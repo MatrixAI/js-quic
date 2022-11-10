@@ -54,6 +54,7 @@
     "jest-extended": "^3.0.1",
     "jest-junit": "^14.0.0",
     "napi-macros": "^2.0.0",
+    "node-addon-api": "^5.0.0",
     "node-gyp": "9.0.0",
     "prettier": "^2.6.2",
     "rimraf": "^3.0.2",
