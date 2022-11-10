@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "tsBuildInfoFile": "./dist/tsbuildinfo",
+    "incremental": true,
+    "sourceMap": true,
+    "declaration": true,
+    "allowJs": true,
+    "strictNullChecks": true,
+    "noImplicitAny": false,
+    "experimentalDecorators": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "module": "CommonJS",
+    "target": "ES2021",
+    "baseUrl": "./src",
+    "paths": {
+      "@": ["index"],
+      "@/*": ["*"]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "./src/**/*",
+    "./src/**/*.json",
+    "./tests/**/*",
+    "./scripts/**/*",
+    "./benches/**/*"
+  ],
+  "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "transpileOnly": true,
+    "swc": true
+  }
+}
