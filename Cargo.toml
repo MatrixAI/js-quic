@@ -1,0 +1,25 @@
+[package]
+name = "quic"
+version = "0.1.0"
+authors = ["Roger Qiu <roger.qiu@polyhack.io>"]
+license = "MIT"
+# build = "build.rs"
+edition = "2021"
+exclude = ["index.node"]
+
+[lib]
+crate-type = ["cdylib"]
+
+# [build-dependencies]
+# neon-build = "0.10.1"
+
+[dependencies]
+num_cpus = "1"
+
+[dependencies.neon]
+version = "0.10"
+default-features = false
+features = ["napi-6"]
+
+# libc = "0.2"
+# url = "1.6"

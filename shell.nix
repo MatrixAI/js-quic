@@ -8,6 +8,8 @@ mkShell {
     clang-tools
     shellcheck
     gitAndTools.gh
+    rustc
+    cargo
   ];
   # Don't set rpath for native addons
   NIX_DONT_SET_RPATH = true;

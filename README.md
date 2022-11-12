@@ -122,3 +122,73 @@ node-gyp build --nodedir=/nix/store/dvzrdz86i15bmjyy869mi7h2bcgl05az-nodejs-16.1
 Ok I've added it to `deps/ngtcp2/ngtcp2`.
 
 Next thing is a binding.gyp file that can actually build it.
+
+---
+
+Trying out the rust ecosystem.
+
+1. Need some extensions for rust.
+2. Then we need to realise that the `rust-analyzer` only works 1 level deep. So the `native` directory must be what the code is.
+3. It only works if we start the project directly. Otherwise there is a problem.
+4. Neon only works on `native`, maybe there's a configuration.
+5. You have to start vscode at the project directory, otherwise it doesn't have access to all the tools. It's a bit annoying.
+
+It seems like neon has changed quite a bit. The latest one has iterated a bit.
+
+```
+{
+  "name": "cpu-coun",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.node",
+  "scripts": {
+    "build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+    "build-debug": "npm run build --",
+    "build-release": "npm run build -- --release",
+    "install": "npm run build-release",
+    "test": "cargo test"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cargo-cp-artifact": "^0.1"
+  }
+}
+```
+
+So now instead of `neon build`. It does things like:
+
+```
+npm run build
+
+cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics
+```
+
+Weird, it's like a command will run something and then do the copy.
+
+It's ecosystem is different from the C/C++ stuff.
+
+
+We would put all of that into our `prebuild.js` script.
+
+Ok so that command is only necessary to "copy" something specifically the `target/debug/libquic.so` to the current directory.
+
+Then it is copied as `index.node`.
+
+It's important for the `cargo.toml` to also be have the package name equal to the name of the JS package.
+
+So as it is `@matrixai/quic`. Then it must also be called `quic` and thus called `libquic`.
+
+I really don't think I need this, I can do all of this with `prebuild.js`.
+
+Interestingly enough, there is NO usage of `binding.gyp` AT ALL.
+
+The so called `gyp` file is only necessary for if we use node-gyp directly, and as a build tool for NodeJS binaries.
+
+The neon seems to fully use cargo.
+
+If the `main` of the `package.json` indicates it is a `index.node` to be loaded.
+
+That becomes the literal module that is loaded when you do a `require('.')`.
+
+That's so cool!

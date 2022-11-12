@@ -25,7 +25,8 @@
     "lintfix-native": "find ./src ./tests -type f -regextype posix-extended -regex '.*\\.(c|cc|cpp|h|hh|hpp)' -exec clang-format -i {} +",
     "lint-shell": "find ./src ./tests ./scripts -type f -regextype posix-extended -regex '.*\\.(sh)' -exec shellcheck {} +",
     "docs": "rimraf ./docs && typedoc --gitRevision master --tsconfig ./tsconfig.build.json --out ./docs src",
-    "bench": "rimraf ./benches/results && ts-node ./benches"
+    "bench": "rimraf ./benches/results && ts-node ./benches",
+    "cargo-build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics"
   },
   "dependencies": {
     "@matrixai/async-init": "^1.8.1",
@@ -45,6 +46,7 @@
     "@typescript-eslint/eslint-plugin": "^5.36.2",
     "@typescript-eslint/parser": "^5.36.2",
     "benny": "^3.7.1",
+    "cargo-cp-artifact": "^0.1.7",
     "common-tags": "^1.8.2",
     "eslint": "^8.15.0",
     "eslint-config-prettier": "^8.5.0",
@@ -54,6 +56,7 @@
     "jest-extended": "^3.0.1",
     "jest-junit": "^14.0.0",
     "napi-macros": "^2.0.0",
+    "neon-cli": "^0.10.1",
     "node-addon-api": "^5.0.0",
     "node-gyp": "9.0.0",
     "prettier": "^2.6.2",
