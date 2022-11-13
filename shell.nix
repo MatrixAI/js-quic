@@ -10,6 +10,7 @@ mkShell {
     gitAndTools.gh
     rustc
     cargo
+    cmake
   ];
   # Don't set rpath for native addons
   NIX_DONT_SET_RPATH = true;
