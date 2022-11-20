@@ -224,6 +224,7 @@ dependencies = [
 name = "quic"
 version = "0.1.0"
 dependencies = [
+ "log",
  "napi",
  "napi-build",
  "napi-derive",

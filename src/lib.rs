@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use ring::rand::*;
@@ -110,6 +113,8 @@ impl Connection {
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
+
+    warn!("New connection");
 
     return Ok(Connection(connection));
   }

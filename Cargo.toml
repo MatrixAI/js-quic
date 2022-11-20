@@ -14,6 +14,7 @@ napi = { version = "2", features = ["async"] }
 napi-derive = "2"
 quiche = "0.16.0"
 ring = "0.16"
+log = "*"
 
 [build-dependencies]
 napi-build = "2"
