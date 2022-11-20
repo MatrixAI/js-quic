@@ -10,10 +10,11 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "gypfile": true,
+  "napi": {
+    "name": "index"
+  },
   "scripts": {
     "prepare": "tsc -p ./tsconfig.build.json",
-    "install": "node-gyp-build",
     "prebuild": "node ./scripts/prebuild.js",
     "build": "rimraf ./dist && tsc -p ./tsconfig.build.json",
     "postversion": "npm install --package-lock-only --ignore-scripts --silent",
@@ -26,7 +27,9 @@
     "lint-shell": "find ./src ./tests ./scripts -type f -regextype posix-extended -regex '.*\\.(sh)' -exec shellcheck {} +",
     "docs": "rimraf ./docs && typedoc --gitRevision master --tsconfig ./tsconfig.build.json --out ./docs src",
     "bench": "rimraf ./benches/results && ts-node ./benches",
-    "cargo-build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics"
+    "neon-build": "cargo-cp-artifact -nc index.node -- cargo build --message-format=json-render-diagnostics",
+    "napi-build": "napi build",
+    "napi-build-prod": "napi build --release"
   },
   "dependencies": {
     "@matrixai/async-init": "^1.8.1",
@@ -35,11 +38,13 @@
     "@matrixai/logger": "^3.0.0",
     "@matrixai/resources": "^1.1.3",
     "@matrixai/workers": "^1.3.5",
+    "ip-num": "^1.5.0",
     "node-gyp-build": "4.4.0",
     "threads": "^1.6.5"
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
+    "@napi-rs/cli": "^2.13.2",
     "@swc/core": "^1.2.215",
     "@types/jest": "^28.1.3",
     "@types/node": "^16.11.7",
@@ -68,9 +73,5 @@
     "tsconfig-paths": "^3.9.0",
     "typedoc": "^0.22.15",
     "typescript": "^4.5.2"
-  },
-  "engines": {
-    "node": "^16.15.0",
-    "msvs": "2019"
   }
 }
