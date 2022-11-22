@@ -17,15 +17,16 @@ const connection = new native.Connection(
 // console.log(connection);
 
 const buf = Buffer.alloc(native.MAX_DATAGRAM_SIZE);
-const s = connection.send(buf);
-console.log(s);
+
+const [l, info] = connection.send(buf);
+console.log(l, info);
 console.log(buf);
 
 // console.log(sendData.out.length);
 
-const s2 = connection.send(buf);
-console.log(s2);
-console.log(buf);
+// const s2 = connection.send(buf);
+// console.log(s2);
+// console.log(buf);
 
 // console.log(sendData2);
 // console.log(sendData2.out.length);

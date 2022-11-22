@@ -38,5 +38,5 @@ export class Connection {
    * This can take both IP addresses and hostnames
    */
   constructor(config: Config, localHost: string, localPort: number, remoteHost: string, remotePort: number)
-  send(data: Buffer): ConnectionSendReturn
+  send(data: Buffer): unknown[]
 }

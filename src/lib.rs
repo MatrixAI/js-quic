@@ -169,7 +169,9 @@ impl Connection {
 
 
   #[napi]
-  pub fn send(&mut self, mut data: Buffer) -> Result<ConnectionSendReturn> {
+  pub fn send(&mut self, env: Env, mut data: Buffer) -> Result<Array> {
+    // Convert the Done error into a 0-length write
+    // This would mean that there's nothing to send
     let (write, send_info) = match self.0.send(&mut data) {
       Ok((write, send_info)) => (write, Some(send_info)),
       Err(quiche::Error::Done) => (0, None),
@@ -187,10 +189,10 @@ impl Connection {
       let at = External::new(info.at);
       SendInfo { from, to, at }
     });
-    return Ok(ConnectionSendReturn {
-      length: write as u32,
-      info: send_info
-    });
+    let mut write_and_send_info = env.create_array(2)?;
+    write_and_send_info.set(0, write as u32)?;
+    write_and_send_info.set(1, send_info)?;
+    return Ok(write_and_send_info);
   }
 
 }
