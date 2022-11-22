@@ -19,6 +19,10 @@ const sendData = connection.send();
 console.log(sendData);
 console.log(sendData.out.length);
 
+const sendData2 = connection.send();
+
+console.log(sendData2);
+console.log(sendData2.out.length);
 
 // const config = native.configNew();
 
