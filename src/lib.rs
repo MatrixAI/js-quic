@@ -153,21 +153,13 @@ impl Connection {
     return Ok(Connection(connection));
   }
 
-
-
-  // Take an input buffer to be written to just like sodium-native
-  // The input buffer is to be passed into the socket.send afterwards
-  // We will return 2 things:
-  // [LengthWritten, SendInfo]
-  // However we cannot pass tuples
-  // So we whave to return an object atm
-  // { length, info: { } }
-  // data
-  // However the DATA msut be at least a certain size
-  // I think that's what sodium native does
-  // It exposes a constant to allocate accordingly
-
-
+  /// Sends a QUIC packet
+  ///
+  /// This writes to the data buffer passed in.
+  /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
+  /// This will return a JS array of `[length, send_info]`.
+  /// If the length is 0, then that there's no data to send.
+  /// The `send_info` will be set to `null`.
   #[napi]
   pub fn send(&mut self, env: Env, mut data: Buffer) -> Result<Array> {
     // Convert the Done error into a 0-length write
