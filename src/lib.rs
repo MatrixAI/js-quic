@@ -7,7 +7,7 @@ pub fn plus_100(input: u32) -> u32 {
   input + 100
 }
 
-// #[napi(constructor)]
+const MAX_DATAGRAM_SIZE: usize = 1350;
 
 #[napi]
 pub struct Config(quiche::Config);
@@ -64,9 +64,38 @@ impl Config {
 // To do so, we can again create a new type around it
 // But this i also ASYNCHRONOUS i think
 
+// Hostname vs Host
+// Remember the String is heap allocated
+
+#[napi(object)]
+pub struct Host {
+  pub hostname: String,
+  pub port: u16,
+}
+
+#[napi(object)]
+pub struct SendInfo {
+  pub from: Host,
+  pub to: Host,
+  pub at: External<std::time::Instant>,
+}
+
+// SocketAddr has private fields and its an enum
+// So here we have to do it a little different
+// We can return a buffer... but this is strange
+// pub to: std::net::SocketAddr,
+// Instant is an "opaque" type
+// there is nothing we can do here
+
+#[napi(object)]
+pub struct SendReturn {
+  pub out: Buffer,
+  pub info: SendInfo,
+}
 
 #[napi]
 pub struct Connection(quiche::Connection);
+
 
 #[napi]
 impl Connection {
@@ -111,9 +140,92 @@ impl Connection {
       |err| Err(Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("STDERR New connection");
+    eprintln!("STDERR New connection with scid {:?}", scid);
 
     return Ok(Connection(connection));
   }
+
+  // This out is actually something else
+  // But we can avoid doing this
+  // By alwys creating an out buffer
+  // Thati s always the case
+  // Because otherwise the buffer has to be passed in
+  // We could just return it
+
+// pub struct SendInfo {
+//     /// The local address the packet should be sent from.
+//     pub from: SocketAddr,
+
+//     /// The remote address the packet should be sent to.
+//     pub to: SocketAddr,
+
+//     /// The time to send the packet out.
+//     ///
+//     /// See [Pacing] for more details.
+//     ///
+//     /// [Pacing]: index.html#pacing
+//     pub at: time::Instant,
+// }
+
+
+  #[napi]
+  pub fn send(&mut self) -> Result<SendReturn> {
+
+    // I reckon we can return the same buffer multiple times
+    // really!
+
+    let mut out = [0; MAX_DATAGRAM_SIZE];
+
+    // The send can return Ok(v) which is the tuple
+    // The send can return Err(done) which means it is DONE
+    // The send can return Err(e) which means some other kind of error
+    // We have to differentiate them all
+    // We could also take in a buffer
+    // And write to it
+    // and return the result
+    // so what does it mean that it is done
+    // do you want to redo the exception?
+
+    let (write, send_info) = match self.0.send(&mut out) {
+      Ok(v) => v,
+      Err(quiche::Error::Done) => return Err(Error::from_reason("Done".to_string())),
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+
+    // In a way, we could keep the to_vec
+    // or out always statically initailised
+    // then just keep reassigning to it
+    // But the key point is that tyou have to return the `write`
+
+    let mut out_buf = vec![0; write];
+    out_buf.clone_from_slice(&out[..write]);
+
+    eprintln!("OUT write length {:?}", write);
+
+    let send_info_js = SendInfo {
+      from: Host {
+        hostname: send_info.from.ip().to_string(),
+        port: send_info.from.port(),
+      },
+      to: Host {
+        hostname: send_info.to.ip().to_string(),
+        port: send_info.to.port(),
+      },
+      at: External::new(send_info.at),
+    };
+
+    eprintln!("STDERR Send info {:?}", send_info);
+
+    // Now we need to return 3 things
+    // The write, the send_info and the also the out
+    // But we must also match on the conditions here
+
+    return Ok(SendReturn {
+      out: out_buf.into(),
+      info: send_info_js
+    });
+
+  }
+
 
 }

@@ -14,6 +14,11 @@ const connection = new native.Connection(
 
 console.log(connection);
 
+const sendData = connection.send();
+
+console.log(sendData);
+console.log(sendData.out.length);
+
 
 // const config = native.configNew();
 
