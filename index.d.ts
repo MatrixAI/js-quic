@@ -9,19 +9,22 @@ export class ExternalObject<T> {
     [K: symbol]: T
   }
 }
-export function plus100(input: number): number
+export const MAX_DATAGRAM_SIZE: number
 export interface Host {
-  hostname: string
+  ip: string
   port: number
 }
 export interface SendInfo {
+  /** The local address the packet should be sent from. */
   from: Host
+  /** The remote address the packet should be sent to. */
   to: Host
+  /** The time to send the packet out for pacing. */
   at: ExternalObject<Instant>
 }
-export interface SendReturn {
-  out: Buffer
-  info: SendInfo
+export interface ConnectionSendReturn {
+  length: number
+  info?: SendInfo
 }
 export class Config {
   constructor()
@@ -29,6 +32,11 @@ export class Config {
   setMaxIdleTimeout(timeout: number): void
 }
 export class Connection {
-  constructor(config: Config)
-  send(): SendReturn
+  /**
+   * Constructs QUIC Connection
+   *
+   * This can take both IP addresses and hostnames
+   */
+  constructor(config: Config, localHost: string, localPort: number, remoteHost: string, remotePort: number)
+  send(data: Buffer): ConnectionSendReturn
 }

@@ -1,13 +1,12 @@
+// use std::net::SocketAddr;
+// use std::net::IpAddr;
+use std::net::ToSocketAddrs;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use ring::rand::*;
 
 #[napi]
-pub fn plus_100(input: u32) -> u32 {
-  input + 100
-}
-
-const MAX_DATAGRAM_SIZE: usize = 1350;
+pub const MAX_DATAGRAM_SIZE: u32 = 1350;
 
 #[napi]
 pub struct Config(quiche::Config);
@@ -57,7 +56,6 @@ impl Config {
   //   Ok(())
   // }
 
-
 }
 
 // Now we want to create a Connection object
@@ -69,28 +67,28 @@ impl Config {
 
 #[napi(object)]
 pub struct Host {
-  pub hostname: String,
+  pub ip: String,
   pub port: u16,
 }
 
 #[napi(object)]
 pub struct SendInfo {
+  /// The local address the packet should be sent from.
   pub from: Host,
+  /// The remote address the packet should be sent to.
   pub to: Host,
+  /// The time to send the packet out for pacing.
   pub at: External<std::time::Instant>,
 }
 
-// SocketAddr has private fields and its an enum
-// So here we have to do it a little different
-// We can return a buffer... but this is strange
-// pub to: std::net::SocketAddr,
-// Instant is an "opaque" type
-// there is nothing we can do here
+// Tuples don't work nicely and tuple structs
+// Instead the I have to create a specialised object
+// just for the return
 
 #[napi(object)]
-pub struct SendReturn {
-  pub out: Buffer,
-  pub info: SendInfo,
+pub struct ConnectionSendReturn {
+  pub length: u32,
+  pub info: Option<SendInfo>,
 }
 
 #[napi]
@@ -99,8 +97,19 @@ pub struct Connection(quiche::Connection);
 
 #[napi]
 impl Connection {
+
+
+  /// Constructs QUIC Connection
+  ///
+  /// This can take both IP addresses and hostnames
   #[napi(constructor)]
-  pub fn new(config: &mut Config) -> Result<Self> {
+  pub fn new(
+    config: &mut Config,
+    local_host: String,
+    local_port: u16,
+    remote_host: String,
+    remote_port: u16,
+  ) -> Result<Self> {
 
     // RANDOM source connection ID
     let mut scid = [0; quiche::MAX_CONN_ID_LEN];
@@ -115,21 +124,20 @@ impl Connection {
     // Since the nodejs runtime will do the relevant binding
     // When binding, it needs to bind to both IPv6 and IPv6
 
-    let local_addr = std::net::SocketAddr::new(
-      std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-      55551
-    );
+    // Host and Hostname
 
-    let remote_addr = std::net::SocketAddr::new(
-      std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-      55552
-    );
+    let local_addr = (local_host, local_port).to_socket_addrs().or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?.next().unwrap();
 
-    // We do not care about the domain
-    // The server name is necessary for SNI
-    // Server name indication
-    // This is meant to be the server name
-    // This is an option
+    eprintln!("Local address: {:?}", local_addr);
+
+    let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?.next().unwrap();
+
+    eprintln!("Remote address: {:?}", remote_addr);
+
     let connection = quiche::connect(
       None,
       &scid,
@@ -145,87 +153,44 @@ impl Connection {
     return Ok(Connection(connection));
   }
 
-  // This out is actually something else
-  // But we can avoid doing this
-  // By alwys creating an out buffer
-  // Thati s always the case
-  // Because otherwise the buffer has to be passed in
-  // We could just return it
 
-// pub struct SendInfo {
-//     /// The local address the packet should be sent from.
-//     pub from: SocketAddr,
 
-//     /// The remote address the packet should be sent to.
-//     pub to: SocketAddr,
-
-//     /// The time to send the packet out.
-//     ///
-//     /// See [Pacing] for more details.
-//     ///
-//     /// [Pacing]: index.html#pacing
-//     pub at: time::Instant,
-// }
+  // Take an input buffer to be written to just like sodium-native
+  // The input buffer is to be passed into the socket.send afterwards
+  // We will return 2 things:
+  // [LengthWritten, SendInfo]
+  // However we cannot pass tuples
+  // So we whave to return an object atm
+  // { length, info: { } }
+  // data
+  // However the DATA msut be at least a certain size
+  // I think that's what sodium native does
+  // It exposes a constant to allocate accordingly
 
 
   #[napi]
-  pub fn send(&mut self) -> Result<SendReturn> {
-
-    // I reckon we can return the same buffer multiple times
-    // really!
-
-    let mut out = [0; MAX_DATAGRAM_SIZE];
-
-    // The send can return Ok(v) which is the tuple
-    // The send can return Err(done) which means it is DONE
-    // The send can return Err(e) which means some other kind of error
-    // We have to differentiate them all
-    // We could also take in a buffer
-    // And write to it
-    // and return the result
-    // so what does it mean that it is done
-    // do you want to redo the exception?
-
-    let (write, send_info) = match self.0.send(&mut out) {
-      Ok(v) => v,
-      Err(quiche::Error::Done) => return Err(Error::from_reason("Done".to_string())),
+  pub fn send(&mut self, mut data: Buffer) -> Result<ConnectionSendReturn> {
+    let (write, send_info) = match self.0.send(&mut data) {
+      Ok((write, send_info)) => (write, Some(send_info)),
+      Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(Error::from_reason(e.to_string())),
     };
-
-    // In a way, we could keep the to_vec
-    // or out always statically initailised
-    // then just keep reassigning to it
-    // But the key point is that tyou have to return the `write`
-
-    let mut out_buf = vec![0; write];
-    out_buf.clone_from_slice(&out[..write]);
-
-    eprintln!("OUT write length {:?}", write);
-
-    let send_info_js = SendInfo {
-      from: Host {
-        hostname: send_info.from.ip().to_string(),
-        port: send_info.from.port(),
-      },
-      to: Host {
-        hostname: send_info.to.ip().to_string(),
-        port: send_info.to.port(),
-      },
-      at: External::new(send_info.at),
-    };
-
-    eprintln!("STDERR Send info {:?}", send_info);
-
-    // Now we need to return 3 things
-    // The write, the send_info and the also the out
-    // But we must also match on the conditions here
-
-    return Ok(SendReturn {
-      out: out_buf.into(),
-      info: send_info_js
+    let send_info = send_info.map(|info| {
+      let from = Host {
+        ip: info.from.ip().to_string(),
+        port: info.from.port(),
+      };
+      let to = Host {
+        ip: info.to.ip().to_string(),
+        port: info.to.port(),
+      };
+      let at = External::new(info.at);
+      SendInfo { from, to, at }
     });
-
+    return Ok(ConnectionSendReturn {
+      length: write as u32,
+      info: send_info
+    });
   }
-
 
 }

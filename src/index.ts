@@ -1,35 +1,31 @@
 const native = require('../index.node');
 
-console.log(native.plus100(100));
-
 const config = new native.Config();
 
-console.log(config);
-console.log(config.verifyPeer(false));
-console.log(config.setMaxIdleTimeout(1000));
+// console.log(config);
+// console.log(config.verifyPeer(false));
+// console.log(config.setMaxIdleTimeout(1000));
 
 const connection = new native.Connection(
-  config
+  config,
+  'localhost',
+  55551,
+  '127.0.0.2',
+  55552
 );
 
-console.log(connection);
+// console.log(connection);
 
-const sendData = connection.send();
+const buf = Buffer.alloc(native.MAX_DATAGRAM_SIZE);
+const s = connection.send(buf);
+console.log(s);
+console.log(buf);
 
-console.log(sendData);
-console.log(sendData.out.length);
+// console.log(sendData.out.length);
 
-const sendData2 = connection.send();
+const s2 = connection.send(buf);
+console.log(s2);
+console.log(buf);
 
-console.log(sendData2);
-console.log(sendData2.out.length);
-
-// const config = native.configNew();
-
-// console.log(config);
-
-// console.log(native.configVerifyPeer(config, true));
-
-// console.log(native.configSetMaxIdleTimeout(config, 1000));
-
-// console.log('DONE');
+// console.log(sendData2);
+// console.log(sendData2.out.length);
