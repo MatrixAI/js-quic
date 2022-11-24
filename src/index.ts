@@ -1,26 +1,41 @@
+import { webcrypto } from 'crypto';
+
 const native = require('../index.node');
 
+// function getRandomValues(b: Buffer) {
+//   return webcrypto.getRandomValues(b);
+//   // return 1;
+// }
+
+// console.log(
+//   native.createConnectionId(
+//     webcrypto.getRandomValues.bind(webcrypto)
+//   )
+// );
+
 const config = new native.Config();
+config.verifyPeer(false);
+config.setMaxIdleTimeout(1000);
 
-// console.log(config);
-// console.log(config.verifyPeer(false));
-// console.log(config.setMaxIdleTimeout(1000));
+const connId = Buffer.alloc(native.MAX_CONN_ID_LEN);
+webcrypto.getRandomValues(connId);
 
-const connection = new native.Connection(
-  config,
+const connection = native.Connection.connect(
+  connId,
   'localhost',
   55551,
   '127.0.0.2',
-  55552
+  55552,
+  config,
 );
 
-// console.log(connection);
+console.log(connection);
 
-const buf = Buffer.alloc(native.MAX_DATAGRAM_SIZE);
+// const buf = Buffer.alloc(native.MAX_DATAGRAM_SIZE);
 
-const [l, info] = connection.send(buf);
-console.log(l, info);
-console.log(buf);
+// const [l, info] = connection.send(buf);
+// console.log(l, info);
+// console.log(buf);
 
 // console.log(sendData.out.length);
 

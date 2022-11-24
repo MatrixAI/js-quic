@@ -3,10 +3,18 @@
 use std::net::ToSocketAddrs;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use ring::rand::*;
+// use ring::rand::*;
+
+// You have to pass a random bytes system?
+// But I don't think we need this
+// We can acquire it from the runtime that passes this in
+// const RNG: SystemRandom = SystemRandom::new();
 
 #[napi]
 pub const MAX_DATAGRAM_SIZE: u32 = 1350;
+
+#[napi]
+pub const MAX_CONN_ID_LEN: u32 = quiche::MAX_CONN_ID_LEN as u32;
 
 #[napi]
 pub struct Config(quiche::Config);
@@ -81,50 +89,65 @@ pub struct SendInfo {
   pub at: External<std::time::Instant>,
 }
 
+#[napi(object)]
+pub struct RecvInfo {
+  /// The remote address the packet was received from.
+  pub from: Host,
+  /// The local address the packet was sent to.
+  pub to: Host,
+}
+
 // Tuples don't work nicely and tuple structs
 // Instead the I have to create a specialised object
 // just for the return
 
-#[napi(object)]
-pub struct ConnectionSendReturn {
-  pub length: u32,
-  pub info: Option<SendInfo>,
-}
+// #[napi(object)]
+// pub struct ConnectionSendReturn {
+//   pub length: u32,
+//   pub info: Option<SendInfo>,
+// }
+
+/// Creates random connection ID
+///
+/// Relies on the JS runtime to provide the randomness system
+// #[napi]
+// pub fn create_connection_id<T: Fn(Buffer) -> Result<()>>(
+//   get_random_values: T
+// ) -> Result<External<quiche::ConnectionId<'static>>> {
+//   let scid = [0; quiche::MAX_CONN_ID_LEN].to_vec();
+//   let scid = Buffer::from(scid);
+//   get_random_values(scid.clone()).or_else(
+//     |err| Err(Error::from_reason(err.to_string()))
+//   )?;
+//   let scid = quiche::ConnectionId::from_vec(scid.to_vec());
+//   eprintln!("New connection with scid {:?}", scid);
+//   return Ok(External::new(scid));
+// }
 
 #[napi]
 pub struct Connection(quiche::Connection);
 
-
 #[napi]
 impl Connection {
 
-
-  /// Constructs QUIC Connection
+  /// Creates QUIC Client Connection
   ///
   /// This can take both IP addresses and hostnames
-  #[napi(constructor)]
-  pub fn new(
-    config: &mut Config,
+  #[napi(factory)]
+  pub fn connect(
+    // scid: External<quiche::ConnectionId>,
+    scid: Buffer,
     local_host: String,
     local_port: u16,
     remote_host: String,
     remote_port: u16,
+    config: &mut Config,
   ) -> Result<Self> {
-
-    // RANDOM source connection ID
-    let mut scid = [0; quiche::MAX_CONN_ID_LEN];
-    let rng = SystemRandom::new();
-    rng.fill(&mut scid[..]).unwrap();
-
-    let scid = quiche::ConnectionId::from_ref(&scid);
-
     // These addresses are passed in from the outside
     // We expect that the local address has already been bound to
     // On the UDP socket, we don't do any binding here
     // Since the nodejs runtime will do the relevant binding
     // When binding, it needs to bind to both IPv6 and IPv6
-
-    // Host and Hostname
 
     let local_addr = (local_host, local_port).to_socket_addrs().or_else(
       |err| Err(Error::from_reason(err.to_string()))
@@ -137,6 +160,8 @@ impl Connection {
     )?.next().unwrap();
 
     eprintln!("Remote address: {:?}", remote_addr);
+
+    let scid = quiche::ConnectionId::from_ref(&scid);
 
     let connection = quiche::connect(
       None,
@@ -153,6 +178,45 @@ impl Connection {
     return Ok(Connection(connection));
   }
 
+  #[napi(factory)]
+  pub fn accept(
+    scid: Buffer,
+    local_host: String,
+    local_port: u16,
+    remote_host: String,
+    remote_port: u16,
+    config: &mut Config,
+  ) -> Result<Self> {
+
+    let local_addr = (local_host, local_port).to_socket_addrs().or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?.next().unwrap();
+
+    eprintln!("Local address: {:?}", local_addr);
+
+    let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?.next().unwrap();
+
+    eprintln!("Remote address: {:?}", remote_addr);
+
+    let scid = quiche::ConnectionId::from_ref(&scid);
+
+    let connection = quiche::accept(
+      &scid,
+      None,
+      local_addr,
+      remote_addr,
+      &mut config.0
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?;
+
+    eprintln!("New connection with scid {:?}", scid);
+
+    return Ok(Connection(connection));
+  }
+
   /// Sends a QUIC packet
   ///
   /// This writes to the data buffer passed in.
@@ -161,7 +225,7 @@ impl Connection {
   /// If the length is 0, then that there's no data to send.
   /// The `send_info` will be set to `null`.
   #[napi]
-  pub fn send(&mut self, env: Env, mut data: Buffer) -> Result<Array> {
+  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> Result<Array> {
     // Convert the Done error into a 0-length write
     // This would mean that there's nothing to send
     let (write, send_info) = match self.0.send(&mut data) {
@@ -186,5 +250,56 @@ impl Connection {
     write_and_send_info.set(1, send_info)?;
     return Ok(write_and_send_info);
   }
+
+  // We need the information that the packet was sent from and to
+  // And both are socket addresses
+  // THE TO info
+  // is the local address
+  // that is something that
+  // The buffer here is mutated
+  // Do not re-use it
+  // Pass back the `to` as the LOCAL address?
+  // We provided the address all the time
+
+  #[napi]
+  pub fn recv(
+    &mut self,
+    mut data: Uint8Array,
+    recv_info: RecvInfo,
+  ) -> Result<u32> {
+
+    // Parsing is kind of slow
+    // the from address has to be passed in from JS side
+    // but the local address here is already known here
+    // if we can keep track of it, it would work nicely
+    // In fact, for any given connection, don't we already have both the remote address and the local address already?
+    // Yea, exactly this information is technically already known
+
+    let recv_info = quiche::RecvInfo {
+      from: (recv_info.from.ip, recv_info.from.port).to_socket_addrs().or_else(
+        |err| Err(Error::from_reason(err.to_string()))
+      )?.next().unwrap(),
+      to: (recv_info.to.ip, recv_info.to.port).to_socket_addrs().or_else(
+        |err| Err(Error::from_reason(err.to_string()))
+      )?.next().unwrap(),
+    };
+    // If there is an error, the JS side should continue to read
+    // But it can log out the error
+    // You may call this multiple times
+    // When receiving multiple packets
+    // Process potentially coalesced packets.
+    let read = match self.0.recv(
+      &mut data,
+      recv_info
+    ) {
+      Ok(v) => v,
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+    return Ok(read as u32);
+  }
+
+  // It's quite low level as above!
+  // Remember that
+  // Plus the returning of the recv info
 
 }

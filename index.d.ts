@@ -10,6 +10,7 @@ export class ExternalObject<T> {
   }
 }
 export const MAX_DATAGRAM_SIZE: number
+export const MAX_CONN_ID_LEN: number
 export interface Host {
   ip: string
   port: number
@@ -22,10 +23,22 @@ export interface SendInfo {
   /** The time to send the packet out for pacing. */
   at: ExternalObject<Instant>
 }
+export interface RecvInfo {
+  /** The remote address the packet was received from. */
+  from: Host
+  /** The local address the packet was sent to. */
+  to: Host
+}
 export interface ConnectionSendReturn {
   length: number
   info?: SendInfo
 }
+/**
+ * Creates random connection ID
+ *
+ * Relies on the JS runtime to provide the randomness system
+ */
+export function createConnectionId(getRandomValues: (arg0: Buffer) => void): ExternalObject<ConnectionId>
 export class Config {
   constructor()
   verifyPeer(verify: boolean): void
@@ -33,10 +46,20 @@ export class Config {
 }
 export class Connection {
   /**
-   * Constructs QUIC Connection
+   * Creates QUIC Client Connection
    *
    * This can take both IP addresses and hostnames
    */
-  constructor(config: Config, localHost: string, localPort: number, remoteHost: string, remotePort: number)
-  send(data: Buffer): unknown[]
+  static connect(scid: Buffer, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
+  /**
+   * Sends a QUIC packet
+   *
+   * This writes to the data buffer passed in.
+   * The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
+   * This will return a JS array of `[length, send_info]`.
+   * If the length is 0, then that there's no data to send.
+   * The `send_info` will be set to `null`.
+   */
+  send(data: Uint8Array): unknown[]
+  recv(data: Uint8Array, recvInfo: RecvInfo): number
 }
