@@ -10,8 +10,18 @@ use napi_derive::napi;
 // We can acquire it from the runtime that passes this in
 // const RNG: SystemRandom = SystemRandom::new();
 
+
+/// This maximum datagram size to SEND to the UDP socket
+/// It must be used with `config.set_max_recv_udp_payload_size` and such
+/// But on the receiving side, we actually use the maximum which is 65535
 #[napi]
 pub const MAX_DATAGRAM_SIZE: u32 = 1350;
+
+/// This is the maximum size of the packet to be received from the socket
+/// This is what you use to receive packets on the UDP socket
+/// And you send it to the connection as well
+#[napi]
+pub const MAX_UDP_PACKET_SIZE: u32 = 65535;
 
 #[napi]
 pub const MAX_CONN_ID_LEN: u32 = quiche::MAX_CONN_ID_LEN as u32;
@@ -20,6 +30,31 @@ pub const MAX_CONN_ID_LEN: u32 = quiche::MAX_CONN_ID_LEN as u32;
 pub struct Config(quiche::Config);
 
 pub const HTTP_3: [&[u8]; 4] = [b"h3", b"h3-29", b"h3-28", b"h3-27"];
+
+// Here's an example
+// We have a ENUM called quiche::Shutdown
+// This has to be passed in from JS
+// We can represent this by wrapping it with our own type here
+// As a new type
+#[napi]
+pub struct Shutdown(quiche::Shutdown);
+
+// Then here, we have to create the implementation for this type
+// In that the 0 and 1 are ultimately coming from JS
+// At the value level they are numerics
+impl FromNapiValue for Shutdown {
+  unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
+    let value = i64::from_napi_value(env, value)?;
+    match value {
+      0 => Ok(Shutdown(quiche::Shutdown::Read)),
+      1 => Ok(Shutdown(quiche::Shutdown::Write)),
+      _ => Err(Error::new(
+        Status::InvalidArg,
+        "Invalid shutdown value".to_string(),
+      )),
+    }
+  }
+}
 
 #[napi]
 impl Config {
@@ -41,13 +76,26 @@ impl Config {
   }
 
   #[napi]
-  pub fn verify_peer(&mut self, verify: bool) -> Undefined {
+  pub fn verify_peer(&mut self, verify: bool) -> () {
     self.0.verify_peer(verify);
   }
 
   #[napi]
-  pub fn set_max_idle_timeout(&mut self, timeout: f64) -> Undefined {
+  pub fn set_max_idle_timeout(&mut self, timeout: f64) -> () {
     self.0.set_max_idle_timeout(timeout as u64);
+  }
+
+  // The max datagram size is set for both of these
+  // But you are supposed to control this outside of the library
+
+  #[napi]
+  pub fn set_max_recv_udp_payload_size(&mut self, size: i64) -> () {
+    self.0.set_max_recv_udp_payload_size(size as usize);
+  }
+
+  #[napi]
+  pub fn set_max_send_udp_payload_size(&mut self, size: i64) -> () {
+    self.0.set_max_send_udp_payload_size(size as usize);
   }
 
   // The set_application_protos must set a reference
@@ -246,7 +294,7 @@ impl Connection {
       SendInfo { from, to, at }
     });
     let mut write_and_send_info = env.create_array(2)?;
-    write_and_send_info.set(0, write as u32)?;
+    write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
     return Ok(write_and_send_info);
   }
@@ -261,12 +309,17 @@ impl Connection {
   // Pass back the `to` as the LOCAL address?
   // We provided the address all the time
 
+  // This data buffer must be the size of the entire largest packet...
+  // It is not the max datagram size, you have to potentially take
+  // A VERY large packet
+  // On the other hand, it's all dynamic in JS
+  // So it may not be a problem
   #[napi]
   pub fn recv(
     &mut self,
     mut data: Uint8Array,
     recv_info: RecvInfo,
-  ) -> Result<u32> {
+  ) -> Result<i64> {
 
     // Parsing is kind of slow
     // the from address has to be passed in from JS side
@@ -295,11 +348,192 @@ impl Connection {
       Ok(v) => v,
       Err(e) => return Err(Error::from_reason(e.to_string())),
     };
-    return Ok(read as u32);
+    return Ok(read as i64);
   }
 
-  // It's quite low level as above!
-  // Remember that
-  // Plus the returning of the recv info
+  /// Maximum dgram size
+  ///
+  /// Use this to determine the size of the dgrams being send and received
+  /// I'm not sure if this is also necessary for send and recv?
+  #[napi]
+  pub fn dgram_max_writable_len(&mut self) -> Option<i64> {
+    return self.0.dgram_max_writable_len().map(|v| v as i64);
+  }
+
+  #[napi]
+  pub fn dgram_send(
+    &mut self,
+    data: Uint8Array,
+  ) -> Result<()> {
+    match self.0.dgram_send(
+      &data,
+    ) {
+      Ok(v) => return Ok(v),
+      // If no data is sent, also return Ok
+      Err(quiche::Error::Done) => return Ok(()),
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+  }
+
+  #[napi]
+  pub fn dgram_recv(
+    &mut self,
+    mut data: Uint8Array
+  ) -> Result<i64> {
+    match self.0.dgram_recv(
+      &mut data,
+    ) {
+      Ok(v) => return Ok(v as i64),
+      Err(quiche::Error::Done) => return Ok(0),
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+  }
+
+  // Ok let's work out how to deal with streams
+  // this returns a tuple
+
+  #[napi]
+  pub fn stream_recv(
+    &mut self,
+    env: Env,
+    stream_id: i64,
+    mut data: Uint8Array,
+  ) -> Result<Array> {
+    let (read, fin) = match self.0.stream_recv(
+      stream_id as u64,
+      &mut data,
+    ) {
+      Ok((read, fin)) => (read, fin),
+      // Done means there's no more data to receive
+      Err(quiche::Error::Done) => (0, true),
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+    let mut read_and_fin = env.create_array(2)?;
+    read_and_fin.set(0, read as i64)?;
+    read_and_fin.set(1, fin)?;
+    return Ok(read_and_fin);
+  }
+
+  #[napi]
+  pub fn stream_priority(
+    &mut self,
+    stream_id: i64,
+    urgency: u8,
+    incremental: bool
+  ) -> Result<()> {
+    return self.0.stream_priority(
+      stream_id as u64,
+      urgency,
+      incremental
+    ).map_err(|e| Error::from_reason(e.to_string()));
+  }
+
+  #[napi]
+  pub fn stream_send(
+    &mut self,
+    stream_id: i64,
+    data: Uint8Array,
+    fin: bool
+  ) -> Result<i64> {
+    // 0-length buffer can be written with a fin being true
+    // this indicates that it has finished the stream
+
+    // number of written bytes may be lower than the length
+    // of hte input buffer when the stream doesn't have enough capacity
+    // the app should retry the operation once the stream reports it is writable again
+    match self.0.stream_send(
+      stream_id as u64,
+      &data,
+      fin
+    ) {
+      Ok(v) => return Ok(v as i64),
+      Err(quiche::Error::Done) => return Ok(0),
+      Err(e) => return Err(Error::from_reason(e.to_string())),
+    };
+  }
+
+  #[napi]
+  pub fn stream_shutdown(
+    &mut self,
+    stream_id: i64,
+    direction: Shutdown,
+    err: i64
+  ) -> Result<()> {
+    // The err is an application-supplied error code
+    // It's an application protocol error code
+    // https://datatracker.ietf.org/doc/html/rfc9000#section-20.2
+    // I think HTTP3 uses this a bit
+    // RESET_STREAM means we stop sending
+    // It can indicate to the peer WHY we have stopped sending
+    // STOP_SENDING means we stop receiving
+    // It can indicate to the peer WHY we have stopped receiving
+    // But this is at the transport layer remember
+    return self.0.stream_shutdown(
+      stream_id as u64,
+      direction.0,
+      err as u64
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn stream_capacity(
+    &self,
+    stream_id: i64,
+  ) -> Result<i64> {
+    return self.0.stream_capacity(
+      stream_id as u64
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    ).map(|v| v as i64);
+  }
+
+  #[napi]
+  pub fn stream_readable(
+    &self,
+    stream_id: i64,
+  ) -> bool {
+    return self.0.stream_readable(
+      stream_id as u64
+    );
+  }
+
+  #[napi]
+  pub fn stream_writable(
+    &mut self,
+    stream_id: i64,
+    len: i64
+  ) -> Result<bool> {
+    return self.0.stream_writable(stream_id as u64, len as usize).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn stream_finished(
+    &self,
+    stream_id: i64
+  ) -> bool {
+    return self.0.stream_finished(stream_id as u64);
+  }
+
+  #[napi]
+  pub fn peer_streams_left_bidi(&self) -> i64 {
+    return self.0.peer_streams_left_bidi() as i64;
+  }
+
+  #[napi]
+  pub fn peer_streams_left_uni(&self) -> i64 {
+    return self.0.peer_streams_left_uni() as i64;
+  }
+
+
+
+
+
+
+
+
 
 }

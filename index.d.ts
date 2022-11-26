@@ -9,7 +9,18 @@ export class ExternalObject<T> {
     [K: symbol]: T
   }
 }
+/**
+ * This maximum datagram size to SEND to the UDP socket
+ * It must be used with `config.set_max_recv_udp_payload_size` and such
+ * But on the receiving side, we actually use the maximum which is 65535
+ */
 export const MAX_DATAGRAM_SIZE: number
+/**
+ * This is the maximum size of the packet to be received from the socket
+ * This is what you use to receive packets on the UDP socket
+ * And you send it to the connection as well
+ */
+export const MAX_UDP_PACKET_SIZE: number
 export const MAX_CONN_ID_LEN: number
 export interface Host {
   ip: string
@@ -29,21 +40,19 @@ export interface RecvInfo {
   /** The local address the packet was sent to. */
   to: Host
 }
-export interface ConnectionSendReturn {
-  length: number
-  info?: SendInfo
+export class Config {
+  constructor()
+  verifyPeer(verify: boolean): void
+  setMaxIdleTimeout(timeout: number): void
+  setMaxRecvUdpPayloadSize(size: number): void
+  setMaxSendUdpPayloadSize(size: number): void
 }
+export class Shutdown { }
 /**
  * Creates random connection ID
  *
  * Relies on the JS runtime to provide the randomness system
  */
-export function createConnectionId(getRandomValues: (arg0: Buffer) => void): ExternalObject<ConnectionId>
-export class Config {
-  constructor()
-  verifyPeer(verify: boolean): void
-  setMaxIdleTimeout(timeout: number): void
-}
 export class Connection {
   /**
    * Creates QUIC Client Connection
@@ -51,6 +60,7 @@ export class Connection {
    * This can take both IP addresses and hostnames
    */
   static connect(scid: Buffer, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
+  static accept(scid: Buffer, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
   /**
    * Sends a QUIC packet
    *
@@ -62,4 +72,23 @@ export class Connection {
    */
   send(data: Uint8Array): unknown[]
   recv(data: Uint8Array, recvInfo: RecvInfo): number
+  /**
+   * Maximum dgram size
+   *
+   * Use this to determine the size of the dgrams being send and received
+   * I'm not sure if this is also necessary for send and recv?
+   */
+  dgramMaxWritableLen(): number | null
+  dgramSend(data: Uint8Array): void
+  dgramRecv(data: Uint8Array): number
+  streamRecv(streamId: number, data: Uint8Array): unknown[]
+  streamPriority(streamId: number, urgency: number, incremental: boolean): void
+  streamSend(streamId: number, data: Uint8Array, fin: boolean): number
+  streamShutdown(streamId: number, direction: Shutdown, err: number): void
+  streamCapacity(streamId: number): number
+  streamReadable(streamId: number): boolean
+  streamWritable(streamId: number, len: number): boolean
+  streamFinished(streamId: number): boolean
+  peerStreamsLeftBidi(): number
+  peerStreamsLeftUni(): number
 }
