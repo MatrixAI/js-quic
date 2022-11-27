@@ -4,20 +4,30 @@ use napi::bindgen_prelude::*;
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
 
+/// Equivalent to quiche::CongestionControlAlgorithm
 #[napi]
-pub struct CongestionControlAlgorithm(quiche::CongestionControlAlgorithm);
+pub enum CongestionControlAlgorithm {
+  Reno = 0,
+  CUBIC = 1,
+  BBR = 2,
+}
 
-impl FromNapiValue for CongestionControlAlgorithm {
-  unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
-    let value = i64::from_napi_value(env, value)?;
-    match value {
-      0 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::Reno)),
-      1 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::CUBIC)),
-      2 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::BBR)),
-      _ => Err(Error::new(
-        Status::InvalidArg,
-        "Invalid congestion control algorithm value".to_string(),
-      )),
+impl From<CongestionControlAlgorithm> for quiche::CongestionControlAlgorithm {
+  fn from(algo: CongestionControlAlgorithm) -> Self {
+    match algo {
+      CongestionControlAlgorithm::Reno => quiche::CongestionControlAlgorithm::Reno,
+      CongestionControlAlgorithm::CUBIC => quiche::CongestionControlAlgorithm::CUBIC,
+      CongestionControlAlgorithm::BBR => quiche::CongestionControlAlgorithm::BBR,
+    }
+  }
+}
+
+impl From<quiche::CongestionControlAlgorithm> for CongestionControlAlgorithm {
+  fn from(item: quiche::CongestionControlAlgorithm) -> Self {
+    match item {
+      quiche::CongestionControlAlgorithm::Reno => CongestionControlAlgorithm::Reno,
+      quiche::CongestionControlAlgorithm::CUBIC => CongestionControlAlgorithm::CUBIC,
+      quiche::CongestionControlAlgorithm::BBR => CongestionControlAlgorithm::BBR,
     }
   }
 }
@@ -201,7 +211,7 @@ impl Config {
 
   #[napi]
   pub fn set_cc_algorithm(&mut self, algo: CongestionControlAlgorithm) -> () {
-    return self.0.set_cc_algorithm(algo.0);
+    return self.0.set_cc_algorithm(algo.into());
   }
 
   #[napi]

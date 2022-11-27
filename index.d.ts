@@ -9,6 +9,17 @@ export class ExternalObject<T> {
     [K: symbol]: T
   }
 }
+/** Equivalent to quiche::CongestionControlAlgorithm */
+export const enum CongestionControlAlgorithm {
+  Reno = 0,
+  CUBIC = 1,
+  BBR = 2
+}
+/** Equivalent to quiche::Shutdown enum */
+export const enum Shutdown {
+  Read = 0,
+  Write = 1
+}
 export interface Host {
   ip: string
   port: number
@@ -74,8 +85,6 @@ export class Config {
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
-export class CongestionControlAlgorithm { }
-export class Shutdown { }
 export class Connection {
   /**
    * Creates QUIC Client Connection

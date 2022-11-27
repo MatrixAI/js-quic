@@ -5,37 +5,34 @@ use napi::bindgen_prelude::{
   Array,
   Uint8Array,
   External,
-  FromNapiValue,
-  sys
+  ToNapiValue,
 };
 use crate::config;
 
-
+/// Equivalent to quiche::Shutdown enum
 #[napi]
-pub struct Shutdown(pub (crate) quiche::Shutdown);
+pub enum Shutdown {
+  Read = 0,
+  Write = 1
+}
 
-// Then here, we have to create the implementation for this type
-// In that the 0 and 1 are ultimately coming from JS
-// At the value level they are numerics
-impl FromNapiValue for Shutdown {
-  unsafe fn from_napi_value(
-    env: sys::napi_env,
-    value: sys::napi_value
-  ) -> napi::Result<Self> {
-    let value = i64::from_napi_value(env, value)?;
-    match value {
-      0 => Ok(Shutdown(quiche::Shutdown::Read)),
-      1 => Ok(Shutdown(quiche::Shutdown::Write)),
-      _ => Err(napi::Error::new(
-        napi::Status::InvalidArg,
-        "Invalid shutdown value".to_string(),
-      )),
+impl From<Shutdown> for quiche::Shutdown {
+  fn from(shutdown: Shutdown) -> Self {
+    match shutdown {
+      Shutdown::Read => quiche::Shutdown::Read,
+      Shutdown::Write => quiche::Shutdown::Write,
     }
   }
 }
 
-// Hostname vs Host
-// Remember the String is heap allocated
+impl From<quiche::Shutdown> for Shutdown {
+  fn from(item: quiche::Shutdown) -> Self {
+    match item {
+      quiche::Shutdown::Read => Shutdown::Read,
+      quiche::Shutdown::Write => Shutdown::Write,
+    }
+  }
+}
 
 #[napi(object)]
 pub struct Host {
@@ -72,7 +69,6 @@ impl Connection {
   /// This can take both IP addresses and hostnames
   #[napi(factory)]
   pub fn connect(
-    // scid: External<quiche::ConnectionId>,
     scid: Uint8Array,
     local_host: String,
     local_port: u16,
@@ -359,7 +355,7 @@ impl Connection {
     // But this is at the transport layer remember
     return self.0.stream_shutdown(
       stream_id as u64,
-      direction.0,
+      direction.into(),
       err as u64
     ).or_else(
       |err| Err(napi::Error::from_reason(err.to_string()))
