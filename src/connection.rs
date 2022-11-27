@@ -12,7 +12,7 @@ use crate::config;
 
 
 #[napi]
-pub struct Shutdown(quiche::Shutdown);
+pub struct Shutdown(pub (crate) quiche::Shutdown);
 
 // Then here, we have to create the implementation for this type
 // In that the 0 and 1 are ultimately coming from JS
@@ -62,7 +62,7 @@ pub struct RecvInfo {
 }
 
 #[napi]
-pub struct Connection(quiche::Connection);
+pub struct Connection(pub (crate) quiche::Connection);
 
 #[napi]
 impl Connection {
