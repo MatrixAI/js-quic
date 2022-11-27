@@ -1,0 +1,247 @@
+use napi_derive::napi;
+use napi::bindgen_prelude::*;
+
+#[napi]
+pub struct Config(pub (crate) quiche::Config);
+
+#[napi]
+pub struct CongestionControlAlgorithm(quiche::CongestionControlAlgorithm);
+
+impl FromNapiValue for CongestionControlAlgorithm {
+  unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
+    let value = i64::from_napi_value(env, value)?;
+    match value {
+      0 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::Reno)),
+      1 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::CUBIC)),
+      2 => Ok(CongestionControlAlgorithm(quiche::CongestionControlAlgorithm::BBR)),
+      _ => Err(Error::new(
+        Status::InvalidArg,
+        "Invalid congestion control algorithm value".to_string(),
+      )),
+    }
+  }
+}
+
+#[napi]
+impl Config {
+
+  #[napi(constructor)]
+  pub fn new() -> Result<Self> {
+    let config = quiche::Config::new(
+      quiche::PROTOCOL_VERSION
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?;
+    return Ok(Config(config));
+  }
+
+  // with_boring_ssl_ctx
+  // Requires create feature boringssl-boring-create
+  // This allows you tp oass the ssl context in memory
+  // this is factory method though
+
+  #[napi]
+  pub fn load_priv_key_from_pem_file(&mut self, file: String) -> Result<()> {
+    return self.0.load_priv_key_from_pem_file(&file).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn load_verify_locations_from_file(&mut self, file: String) -> Result<()> {
+    return self.0.load_verify_locations_from_file(&file).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn load_verify_locations_from_directory(&mut self, dir: String) -> Result<()> {
+    return self.0.load_verify_locations_from_directory(&dir).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn verify_peer(&mut self, verify: bool) -> () {
+    return self.0.verify_peer(verify);
+  }
+
+  #[napi]
+  pub fn grease(&mut self, grease: bool) -> () {
+    return self.0.grease(grease);
+  }
+
+  #[napi]
+  pub fn log_keys(&mut self) -> () {
+    return self.0.log_keys();
+  }
+
+  #[napi]
+  pub fn set_ticket_key(&mut self, key: Uint8Array) -> Result<()> {
+    return self.0.set_ticket_key(&key).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn enable_early_data(&mut self) -> () {
+    return self.0.enable_early_data();
+  }
+
+  #[napi]
+  pub fn set_application_protos(
+    &mut self,
+    protos_list: Vec<String>,
+  ) -> Result<()> {
+    let protos_list = protos_list.iter().map(
+      |proto| proto.as_bytes()
+    ).collect::<Vec<&[u8]>>();
+    return self.0.set_application_protos(&protos_list).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn set_application_protos_wire_format(
+    &mut self,
+    protos: Uint8Array
+  ) -> Result<()> {
+    return self.0.set_application_protos_wire_format(&protos).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn set_max_idle_timeout(&mut self, timeout: BigInt) -> () {
+    self.0.set_max_idle_timeout(timeout.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_max_recv_udp_payload_size(&mut self, size: BigInt) -> () {
+    return self.0.set_max_recv_udp_payload_size(
+      size.get_u64().1.try_into().unwrap()
+    );
+  }
+
+  #[napi]
+  pub fn set_max_send_udp_payload_size(&mut self, size: BigInt) -> () {
+    return self.0.set_max_send_udp_payload_size(
+      size.get_u64().1.try_into().unwrap()
+    );
+  }
+
+  #[napi]
+  pub fn set_initial_max_data(&mut self, v: BigInt) -> () {
+    return self.0.set_initial_max_data(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_initial_max_stream_data_bidi_local(&mut self, v: BigInt) -> () {
+    return self.0.set_initial_max_stream_data_bidi_local(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_initial_max_stream_data_bidi_remote(&mut self, v: BigInt) -> () {
+    return self.0.set_initial_max_stream_data_bidi_remote(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_initial_max_stream_data_uni(&mut self, v: BigInt) -> () {
+    return self.0.set_initial_max_stream_data_uni(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_initial_max_streams_bidi(&mut self, v: BigInt) -> () {
+    return self.0.set_initial_max_streams_bidi(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_initial_max_streams_uni(
+    &mut self,
+    v: BigInt
+  ) -> () {
+    return self.0.set_initial_max_streams_uni(
+      v.get_u64().1
+    );
+  }
+
+  #[napi]
+  pub fn set_ack_delay_exponent(&mut self, v: BigInt) -> () {
+    return self.0.set_ack_delay_exponent(
+      v.get_u64().1
+    );
+  }
+
+  #[napi]
+  pub fn set_max_ack_delay(&mut self, v: BigInt) -> () {
+    return self.0.set_max_ack_delay(
+      v.get_u64().1
+    );
+  }
+
+  #[napi]
+  pub fn set_active_connection_id_limit(
+    &mut self,
+    v: BigInt
+  ) -> () {
+    return self.0.set_active_connection_id_limit(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_disable_active_migration(&mut self, v: bool) -> () {
+    return self.0.set_disable_active_migration(v);
+  }
+
+  #[napi]
+  pub fn set_cc_algorithm_name(&mut self, name: String) -> Result<()> {
+    return self.0.set_cc_algorithm_name(&name).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn set_cc_algorithm(&mut self, algo: CongestionControlAlgorithm) -> () {
+    return self.0.set_cc_algorithm(algo.0);
+  }
+
+  #[napi]
+  pub fn enable_hystart(&mut self, v: bool) {
+    return self.0.enable_hystart(v);
+  }
+
+  #[napi]
+  pub fn enable_pacing(&mut self, v: bool) {
+    return self.0.enable_pacing(v);
+  }
+
+  #[napi]
+  pub fn enable_dgram(
+    &mut self,
+    enabled: bool,
+    recv_queue_len: BigInt,
+    send_queue_len: BigInt,
+  ) -> () {
+    return self.0.enable_dgram(
+      enabled,
+      recv_queue_len.get_u64().1.try_into().unwrap(),
+      send_queue_len.get_u64().1.try_into().unwrap()
+    );
+  }
+
+  #[napi]
+  pub fn set_max_connection_window(&mut self, v: BigInt) -> () {
+    return self.0.set_max_connection_window(v.get_u64().1);
+  }
+
+  #[napi]
+  pub fn set_stateless_reset_token(&mut self, v: Option<BigInt>) -> () {
+    return self.0.set_stateless_reset_token(
+      v.map(|v| v.get_u128().1)
+    );
+  }
+
+  #[napi]
+  pub fn set_disable_dcid_reuse(&mut self, v: bool) -> () {
+    return self.0.set_disable_dcid_reuse(v);
+  }
+}

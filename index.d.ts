@@ -9,19 +9,6 @@ export class ExternalObject<T> {
     [K: symbol]: T
   }
 }
-/**
- * This maximum datagram size to SEND to the UDP socket
- * It must be used with `config.set_max_recv_udp_payload_size` and such
- * But on the receiving side, we actually use the maximum which is 65535
- */
-export const MAX_DATAGRAM_SIZE: number
-/**
- * This is the maximum size of the packet to be received from the socket
- * This is what you use to receive packets on the UDP socket
- * And you send it to the connection as well
- */
-export const MAX_UDP_PACKET_SIZE: number
-export const MAX_CONN_ID_LEN: number
 export interface Host {
   ip: string
   port: number
@@ -40,27 +27,63 @@ export interface RecvInfo {
   /** The local address the packet was sent to. */
   to: Host
 }
+/**
+ * This maximum datagram size to SEND to the UDP socket
+ * It must be used with `config.set_max_recv_udp_payload_size` and such
+ * But on the receiving side, we actually use the maximum which is 65535
+ */
+export const MAX_DATAGRAM_SIZE: number
+/**
+ * This is the maximum size of the packet to be received from the socket
+ * This is what you use to receive packets on the UDP socket
+ * And you send it to the connection as well
+ */
+export const MAX_UDP_PACKET_SIZE: number
+export const MAX_CONN_ID_LEN: number
 export class Config {
   constructor()
+  loadPrivKeyFromPemFile(file: string): void
+  loadVerifyLocationsFromFile(file: string): void
+  loadVerifyLocationsFromDirectory(dir: string): void
   verifyPeer(verify: boolean): void
-  setMaxIdleTimeout(timeout: number): void
-  setMaxRecvUdpPayloadSize(size: number): void
-  setMaxSendUdpPayloadSize(size: number): void
+  grease(grease: boolean): void
+  logKeys(): void
+  setTicketKey(key: Uint8Array): void
+  enableEarlyData(): void
+  setApplicationProtos(protosList: Array<string>): void
+  setApplicationProtosWireFormat(protos: Uint8Array): void
+  setMaxIdleTimeout(timeout: bigint): void
+  setMaxRecvUdpPayloadSize(size: bigint): void
+  setMaxSendUdpPayloadSize(size: bigint): void
+  setInitialMaxData(v: bigint): void
+  setInitialMaxStreamDataBidiLocal(v: bigint): void
+  setInitialMaxStreamDataBidiRemote(v: bigint): void
+  setInitialMaxStreamDataUni(v: bigint): void
+  setInitialMaxStreamsBidi(v: bigint): void
+  setInitialMaxStreamsUni(v: bigint): void
+  setAckDelayExponent(v: bigint): void
+  setMaxAckDelay(v: bigint): void
+  setActiveConnectionIdLimit(v: bigint): void
+  setDisableActiveMigration(v: boolean): void
+  setCcAlgorithmName(name: string): void
+  setCcAlgorithm(algo: CongestionControlAlgorithm): void
+  enableHystart(v: boolean): void
+  enablePacing(v: boolean): void
+  enableDgram(enabled: boolean, recvQueueLen: bigint, sendQueueLen: bigint): void
+  setMaxConnectionWindow(v: bigint): void
+  setStatelessResetToken(v?: bigint | undefined | null): void
+  setDisableDcidReuse(v: boolean): void
 }
+export class CongestionControlAlgorithm { }
 export class Shutdown { }
-/**
- * Creates random connection ID
- *
- * Relies on the JS runtime to provide the randomness system
- */
 export class Connection {
   /**
    * Creates QUIC Client Connection
    *
    * This can take both IP addresses and hostnames
    */
-  static connect(scid: Buffer, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
-  static accept(scid: Buffer, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
+  static connect(scid: Uint8Array, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
+  static accept(scid: Uint8Array, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
   /**
    * Sends a QUIC packet
    *

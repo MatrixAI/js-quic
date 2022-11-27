@@ -10,18 +10,10 @@ exclude = ["index.node"]
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", features = ["async"] }
+napi = { version = "2", features = ["async", "napi6"] }
 napi-derive = "2"
 quiche = "0.16.0"
 ring = "0.16"
 
 [build-dependencies]
 napi-build = "2"
-# url = "1"
-# num_cpus = "1"
-# mio = { version = "0.8", features = ["net", "os-poll"] }
-
-# [dependencies.neon]
-# version = "0.10"
-# default-features = false
-# features = ["napi-6"]
