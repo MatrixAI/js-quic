@@ -20,46 +20,77 @@ use crate::config;
 use crate::stream;
 use crate::path;
 
-// #[napi]
-// pub struct ConnectionId;
+#[napi(object)]
+pub struct ConnectionError {
+  pub is_app: bool,
+  pub error_code: i64,
+  pub reason: Vec<u8>,
+}
 
-// #[napi(object)]
-// pub struct ConnectionId {
-//   pub id: Uint8Array,
-// }
+impl From<quiche::ConnectionError> for ConnectionError {
+  fn from(err: quiche::ConnectionError) -> Self {
+    return ConnectionError {
+      is_app: err.is_app,
+      error_code: err.error_code as i64,
+      reason: err.reason.to_vec(),
+    };
+  }
+}
 
-// #[napi(ts_type = "Uint8Array")]
-// type Something = Uint8Array;
-// pub struct Something(pub Uint8Array);
-// #[napi]
-// pub struct ConnectionId(pub (crate) quiche::ConnectionId<'static>);
-// #[napi]
-// impl ConnectionId {
-//   #[napi(constructor)]
-//   pub fn new(data: Uint8Array) -> Self {
-//     return ConnectionId { id: data };
-//     // return ConnectionId(quiche::ConnectionId::from_vec(data.to_vec()));
-//   }
-// }
+#[napi(object)]
+pub struct Stats {
+  pub recv: i64,
+  pub sent: i64,
+  pub lost: i64,
+  pub retrans: i64,
+  pub sent_bytes: i64,
+  pub recv_bytes: i64,
+  pub lost_bytes: i64,
+  pub stream_retrans_bytes: i64,
+  pub paths_count: i64,
+  pub peer_max_idle_timeout: i64,
+  pub peer_max_udp_payload_size: i64,
+  pub peer_initial_max_data: i64,
+  pub peer_initial_max_stream_data_bidi_local: i64,
+  pub peer_initial_max_stream_data_bidi_remote: i64,
+  pub peer_initial_max_stream_data_uni: i64,
+  pub peer_initial_max_streams_bidi: i64,
+  pub peer_initial_max_streams_uni: i64,
+  pub peer_ack_delay_exponent: i64,
+  pub peer_max_ack_delay: i64,
+  pub peer_disable_active_migration: bool,
+  pub peer_active_conn_id_limit: i64,
+  pub peer_max_datagram_frame_size: Option<i64>,
+}
 
-// impl FromNapiValue for ConnectionId {
-//   unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
-//     let data = Uint8Array::from_napi_value(env, value)?;
-//     return Ok(ConnectionId { id: data });
-//   }
-// }
-
-// impl FromNapiValue for ConnectionId {
-//   unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
-//     let data = Uint8Array::from_napi_value(env, value)?;
-//     return Ok(ConnectionId::new(data));
-//   }
-// }
-
-// Well this is weird
-// If I just take a Buffer
-// and convert it to that
-// Why does it matter?
+impl From<quiche::Stats> for Stats {
+  fn from(stats: quiche::Stats) -> Self {
+    return Stats {
+      recv: stats.recv as i64,
+      sent: stats.sent as i64,
+      lost: stats.lost as i64,
+      retrans: stats.retrans as i64,
+      sent_bytes: stats.sent_bytes as i64,
+      recv_bytes: stats.recv_bytes as i64,
+      lost_bytes: stats.lost_bytes as i64,
+      stream_retrans_bytes: stats.stream_retrans_bytes as i64,
+      paths_count: stats.paths_count as i64,
+      peer_max_idle_timeout: stats.peer_max_idle_timeout as i64,
+      peer_max_udp_payload_size: stats.peer_max_udp_payload_size as i64,
+      peer_initial_max_data: stats.peer_initial_max_data as i64,
+      peer_initial_max_stream_data_bidi_local: stats.peer_initial_max_stream_data_bidi_local as i64,
+      peer_initial_max_stream_data_bidi_remote: stats.peer_initial_max_stream_data_bidi_remote as i64,
+      peer_initial_max_stream_data_uni: stats.peer_initial_max_stream_data_uni as i64,
+      peer_initial_max_streams_bidi: stats.peer_initial_max_streams_bidi as i64,
+      peer_initial_max_streams_uni: stats.peer_initial_max_streams_uni as i64,
+      peer_ack_delay_exponent: stats.peer_ack_delay_exponent as i64,
+      peer_max_ack_delay: stats.peer_max_ack_delay as i64,
+      peer_disable_active_migration: stats.peer_disable_active_migration,
+      peer_active_conn_id_limit: stats.peer_active_conn_id_limit as i64,
+      peer_max_datagram_frame_size: stats.peer_max_datagram_frame_size.map(|v| v as i64),
+    };
+  }
+}
 
 /// Equivalent to quiche::Shutdown enum
 #[napi]
@@ -972,9 +1003,21 @@ impl Connection {
     return self.0.is_timed_out();
   }
 
-  // peer_error
-  // local_error
-  // stats
+  #[napi]
+  pub fn peer_error(&self) -> Option<ConnectionError> {
+    return self.0.peer_error().map(|e| e.clone().into());
+  }
+
+  #[napi]
+  pub fn local_error(&self) -> Option<ConnectionError> {
+    return self.0.local_error().map(|e| e.clone().into());
+  }
+
+  #[napi]
+  pub fn stats(&self) -> Stats {
+    return self.0.stats().into();
+  }
+
   // path_stats
 
 }

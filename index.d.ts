@@ -85,7 +85,11 @@ export class Config {
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
-export class ConnectionId { }
+export class ConnectionError {
+  get isApp(): boolean
+  get errorCode(): number
+  get reason(): Array<number>
+}
 export class Connection {
   /**
    * Creates QUIC Client Connection

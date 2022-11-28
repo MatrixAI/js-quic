@@ -1,12 +1,5 @@
 use napi_derive::napi;
-use napi::bindgen_prelude::{
-  Env,
-  Array,
-  Uint8Array,
-  External,
-  ToNapiValue,
-  Generator
-};
+use napi::bindgen_prelude::{Generator};
 
 #[napi(iterator)]
 pub struct StreamIter(pub (crate) quiche::StreamIter);
