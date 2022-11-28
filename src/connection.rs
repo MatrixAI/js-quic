@@ -20,23 +20,37 @@ use crate::config;
 use crate::stream;
 use crate::path;
 
-#[napi]
-pub struct ConnectionId(pub (crate) quiche::ConnectionId<'static>);
 
-#[napi]
-impl ConnectionId {
-  #[napi(constructor)]
-  pub fn new(data: Uint8Array) -> Self {
-    return ConnectionId(quiche::ConnectionId::from_vec(data.to_vec()));
-  }
+#[napi(object)]
+pub struct ConnectionId {
+  pub id: Uint8Array,
 }
 
-impl FromNapiValue for ConnectionId {
-  unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
-    let data = Uint8Array::from_napi_value(env, value)?;
-    return Ok(ConnectionId::new(data));
-  }
-}
+// #[napi]
+// pub struct ConnectionId(pub (crate) quiche::ConnectionId<'static>);
+
+// #[napi]
+// impl ConnectionId {
+//   #[napi(constructor)]
+//   pub fn new(data: Uint8Array) -> Self {
+//     return ConnectionId { id: data };
+//     // return ConnectionId(quiche::ConnectionId::from_vec(data.to_vec()));
+//   }
+// }
+
+// impl FromNapiValue for ConnectionId {
+//   unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
+//     let data = Uint8Array::from_napi_value(env, value)?;
+//     return Ok(ConnectionId { id: data });
+//   }
+// }
+
+// impl FromNapiValue for ConnectionId {
+//   unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
+//     let data = Uint8Array::from_napi_value(env, value)?;
+//     return Ok(ConnectionId::new(data));
+//   }
+// }
 
 // Well this is weird
 // If I just take a Buffer
@@ -762,7 +776,7 @@ impl Connection {
     retire_if_needed: bool
   ) -> napi::Result<i64> {
     return self.0.new_source_cid(
-      &scid.0,
+      &quiche::ConnectionId::from_ref(&scid.id),
       reset_token.get_u128().1,
       retire_if_needed
     ).map(|v| v as i64).or_else(
@@ -806,8 +820,11 @@ impl Connection {
 
   #[napi]
   pub fn retired_scid_next(&mut self) -> Option<ConnectionId> {
+    // return self.0.retired_scid_next().map(|v| ConnectionId(v));
     let connection_id = self.0.retired_scid_next();
-    return connection_id.map(|v| ConnectionId(v));
+    return connection_id.map(|v| ConnectionId {
+      id: v.as_ref().into()
+    });
   }
 
   #[napi]
@@ -815,18 +832,142 @@ impl Connection {
     return self.0.available_dcids() as i64;
   }
 
+  #[napi]
+  pub fn paths_iter(&self, from: Host) -> napi::Result<path::HostIter> {
+    let from_addr: SocketAddr = from.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    let socket_addr_iter = self.0.paths_iter(from_addr);
+    return Ok(path::HostIter(socket_addr_iter));
+  }
 
+  #[napi]
+  pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<()> {
+    return self.0.close(app, err as u64, &reason).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
 
+  #[napi]
+  pub fn trace_id(&self) -> String {
+    return self.0.trace_id().to_string();
+  }
 
+  #[napi]
+  pub fn application_proto(&self) -> Uint8Array {
+    return self.0.application_proto().to_vec().into();
+  }
 
+  #[napi]
+  pub fn server_name(&self) -> Option<String> {
+    return self.0.server_name().map(|v| v.to_string());
+  }
 
+  #[napi]
+  pub fn peer_cert_chain(&self) -> Option<Vec<Uint8Array>> {
+    return self.0.peer_cert_chain().map(
+      |certs| certs.iter().map(
+        |cert| cert.to_vec().into()
+      ).collect()
+    );
+  }
 
+  #[napi]
+  pub fn session(&self) -> Option<Uint8Array> {
+    return self.0.session().map(|s| s.to_vec().into());
+  }
 
+  // This requires working on a Buffer/Uint8Array
+  // We return the ConnectionId
+  // But the problem is that on the JS side
+  // ConnectionId is just an opaque object
+  // It should be "containing" an inherent buffer
+  // Or we just use Uint8Array as our ConnectionId
+  // And just do the conversion directly
+  // As on the JS side it makes more sense to just say that it is a buffer
+  // without further work
+  // We could do something like
+  // ConnectionId(Uint8Array)
+  // Thus wrapping it into something we can use outside
+  // and exposing it too?
 
+  #[napi]
+  pub fn source_id(&self) -> ConnectionId {
+    return ConnectionId { id: self.0.source_id().as_ref().into() };
+    // return ConnectionId(
+    //   quiche::ConnectionId::from_vec(self.0.source_id().as_ref().to_vec())
+    // );
+  }
 
+  #[napi]
+  pub fn destination_id(&self) -> ConnectionId {
+    return ConnectionId { id: self.0.destination_id().as_ref().into() };
+    // return ConnectionId(
+    //   quiche::ConnectionId::from_vec(self.0.destination_id().as_ref().to_vec())
+    // );
+  }
 
+  #[napi]
+  pub fn is_established(&self) -> bool {
+    return self.0.is_established();
+  }
 
+  #[napi]
+  pub fn is_resumed(&self) -> bool {
+    return self.0.is_resumed();
+  }
 
+  #[napi]
+  pub fn is_in_early_data(&self) -> bool {
+    return self.0.is_in_early_data();
+  }
 
+  #[napi]
+  pub fn is_readable(&self) -> bool {
+    return self.0.is_readable();
+  }
+
+  #[napi]
+  pub fn is_path_validated(
+    &self,
+    from: Host,
+    to: Host
+  ) -> napi::Result<bool> {
+    let from_addr: SocketAddr = from.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    let to_addr: SocketAddr = to.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    return self.0.is_path_validated(from_addr, to_addr).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn is_draining(&self) -> bool {
+    return self.0.is_draining();
+  }
+
+  #[napi]
+  pub fn is_closed(&self) -> bool {
+    return self.0.is_closed();
+  }
+
+  #[napi]
+  pub fn is_timed_out(&self) -> bool {
+    return self.0.is_timed_out();
+  }
+
+  // peer_error
+  // local_error
+  // stats
+  // path_stats
 
 }

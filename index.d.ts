@@ -15,6 +15,9 @@ export const enum CongestionControlAlgorithm {
   CUBIC = 1,
   BBR = 2
 }
+export interface ConnectionId {
+  id: Uint8Array
+}
 /** Equivalent to quiche::Shutdown enum */
 export const enum Shutdown {
   Read = 0,
@@ -85,9 +88,6 @@ export class Config {
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
-export class ConnectionId {
-  constructor(data: Uint8Array)
-}
 export class Connection {
   /**
    * Creates QUIC Client Connection
@@ -154,8 +154,30 @@ export class Connection {
   maxActiveSourceCids(): number
   sourceCidsLeft(): number
   retireDestinationCid(dcidSeq: number): void
-  pathEventNext(): { type: "New" } | { type: "Validated" } | { type: "FailedValidation" } | { type: "Closed" } | { type: "ReusedSourceConnectionId" } | { type: "PeerMigrated" }
+  pathEventNext(): object
+  retiredScidNext(): ConnectionId | null
+  availableDcids(): number
+  pathsIter(from: Host): HostIter
+  close(app: boolean, err: number, reason: Uint8Array): void
+  traceId(): string
+  applicationProto(): Uint8Array
+  serverName(): string | null
+  peerCertChain(): Array<Uint8Array> | null
+  session(): Uint8Array | null
+  sourceId(): ConnectionId
+  destinationId(): ConnectionId
+  isEstablished(): boolean
+  isResumed(): boolean
+  isInEarlyData(): boolean
+  isReadable(): boolean
+  isPathValidated(from: Host, to: Host): boolean
+  isDraining(): boolean
+  isClosed(): boolean
+  isTimedOut(): boolean
 }
 export class StreamIter {
   [Symbol.iterator](): Iterator<number, void, void>
+}
+export class HostIter {
+  [Symbol.iterator](): Iterator<Host, void, void>
 }

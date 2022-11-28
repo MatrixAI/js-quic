@@ -1,3 +1,7 @@
+use napi_derive::napi;
+use napi::bindgen_prelude::{
+  Generator
+};
 use serde::{Serialize, Deserialize};
 use crate::connection;
 
@@ -51,5 +55,19 @@ impl From<quiche::PathEvent> for PathEvent {
   }
 }
 
-// #[napi]
-// pub struct PathEvent(pub (crate) quiche::PathEvent);
+// This is an iterator of the host
+#[napi(iterator)]
+pub struct HostIter(pub (crate) quiche::SocketAddrIter);
+
+#[napi]
+impl Generator for HostIter {
+  type Yield = connection::Host;
+  type Next = ();
+  type Return = ();
+
+  fn next(&mut self, _value: Option<Self::Next>) -> Option<Self::Yield> {
+    return self.0.next().map(
+      |socket_addr| socket_addr.into()
+    );
+  }
+}
