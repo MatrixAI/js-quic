@@ -5,6 +5,7 @@
 mod config;
 mod connection;
 mod constants;
+mod stream;
 
 // Creates random connection ID
 //

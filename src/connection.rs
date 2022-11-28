@@ -1,4 +1,9 @@
-use std::net::ToSocketAddrs;
+use std::io;
+use std::net::{
+  SocketAddr,
+  ToSocketAddrs,
+};
+// use std::net::ToSocketAddrs;
 use napi_derive::napi;
 use napi::bindgen_prelude::{
   Env,
@@ -8,6 +13,7 @@ use napi::bindgen_prelude::{
   ToNapiValue,
 };
 use crate::config;
+use crate::stream;
 
 /// Equivalent to quiche::Shutdown enum
 #[napi]
@@ -36,8 +42,29 @@ impl From<quiche::Shutdown> for Shutdown {
 
 #[napi(object)]
 pub struct Host {
-  pub ip: String,
+  pub addr: String,
   pub port: u16,
+}
+
+impl TryFrom<Host> for SocketAddr {
+  type Error = io::Error;
+  fn try_from(host: Host) -> io::Result<Self> {
+    (host.addr, host.port).to_socket_addrs()?.next().ok_or(
+      io::Error::new(
+        io::ErrorKind::Other,
+        "Could not convert host to socket address"
+      )
+    )
+  }
+}
+
+impl From<SocketAddr> for Host {
+  fn from(socket_addr: SocketAddr) -> Self {
+    Host {
+      addr: socket_addr.ip().to_string(),
+      port: socket_addr.port(),
+    }
+  }
 }
 
 #[napi(object)]
@@ -70,10 +97,8 @@ impl Connection {
   #[napi(factory)]
   pub fn connect(
     scid: Uint8Array,
-    local_host: String,
-    local_port: u16,
-    remote_host: String,
-    remote_port: u16,
+    local_host: Host,
+    remote_host: Host,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
     // These addresses are passed in from the outside
@@ -82,15 +107,23 @@ impl Connection {
     // Since the nodejs runtime will do the relevant binding
     // When binding, it needs to bind to both IPv6 and IPv6
 
-    let local_addr = (local_host, local_port).to_socket_addrs().or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    )?.next().unwrap();
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+    )?;
+
+    // let local_addr = (local_host, local_port).to_socket_addrs().or_else(
+    //   |err| Err(napi::Error::from_reason(err.to_string()))
+    // )?.next().unwrap();
 
     eprintln!("Local address: {:?}", local_addr);
 
-    let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    )?.next().unwrap();
+    // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
+    //   |err| Err(napi::Error::from_reason(err.to_string()))
+    // )?.next().unwrap();
+
+    let remote_addr: SocketAddr = remote_host.try_into().or_else(
+      |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+    )?;
 
     eprintln!("Remote address: {:?}", remote_addr);
 
@@ -114,22 +147,28 @@ impl Connection {
   #[napi(factory)]
   pub fn accept(
     scid: Uint8Array,
-    local_host: String,
-    local_port: u16,
-    remote_host: String,
-    remote_port: u16,
+    local_host: Host,
+    remote_host: Host,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
 
-    let local_addr = (local_host, local_port).to_socket_addrs().or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    )?.next().unwrap();
+    // let local_addr = (local_host, local_port).to_socket_addrs().or_else(
+    //   |err| Err(napi::Error::from_reason(err.to_string()))
+    // )?.next().unwrap();
+
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+    )?;
 
     eprintln!("Local address: {:?}", local_addr);
 
-    let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    )?.next().unwrap();
+    // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
+    //   |err| Err(napi::Error::from_reason(err.to_string()))
+    // )?.next().unwrap();
+
+    let remote_addr: SocketAddr = remote_host.try_into().or_else(
+      |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+    )?;
 
     eprintln!("Remote address: {:?}", remote_addr);
 
@@ -150,49 +189,12 @@ impl Connection {
     return Ok(Connection(connection));
   }
 
-  /// Sends a QUIC packet
-  ///
-  /// This writes to the data buffer passed in.
-  /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
-  /// This will return a JS array of `[length, send_info]`.
-  /// If the length is 0, then that there's no data to send.
-  /// The `send_info` will be set to `null`.
   #[napi]
-  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
-    // Convert the Done error into a 0-length write
-    // This would mean that there's nothing to send
-    let (write, send_info) = match self.0.send(&mut data) {
-      Ok((write, send_info)) => (write, Some(send_info)),
-      Err(quiche::Error::Done) => (0, None),
-      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
-    };
-    let send_info = send_info.map(|info| {
-      let from = Host {
-        ip: info.from.ip().to_string(),
-        port: info.from.port(),
-      };
-      let to = Host {
-        ip: info.to.ip().to_string(),
-        port: info.to.port(),
-      };
-      let at = External::new(info.at);
-      SendInfo { from, to, at }
-    });
-    let mut write_and_send_info = env.create_array(2)?;
-    write_and_send_info.set(0, write as i64)?;
-    write_and_send_info.set(1, send_info)?;
-    return Ok(write_and_send_info);
+  pub fn set_session(&mut self, session: Uint8Array) -> napi::Result<()> {
+    return self.0.set_session(&session).or_else(
+      |err| Err(napi::Error::from_reason(err.to_string()))
+    );
   }
-
-  // We need the information that the packet was sent from and to
-  // And both are socket addresses
-  // THE TO info
-  // is the local address
-  // that is something that
-  // The buffer here is mutated
-  // Do not re-use it
-  // Pass back the `to` as the LOCAL address?
-  // We provided the address all the time
 
   // This data buffer must be the size of the entire largest packet...
   // It is not the max datagram size, you have to potentially take
@@ -213,13 +215,21 @@ impl Connection {
     // In fact, for any given connection, don't we already have both the remote address and the local address already?
     // Yea, exactly this information is technically already known
 
+    // recv_info.from
+
     let recv_info = quiche::RecvInfo {
-      from: (recv_info.from.ip, recv_info.from.port).to_socket_addrs().or_else(
-        |err| Err(napi::Error::from_reason(err.to_string()))
-      )?.next().unwrap(),
-      to: (recv_info.to.ip, recv_info.to.port).to_socket_addrs().or_else(
-        |err| Err(napi::Error::from_reason(err.to_string()))
-      )?.next().unwrap(),
+      from: recv_info.from.try_into().or_else(
+        |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+      )?,
+      // from: (recv_info.from.addr, recv_info.from.port).to_socket_addrs().or_else(
+      //   |err| Err(napi::Error::from_reason(err.to_string()))
+      // )?.next().unwrap(),
+      to: recv_info.to.try_into().or_else(
+        |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
+      )?,
+      // to: (recv_info.to.addr, recv_info.to.port).to_socket_addrs().or_else(
+      //   |err| Err(napi::Error::from_reason(err.to_string()))
+      // )?.next().unwrap(),
     };
     // If there is an error, the JS side should continue to read
     // But it can log out the error
@@ -236,46 +246,129 @@ impl Connection {
     return Ok(read as i64);
   }
 
-  /// Maximum dgram size
+
+  /// Sends a QUIC packet
   ///
-  /// Use this to determine the size of the dgrams being send and received
-  /// I'm not sure if this is also necessary for send and recv?
+  /// This writes to the data buffer passed in.
+  /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
+  /// This will return a JS array of `[length, send_info]`.
+  /// If the length is 0, then that there's no data to send.
+  /// The `send_info` will be set to `null`.
   #[napi]
-  pub fn dgram_max_writable_len(&mut self) -> Option<i64> {
-    return self.0.dgram_max_writable_len().map(|v| v as i64);
-  }
-
-  #[napi]
-  pub fn dgram_send(
-    &mut self,
-    data: Uint8Array,
-  ) -> napi::Result<()> {
-    match self.0.dgram_send(
-      &data,
-    ) {
-      Ok(v) => return Ok(v),
-      // If no data is sent, also return Ok
-      Err(quiche::Error::Done) => return Ok(()),
+  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
+    // Convert the Done error into a 0-length write
+    // This would mean that there's nothing to send
+    let (write, send_info) = match self.0.send(&mut data) {
+      Ok((write, send_info)) => (write, Some(send_info)),
+      Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
+    let send_info = send_info.map(|info| {
+      let from = Host {
+        addr: info.from.ip().to_string(),
+        port: info.from.port(),
+      };
+      let to = Host {
+        addr: info.to.ip().to_string(),
+        port: info.to.port(),
+      };
+      let at = External::new(info.at);
+      SendInfo { from, to, at }
+    });
+    let mut write_and_send_info = env.create_array(2)?;
+    write_and_send_info.set(0, write as i64)?;
+    write_and_send_info.set(1, send_info)?;
+    return Ok(write_and_send_info);
+  }
+
+  // So you can pass the SocketAddr
+  // But instead we provide a sort of conversion that is necessary
+
+  #[napi]
+  pub fn send_on_path(
+    &mut self,
+    env: Env,
+    mut data: Uint8Array,
+    from: Option<Host>,
+    to: Option<Host>
+  ) -> napi::Result<Array> {
+    // If we want to "preserve" the error
+    // We have to then provide a Some(Result)
+    // Which means Option<Result<SocketAddr>>
+    // Then we have to "unwrap" it
+    // But I'm not sure how to do this here...
+    // Especially it seems so functional
+    // On the other hand... I think if we can unwrap it here
+
+    let from: Option<SocketAddr> = match from {
+      Some(host) => Some(
+        host.try_into().or_else(
+          |err: io::Error| Err(
+            napi::Error::new(napi::Status::InvalidArg, err.to_string())
+          )
+        )?
+      ),
+      // Some(host) => (host.addr, host.port).to_socket_addrs().or_else(
+      //   |err| Err(napi::Error::from_reason(err.to_string()))
+      // )?.next(),
+      _ => None
+    };
+    let to: Option<SocketAddr> = match to {
+      Some(host) => Some(
+        host.try_into().or_else(
+          |err: io::Error| Err(
+            napi::Error::new(napi::Status::InvalidArg, err.to_string())
+            // napi::Error::from_reason(err.to_string())
+          )
+        )?
+      ),
+      // Some(host) => (host.addr, host.port).to_socket_addrs().or_else(
+      //   |err| Err(napi::Error::from_reason(err.to_string()))
+      // )?.next(),
+      _ => None
+    };
+    let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
+      Ok((write, send_info)) => (write, Some(send_info)),
+      Err(quiche::Error::Done) => (0, None),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+    };
+    let send_info = send_info.map(|info| {
+      let from = Host {
+        addr: info.from.ip().to_string(),
+        port: info.from.port(),
+      };
+      let to = Host {
+        addr: info.to.ip().to_string(),
+        port: info.to.port(),
+      };
+      let at = External::new(info.at);
+      SendInfo { from, to, at }
+    });
+    let mut write_and_send_info = env.create_array(2)?;
+    write_and_send_info.set(0, write as i64)?;
+    write_and_send_info.set(1, send_info)?;
+    return Ok(write_and_send_info);
   }
 
   #[napi]
-  pub fn dgram_recv(
-    &mut self,
-    mut data: Uint8Array
-  ) -> napi::Result<i64> {
-    match self.0.dgram_recv(
-      &mut data,
-    ) {
-      Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
-      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
-    };
+  pub fn send_quantum(&self) -> i64 {
+    return self.0.send_quantum() as i64;
   }
 
-  // Ok let's work out how to deal with streams
-  // this returns a tuple
+  #[napi]
+  pub fn send_quantum_on_path(&self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    let remote_addr: SocketAddr = peer_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    return Ok(self.0.send_quantum_on_path(local_addr, remote_addr) as i64);
+  }
 
   #[napi]
   pub fn stream_recv(
@@ -300,20 +393,6 @@ impl Connection {
   }
 
   #[napi]
-  pub fn stream_priority(
-    &mut self,
-    stream_id: i64,
-    urgency: u8,
-    incremental: bool
-  ) -> napi::Result<()> {
-    return self.0.stream_priority(
-      stream_id as u64,
-      urgency,
-      incremental
-    ).map_err(|e| napi::Error::from_reason(e.to_string()));
-  }
-
-  #[napi]
   pub fn stream_send(
     &mut self,
     stream_id: i64,
@@ -335,6 +414,20 @@ impl Connection {
       Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
+  }
+
+  #[napi]
+  pub fn stream_priority(
+    &mut self,
+    stream_id: i64,
+    urgency: u8,
+    incremental: bool
+  ) -> napi::Result<()> {
+    return self.0.stream_priority(
+      stream_id as u64,
+      urgency,
+      incremental
+    ).map_err(|e| napi::Error::from_reason(e.to_string()));
   }
 
   #[napi]
@@ -412,4 +505,162 @@ impl Connection {
   pub fn peer_streams_left_uni(&self) -> i64 {
     return self.0.peer_streams_left_uni() as i64;
   }
+
+  #[napi]
+  pub fn readable(&self) -> stream::StreamIter {
+    return stream::StreamIter(self.0.readable());
+  }
+
+  #[napi]
+  pub fn writable(&self) -> stream::StreamIter {
+    return stream::StreamIter(self.0.writable());
+  }
+
+  #[napi]
+  pub fn max_send_udp_payload_size(&self) -> i64 {
+    return self.0.max_send_udp_payload_size() as i64;
+  }
+
+  #[napi]
+  pub fn dgram_recv(
+    &mut self,
+    mut data: Uint8Array
+  ) -> napi::Result<i64> {
+    match self.0.dgram_recv(
+      &mut data,
+    ) {
+      Ok(v) => return Ok(v as i64),
+      Err(quiche::Error::Done) => return Ok(0),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+    };
+  }
+
+  #[napi]
+  pub fn dgram_recv_vec(
+    &mut self,
+  ) -> napi::Result<Option<Uint8Array>> {
+    match self.0.dgram_recv_vec() {
+      Ok(v) => return Ok(Some(v.into())),
+      Err(quiche::Error::Done) => return Ok(None),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+    };
+  }
+
+  #[napi]
+  pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<i64> {
+    match self.0.dgram_recv_peek(
+      &mut data,
+      len as usize,
+    ) {
+      Ok(v) => return Ok(v as i64),
+      Err(quiche::Error::Done) => return Ok(0),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string()))
+    };
+  }
+
+  #[napi]
+  pub fn dgram_recv_front_len(&self) -> Option<i64> {
+    return self.0.dgram_recv_front_len().map(|v| v as i64);
+  }
+
+  #[napi]
+  pub fn dgram_recv_queue_len(&self) -> i64 {
+    return self.0.dgram_recv_queue_len() as i64;
+  }
+
+  #[napi]
+  pub fn dgram_recv_queue_byte_size(&self) -> i64 {
+    return self.0.dgram_recv_queue_byte_size() as i64;
+  }
+
+  #[napi]
+  pub fn dgram_send_queue_len(&self) -> i64 {
+    return self.0.dgram_send_queue_len() as i64;
+  }
+
+  #[napi]
+  pub fn dgram_send_queue_byte_size(&self) -> i64 {
+    return self.0.dgram_send_queue_byte_size() as i64;
+  }
+
+  #[napi]
+  pub fn is_dgram_send_queue_full(&self) -> bool {
+    return self.0.is_dgram_send_queue_full();
+  }
+
+  #[napi]
+  pub fn is_dgram_recv_queue_full(&self) -> bool {
+    return self.0.is_dgram_recv_queue_full();
+  }
+
+  #[napi]
+  pub fn dgram_send(
+    &mut self,
+    data: Uint8Array,
+  ) -> napi::Result<()> {
+    match self.0.dgram_send(
+      &data,
+    ) {
+      Ok(v) => return Ok(v),
+      // If no data is sent, also return Ok
+      Err(quiche::Error::Done) => return Ok(()),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+    };
+  }
+
+  #[napi]
+  pub fn dgram_send_vec(
+    &mut self,
+    data: Uint8Array
+  ) -> napi::Result<()> {
+    match self.0.dgram_send_vec(
+      data.to_vec()
+    ) {
+      Ok(v) => return Ok(v),
+      Err(quiche::Error::Done) => return Ok(()),
+      Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+    };
+  }
+
+  // We have Task, AsyncTask and async fn that runs things in the tokio runtime
+  // It seems the async task could be used here
+  // but I'm unclear about how the streams and shit should be done
+  // It seems that this is all in-memory computation
+  // So we should just not bother any async unless there's REAL IO
+
+  // If an exception occurs, we have to convert to false
+  #[napi]
+  pub fn dgram_purge_outgoing<F: Fn(Uint8Array) -> napi::Result<bool>>(
+    &mut self,
+    f: F
+  ) -> () {
+    return self.0.dgram_purge_outgoing(
+      |data: &[u8]| match f(data.into()) {
+        Ok(v) => v,
+        // If error occurs, this must return false
+        _ => false
+      }
+    );
+  }
+
+  /// Maximum dgram size
+  ///
+  /// Use this to determine the size of the dgrams being send and received
+  /// I'm not sure if this is also necessary for send and recv?
+  #[napi]
+  pub fn dgram_max_writable_len(&mut self) -> Option<i64> {
+    return self.0.dgram_max_writable_len().map(|v| v as i64);
+  }
+
+  #[napi]
+  pub fn timeout(&self) -> Option<i64> {
+    return self.0.timeout().map(|t| t.as_millis() as i64);
+  }
+
+  #[napi]
+  pub fn on_timeout(&mut self) -> () {
+    return self.0.on_timeout();
+  }
+
+
 }

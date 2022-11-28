@@ -21,7 +21,7 @@ export const enum Shutdown {
   Write = 1
 }
 export interface Host {
-  ip: string
+  addr: string
   port: number
 }
 export interface SendInfo {
@@ -91,8 +91,10 @@ export class Connection {
    *
    * This can take both IP addresses and hostnames
    */
-  static connect(scid: Uint8Array, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
-  static accept(scid: Uint8Array, localHost: string, localPort: number, remoteHost: string, remotePort: number, config: Config): Connection
+  static connect(scid: Uint8Array, localHost: Host, remoteHost: Host, config: Config): Connection
+  static accept(scid: Uint8Array, localHost: Host, remoteHost: Host, config: Config): Connection
+  setSession(session: Uint8Array): void
+  recv(data: Uint8Array, recvInfo: RecvInfo): number
   /**
    * Sends a QUIC packet
    *
@@ -103,19 +105,12 @@ export class Connection {
    * The `send_info` will be set to `null`.
    */
   send(data: Uint8Array): unknown[]
-  recv(data: Uint8Array, recvInfo: RecvInfo): number
-  /**
-   * Maximum dgram size
-   *
-   * Use this to determine the size of the dgrams being send and received
-   * I'm not sure if this is also necessary for send and recv?
-   */
-  dgramMaxWritableLen(): number | null
-  dgramSend(data: Uint8Array): void
-  dgramRecv(data: Uint8Array): number
+  sendOnPath(data: Uint8Array, from?: Host | undefined | null, to?: Host | undefined | null): unknown[]
+  sendQuantum(): number
+  sendQuantumOnPath(localHost: Host, peerHost: Host): number
   streamRecv(streamId: number, data: Uint8Array): unknown[]
-  streamPriority(streamId: number, urgency: number, incremental: boolean): void
   streamSend(streamId: number, data: Uint8Array, fin: boolean): number
+  streamPriority(streamId: number, urgency: number, incremental: boolean): void
   streamShutdown(streamId: number, direction: Shutdown, err: number): void
   streamCapacity(streamId: number): number
   streamReadable(streamId: number): boolean
@@ -123,4 +118,32 @@ export class Connection {
   streamFinished(streamId: number): boolean
   peerStreamsLeftBidi(): number
   peerStreamsLeftUni(): number
+  readable(): StreamIter
+  writable(): StreamIter
+  maxSendUdpPayloadSize(): number
+  dgramRecv(data: Uint8Array): number
+  dgramRecvVec(): Uint8Array | null
+  dgramRecvPeek(data: Uint8Array, len: number): number
+  dgramRecvFrontLen(): number | null
+  dgramRecvQueueLen(): number
+  dgramRecvQueueByteSize(): number
+  dgramSendQueueLen(): number
+  dgramSendQueueByteSize(): number
+  isDgramSendQueueFull(): boolean
+  isDgramRecvQueueFull(): boolean
+  dgramSend(data: Uint8Array): void
+  dgramSendVec(data: Uint8Array): void
+  dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void
+  /**
+   * Maximum dgram size
+   *
+   * Use this to determine the size of the dgrams being send and received
+   * I'm not sure if this is also necessary for send and recv?
+   */
+  dgramMaxWritableLen(): number | null
+  timeout(): number | null
+  onTimeout(): void
+}
+export class StreamIter {
+  [Symbol.iterator](): Iterator<number, void, void>
 }
