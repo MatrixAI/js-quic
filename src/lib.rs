@@ -6,6 +6,7 @@ mod config;
 mod connection;
 mod constants;
 mod stream;
+mod path;
 
 // Creates random connection ID
 //

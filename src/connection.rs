@@ -1,3 +1,4 @@
+use serde::{Serialize, Deserialize};
 use std::io;
 use std::net::{
   SocketAddr,
@@ -8,12 +9,39 @@ use napi_derive::napi;
 use napi::bindgen_prelude::{
   Env,
   Array,
+  BigInt,
   Uint8Array,
   External,
   ToNapiValue,
+  FromNapiValue,
+  sys
 };
 use crate::config;
 use crate::stream;
+use crate::path;
+
+#[napi]
+pub struct ConnectionId(pub (crate) quiche::ConnectionId<'static>);
+
+#[napi]
+impl ConnectionId {
+  #[napi(constructor)]
+  pub fn new(data: Uint8Array) -> Self {
+    return ConnectionId(quiche::ConnectionId::from_vec(data.to_vec()));
+  }
+}
+
+impl FromNapiValue for ConnectionId {
+  unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> napi::Result<Self> {
+    let data = Uint8Array::from_napi_value(env, value)?;
+    return Ok(ConnectionId::new(data));
+  }
+}
+
+// Well this is weird
+// If I just take a Buffer
+// and convert it to that
+// Why does it matter?
 
 /// Equivalent to quiche::Shutdown enum
 #[napi]
@@ -41,6 +69,7 @@ impl From<quiche::Shutdown> for Shutdown {
 }
 
 #[napi(object)]
+#[derive(Serialize, Deserialize)]
 pub struct Host {
   pub addr: String,
   pub port: u16,
@@ -254,7 +283,7 @@ impl Connection {
   /// This will return a JS array of `[length, send_info]`.
   /// If the length is 0, then that there's no data to send.
   /// The `send_info` will be set to `null`.
-  #[napi]
+  #[napi(ts_return_type = "[number, SendInfo | null]")]
   pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
     // Convert the Done error into a 0-length write
     // This would mean that there's nothing to send
@@ -284,7 +313,7 @@ impl Connection {
   // So you can pass the SocketAddr
   // But instead we provide a sort of conversion that is necessary
 
-  #[napi]
+  #[napi(ts_return_type = "[number, SendInfo | null]")]
   pub fn send_on_path(
     &mut self,
     env: Env,
@@ -370,7 +399,7 @@ impl Connection {
     return Ok(self.0.send_quantum_on_path(local_addr, remote_addr) as i64);
   }
 
-  #[napi]
+  #[napi(ts_return_type = "[number, boolean]")]
   pub fn stream_recv(
     &mut self,
     env: Env,
@@ -661,6 +690,143 @@ impl Connection {
   pub fn on_timeout(&mut self) -> () {
     return self.0.on_timeout();
   }
+
+  #[napi]
+  pub fn probe_path(
+    &mut self,
+    local_host: Host,
+    peer_host: Host
+  ) -> napi::Result<i64> {
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    let peer_addr: SocketAddr = peer_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    return self.0.probe_path(
+      local_addr,
+      peer_addr
+    )
+    .map(|v| v as i64)
+    .or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn migrate_source(&mut self, local_host: Host) -> napi::Result<i64> {
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    return self.0.migrate_source(local_addr).map(|v| v as i64).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn migrate(&mut self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+    let local_addr: SocketAddr = local_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    let peer_addr: SocketAddr = peer_host.try_into().or_else(
+      |err: io::Error| Err(
+        napi::Error::new(napi::Status::InvalidArg, err.to_string())
+      )
+    )?;
+    return self.0.migrate(local_addr, peer_addr).map(|v| v as i64).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  // So the problem with ConnectionId
+  // is that I could make it External
+  // But at the same time it turns out that these are just buffers
+  // And the connection ID can just be maintained on the JS side
+  // So I can just reference those buffers
+  // One way is to provide a constructor
+  // That allows you pass a buffer in to construct it
+  // rather than just taking it
+  #[napi]
+  pub fn new_source_cid(
+    &mut self,
+    scid: ConnectionId,
+    reset_token: BigInt,
+    retire_if_needed: bool
+  ) -> napi::Result<i64> {
+    return self.0.new_source_cid(
+      &scid.0,
+      reset_token.get_u128().1,
+      retire_if_needed
+    ).map(|v| v as i64).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  #[napi]
+  pub fn active_source_cids(&self) -> i64 {
+    return self.0.active_source_cids() as i64;
+  }
+
+  #[napi]
+  pub fn max_active_source_cids(&self) -> i64 {
+    return self.0.max_active_source_cids() as i64;
+  }
+
+  #[napi]
+  pub fn source_cids_left(&self) -> i64 {
+    return self.0.source_cids_left() as i64;
+  }
+
+  #[napi]
+  pub fn retire_destination_cid(&mut self, dcid_seq: i64) -> napi::Result<()> {
+    return self.0.retire_destination_cid(dcid_seq as u64).or_else(
+      |e| Err(napi::Error::from_reason(e.to_string()))
+    );
+  }
+
+  // Technically this is some sort of struct
+  #[napi(ts_return_type = "object")]
+  pub fn path_event_next(
+    &mut self,
+    env: Env
+  ) -> napi::Result<Option<napi::JsUnknown>> {
+    let path_event: Option<path::PathEvent> = self.0.path_event_next().map(
+      |v| v.into()
+    );
+    return path_event.map(|v| env.to_js_value(&v)).transpose();
+  }
+
+  #[napi]
+  pub fn retired_scid_next(&mut self) -> Option<ConnectionId> {
+    let connection_id = self.0.retired_scid_next();
+    return connection_id.map(|v| ConnectionId(v));
+  }
+
+  #[napi]
+  pub fn available_dcids(&self) -> i64 {
+    return self.0.available_dcids() as i64;
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 }

@@ -85,6 +85,9 @@ export class Config {
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
+export class ConnectionId {
+  constructor(data: Uint8Array)
+}
 export class Connection {
   /**
    * Creates QUIC Client Connection
@@ -104,11 +107,11 @@ export class Connection {
    * If the length is 0, then that there's no data to send.
    * The `send_info` will be set to `null`.
    */
-  send(data: Uint8Array): unknown[]
-  sendOnPath(data: Uint8Array, from?: Host | undefined | null, to?: Host | undefined | null): unknown[]
+  send(data: Uint8Array): [number, SendInfo | null]
+  sendOnPath(data: Uint8Array, from?: Host | undefined | null, to?: Host | undefined | null): [number, SendInfo | null]
   sendQuantum(): number
   sendQuantumOnPath(localHost: Host, peerHost: Host): number
-  streamRecv(streamId: number, data: Uint8Array): unknown[]
+  streamRecv(streamId: number, data: Uint8Array): [number, boolean]
   streamSend(streamId: number, data: Uint8Array, fin: boolean): number
   streamPriority(streamId: number, urgency: number, incremental: boolean): void
   streamShutdown(streamId: number, direction: Shutdown, err: number): void
@@ -143,6 +146,15 @@ export class Connection {
   dgramMaxWritableLen(): number | null
   timeout(): number | null
   onTimeout(): void
+  probePath(localHost: Host, peerHost: Host): number
+  migrateSource(localHost: Host): number
+  migrate(localHost: Host, peerHost: Host): number
+  newSourceCid(scid: ConnectionId, resetToken: bigint, retireIfNeeded: boolean): number
+  activeSourceCids(): number
+  maxActiveSourceCids(): number
+  sourceCidsLeft(): number
+  retireDestinationCid(dcidSeq: number): void
+  pathEventNext(): { type: "New" } | { type: "Validated" } | { type: "FailedValidation" } | { type: "Closed" } | { type: "ReusedSourceConnectionId" } | { type: "PeerMigrated" }
 }
 export class StreamIter {
   [Symbol.iterator](): Iterator<number, void, void>

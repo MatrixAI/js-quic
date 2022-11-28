@@ -10,7 +10,8 @@ exclude = ["index.node"]
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", features = ["async", "napi6"] }
+napi = { version = "2", features = ["async", "napi6", "serde-json"] }
+serde = { version = "1.0", features = ["derive"] }
 napi-derive = "2"
 quiche = "0.16.0"
 ring = "0.16"
