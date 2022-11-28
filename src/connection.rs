@@ -20,15 +20,19 @@ use crate::config;
 use crate::stream;
 use crate::path;
 
+// #[napi]
+// pub struct ConnectionId;
 
-#[napi(object)]
-pub struct ConnectionId {
-  pub id: Uint8Array,
-}
+// #[napi(object)]
+// pub struct ConnectionId {
+//   pub id: Uint8Array,
+// }
 
+// #[napi(ts_type = "Uint8Array")]
+// type Something = Uint8Array;
+// pub struct Something(pub Uint8Array);
 // #[napi]
 // pub struct ConnectionId(pub (crate) quiche::ConnectionId<'static>);
-
 // #[napi]
 // impl ConnectionId {
 //   #[napi(constructor)]
@@ -771,12 +775,12 @@ impl Connection {
   #[napi]
   pub fn new_source_cid(
     &mut self,
-    scid: ConnectionId,
+    scid: Uint8Array,
     reset_token: BigInt,
     retire_if_needed: bool
   ) -> napi::Result<i64> {
     return self.0.new_source_cid(
-      &quiche::ConnectionId::from_ref(&scid.id),
+      &quiche::ConnectionId::from_ref(&scid),
       reset_token.get_u128().1,
       retire_if_needed
     ).map(|v| v as i64).or_else(
@@ -819,12 +823,13 @@ impl Connection {
   }
 
   #[napi]
-  pub fn retired_scid_next(&mut self) -> Option<ConnectionId> {
+  pub fn retired_scid_next(&mut self) -> Option<Uint8Array> {
+    return self.0.retired_scid_next().map(|v| v.into());
     // return self.0.retired_scid_next().map(|v| ConnectionId(v));
-    let connection_id = self.0.retired_scid_next();
-    return connection_id.map(|v| ConnectionId {
-      id: v.as_ref().into()
-    });
+    // let connection_id = self.0.retired_scid_next();
+    // return connection_id.map(|v| ConnectionId {
+    //   id: v.as_ref().into()
+    // });
   }
 
   #[napi]
@@ -894,16 +899,18 @@ impl Connection {
   // and exposing it too?
 
   #[napi]
-  pub fn source_id(&self) -> ConnectionId {
-    return ConnectionId { id: self.0.source_id().as_ref().into() };
+  pub fn source_id(&self) -> Uint8Array {
+    return self.0.source_id().as_ref().into();
+    // return ConnectionId { id: self.0.source_id().as_ref().into() };
     // return ConnectionId(
     //   quiche::ConnectionId::from_vec(self.0.source_id().as_ref().to_vec())
     // );
   }
 
   #[napi]
-  pub fn destination_id(&self) -> ConnectionId {
-    return ConnectionId { id: self.0.destination_id().as_ref().into() };
+  pub fn destination_id(&self) -> Uint8Array {
+    return self.0.destination_id().as_ref().into();
+    // return ConnectionId { id: self.0.destination_id().as_ref().into() };
     // return ConnectionId(
     //   quiche::ConnectionId::from_vec(self.0.destination_id().as_ref().to_vec())
     // );

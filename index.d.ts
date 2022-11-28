@@ -15,9 +15,6 @@ export const enum CongestionControlAlgorithm {
   CUBIC = 1,
   BBR = 2
 }
-export interface ConnectionId {
-  id: Uint8Array
-}
 /** Equivalent to quiche::Shutdown enum */
 export const enum Shutdown {
   Read = 0,
@@ -88,6 +85,7 @@ export class Config {
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
+export class ConnectionId { }
 export class Connection {
   /**
    * Creates QUIC Client Connection
@@ -149,13 +147,13 @@ export class Connection {
   probePath(localHost: Host, peerHost: Host): number
   migrateSource(localHost: Host): number
   migrate(localHost: Host, peerHost: Host): number
-  newSourceCid(scid: ConnectionId, resetToken: bigint, retireIfNeeded: boolean): number
+  newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number
   activeSourceCids(): number
   maxActiveSourceCids(): number
   sourceCidsLeft(): number
   retireDestinationCid(dcidSeq: number): void
   pathEventNext(): object
-  retiredScidNext(): ConnectionId | null
+  retiredScidNext(): Uint8Array | null
   availableDcids(): number
   pathsIter(from: Host): HostIter
   close(app: boolean, err: number, reason: Uint8Array): void
@@ -164,8 +162,8 @@ export class Connection {
   serverName(): string | null
   peerCertChain(): Array<Uint8Array> | null
   session(): Uint8Array | null
-  sourceId(): ConnectionId
-  destinationId(): ConnectionId
+  sourceId(): Uint8Array
+  destinationId(): Uint8Array
   isEstablished(): boolean
   isResumed(): boolean
   isInEarlyData(): boolean
