@@ -9,6 +9,21 @@ export class ExternalObject<T> {
     [K: symbol]: T
   }
 }
+export const MAX_CONN_ID_LEN: number
+export const MIN_CLIENT_INITIAL_LEN: number
+export const PROTOCOL_VERSION: number
+/**
+ * This maximum datagram size to SEND to the UDP socket
+ * It must be used with `config.set_max_recv_udp_payload_size` and such
+ * But on the receiving side, we actually use the maximum which is 65535
+ */
+export const MAX_DATAGRAM_SIZE: number
+/**
+ * This is the maximum size of the packet to be received from the socket
+ * This is what you use to receive packets on the UDP socket
+ * And you send it to the connection as well
+ */
+export const MAX_UDP_PACKET_SIZE: number
 /** Equivalent to quiche::CongestionControlAlgorithm */
 export const enum CongestionControlAlgorithm {
   Reno = 0,
@@ -67,19 +82,6 @@ export interface RecvInfo {
   /** The local address the packet was sent to. */
   to: Host
 }
-/**
- * This maximum datagram size to SEND to the UDP socket
- * It must be used with `config.set_max_recv_udp_payload_size` and such
- * But on the receiving side, we actually use the maximum which is 65535
- */
-export const MAX_DATAGRAM_SIZE: number
-/**
- * This is the maximum size of the packet to be received from the socket
- * This is what you use to receive packets on the UDP socket
- * And you send it to the connection as well
- */
-export const MAX_UDP_PACKET_SIZE: number
-export const MAX_CONN_ID_LEN: number
 /**
  * Equivalent to quiche::PathStats
  *

@@ -1,10 +1,6 @@
-// use std::net::SocketAddr;
-// use std::net::IpAddr;
-// use ring::rand::*;
-
+mod constants;
 mod config;
 mod connection;
-mod constants;
 mod stream;
 mod path;
 mod packet;
