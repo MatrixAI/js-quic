@@ -113,6 +113,9 @@ export const enum Type {
   VersionNegotiation = 4,
   Short = 5
 }
+export function negotiateVersion(scid: Uint8Array, dcid: Uint8Array, out: Uint8Array): number
+export function retry(scid: Uint8Array, dcid: Uint8Array, newScid: Uint8Array, token: Uint8Array, version: number, out: Uint8Array): number
+export function versionIsSuported(version: number): boolean
 export class Config {
   constructor()
   loadPrivKeyFromPemFile(file: string): void
