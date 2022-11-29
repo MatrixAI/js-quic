@@ -15,6 +15,35 @@ export const enum CongestionControlAlgorithm {
   CUBIC = 1,
   BBR = 2
 }
+export interface ConnectionError {
+  isApp: boolean
+  errorCode: number
+  reason: Array<number>
+}
+export interface Stats {
+  recv: number
+  sent: number
+  lost: number
+  retrans: number
+  sentBytes: number
+  recvBytes: number
+  lostBytes: number
+  streamRetransBytes: number
+  pathsCount: number
+  peerMaxIdleTimeout: number
+  peerMaxUdpPayloadSize: number
+  peerInitialMaxData: number
+  peerInitialMaxStreamDataBidiLocal: number
+  peerInitialMaxStreamDataBidiRemote: number
+  peerInitialMaxStreamDataUni: number
+  peerInitialMaxStreamsBidi: number
+  peerInitialMaxStreamsUni: number
+  peerAckDelayExponent: number
+  peerMaxAckDelay: number
+  peerDisableActiveMigration: boolean
+  peerActiveConnIdLimit: number
+  peerMaxDatagramFrameSize?: number
+}
 /** Equivalent to quiche::Shutdown enum */
 export const enum Shutdown {
   Read = 0,
@@ -51,6 +80,37 @@ export const MAX_DATAGRAM_SIZE: number
  */
 export const MAX_UDP_PACKET_SIZE: number
 export const MAX_CONN_ID_LEN: number
+/**
+ * Equivalent to quiche::PathStats
+ *
+ * This is missing the validation_state because it is in a private module
+ * that I cannot access
+ */
+export interface PathStats {
+  localHost: Host
+  peerHost: Host
+  active: boolean
+  recv: number
+  sent: number
+  lost: number
+  retrans: number
+  rtt: number
+  cwnd: number
+  sentBytes: number
+  recvBytes: number
+  lostBytes: number
+  streamRetransBytes: number
+  pmtu: number
+  deliveryRate: number
+}
+export const enum Type {
+  Initial = 0,
+  Retry = 1,
+  Handshake = 2,
+  ZeroRTT = 3,
+  VersionNegotiation = 4,
+  Short = 5
+}
 export class Config {
   constructor()
   loadPrivKeyFromPemFile(file: string): void
@@ -84,11 +144,6 @@ export class Config {
   setMaxConnectionWindow(v: bigint): void
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
-}
-export class ConnectionError {
-  get isApp(): boolean
-  get errorCode(): number
-  get reason(): Array<number>
 }
 export class Connection {
   /**
@@ -176,10 +231,38 @@ export class Connection {
   isDraining(): boolean
   isClosed(): boolean
   isTimedOut(): boolean
+  peerError(): ConnectionError | null
+  localError(): ConnectionError | null
+  stats(): Stats
+  /**
+   * Path stats as an array
+   *
+   * Normally this would be an iterator.
+   * However the iterator can only exist in the lifetime of the connection.
+   * This collects the all the data, converts them to our PathStats
+   * Then returns it all as 1 giant array.
+   *
+   * https://stackoverflow.com/q/74609430/582917
+   * https://stackoverflow.com/q/50343130/582917
+   */
+  pathStats(): Array<PathStats>
 }
 export class StreamIter {
   [Symbol.iterator](): Iterator<number, void, void>
 }
 export class HostIter {
   [Symbol.iterator](): Iterator<Host, void, void>
+}
+export class PathStatsIter {
+  [Symbol.iterator](): Iterator<PathStats, void, void>
+}
+export class Header {
+  ty: Type
+  version: number
+  dcid: Uint8Array
+  scid: Uint8Array
+  token?: Uint8Array
+  versions?: Array<number>
+  constructor(ty: Type, version: number, dcid: Uint8Array, scid: Uint8Array, token?: Uint8Array, versions?: Array<number>)
+  static fromSlice(data: Uint8Array, dcidLen: number): Header
 }

@@ -7,6 +7,7 @@ mod connection;
 mod constants;
 mod stream;
 mod path;
+mod packet;
 
 // Creates random connection ID
 //

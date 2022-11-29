@@ -1,7 +1,8 @@
 use napi_derive::napi;
-use napi::bindgen_prelude::{
-  Generator
-};
+use napi::bindgen_prelude::*;
+// use napi::bindgen_prelude::{
+//   Generator
+// };
 use serde::{Serialize, Deserialize};
 use crate::connection;
 
@@ -68,6 +69,67 @@ impl Generator for HostIter {
   fn next(&mut self, _value: Option<Self::Next>) -> Option<Self::Yield> {
     return self.0.next().map(
       |socket_addr| socket_addr.into()
+    );
+  }
+}
+
+/// Equivalent to quiche::PathStats
+///
+/// This is missing the validation_state because it is in a private module
+/// that I cannot access
+#[napi(object)]
+pub struct PathStats {
+  pub local_host: connection::Host,
+  pub peer_host: connection::Host,
+  pub active: bool,
+  pub recv: i64,
+  pub sent: i64,
+  pub lost: i64,
+  pub retrans: i64,
+  pub rtt: i64,
+  pub cwnd: i64,
+  pub sent_bytes: i64,
+  pub recv_bytes: i64,
+  pub lost_bytes: i64,
+  pub stream_retrans_bytes: i64,
+  pub pmtu: i64,
+  pub delivery_rate: i64,
+}
+
+impl From<quiche::PathStats> for PathStats {
+  fn from(path_stats: quiche::PathStats) -> Self {
+    PathStats {
+      local_host: connection::Host::from(path_stats.local_addr),
+      peer_host: connection::Host::from(path_stats.peer_addr),
+      active: path_stats.active,
+      recv: path_stats.recv as i64,
+      sent: path_stats.sent as i64,
+      lost: path_stats.lost as i64,
+      retrans: path_stats.retrans as i64,
+      rtt: path_stats.rtt.as_millis() as i64,
+      cwnd: path_stats.cwnd as i64,
+      sent_bytes: path_stats.sent_bytes as i64,
+      recv_bytes: path_stats.recv_bytes as i64,
+      lost_bytes: path_stats.lost_bytes as i64,
+      stream_retrans_bytes: path_stats.stream_retrans_bytes as i64,
+      pmtu: path_stats.pmtu as i64,
+      delivery_rate: path_stats.delivery_rate as i64,
+    }
+  }
+}
+
+#[napi(iterator)]
+pub struct PathStatsIter(pub (crate) Box<dyn Iterator<Item = quiche::PathStats>>);
+
+#[napi]
+impl Generator for PathStatsIter {
+  type Yield = PathStats;
+  type Next = ();
+  type Return = ();
+
+  fn next(&mut self, _value: Option<Self::Next>) -> Option<Self::Yield> {
+    return self.0.next().map(
+      |path_stats| path_stats.into()
     );
   }
 }

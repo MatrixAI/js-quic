@@ -6,16 +6,17 @@ use std::net::{
 };
 // use std::net::ToSocketAddrs;
 use napi_derive::napi;
-use napi::bindgen_prelude::{
-  Env,
-  Array,
-  BigInt,
-  Uint8Array,
-  External,
-  ToNapiValue,
-  FromNapiValue,
-  sys
-};
+// use napi::bindgen_prelude::{
+//   Env,
+//   Array,
+//   BigInt,
+//   Uint8Array,
+//   External,
+//   ToNapiValue,
+//   FromNapiValue,
+//   sys
+// };
+use napi::bindgen_prelude::*;
 use crate::config;
 use crate::stream;
 use crate::path;
@@ -1018,6 +1019,19 @@ impl Connection {
     return self.0.stats().into();
   }
 
-  // path_stats
-
+  /// Path stats as an array
+  ///
+  /// Normally this would be an iterator.
+  /// However the iterator can only exist in the lifetime of the connection.
+  /// This collects the all the data, converts them to our PathStats
+  /// Then returns it all as 1 giant array.
+  ///
+  /// https://stackoverflow.com/q/74609430/582917
+  /// https://stackoverflow.com/q/50343130/582917
+  #[napi]
+  pub fn path_stats(&self) -> Vec<path::PathStats> {
+    return self.0.path_stats().map(
+      |s| s.into()
+    ).collect();
+  }
 }
