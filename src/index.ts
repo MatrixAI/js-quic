@@ -1,8 +1,12 @@
 import { webcrypto } from 'crypto';
-
+import dgram from 'dgram';
 const native = require('../index.node');
 
-console.log(native);
+async function main () {
+  console.log(native);
+}
+
+void main();
 
 // function getRandomValues(b: Buffer) {
 //   return webcrypto.getRandomValues(b);
