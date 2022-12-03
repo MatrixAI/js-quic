@@ -122,79 +122,79 @@ impl Config {
   }
 
   #[napi]
-  pub fn set_max_idle_timeout(&mut self, timeout: BigInt) -> () {
-    self.0.set_max_idle_timeout(timeout.get_u64().1);
+  pub fn set_max_idle_timeout(&mut self, timeout: i64) -> () {
+    self.0.set_max_idle_timeout(timeout as u64);
   }
 
   #[napi]
-  pub fn set_max_recv_udp_payload_size(&mut self, size: BigInt) -> () {
+  pub fn set_max_recv_udp_payload_size(&mut self, size: i64) -> () {
     return self.0.set_max_recv_udp_payload_size(
-      size.get_u64().1.try_into().unwrap()
+      size as usize
     );
   }
 
   #[napi]
-  pub fn set_max_send_udp_payload_size(&mut self, size: BigInt) -> () {
+  pub fn set_max_send_udp_payload_size(&mut self, size: i64) -> () {
     return self.0.set_max_send_udp_payload_size(
-      size.get_u64().1.try_into().unwrap()
+      size as usize
     );
   }
 
   #[napi]
-  pub fn set_initial_max_data(&mut self, v: BigInt) -> () {
-    return self.0.set_initial_max_data(v.get_u64().1);
+  pub fn set_initial_max_data(&mut self, v: i64) -> () {
+    return self.0.set_initial_max_data(v as u64);
   }
 
   #[napi]
-  pub fn set_initial_max_stream_data_bidi_local(&mut self, v: BigInt) -> () {
-    return self.0.set_initial_max_stream_data_bidi_local(v.get_u64().1);
+  pub fn set_initial_max_stream_data_bidi_local(&mut self, v: i64) -> () {
+    return self.0.set_initial_max_stream_data_bidi_local(v as u64);
   }
 
   #[napi]
-  pub fn set_initial_max_stream_data_bidi_remote(&mut self, v: BigInt) -> () {
-    return self.0.set_initial_max_stream_data_bidi_remote(v.get_u64().1);
+  pub fn set_initial_max_stream_data_bidi_remote(&mut self, v: i64) -> () {
+    return self.0.set_initial_max_stream_data_bidi_remote(v as u64);
   }
 
   #[napi]
-  pub fn set_initial_max_stream_data_uni(&mut self, v: BigInt) -> () {
-    return self.0.set_initial_max_stream_data_uni(v.get_u64().1);
+  pub fn set_initial_max_stream_data_uni(&mut self, v: i64) -> () {
+    return self.0.set_initial_max_stream_data_uni(v as u64);
   }
 
   #[napi]
-  pub fn set_initial_max_streams_bidi(&mut self, v: BigInt) -> () {
-    return self.0.set_initial_max_streams_bidi(v.get_u64().1);
+  pub fn set_initial_max_streams_bidi(&mut self, v: i64) -> () {
+    return self.0.set_initial_max_streams_bidi(v as u64);
   }
 
   #[napi]
   pub fn set_initial_max_streams_uni(
     &mut self,
-    v: BigInt
+    v: i64
   ) -> () {
     return self.0.set_initial_max_streams_uni(
-      v.get_u64().1
+      v as u64
     );
   }
 
   #[napi]
-  pub fn set_ack_delay_exponent(&mut self, v: BigInt) -> () {
+  pub fn set_ack_delay_exponent(&mut self, v: i64) -> () {
     return self.0.set_ack_delay_exponent(
-      v.get_u64().1
+      v as u64
     );
   }
 
   #[napi]
-  pub fn set_max_ack_delay(&mut self, v: BigInt) -> () {
+  pub fn set_max_ack_delay(&mut self, v: i64) -> () {
     return self.0.set_max_ack_delay(
-      v.get_u64().1
+      v as u64
     );
   }
 
   #[napi]
   pub fn set_active_connection_id_limit(
     &mut self,
-    v: BigInt
+    v: i64
   ) -> () {
-    return self.0.set_active_connection_id_limit(v.get_u64().1);
+    return self.0.set_active_connection_id_limit(v as u64);
   }
 
   #[napi]
@@ -228,19 +228,19 @@ impl Config {
   pub fn enable_dgram(
     &mut self,
     enabled: bool,
-    recv_queue_len: BigInt,
-    send_queue_len: BigInt,
+    recv_queue_len: i64,
+    send_queue_len: i64,
   ) -> () {
     return self.0.enable_dgram(
       enabled,
-      recv_queue_len.get_u64().1.try_into().unwrap(),
-      send_queue_len.get_u64().1.try_into().unwrap()
+      recv_queue_len as usize,
+      send_queue_len as usize
     );
   }
 
   #[napi]
-  pub fn set_max_connection_window(&mut self, v: BigInt) -> () {
-    return self.0.set_max_connection_window(v.get_u64().1);
+  pub fn set_max_connection_window(&mut self, v: i64) -> () {
+    return self.0.set_max_connection_window(v as u64);
   }
 
   #[napi]

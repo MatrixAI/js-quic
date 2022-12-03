@@ -29,11 +29,11 @@ mod packet;
 pub fn negotiate_version(
   scid: Uint8Array,
   dcid: Uint8Array,
-  mut out: Uint8Array,
+  mut data: Uint8Array,
 ) -> napi::Result<i64> {
   let scid = quiche::ConnectionId::from_ref(&scid);
   let dcid = quiche::ConnectionId::from_ref(&dcid);
-  return quiche::negotiate_version(&scid, &dcid, &mut out).or_else(
+  return quiche::negotiate_version(&scid, &dcid, &mut data).or_else(
     |e| Err(Error::from_reason(e.to_string()))
   ).map(|v| v as i64);
 }
@@ -63,6 +63,7 @@ pub fn retry(
 }
 
 #[napi]
-pub fn version_is_suported(version: u32) -> bool {
+pub fn version_is_supported(version: u32) -> bool {
   return quiche::version_is_supported(version);
+
 }

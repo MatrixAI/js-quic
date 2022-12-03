@@ -113,9 +113,9 @@ export const enum Type {
   VersionNegotiation = 4,
   Short = 5
 }
-export function negotiateVersion(scid: Uint8Array, dcid: Uint8Array, out: Uint8Array): number
+export function negotiateVersion(scid: Uint8Array, dcid: Uint8Array, data: Uint8Array): number
 export function retry(scid: Uint8Array, dcid: Uint8Array, newScid: Uint8Array, token: Uint8Array, version: number, out: Uint8Array): number
-export function versionIsSuported(version: number): boolean
+export function versionIsSupported(version: number): boolean
 export class Config {
   constructor()
   loadPrivKeyFromPemFile(file: string): void
@@ -128,25 +128,25 @@ export class Config {
   enableEarlyData(): void
   setApplicationProtos(protosList: Array<string>): void
   setApplicationProtosWireFormat(protos: Uint8Array): void
-  setMaxIdleTimeout(timeout: bigint): void
-  setMaxRecvUdpPayloadSize(size: bigint): void
-  setMaxSendUdpPayloadSize(size: bigint): void
-  setInitialMaxData(v: bigint): void
-  setInitialMaxStreamDataBidiLocal(v: bigint): void
-  setInitialMaxStreamDataBidiRemote(v: bigint): void
-  setInitialMaxStreamDataUni(v: bigint): void
-  setInitialMaxStreamsBidi(v: bigint): void
-  setInitialMaxStreamsUni(v: bigint): void
-  setAckDelayExponent(v: bigint): void
-  setMaxAckDelay(v: bigint): void
-  setActiveConnectionIdLimit(v: bigint): void
+  setMaxIdleTimeout(timeout: number): void
+  setMaxRecvUdpPayloadSize(size: number): void
+  setMaxSendUdpPayloadSize(size: number): void
+  setInitialMaxData(v: number): void
+  setInitialMaxStreamDataBidiLocal(v: number): void
+  setInitialMaxStreamDataBidiRemote(v: number): void
+  setInitialMaxStreamDataUni(v: number): void
+  setInitialMaxStreamsBidi(v: number): void
+  setInitialMaxStreamsUni(v: number): void
+  setAckDelayExponent(v: number): void
+  setMaxAckDelay(v: number): void
+  setActiveConnectionIdLimit(v: number): void
   setDisableActiveMigration(v: boolean): void
   setCcAlgorithmName(name: string): void
   setCcAlgorithm(algo: CongestionControlAlgorithm): void
   enableHystart(v: boolean): void
   enablePacing(v: boolean): void
-  enableDgram(enabled: boolean, recvQueueLen: bigint, sendQueueLen: bigint): void
-  setMaxConnectionWindow(v: bigint): void
+  enableDgram(enabled: boolean, recvQueueLen: number, sendQueueLen: number): void
+  setMaxConnectionWindow(v: number): void
   setStatelessResetToken(v?: bigint | undefined | null): void
   setDisableDcidReuse(v: boolean): void
 }
@@ -157,7 +157,7 @@ export class Connection {
    * This can take both IP addresses and hostnames
    */
   static connect(scid: Uint8Array, localHost: Host, remoteHost: Host, config: Config): Connection
-  static accept(scid: Uint8Array, localHost: Host, remoteHost: Host, config: Config): Connection
+  static accept(scid: Uint8Array, odcid: Uint8Array | undefined | null, localHost: Host, remoteHost: Host, config: Config): Connection
   setSession(session: Uint8Array): void
   recv(data: Uint8Array, recvInfo: RecvInfo): number
   /**

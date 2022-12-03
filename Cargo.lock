@@ -236,7 +236,6 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "quiche",
- "ring",
  "serde",
 ]
 

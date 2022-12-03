@@ -226,6 +226,7 @@ impl Connection {
   #[napi(factory)]
   pub fn accept(
     scid: Uint8Array,
+    odcid: Option<Uint8Array>,
     local_host: Host,
     remote_host: Host,
     config: &mut config::Config,
@@ -253,9 +254,13 @@ impl Connection {
 
     let scid = quiche::ConnectionId::from_ref(&scid);
 
+    let odcid = odcid.map(
+      |dcid| quiche::ConnectionId::from_vec(dcid.to_vec())
+    );
+
     let connection = quiche::accept(
       &scid,
-      None,
+      odcid.as_ref(),
       local_addr,
       remote_addr,
       &mut config.0
