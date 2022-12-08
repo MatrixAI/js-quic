@@ -1,5 +1,4 @@
 use napi_derive::napi;
-use napi::bindgen_prelude::*;
 
 mod constants;
 mod config;
@@ -25,45 +24,8 @@ mod packet;
 //   return Ok(External::new(scid));
 // }
 
-#[napi]
-pub fn negotiate_version(
-  scid: Uint8Array,
-  dcid: Uint8Array,
-  mut data: Uint8Array,
-) -> napi::Result<i64> {
-  let scid = quiche::ConnectionId::from_ref(&scid);
-  let dcid = quiche::ConnectionId::from_ref(&dcid);
-  return quiche::negotiate_version(&scid, &dcid, &mut data).or_else(
-    |e| Err(Error::from_reason(e.to_string()))
-  ).map(|v| v as i64);
-}
-
-#[napi]
-pub fn retry(
-  scid: Uint8Array,
-  dcid: Uint8Array,
-  new_scid: Uint8Array,
-  token: Uint8Array,
-  version: u32,
-  mut out: Uint8Array
-) -> napi::Result<i64> {
-  let scid = quiche::ConnectionId::from_ref(&scid);
-  let dcid = quiche::ConnectionId::from_ref(&dcid);
-  let new_scid = quiche::ConnectionId::from_ref(&new_scid);
-  return quiche::retry(
-    &scid,
-    &dcid,
-    &new_scid,
-    &token,
-    version,
-    &mut out
-  ).or_else(
-    |e| Err(Error::from_reason(e.to_string()))
-  ).map(|v| v as i64);
-}
 
 #[napi]
 pub fn version_is_supported(version: u32) -> bool {
   return quiche::version_is_supported(version);
-
 }

@@ -2,17 +2,6 @@ import { webcrypto } from 'crypto';
 import dgram from 'dgram';
 const native = require('../index.node');
 
-// Ok so I'm first going to use the dgram module to create a socket
-// This socket will be a P2P socket
-// It has to act like both the client and server
-// So we need to create a connection here...
-// To do so, we must first create our first socket
-// wait first aren't we just exposing thsi first
-// this is anot a P2P library
-// all we are doing is exposing the functinoality
-// but to do so... we also need to pass a dgram socket?
-
-
 // This will need to use the binary string as the key
 // These are ConnectionId as keys
 // Each of these CONTAIN a "CLIENT"
@@ -22,7 +11,7 @@ const clients = new Map<string, any>();
 
 async function main () {
 
-  // HMAC key
+  // HMAC key for signing and verification
   const key = await webcrypto.subtle.generateKey(
     {
       name: 'HMAC',
@@ -32,39 +21,20 @@ async function main () {
     ['sign', 'verify'],
   );
 
-  // you must have only udp4 or udp6 interestingly
 
+  // Calling abortController.abort() is the same as socket.close()
   const abortController = new AbortController();
 
-  // The type here has to be selected based on the desired IP used
-  // If using `::` then use udp6 or `::1`
-  // Note that localhost can be udp6 or udp4
-  // So we default on udp6 since it will work on `::`
-  // But if the address is an explicit IPv4 address, then use udp4
-  // We may disallow hostnames? I'm not sure
-  // We force it always to be an IP address due to the `Host` type
+  // Binding to `::` will listen on 0.0.0.0 and all ipv6 interfaces
+
   const socket = dgram.createSocket({
     type: 'udp6',
     reuseAddr: false,
-    // Binding to `::` will listen on 0.0.0.0 and all ipv6 interfaces
     ipv6Only: false,
     recvBufferSize: undefined,
     sendBufferSize: undefined,
-    // the lookup here would use dns.lookup
-    // if we were going to do use DNS to lookup a host to connect to
-    // but our Node Address will never use it right?
-    // not necessarily
-    // but usually we resolve FIRST, then we create a socket
-    // but this socket is for our own socket to use
     signal: abortController.signal,
   });
-
-  // abort is the same as calling socket.close()
-  // i think that should be fine
-  // we are going to create a QUIC connection
-  // and we expose it to the end user
-  // and we expect the end user to pass a socket
-  // or we might have to pass it in somehow
 
   const config = new native.Config();
   config.verifyPeer(false);
@@ -75,6 +45,66 @@ async function main () {
   config.setInitialMaxData(10000000);
   config.setInitialMaxStreamDataBidiLocal(1000000);
   config.setInitialMaxStreamDataBidiRemote(1000000);
+  config.setApplicationProtos(
+    [
+      'hq-interop',
+      'hq-29',
+      'hq-28',
+      'hq-27',
+      'http/0.9'
+    ]
+  );
+
+  // These set the allowed/supported ALPN
+  // The ALPN is a field that is sent on the initial TLS handshake Client Hello message
+  // It lists the protocols that are supported
+
+  /*
+
+  It looks like:
+
+    Extension: application_layer_protocol_negotiation (len=14)
+        Type: application_layer_protocol_negotiation (16)
+        Length: 14
+        ALPN Extension Length: 12
+        ALPN Protocol
+            ALPN string length: 2
+            ALPN Next Protocol: h2
+            ALPN string length: 8
+            ALPN Next Protocol: http/1.1
+
+    It seems to say the h2, then the next one is http/1.1.
+    So I guess these are all "registered" alpn protocol strings
+
+    The server answers with a Server Hello message. With these ALPN fields:
+
+    Extension: application_layer_protocol_negotiation (len=5)
+        Type: application_layer_protocol_negotiation (16)
+        Length: 5
+        ALPN Extension Length: 3
+        ALPN Protocol
+            ALPN string length: 2
+            ALPN Next Protocol: h2
+
+    Here it is answering with h2.
+
+  */
+
+  // So what are these h3-?
+  // They are the draft versions
+  // I think since it's no longer a draft, then it should work fine as just h3.
+  // But this is also assuming we want to use HTTP3
+  // If we just want raw QUIC packets, then what does this mean?
+  // hq means HTTP + QUIC, it's not the same as HTTP3
+  // So it's possible none of this matters if we aren't trying to be HTTP3 compatible
+  // config.setApplicationProtos(
+  //   [
+  //     'h3',
+  //     'h3-29',
+  //     'h3-28',
+  //     'h3-27',
+  //   ]
+  // );
 
   // This is the concurrent limit for how many streams can be opened locally
   config.setInitialMaxStreamsBidi(100);
@@ -92,6 +122,7 @@ async function main () {
     '::'
   );
 
+  // Connection ID is a random thing
   const connId = Buffer.alloc(native.MAX_CONN_ID_LEN);
   webcrypto.getRandomValues(connId);
 
@@ -450,21 +481,6 @@ async function validateToken(key: CryptoKey, sourceAddress: string, tokenData: B
   // The original destination connection ID is therefore correct
   return Buffer.from(msg.dcid, 'base64url');
 }
-
-// function getRandomValues(b: Buffer) {
-//   return webcrypto.getRandomValues(b);
-//   // return 1;
-// }
-
-// console.log(
-//   native.createConnectionId(
-//     webcrypto.getRandomValues.bind(webcrypto)
-//   )
-// );
-
-// const config = new native.Config();
-// config.verifyPeer(false);
-// config.setMaxIdleTimeout(1000);
 
 // const connId = Buffer.alloc(native.MAX_CONN_ID_LEN);
 // webcrypto.getRandomValues(connId);
