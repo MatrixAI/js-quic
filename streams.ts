@@ -1,4 +1,10 @@
-import { ReadableStream, WritableStream, TransformStream } from 'stream/web';
+import {
+  ReadableStream,
+  WritableStream,
+  TransformStream,
+  ByteLengthQueuingStrategy,
+  CountQueuingStrategy
+} from 'stream/web';
 
 // It seems we could also just implement both readable stream and writable stream
 // Promise returning property
@@ -26,22 +32,77 @@ import { ReadableStream, WritableStream, TransformStream } from 'stream/web';
 
 type StreamId = number;
 
-class QUICEvent extends Event {
+class QUICDataEvent extends Event {
   public detail?: Uint8Array;
   constructor(
-    type: StreamId,
     options: EventInit & {
       detail?: Uint8Array
     }
   ) {
-    super(type.toString(), options);
+    super('data', options);
+    this.detail = options.detail;
+  }
+}
+
+
+class QUICErrorEvent extends Event {
+  public detail: Error;
+  constructor(
+    options: EventInit & {
+      detail: Error
+    }
+  ) {
+    super('error', options);
     this.detail = options.detail;
   }
 }
 
 // Let's say the system closes
 // How does one even know this?
-// We would need to indicate the event `data-123` and `close-123`
+
+class QUICEvents extends EventTarget {
+  paused: boolean = false;
+  // Return type of setTimeout
+  source?: ReturnType<typeof setTimeout>;
+
+  public constructor() {
+    super();
+  }
+
+  public scheduleEvent() {
+    this.source = setTimeout(() => {
+      this.scheduleEvent();
+    }, 100);
+    // Immediately dispatches the data
+    // This is SYNCHRONOUS - remember that
+    // This will end up enqueueing the data
+    // And it will end PAUSING the thing
+    this.dispatchEvent(
+      new QUICDataEvent({
+        detail: new Uint8Array([1, 2, 3])
+      })
+    );
+  }
+
+  public pause() {
+    clearTimeout(this.source);
+    delete this.source;
+    this.paused = true;
+  }
+
+  public resume() {
+    // Resume reading from the socket
+    this.paused = false;
+    // Reschedule the events... which will immediately dispatch
+    if (this.source == null) {
+      this.scheduleEvent();
+    }
+  }
+
+  public destroy() {
+
+  }
+}
 
 class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
@@ -56,8 +117,15 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   public constructor(
     streamId: StreamId,
-    events: EventTarget,
+    events: QUICEvents,
   ) {
+
+    // Use count queuing strategy because
+    // the chunks are already properly sized
+    // according to the configuration of the QUIC streams
+    // we do not need a further byte length queueing strategy here
+
+
     this.streamId = streamId;
     // Start is called during construction
     // Pull is called whenever there's room in the readable stream
@@ -65,20 +133,53 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // It is only called after start is finished
     // If pull doesn't enqueue naything, it won't be called again
     // Cancel is called if the consumer cancels the stream
-    this.readable = new ReadableStream({
-      start(controller) {
 
-        // @ts-ignore
-        events.addEventListener('data', (event: QUICEvent) => {
-          controller.enqueue(event.detail!);
-        });
+    // const strategy = new CountQueuingStrategy({ highWaterMark: 1});
 
-        events.addEventListener('close', () => {
-          controller.close();
-        }, { once: true });
+    this.readable = new ReadableStream(
+      {
+        type: 'bytes',
+        start(controller) {
 
+          // @ts-ignore
+          events.addEventListener('data', (event: QUICDataEvent) => {
+            controller.enqueue(event.detail!);
+
+            // The desiredSize would exist right?
+            if (controller.desiredSize! <= 0) {
+              console.log('DESIRED SIZE IS LESS OR EQUAL THAN 0');
+              // Tell the the system to stop reading from the socket
+              events.pause();
+            }
+          });
+
+          // @ts-ignore
+          events.addEventListener('error', (event: QUICErrorEvent) => {
+            controller.error(event.detail);
+          }, { once: true });
+
+          events.addEventListener('end', () => {
+            controller.close();
+          }, { once: true });
+
+          events.scheduleEvent();
+
+        },
+        pull() {
+          events.resume();
+        },
+        cancel() {
+          // QUIC events is not a socket
+          // it's a virtual abstraction
+          // "a derived" event emitter from the UDP socket after processing
+          // It's more like an observable really
+          events.destroy();
+        }
       },
-    });
+      // This is the default
+      // new CountQueuingStrategy({ highWaterMark: 1})
+      // strategy
+    );
     this.writable = new WritableStream({
       write(chunk) {
         console.log(chunk);
@@ -91,22 +192,31 @@ async function main () {
   console.log('START');
 
   const streamId = 1;
-  const streamEvents = new EventTarget();
+  const streamEvents = new QUICEvents();
   const stream = new QUICStream(streamId, streamEvents);
 
+  // const writer = stream.writable.getWriter();
+  // writer.write(Buffer.from('A'));
+  // // We want this to SEND the data out...
+  // // But we still need to enqueue the data
 
-  const writer = stream.writable.getWriter();
-  writer.write(Buffer.from('A'));
+  // // console.log(stream);
 
-  // We want this to SEND the data out...
-  // But we still need to enqueue the data
-
-  // console.log(stream);
-
-  // Ok so we are able to read something
+  // // Ok so we are able to read something
   const reader = stream.readable.getReader();
   reader.read().then(console.log);
   reader.read().then(console.log);
+  reader.read().then(console.log);
+  reader.read().then(console.log);
+  reader.read().then(console.log);
+  reader.read().then(console.log);
+
+  // Because it gets "paused" when the queue is full
+  // the data source which is a infinite settimeout loop
+  // gets cleared, and there's nothing referencing the event loop and no async operations exist
+  // This allows the program to exit
+  // The problem was the order of operations
+
   // console.log('READ', await reader.read());
   // console.log('READ', await reader.read());
 
