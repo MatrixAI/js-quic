@@ -8,6 +8,15 @@ let key: CryptoKey;
 let socket: dgram.Socket;
 let config;
 
+// Ok I need to create a web stream to help with this
+// Let's assume that upon writing to this stream, I need to do something with this
+// See I'm a bit confused, cause you can "write" and "read"
+// from this stream... unless I'm supposed to create 2 streams
+// A transform stream is both readable and writable
+// If you write to it... it then sends it to the readable side?
+// THat doesn't make sense to me
+
+
 const clients = new Map<string, any>();
 
 async function main() {
@@ -204,7 +213,7 @@ async function handleMessage(
 
     client = {
       conn,
-      partial_responses: new Map()
+      partialResponses: new Map()
     };
 
     clients.set(scid.toString('binary'), client);
@@ -272,6 +281,36 @@ async function handleMessage(
   if (client.conn.isInEarlyData() || client.conn.isEstablished()) {
     // This is when we handle writable streams
     // Process readable streams
+
+    // Streams that are "writable", these streams we are calling `streamSend()`?
+    // These are streams that have capacity to write things...?
+    // So even if there's nothing to write, we will end up calling return.
+    // There's space in the stream buffer to write things
+    // So that's what it means to be writable
+    // The size of the buffer is based on the flow control window
+    for (const streamId of client.conn.writable()) {
+      // StreamId is just a number
+      handleWritable(client, streamId);
+    }
+
+    // A stream that has data that is pending to be read
+    for (const streamId in client.conn.readable()) {
+
+      // Ideally large enough to hold whatever data you want to deal with
+      // Seems we can always use some random data size
+      const data = Buffer.alloc(quic.MAX_UDP_PACKET_SIZE);
+
+
+      while (true) {
+        const [streamRead, fin] = client.conn.streamRecv(streamId, data);
+        if (streamRead === 0 || fin === true) {
+          break;
+        }
+        const dataUseful = data.subarray(0, streamRead);
+        handleStream(client, streamId, dataUseful, "examples/root");
+      }
+
+    }
 
   }
 
@@ -344,5 +383,73 @@ async function validateToken(key: CryptoKey, sourceAddress: string, tokenData: B
   // The original destination connection ID is therefore correct
   return Buffer.from(msg.dcid, 'base64url');
 }
+
+
+// This appears to primarily "write"
+// the partial responses by using `streamSend`
+// And also attempt to finish it
+// But IF, the stream written is less tahn the total response...
+// Then it's possible that there is still a partial response
+// Not entirely sure
+function handleWritable(client, streamId) {
+
+  // partial responses is indexed by the stream ID numbers
+  // THIS checks that if it doesn't contain the stream ID, we just return
+  if (!client.partialResponses.has(streamId)) {
+    return;
+  }
+
+  const resp = client.partialResponses.get(streamId);
+
+  let streamWritten;
+  try {
+    streamWritten = client.conn.streamSend(streamId, resp.body, true);
+  } catch (e) {
+    // If there is an error
+    client.partialResponses.delete(streamId);
+    throw e;
+  }
+
+  // If the written increases..
+  resp.written += streamWritten;
+
+  if (resp.written === resp.body.length) {
+    client.partialResponses.delete(streamId);
+  }
+
+}
+
+
+// This is for handling HTTP/0.9 requests???
+// Well if I want to do something else!?
+function handleStream(client, streamId, data, root) {
+  // So here the data is ONE iteration the loop
+  // In that sense, this may be called multiple times
+  // Until the stream is finished
+  // So here is where we are processing the data
+  // Insterestingly.. here is how we respond
+  // we want to read the data
+
+  console.log('DATA RECVED on stream', data.toString());
+  const dataReply = Buffer.from('Hello World');
+
+  const written = client.conn.streamSend(streamId, dataReply, true);
+
+  // So if we need "wait" to send out data
+  if (written < dataReply.length) {
+    // Keep track of partial responses, so it can be sent out later
+    client.partialResponses.set(streamId, {
+      body: dataReply,
+      written
+    });
+  }
+
+
+}
+
+// If a stream is writable, it tries to write all of it
+
+// Socket message
+
 
 void main();
