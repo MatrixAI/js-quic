@@ -15,7 +15,6 @@
   },
   "scripts": {
     "prepare": "tsc -p ./tsconfig.build.json",
-    "install": "node-gyp-build",
     "prebuild": "node ./scripts/prebuild.js",
     "build": "rimraf ./dist && tsc -p ./tsconfig.build.json",
     "postversion": "npm install --package-lock-only --ignore-scripts --silent",
@@ -45,7 +44,7 @@
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
-    "@napi-rs/cli": "^2.13",
+    "@napi-rs/cli": "^2.13.2",
     "@swc/core": "^1.2.215",
     "@types/jest": "^28.1.3",
     "@types/node": "^16.11.7",

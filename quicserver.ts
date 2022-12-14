@@ -1,24 +1,107 @@
 import dgram from 'dgram';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import { promisify, promise } from './src/utils';
+const quic = require('./index.node');
 
 // So here we imagine we have multiple events that we need to setup
 // And then subsequently create web streams over it
 // We may need an asynchronous setup first
 // Async create and async stop
 
-class QUICServer {
+
+// Event: 'connection' <- indicates a new QUIC connection is available
+// Event: 'stream' <- indicates a new QUIC stream is available
+class QUICServer extends EventTarget {
 
   protected socket: dgram.Socket;
   protected host: string;
   protected port: number;
+
+  // This is method?
+  // No it must be async property
+  // That way we can attach it without losing context!!
+  // Event connection is going to have a `timeout()`
+  // Which returns the amount of time before a timeout event will occur
+  // However this will necessarily be replaced..
+  // If `conn.timeout() == null`, then the timeout should be DISARMED or removed
+  // If it returns the milliseconds, we need set it
+  protected handleTimeout = () => {
+    // The `this` is the INSTANCE
+
+  };
+
+  // This handles the UDP socket message
+  protected handleMessage = (data: Buffer, rinfo: dgram.RemoteInfo) => {
+
+    console.log('MESSAGE', data.byteLength, rinfo);
+
+    // The `this` is the INSTANCE
+
+    // data.subarray(0, 1200);
+
+
+    console.log('MAX CONN ID LEN', quic.MAX_CONN_ID_LEN);
+
+    // console.log('CONSTRUCT', new quic.Header(123));
+
+
+    // This is quic.Header
+    let header;
+    try {
+      // Maximum length of a connection ID
+      header = quic.Header.fromSlice(
+        data,
+        20
+        // quic.MAX_CONN_ID_LEN
+      );
+    } catch (e) {
+      // Drop the message if it is not a QUIC packet
+      return;
+    }
+
+    // The header is being parsed propertly
+    console.log(header);
+    console.log(header.ty);
+    console.log(header.version);
+    console.log(header.dcid);
+    console.log(header.scid);
+    console.log(header.tokens);
+    console.log(header.versions);
+
+
+  };
+
+  protected handleStream = () => {
+
+  };
+
+  // alternatively
+  // we expose "events" that gets emitted here
+  // and you just register events on this
+  // but if we are not using event emitter
+  // but instead a
+  // i think it's interesting
+  // in that we would wnt to pass something to handle streams
+  // rather than you attach handlers to these  things
+  // quicServer.on('stream')
+  // so then you would extend the event emitter in nodeJS
+  // on other systems you may want to use other things
+  // OR you extend the event target
+  // We may emit an event called stream here
+  // protected handleStream;
 
   public static async createQUICServer() {
 
   }
 
   public constructor() {
+    super();
 
+    // The stream events are "custom"
+    // We need to emit this event to create a stream
+    // But we walso need to pass data in
+    // this.addEventListener('stream');
+    // this.handleStream = handleStream;
   }
 
   public async start({
@@ -72,6 +155,13 @@ class QUICServer {
 
     console.log(this.host, this.port);
 
+    this.socket.on('message', this.handleMessage);
+
+    // Ok suppose we handle a new stream for whatever eason
+    // It would mean one has to provide a handler for an event
+    // We would emit an event for a new stream that was created
+    // And you would need to provide some data for it
+
   }
 
   public async stop() {
@@ -93,9 +183,13 @@ async function main () {
   const quicServer = new QUICServer();
   await quicServer.start({
     host: 'localhost',
-    port: 0,
+    port: 55555,
   });
-  await quicServer.stop();
+  // await quicServer.stop();
+
+  // After `on_timeout()` is called (which occurs at a timeout event)
+  // More packets on the connection may need to be sent (for that specific connection)
+  // In such a case, that connection should have the `conn.send()` called
 
 }
 

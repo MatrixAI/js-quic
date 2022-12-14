@@ -2,6 +2,7 @@
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
 
+
 #[napi]
 pub enum Type {
   Initial,
@@ -10,6 +11,19 @@ pub enum Type {
   ZeroRTT,
   VersionNegotiation,
   Short
+}
+
+impl From<Type> for quiche::Type {
+  fn from(ty: Type) -> Self {
+    match ty {
+      Type::Initial => quiche::Type::Initial,
+      Type::Retry => quiche::Type::Retry,
+      Type::Handshake => quiche::Type::Handshake,
+      Type::ZeroRTT => quiche::Type::ZeroRTT,
+      Type::VersionNegotiation => quiche::Type::VersionNegotiation,
+      Type::Short => quiche::Type::Short,
+    }
+  }
 }
 
 impl From<quiche::Type> for Type {
@@ -25,7 +39,7 @@ impl From<quiche::Type> for Type {
   }
 }
 
-#[napi(constructor)]
+#[napi]
 pub struct Header {
   pub ty: Type,
   pub version: u32,

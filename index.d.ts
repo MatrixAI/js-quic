@@ -268,6 +268,5 @@ export class Header {
   scid: Uint8Array
   token?: Uint8Array
   versions?: Array<number>
-  constructor(ty: Type, version: number, dcid: Uint8Array, scid: Uint8Array, token?: Uint8Array, versions?: Array<number>)
   static fromSlice(data: Uint8Array, dcidLen: number): Header
 }
