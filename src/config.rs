@@ -51,6 +51,13 @@ impl Config {
   // this is factory method though
 
   #[napi]
+  pub fn load_cert_chain_from_pem_file(&mut self, file: String) -> Result<()> {
+    return self.0.load_cert_chain_from_pem_file(&file).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
+
+  #[napi]
   pub fn load_priv_key_from_pem_file(&mut self, file: String) -> Result<()> {
     return self.0.load_priv_key_from_pem_file(&file).or_else(
       |err| Err(Error::from_reason(err.to_string()))

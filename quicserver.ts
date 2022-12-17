@@ -95,6 +95,8 @@ class QUICServer extends EventTarget {
       dcid
     ));
 
+    console.log('Deriving CONNID');
+
     const connId = dcidSignature.subarray(0, quic.MAX_CONN_ID_LEN);
 
     console.log('CONNECTION ID', connId);
@@ -128,6 +130,7 @@ class QUICServer extends EventTarget {
     // And then use the connection to determine the stream
     // And then use the stream to determine the data
 
+    let actualId;
     let conn;
     if (
       !this.clients.has(dcid.toString('binary')) &&
@@ -282,6 +285,7 @@ class QUICServer extends EventTarget {
       // Our derived conn ID, should not be required
       if (connId.byteLength !== dcid.byteLength) {
         console.log('INVALID SCID/DCID LENGTH');
+        console.groupEnd();
         return;
       }
 
@@ -340,6 +344,8 @@ class QUICServer extends EventTarget {
         conn
       );
 
+      actualId = scid;
+
       // Note that this `conn` is kind of useless...
       // It's not a stream duplex or anything
       // It's a QUIC connection specifically
@@ -352,8 +358,14 @@ class QUICServer extends EventTarget {
     } else {
       // One of these 2 will be acquired!
       // But this is an existing connection
-      conn = this.clients.get(dcid.toString('binary')) ||
-             this.clients.get(connId.toString('binary'));
+      console.log('EXISTING CONNECTION');
+
+      conn = this.clients.get(dcid.toString('binary'));
+      actualId = dcid;
+      if (conn == null) {
+        conn = this.clients.get(connId.toString('binary'));
+        actualId = connId;
+      }
     }
 
     // So we now have a CONNECTION
@@ -369,17 +381,146 @@ class QUICServer extends EventTarget {
     // We either have the new connection or we have an existing connection
     // Now we need to do something with it
 
+    console.log('Connection Trace ID', conn.traceId());
+
+    // At this point the connection is not established
+    // and it is not in early data
+
+    // In early data means TLS handshake completed
+    // and can send and receive application data
+
+    // It is not established until the 0-RTT handshake is done
+    // The 0-RTT just means that the client can send data to the server
+    // without waiting for the server to confirm receipt
+    // To do this both client and serer must support it
+    // And the client must use a previously established connection
+
+    const recvInfo = {
+      to: {
+        addr: this.socket.address().address,
+        port: this.socket.address().port
+      },
+      from: {
+        addr: rinfo.address,
+        port: rinfo.port
+      },
+    };
+
+    console.log('RECV INFO', recvInfo);
+
+    // Here we are asking the CONNECTION to actually process the message
+    // Because the above is just pre-processing
+    // We have accepted the connection
+    // But we must be processing the actual message at this point
+    let recvLength
+    try {
+      recvLength = conn.recv(data, recvInfo);
+    } catch(e) {
+      // And here we get a TlsFail error
+      console.log('Error processing packet data', e);
+      // Ignore this packet if you can't do anything about it
+      console.groupEnd();
+      return;
+    }
+
+    // 1200 bytes is processed here (the full message)
+    console.log('CONNECTION processed this many bytes:', recvLength);
+
+    // Ok we managed to "process" the connection
+    // But we are actually still neither of the 2 below
+    // This is because we need to ANSWER something...
+
     // At this point it should be the case that it is established
     if (conn.isInEarlyData() || conn.isEstablished()) {
 
       // Process the streams now
       // This is where we need to also attach the stream concepts
 
+      // The streams wants to be read!?!?!?!?
+      for (const streamId of conn.writable()) {
+        console.log('WRITABLE stream', streamId);
+      }
+
+      for (const streamId of conn.readable()) {
+        console.log('READABLE stream', streamId);
+      }
+
+    } else {
+
+      console.log('NOT In early data or is established!');
 
     }
 
+    // We have to COMPLETE the TLS handshake here
+    // by responding BACK to the client here
+
+    // Perhaps what we actually need to do is to "send" back data?
+    // This has to be DONE for every connection
+    // This is being triggered here
+    // But other triggers could also trigger connection sends
+
+    // This is some how processing FOR everything
+    // but here we are handling 1 message from a given thing
+    // We are only operating over our own connection here
+
+    // This actually GOES in a loop
+    // cause there may be more than 1 piece of data to send
+    console.group('SENDING loop');
+    while (true) {
+      // Remember that this is supposed to loop
+      // UNTIL we are done
 
 
+      const dataSend = Buffer.allocUnsafe(quic.MAX_DATAGRAM_SIZE);
+      let dataSendLength;
+      let sendInfo;
+      try {
+        [dataSendLength, sendInfo] = conn.send(dataSend);
+      } catch (e) {
+        // If there's a failure to do this
+        // We actually CLOSE the connection ...
+        conn.close(
+          false,
+          0x01,
+          Buffer.from('Failed to send data')
+        );
+        this.clients.delete(actualId);
+        break;
+      }
+
+      console.log('SENDING', dataSendLength, sendInfo);
+
+      if (dataSendLength === 0) {
+        // If there's nothing to send, we got nothing to do anymore
+        console.log('NOTHING TO SEND');
+        break;
+        // However we may be closing connections
+        // But that's not what we are doing right?
+      }
+
+      // This is not properly awaited for
+      // But if there was a problem
+      // You'd break out of the loop as well
+      this.socket.send(
+        dataSend,
+        0,
+        dataSendLength,
+        sendInfo.to.port,
+        sendInfo.to.addr,
+        (e) => {
+          // The error can be a DNS error, although not in this case
+          if (e != null) {
+            console.log('Error send socket', e);
+          }
+          console.log('Sent out data!');
+        }
+      );
+    }
+    console.groupEnd();
+
+    // So we still need these to be asynchronously awaited
+
+    console.log('### FINISH HANDLING MESSAGE ###');
     console.groupEnd();
   };
 
@@ -413,6 +554,17 @@ class QUICServer extends EventTarget {
     this.key = key;
 
     const config = new quic.Config();
+
+    // This is necessary even though we are not verifying the peer
+    // It is mandatory to provide the cert and key
+    // Otherwise when we do conn.recv() we would get a cryptic TlsFail error!
+    config.loadCertChainFromPemFile(
+      './tmp/localhost.crt'
+    );
+    config.loadPrivKeyFromPemFile(
+      './tmp/localhost.key'
+    );
+
     config.verifyPeer(false);
     config.grease(true);
     config.setMaxIdleTimeout(5000);
@@ -433,6 +585,15 @@ class QUICServer extends EventTarget {
         'http/0.9'
       ]
     );
+
+    // Note that we have not enabled dgrams yet!
+    // that will be important
+
+    // This will ensure that... we can do what exactly?
+    // It allows the client to immediately send data
+    // before it receives RECEIPT of it
+    config.enableEarlyData();
+
     this.config = config;
 
     // The stream events are "custom"

@@ -118,6 +118,7 @@ export function retry(scid: Uint8Array, dcid: Uint8Array, newScid: Uint8Array, t
 export function versionIsSupported(version: number): boolean
 export class Config {
   constructor()
+  loadCertChainFromPemFile(file: string): void
   loadPrivKeyFromPemFile(file: string): void
   loadVerifyLocationsFromFile(file: string): void
   loadVerifyLocationsFromDirectory(dir: string): void
