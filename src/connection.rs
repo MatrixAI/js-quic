@@ -194,7 +194,7 @@ impl Connection {
     //   |err| Err(napi::Error::from_reason(err.to_string()))
     // )?.next().unwrap();
 
-    eprintln!("Local address: {:?}", local_addr);
+    // eprintln!("Local address: {:?}", local_addr);
 
     // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
     //   |err| Err(napi::Error::from_reason(err.to_string()))
@@ -204,7 +204,7 @@ impl Connection {
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("Remote address: {:?}", remote_addr);
+    // eprintln!("Remote address: {:?}", remote_addr);
 
     let scid = quiche::ConnectionId::from_ref(&scid);
 
@@ -218,7 +218,7 @@ impl Connection {
       |err| Err(napi::Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("STDERR New connection with scid {:?}", scid);
+    // eprintln!("STDERR New connection with scid {:?}", scid);
 
     return Ok(Connection(connection));
   }
@@ -240,7 +240,7 @@ impl Connection {
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("Local address: {:?}", local_addr);
+    // eprintln!("Local address: {:?}", local_addr);
 
     // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
     //   |err| Err(napi::Error::from_reason(err.to_string()))
@@ -250,7 +250,7 @@ impl Connection {
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("Remote address: {:?}", remote_addr);
+    // eprintln!("Remote address: {:?}", remote_addr);
 
     let scid = quiche::ConnectionId::from_ref(&scid);
 
@@ -268,7 +268,7 @@ impl Connection {
       |err| Err(napi::Error::from_reason(err.to_string()))
     )?;
 
-    eprintln!("New connection with scid {:?}", scid);
+    // eprintln!("New connection with scid {:?}", scid);
 
     return Ok(Connection(connection));
   }

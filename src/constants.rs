@@ -8,7 +8,7 @@ pub const MAX_CONN_ID_LEN: i64 = quiche::MAX_CONN_ID_LEN as i64;
 pub const MIN_CLIENT_INITIAL_LEN: i64 = quiche::MIN_CLIENT_INITIAL_LEN as i64;
 
 #[napi]
-pub const PROTOCOL_VERSION: i64 = quiche::PROTOCOL_VERSION as i64;
+pub const PROTOCOL_VERSION: u32 = quiche::PROTOCOL_VERSION;
 
 /// This maximum datagram size to SEND to the UDP socket
 /// It must be used with `config.set_max_recv_udp_payload_size` and such
