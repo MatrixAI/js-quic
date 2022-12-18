@@ -1,25 +1,35 @@
-use serde::{Serialize, Deserialize};
 use std::io;
 use std::net::{
   SocketAddr,
   ToSocketAddrs,
 };
-// use std::net::ToSocketAddrs;
 use napi_derive::napi;
-// use napi::bindgen_prelude::{
-//   Env,
-//   Array,
-//   BigInt,
-//   Uint8Array,
-//   External,
-//   ToNapiValue,
-//   FromNapiValue,
-//   sys
-// };
 use napi::bindgen_prelude::*;
+use serde::{Serialize, Deserialize};
 use crate::config;
 use crate::stream;
 use crate::path;
+
+#[napi]
+pub enum ConnectionErrorCode {
+  NoError = 0x0,
+  InternalError = 0x1,
+  ConnectionRefused = 0x2,
+  FlowControlError = 0x3,
+  StreamLimitError = 0x4,
+  StreamStateError = 0x5,
+  FinalSizeError = 0x6,
+  FrameEncodingError = 0x7,
+  TransportParameterError = 0x8,
+  ConnectionIdLimitError = 0x9,
+  ProtocolViolation = 0xa,
+  InvalidToken = 0xb,
+  ApplicationError = 0xc,
+  CryptoBufferExceeded = 0xd,
+  KeyUpdateError = 0xe,
+  AEADLimitReached = 0xf,
+  NoViablePath = 0x10,
+}
 
 #[napi(object)]
 pub struct ConnectionError {
@@ -120,15 +130,15 @@ impl From<quiche::Shutdown> for Shutdown {
 
 #[napi(object)]
 #[derive(Serialize, Deserialize)]
-pub struct Host {
-  pub addr: String,
+pub struct HostPort {
+  pub host: String,
   pub port: u16,
 }
 
-impl TryFrom<Host> for SocketAddr {
+impl TryFrom<HostPort> for SocketAddr {
   type Error = io::Error;
-  fn try_from(host: Host) -> io::Result<Self> {
-    (host.addr, host.port).to_socket_addrs()?.next().ok_or(
+  fn try_from(host: HostPort) -> io::Result<Self> {
+    (host.host, host.port).to_socket_addrs()?.next().ok_or(
       io::Error::new(
         io::ErrorKind::Other,
         "Could not convert host to socket address"
@@ -137,10 +147,10 @@ impl TryFrom<Host> for SocketAddr {
   }
 }
 
-impl From<SocketAddr> for Host {
+impl From<SocketAddr> for HostPort {
   fn from(socket_addr: SocketAddr) -> Self {
-    Host {
-      addr: socket_addr.ip().to_string(),
+    HostPort {
+      host: socket_addr.ip().to_string(),
       port: socket_addr.port(),
     }
   }
@@ -149,9 +159,9 @@ impl From<SocketAddr> for Host {
 #[napi(object)]
 pub struct SendInfo {
   /// The local address the packet should be sent from.
-  pub from: Host,
+  pub from: HostPort,
   /// The remote address the packet should be sent to.
-  pub to: Host,
+  pub to: HostPort,
   /// The time to send the packet out for pacing.
   pub at: External<std::time::Instant>,
 }
@@ -159,9 +169,9 @@ pub struct SendInfo {
 #[napi(object)]
 pub struct RecvInfo {
   /// The remote address the packet was received from.
-  pub from: Host,
+  pub from: HostPort,
   /// The local address the packet was sent to.
-  pub to: Host,
+  pub to: HostPort,
 }
 
 #[napi]
@@ -175,9 +185,10 @@ impl Connection {
   /// This can take both IP addresses and hostnames
   #[napi(factory)]
   pub fn connect(
+    server_name: Option<String>,
     scid: Uint8Array,
-    local_host: Host,
-    remote_host: Host,
+    local_host: HostPort,
+    remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
     // These addresses are passed in from the outside
@@ -209,7 +220,7 @@ impl Connection {
     let scid = quiche::ConnectionId::from_ref(&scid);
 
     let connection = quiche::connect(
-      None,
+      server_name.as_deref(),
       &scid,
       local_addr,
       remote_addr,
@@ -227,8 +238,8 @@ impl Connection {
   pub fn accept(
     scid: Uint8Array,
     odcid: Option<Uint8Array>,
-    local_host: Host,
-    remote_host: Host,
+    local_host: HostPort,
+    remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
 
@@ -336,29 +347,31 @@ impl Connection {
   /// This writes to the data buffer passed in.
   /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
   /// This will return a JS array of `[length, send_info]`.
-  /// If the length is 0, then that there's no data to send.
-  /// The `send_info` will be set to `null`.
-  #[napi(ts_return_type = "[number, SendInfo | null]")]
+  /// It is possible for the length to be 0.
+  /// You may then send a 0-lenght buffer.
+  /// If there is nothing to be sent a Done error will be thrown.
+  #[napi(ts_return_type = "[number, SendInfo]")]
   pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
     // Convert the Done error into a 0-length write
     // This would mean that there's nothing to send
+
     let (write, send_info) = match self.0.send(&mut data) {
-      Ok((write, send_info)) => (write, Some(send_info)),
-      Err(quiche::Error::Done) => (0, None),
+      Ok((write, send_info)) => (write, send_info),
+      // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
-    let send_info = send_info.map(|info| {
-      let from = Host {
-        addr: info.from.ip().to_string(),
-        port: info.from.port(),
+    let send_info = {
+      let from = HostPort {
+        host: send_info.from.ip().to_string(),
+        port: send_info.from.port(),
       };
-      let to = Host {
-        addr: info.to.ip().to_string(),
-        port: info.to.port(),
+      let to = HostPort {
+        host: send_info.to.ip().to_string(),
+        port: send_info.to.port(),
       };
-      let at = External::new(info.at);
+      let at = External::new(send_info.at);
       SendInfo { from, to, at }
-    });
+    };
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
@@ -373,8 +386,8 @@ impl Connection {
     &mut self,
     env: Env,
     mut data: Uint8Array,
-    from: Option<Host>,
-    to: Option<Host>
+    from: Option<HostPort>,
+    to: Option<HostPort>
   ) -> napi::Result<Array> {
     // If we want to "preserve" the error
     // We have to then provide a Some(Result)
@@ -413,16 +426,16 @@ impl Connection {
     };
     let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
       Ok((write, send_info)) => (write, Some(send_info)),
-      Err(quiche::Error::Done) => (0, None),
+      // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = send_info.map(|info| {
-      let from = Host {
-        addr: info.from.ip().to_string(),
+      let from = HostPort {
+        host: info.from.ip().to_string(),
         port: info.from.port(),
       };
-      let to = Host {
-        addr: info.to.ip().to_string(),
+      let to = HostPort {
+        host: info.to.ip().to_string(),
         port: info.to.port(),
       };
       let at = External::new(info.at);
@@ -440,7 +453,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn send_quantum_on_path(&self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+  pub fn send_quantum_on_path(&self, local_host: HostPort, peer_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -466,8 +479,13 @@ impl Connection {
       &mut data,
     ) {
       Ok((read, fin)) => (read, fin),
+      // Change this to an exception
+      // DONE means it's actually done!
       // Done means there's no more data to receive
-      Err(quiche::Error::Done) => (0, true),
+      // Err(quiche::Error::Done) => (0, true),
+      // Which is different from receiving a 0-length buffer
+      // We can also change this to a different kind of thing?
+      // But if it is a result array or something else
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let mut read_and_fin = env.create_array(2)?;
@@ -495,7 +513,8 @@ impl Connection {
       fin
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // We are going to just return Done
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -614,7 +633,7 @@ impl Connection {
       &mut data,
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -625,7 +644,7 @@ impl Connection {
   ) -> napi::Result<Option<Uint8Array>> {
     match self.0.dgram_recv_vec() {
       Ok(v) => return Ok(Some(v.into())),
-      Err(quiche::Error::Done) => return Ok(None),
+      // Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -637,7 +656,7 @@ impl Connection {
       len as usize,
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string()))
     };
   }
@@ -687,7 +706,7 @@ impl Connection {
     ) {
       Ok(v) => return Ok(v),
       // If no data is sent, also return Ok
-      Err(quiche::Error::Done) => return Ok(()),
+      // Err(quiche::Error::Done) => return Ok(()),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -701,7 +720,7 @@ impl Connection {
       data.to_vec()
     ) {
       Ok(v) => return Ok(v),
-      Err(quiche::Error::Done) => return Ok(()),
+      // Err(quiche::Error::Done) => return Ok(()),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -749,8 +768,8 @@ impl Connection {
   #[napi]
   pub fn probe_path(
     &mut self,
-    local_host: Host,
-    peer_host: Host
+    local_host: HostPort,
+    peer_host: HostPort
   ) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
@@ -773,7 +792,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn migrate_source(&mut self, local_host: Host) -> napi::Result<i64> {
+  pub fn migrate_source(&mut self, local_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -785,7 +804,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn migrate(&mut self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+  pub fn migrate(&mut self, local_host: HostPort, peer_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -875,7 +894,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn paths_iter(&self, from: Host) -> napi::Result<path::HostIter> {
+  pub fn paths_iter(&self, from: HostPort) -> napi::Result<path::HostIter> {
     let from_addr: SocketAddr = from.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -976,8 +995,8 @@ impl Connection {
   #[napi]
   pub fn is_path_validated(
     &self,
-    from: Host,
-    to: Host
+    from: HostPort,
+    to: HostPort
   ) -> napi::Result<bool> {
     let from_addr: SocketAddr = from.try_into().or_else(
       |err: io::Error| Err(

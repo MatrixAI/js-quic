@@ -342,3 +342,84 @@ https://stackoverflow.com/questions/57476533/why-is-statically-linking-glibc-dis
 https://news.ycombinator.com/item?id=21907870
 
 Also I can see that the control for all of this in cargo. You can see `libc`, `libm`
+
+---
+
+```sh
+# Build the the native binary
+npm run napi-build
+
+# Put certificates in `./tmp`
+step certificate create \
+  localhost localhost.crt localhost.key \
+  --profile self-signed \
+  --subtle \
+  --no-password \
+  --insecure \
+  --force \
+  --san 127.0.0.1 \
+  --san ::1 \
+  --not-after 31536000s
+
+cargo run --bin quiche-client -- 'http://127.0.0.1:55555'
+
+# Run without verifying TLS cause the certs are self-signed
+cargo run --bin quiche-client -- --no-verify 'http://127.0.0.1:55555'
+
+cd ./apps
+```
+
+To run quiche apps:
+
+```
+cd apps
+cargo run --bin quiche-server -- --listen 127.0.0.1:55555
+cargo run --bin quiche-client -- --no-verify 'https://127.0.0.1:55555'
+```
+
+---
+
+
+```
+const s = new QUICServer({ socket: QUICSocket });
+const c1 = new QUICClient({ socket: QUICSocket });
+const c2 = new QUICClient({ socket: QUICSocket });
+```
+
+```
+    // The DCID is the ID that the remote peer picked for us.
+    // Unlike the SCID it is guaranteed to exist for all QUIC packets.
+    // const dcid = header.dcid;
+
+    // If this packet is a short header
+    // the DCID is decoded based on the dcid length
+    // However the SCID is actually:
+    // header.scid: ConnectionId::default()
+    // What is this?
+    // The default connection id is a `from_vec(Vec::new())`
+    // I think it's just an empty Uint8Array
+    // With length of 0
+    // Ok that makes sense now
+
+    // DCID is the only thing that will always exist
+    // We must use this as a way to route the connections
+    // How do we decide how to do this?
+    // We must maintain a "connection" map here
+    // That is QUIC connections... etc.
+    // Furthermore the DCID may also not exist in the map
+    // In that case it can be a NEW connection
+    // But if it doesn't follow the new connections
+    // it must be discarded too
+
+    // Ok so the problem is that there could be multiple packets in the datagram
+    // In the initial packet we have the random DCID that the client creates
+    // But it also randomly chooses its SCID
+
+    // On the server side, we are converting the `dcid` to `connId`
+    // Which is a deterministic hash of it, well a "signed" version of it
+
+    // So we have DCID, SCID and CONNID
+
+    // At any time, endpoints can change the DCID they transmit to a value that has not been used on
+    // **another** path.
+```

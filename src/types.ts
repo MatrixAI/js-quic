@@ -1,3 +1,14 @@
+import type dgram from 'dgram';
+import type QUICConnection from './QUICConnection';
+import type QUICStream from './QUICStream';
+
+/**
+ * Opaque types are wrappers of existing types
+ * that require smart constructors
+ */
+type Opaque<K, T> = T & { readonly [brand]: K };
+declare const brand: unique symbol;
+
 /**
  * Generic callback
  */
@@ -15,7 +26,83 @@ type PromiseDeconstructed<T> = {
   rejectP: (reason?: any) => void;
 };
 
+type ConnectionId = Opaque<'ConnectionId', Buffer>;
+
+type ConnectionIdString = Opaque<'ConnectionIdString', string>;
+
+/**
+ * Crypto utility object
+ * Remember ever Node Buffer is an ArrayBuffer
+ */
+type Crypto = {
+  sign(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+  ): Promise<ArrayBuffer>;
+  verify(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+    sig: ArrayBuffer,
+  ): Promise<boolean>;
+  randomBytes(
+    data: ArrayBuffer,
+  ): Promise<void>;
+};
+
+type StreamId = Opaque<'StreamId', number>;
+
+/**
+ * Host is always an IP address
+ */
+type Host = Opaque<'Host', string>;
+
+/**
+ * Hostnames are resolved to IP addresses
+ */
+type Hostname = Opaque<'Hostname', string>;
+
+/**
+ * Ports are numbers from 0 to 65535
+ */
+type Port = Opaque<'Port', number>;
+
+/**
+ * Combination of `<HOST>:<PORT>`
+ */
+type Address = Opaque<'Address', string>;
+
+type QUICStreamMap = Map<StreamId, QUICStream>;
+
+type RemoteInfo = {
+  host: Host;
+  port: Port;
+};
+
+/**
+ * Maps reason (most likely an exception) to a stream code.
+ * Use `0` to indicate unknown/default reason.
+ */
+type StreamReasonToCode = (type: 'recv' | 'send', reason?: any) => number | PromiseLike<number>;
+
+/**
+ * Maps code to a reason. 0 usually indicates unknown/default reason.
+ */
+type StreamCodeToReason = (type: 'recv' | 'send', code: number) => any | PromiseLike<any>;
+
 export type {
+  Opaque,
   Callback,
   PromiseDeconstructed,
+  ConnectionId,
+  ConnectionIdString,
+  Crypto,
+  StreamId,
+  Host,
+  Hostname,
+  Port,
+  Address,
+  QUICStreamMap,
+  RemoteInfo,
+  StreamReasonToCode,
+  StreamCodeToReason,
 };

@@ -10,9 +10,9 @@
 # prebuildify
 /prebuilds
 
-# neon
+# napi-rs
 /target
-/index.node
+/*.node
 
 # Logs
 logs

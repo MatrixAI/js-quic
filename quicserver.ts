@@ -1,13 +1,20 @@
 import dgram from 'dgram';
+import { ReadableStream, WritableStream, } from 'stream/web';
 import { webcrypto } from 'crypto';
-import { IPv4, IPv6, Validator } from 'ip-num';
+import { bigIntToHexadecimalString, IPv4, IPv6, Validator } from 'ip-num';
 import { promisify, promise } from './src/utils';
 const quic = require('./index.node');
 
-// So here we imagine we have multiple events that we need to setup
-// And then subsequently create web streams over it
-// We may need an asynchronous setup first
-// Async create and async stop
+type StreamId = number;
+type ConnectionId = string;
+type Connection = any;
+
+function reasonToCode(reason?: any) {
+  // The reason to code map must be supplied
+  // If it is not a valid reason, we return an unknown reason
+  // that is 0
+  return 0;
+}
 
 class QUICConnectionEvent extends Event {
   public detail;
@@ -21,6 +28,328 @@ class QUICConnectionEvent extends Event {
   }
 }
 
+class QUICDataEvent extends Event {
+  public detail;
+  constructor(
+    options: EventInit & {
+      detail: any
+    }
+  ) {
+    super('data', options);
+    this.detail = options.detail;
+  }
+}
+
+class QUICErrorEvent extends Event {
+  public detail;
+  constructor(
+    options: EventInit & {
+      detail: any
+    }
+  ) {
+    super('error', options);
+    this.detail = options.detail;
+  }
+}
+
+
+class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
+
+  public streamId: number;
+  public readable: ReadableStream<Uint8Array>;
+  public writable: WritableStream<Uint8Array>;
+  protected conn;
+  protected _recvPaused: boolean = false;
+
+  public get recvPaused(): boolean {
+    return this._recvPaused;
+  }
+
+  public constructor(
+    conn,
+    streamId: StreamId,
+  ) {
+    super();
+    this.conn = conn;
+    this.streamId = streamId;
+
+    // Try the BYOB later, it seems more performant
+    let handleReadable : () => void;
+    this.readable = new ReadableStream({
+      type: 'bytes',
+      // autoAllocateChunkSize: 1024,
+      start(controller) {
+        handleReadable = () => {
+          if (this._recvPaused) {
+            // Do nothing if we are paused
+            return;
+          }
+          const buf = Buffer.alloc(1024);
+          let recvLength, fin;
+          try {
+            [recvLength, fin] = this.conn.streamRecv(
+              this.streamId,
+              buf
+            );
+          } catch (e) {
+            if (e.message === 'Done') {
+              // Do nothing if there was nothing to read
+              return;
+            } else {
+              // If there is an error, we do not do anything else
+              controller.error(e);
+              return;
+            }
+          }
+          // It's possible to get a 0-length buffer
+          controller.enqueue(buf.subarray(0, recvLength));
+          // If fin is true, then that means, the stream is CLOSED
+          if (fin) {
+            controller.close();
+            // If finished, we won't bother doing anything else, we finished
+            return;
+          }
+          // Now we paus receiving if the queue is full
+          if (controller.desiredSize != null && controller.desiredSize <= 0) {
+            this._recvPaused = true;
+            // this.pauseRecv();
+          }
+        };
+        this.addEventListener('readable', handleReadable);
+      },
+      pull() {
+        // this.resumeRecv();
+        // Unpausese
+        this._recvPaused = false;
+        // This causes the readable to run again
+        // Because the stream was previously readable
+        // The pull
+        this.dispatchEvent(new Event('readable'));
+      },
+      cancel(reason) {
+        this.removeEventListener('readable', handleReadable);
+        this.conn.streamShutdown(
+          this.streamId,
+          quic.Shutdown.Read,
+          reasonToCode(reason)
+        );
+      }
+    });
+
+    this.writable = new WritableStream({
+      start(controller) {
+        // Here we start the stream
+        // Called when the objectis constructed
+        // It should aim to get access to the underlying SINK
+        // So what does it really mean here?
+        // We have nothing to do here for now
+        // Since the server already received a "stream ID"
+        // So it already exists, and so it's already ready to be used!!!
+      },
+      async write(chunk: Uint8Array) {
+        await this.streamSendFully(chunk);
+      },
+      async close() {
+        // Send an empty buffer and also `true` to indicate that it is finished!
+        await this.streamSendFully(Buffer.from([]), true);
+      },
+      abort(reason?: any) {
+        // Abort can be called even if there are writes are queued up
+        // The chunks are meant to be thrown away
+        // We could tell it to shutdown
+        // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
+        // The receiver can discard any data it already received on that stream
+        // We don't have "unidirectional" streams so that's not important...
+        this.conn.streamShutdown(
+          this.streamId,
+          quic.Shutdown.Write,
+          reasonToCode(reason)
+        );
+      }
+    });
+
+  }
+
+  async streamSendFully(chunk, fin = false) {
+    // This means that the number of written bytes returned can be lower
+    // than the length of the input buffer when the stream doesn’t have
+    // enough capacity for the operation to complete. The application
+    // should retry the operation once the stream is reported as writable again.
+    let sentLength;
+    try {
+      sentLength = this.conn.streamSend(
+        this.streamId,
+        chunk,
+        fin
+      );
+    } catch (e) {
+      // If the Done is returned
+      // then no data was sent
+      // because the stream has no capacity
+      // That is equivalent here to being sent lenght of 0
+      if (e.message === 'Done') {
+        sentLength = 0;
+      } else {
+        throw e;
+      }
+    }
+    if (sentLength < chunk.length) {
+      // Could also use a LOCK... but this is sort of the same thing
+      // We have to wait for the next event!
+      await new Promise((resolve) => {
+        this.addEventListener(
+          'writable',
+          resolve,
+          { once: true }
+        );
+      });
+      return await this.streamSendFully(
+        chunk.subarray(sentLength)
+      );
+    }
+  }
+}
+
+// The only reason to encapsulate is to make it easier
+// for JS modelling here
+// Otherwise in rust we will have a ES6 map of the streams
+// And I can refer to the connection here
+// We have to have events that make this thing writable/readable
+// Note that ON every packet... there could be writable/readable events
+class QUICClient extends EventTarget {
+
+  /**
+   * Underlying QUIC connection
+   */
+  public connection: Connection;
+  protected streams: Map<StreamId, QUICStream> = new Map();
+
+  // We may need to iterate over all the other connections too
+  // not just the connection that we care about too
+  public constructor(
+    connectionId: ConnectionId,
+    connection,
+    server
+  ) {
+    super();
+    this.connection = connection;
+
+    // A data event means there's some data
+    // And it is in fact a socket event
+    // And this may have been constructed
+
+    this.addEventListener(
+      'data',
+      (e) => {
+
+        // Here we are "processing" the data
+        let recvLength;
+        try {
+          // @ts-ignore
+          recvLength = this.connection.recv(e.detail.data, e.detail.recvInfo);
+        } catch (e) {
+          console.log('Error processing packet data', e);
+          return;
+        }
+
+        console.log('CONNECTION processed this many bytes:', recvLength);
+
+        // Every time the connection is ready, we are going to create streams
+        // and process it accordingly
+        if (this.connection.isInEarlyData() && this.connection.isEstablished()) {
+          for (const streamId of this.connection.writable()) {
+            let quicStream = this.streams.get(streamId);
+            if (quicStream == null) {
+              quicStream = new QUICStream(this.connection, streamId);
+            }
+            // This triggers a writable event
+            // If nothing is listening on this
+            // The event is discarded
+            // But when the stream is first created
+            // It will be ready to be written to
+            // But if it is blocked it will wait
+            // for the next writable event
+            // This event won't be it...
+            // So it's only useful for existing streams
+            quicStream.dispatchEvent(new Event('writable'));
+          }
+          // What streams can be read from?
+          for (const streamId of this.connection.readable()) {
+            let quicStream = this.streams.get(streamId);
+            if (quicStream == null) {
+              quicStream = new QUICStream(this.connection, streamId);
+            }
+            // We must emit a readable event, otherwise the quic stream
+            // will not actually read anything
+            quicStream.dispatchEvent(new Event('readable'));
+          }
+        }
+
+        // Now we go into our sending loop?
+        // The reason is because EVEN if streams have nothing to do
+        // The connection may still have some data to be sent back on
+        // We don't know, only quiche knows
+        // We have to interrogate quiche for this
+        // The regular system actually ITERATES
+        // over ALL connections, not just the connection that sent us data
+        // I think this may be primarily due to timeout events
+        // But I cannot be sure
+        // But why do we do this?
+
+        // Ok so the reason is that QUIC may send periodic keep-alive packets to all clients
+        // But would this be due to the timeout event in any way?
+
+        // Ok so we need iterate over ALL connections when we do this
+        // This makes a bit difficult actually to do this
+
+      }
+    );
+
+
+  }
+
+
+
+  protected handleStream(streamId: StreamId) {
+    // so what are we doing here?
+    // if we get a new stream id
+    // we are saying that this tream is both readable/writable
+    // so it could be the same
+
+    let stream = this.streams.get(streamId);
+    if (stream == null) {
+      // Then we have a new stream
+      // That's the idea
+      stream = new QUICStream(this.connection, streamId);
+    }
+
+    // Now we have the stream
+
+  }
+
+  // Should we be checking which streams here
+  // and then emitting it somehow?
+
+  protected doSomething () {
+
+    // Output data (this means) there's
+    for (const streamId of this.connection.writable()) {
+      // A writable stream JUST means the stream is ready to be written to
+      // It doesn't mean there's any DATA to be written to it
+      // The original RS code checks the "partial" responses
+      // Therefore this is actually meant to be used for the flow-control... on write streams
+    }
+
+    // Input data
+    for (const streamId of this.connection.readable()) {
+
+    }
+
+  }
+
+}
+
+
 
 // Event: 'connection' <- indicates a new QUIC connection is available
 // Event: 'stream' <- indicates a new QUIC stream is available
@@ -31,7 +360,13 @@ class QUICServer extends EventTarget {
   protected port: number;
   protected key;
   protected config;
-  protected clients: Map<string, any> = new Map();
+
+  protected clients: Map<ConnectionId, QUICClient> = new Map();
+
+  // Note that this has to be "indexed" by the connection
+  // Any given connection is going to have a set of streams
+  // Maybe we should model this with a class..
+
 
   // This is method?
   // No it must be async property
@@ -43,12 +378,10 @@ class QUICServer extends EventTarget {
   // If it returns the milliseconds, we need set it
   protected handleTimeout = () => {
     // The `this` is the INSTANCE
-
   };
 
   // This handles the UDP socket message
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-
     console.group('---- Handle Message ----');
 
     console.log('MESSAGE', data.byteLength, rinfo);
@@ -76,19 +409,20 @@ class QUICServer extends EventTarget {
       return;
     }
 
-
-
     // The header is being parsed propertly
-    console.log('HEADER TYPE:', header.ty);
-    console.log('HEADER VERSION:', header.version);
-    console.log('HEADER DCID', header.dcid);
-    console.log('HEADER SCID', header.scid);
-    console.log('HEADER TOKEN', header.token);
-    console.log('HEADER VERSION', header.version);
-    console.log('HEADER VERSIONS', header.versions);
+    // console.log('HEADER TYPE:', header.ty);
+    // console.log('HEADER VERSION:', header.version);
+    // console.log('HEADER DCID', header.dcid);
+    // console.log('HEADER SCID', header.scid);
+    // console.log('HEADER TOKEN', header.token);
+    // console.log('HEADER VERSION', header.version);
+    // console.log('HEADER VERSIONS', header.versions);
 
     const dcid: Buffer = Buffer.from(header.dcid);
 
+    // Funny
+    // If we do this
+    // we need to ensure that we can run this separately?
     const dcidSignature = Buffer.from(await webcrypto.subtle.sign(
       'HMAC',
       this.key,
@@ -132,6 +466,7 @@ class QUICServer extends EventTarget {
 
     let actualId;
     let conn;
+    let connection;
     if (
       !this.clients.has(dcid.toString('binary')) &&
       !this.clients.has(connId.toString('binary'))
@@ -163,6 +498,10 @@ class QUICServer extends EventTarget {
           versionDatagram
         );
 
+        // This is actually non-blocking already
+        // the other ones try to break out of the loop and retry
+        // But this is not necessary
+        // We always end up sending data!
         this.socket.send(
           versionDatagram,
           0,
@@ -172,12 +511,21 @@ class QUICServer extends EventTarget {
           (e) => {
             // The error can be a DNS error, although not in this case
             if (e != null) {
-              console.log('Error version negotation', e);
+              this.dispatchEvent(new QUICErrorEvent({ detail: e}));
             }
           }
         );
 
         console.groupEnd();
+
+        // I'm confused how to translate teh `continue 'read`
+        // to a return here
+        // Or a break to occur if the socket would block
+        // But it seems that if the socket would block
+        // We still attempt to see if we need to send out data
+        // So it's almost like
+        // We do this on every event
+
         return;
       }
 
@@ -333,62 +681,56 @@ class QUICServer extends EventTarget {
 
       console.log('WE GOT A CONNECTION!', conn);
 
-      // SO we should not require partial responses
-      // We will manage backpressure on both ends
-      // using streams, that should be fine
+      const connectionId = scid.toString('binary');
 
-      // We are setting the CONNECTION object here
+      connection = new QUICClient(
+        connectionId,
+        conn,
+        this
+      );
 
       this.clients.set(
         scid.toString('binary'),
-        conn
+        connection
       );
+
+      // The only issue is how do we do this
+      // If we our QUICConnection also needs reference
+      // We can pass it reference back to the server
+      // So it can iterate over all connections to do this
+      // So the child object has reference to the parent object here
+
 
       actualId = scid;
 
       // Note that this `conn` is kind of useless...
       // It's not a stream duplex or anything
       // It's a QUIC connection specifically
-      this.dispatchEvent(
-        new QUICConnectionEvent({
-          detail: conn
-        })
-      );
+      // this.dispatchEvent(
+      //   new QUICConnectionEvent({
+      //     detail: conn
+      //   })
+      // );
 
     } else {
       // One of these 2 will be acquired!
       // But this is an existing connection
       console.log('EXISTING CONNECTION');
 
-      conn = this.clients.get(dcid.toString('binary'));
+      connection = this.clients.get(dcid.toString('binary'));
       actualId = dcid;
-      if (conn == null) {
-        conn = this.clients.get(connId.toString('binary'));
+      if (connection == null) {
+        connection = this.clients.get(connId.toString('binary'));
         actualId = connId;
       }
     }
-
-    // So we now have a CONNECTION
-    // and we should EMIT this as an "event"
-    // and handle the connection "separately"
-    // I reckon that would be more useful...
-    // But this is technically an internal event I guess
-    // Wait a minute
-    // no that's not true
-    // This is NOT a new connection
-    // this could be an existing connection
-    // So I guess it doesn't really make sense to emit an event here
-    // We either have the new connection or we have an existing connection
-    // Now we need to do something with it
 
     console.log('Connection Trace ID', conn.traceId());
 
     // At this point the connection is not established
     // and it is not in early data
-
     // In early data means TLS handshake completed
     // and can send and receive application data
-
     // It is not established until the 0-RTT handshake is done
     // The 0-RTT just means that the client can send data to the server
     // without waiting for the server to confirm receipt
@@ -408,48 +750,70 @@ class QUICServer extends EventTarget {
 
     console.log('RECV INFO', recvInfo);
 
-    // Here we are asking the CONNECTION to actually process the message
-    // Because the above is just pre-processing
-    // We have accepted the connection
-    // But we must be processing the actual message at this point
-    let recvLength
-    try {
-      recvLength = conn.recv(data, recvInfo);
-    } catch(e) {
-      // And here we get a TlsFail error
-      console.log('Error processing packet data', e);
-      // Ignore this packet if you can't do anything about it
-      console.groupEnd();
-      return;
-    }
+    this.dispatchEvent(
+      new QUICDataEvent({
+        detail: {
+          data,
+          recvInfo
+        }
+      })
+    );
 
-    // 1200 bytes is processed here (the full message)
-    console.log('CONNECTION processed this many bytes:', recvLength);
+
+    // // Here we are asking the CONNECTION to actually process the message
+    // // Because the above is just pre-processing
+    // // We have accepted the connection
+    // // But we must be processing the actual message at this point
+    // let recvLength
+    // try {
+    //   recvLength = conn.recv(data, recvInfo);
+    // } catch(e) {
+    //   // And here we get a TlsFail error
+    //   console.log('Error processing packet data', e);
+    //   // Ignore this packet if you can't do anything about it
+    //   console.groupEnd();
+    //   return;
+    // }
+
+    // // 1200 bytes is processed here (the full message)
+    // console.log('CONNECTION processed this many bytes:', recvLength);
 
     // Ok we managed to "process" the connection
     // But we are actually still neither of the 2 below
     // This is because we need to ANSWER something...
 
     // At this point it should be the case that it is established
-    if (conn.isInEarlyData() || conn.isEstablished()) {
+    // if (conn.isInEarlyData() || conn.isEstablished()) {
 
-      // Process the streams now
-      // This is where we need to also attach the stream concepts
+    //   // Process the streams now
+    //   // This is where we need to also attach the stream concepts
 
-      // The streams wants to be read!?!?!?!?
-      for (const streamId of conn.writable()) {
-        console.log('WRITABLE stream', streamId);
-      }
+    //   // So here in this connection
+    //   // we now can ASK which of these streams are writable
+    //   // and which of these streams are readable
+    //   // these are ALL events that has to be dispatched
 
-      for (const streamId of conn.readable()) {
-        console.log('READABLE stream', streamId);
-      }
+    //   // The streams wants to be read!?!?!?!?
+    //   for (const streamId of conn.writable()) {
+    //     // depending on which stream id we that is writable
+    //     // we have to emit to that
+    //     // at the same time
+    //     // it doesn't seem like there's a "creation" of streams
+    //     // any time there is a new stream id
+    //     // that means a new stream
 
-    } else {
+    //     console.log('WRITABLE stream', streamId);
+    //   }
 
-      console.log('NOT In early data or is established!');
+    //   for (const streamId of conn.readable()) {
+    //     console.log('READABLE stream', streamId);
+    //   }
 
-    }
+    // } else {
+
+    //   console.log('NOT In early data or is established!');
+
+    // }
 
     // We have to COMPLETE the TLS handshake here
     // by responding BACK to the client here
@@ -465,64 +829,162 @@ class QUICServer extends EventTarget {
 
     // This actually GOES in a loop
     // cause there may be more than 1 piece of data to send
-    console.group('SENDING loop');
-    while (true) {
-      // Remember that this is supposed to loop
-      // UNTIL we are done
+    // console.group('SENDING loop');
+    // while (true) {
+    //   // Remember that this is supposed to loop
+    //   // UNTIL we are done
 
 
-      const dataSend = Buffer.allocUnsafe(quic.MAX_DATAGRAM_SIZE);
-      let dataSendLength;
-      let sendInfo;
-      try {
-        [dataSendLength, sendInfo] = conn.send(dataSend);
-      } catch (e) {
-        // If there's a failure to do this
-        // We actually CLOSE the connection ...
-        conn.close(
-          false,
-          0x01,
-          Buffer.from('Failed to send data')
-        );
-        this.clients.delete(actualId);
-        break;
-      }
+    //   const dataSend = Buffer.allocUnsafe(quic.MAX_DATAGRAM_SIZE);
+    //   let dataSendLength;
+    //   let sendInfo;
+    //   try {
+    //     [dataSendLength, sendInfo] = conn.send(dataSend);
+    //   } catch (e) {
+    //     // If there's a failure to do this
+    //     // We actually CLOSE the connection ...
+    //     conn.close(
+    //       false,
+    //       0x01,
+    //       Buffer.from('Failed to send data')
+    //     );
+    //     this.connections.delete(actualId);
+    //     break;
+    //   }
 
-      console.log('SENDING', dataSendLength, sendInfo);
+    //   console.log('SENDING', dataSendLength, sendInfo);
 
-      if (dataSendLength === 0) {
-        // If there's nothing to send, we got nothing to do anymore
-        console.log('NOTHING TO SEND');
-        break;
-        // However we may be closing connections
-        // But that's not what we are doing right?
-      }
+    //   if (dataSendLength === 0) {
+    //     // If there's nothing to send, we got nothing to do anymore
+    //     console.log('NOTHING TO SEND');
+    //     break;
+    //     // However we may be closing connections
+    //     // But that's not what we are doing right?
+    //   }
 
-      // This is not properly awaited for
-      // But if there was a problem
-      // You'd break out of the loop as well
-      this.socket.send(
-        dataSend,
-        0,
-        dataSendLength,
-        sendInfo.to.port,
-        sendInfo.to.addr,
-        (e) => {
-          // The error can be a DNS error, although not in this case
-          if (e != null) {
-            console.log('Error send socket', e);
-          }
-          console.log('Sent out data!');
-        }
-      );
-    }
-    console.groupEnd();
+    //   // This is not properly awaited for
+    //   // But if there was a problem
+    //   // You'd break out of the loop as well
+    //   this.socket.send(
+    //     dataSend,
+    //     0,
+    //     dataSendLength,
+    //     sendInfo.to.port,
+    //     sendInfo.to.addr,
+    //     (e) => {
+    //       // The error can be a DNS error, although not in this case
+    //       if (e != null) {
+    //         console.log('Error send socket', e);
+    //       }
+    //       console.log('Sent out data!');
+    //     }
+    //   );
+    // }
+    // console.groupEnd();
 
     // So we still need these to be asynchronously awaited
 
     console.log('### FINISH HANDLING MESSAGE ###');
     console.groupEnd();
   };
+
+  // Loop through all connections and send some data back!
+  // This needs to be used every time there's data
+  // Even if other things are broken
+  // Even if no streams are used
+  // It must always run
+  // Even if it is a timeout
+  protected async sendQUICData() {
+
+    // Ok so it turns out...
+    // EVEN if no data was read from the UDP socket
+    // That is, if there was a `WouldBlock`  from reading rom the UDP socket
+    // Then we still trigger this function
+    // Meaning you still try to see if there is data to be sent out
+    // That's because even in a timeout, we would want to perform this action
+
+    // We could technically do this all in parallel
+    // We don't need to loop through anything
+    // The system will figure out how to do this
+    // The while loop is that we loop until the socket says it will block
+    // But actually in our case, we don't really have this concept
+    // Our socket is ALWAYS non-blocking, just by virtue of the callback system
+    // Even if we turn it into a promise it still is
+    // So the idea of LOOPING is kind of strange
+    // It sort of is the case that we are doing this no matter what?
+    // Breaking only occurs either when `conn.send` is Done
+    // Or when there's an error, and we close the connection
+    // And when the send() would block on the socket
+    // Would block simply means that this would actually be blocking?
+    // We make something non-blocking. It is possible for the send operation to be sent later
+    // Strangely enough.. that doesn't actually mean it is sent
+    // When sending the version negotiation
+    // We CONTINUE on read (meaning we skip and wait for the next message)
+    // When sending the stateless retry
+    // WE CONTINUE on read (meaning we skip and wait for the next message)
+
+    // We may be able to use this
+    // socket.getSendBufferSize()
+    // socket.getSendQueueSize()
+    // socket.getSendQueueCount()
+
+    const ps: Array<Promise<void>> = [];
+    const clients = this.clients.values();
+    for (const client of clients) {
+      ps.push(
+        (async () => {
+          while (true) {
+            const dataSend = Buffer.allocUnsafe(quic.MAX_DATAGRAM_SIZE);
+            let dataSendLength;
+            let sendInfo;
+            try {
+              [dataSendLength, sendInfo] = client.connection.send(
+                dataSend
+              );
+            } catch (e) {
+              if (e.message === 'Done') {
+                break;
+              }
+              this.dispatchEvent(new QUICErrorEvent({ detail: e}));
+              try {
+                client.connection.close(
+                  false,
+                  0x01,
+                  Buffer.from('Failed to send data')
+                );
+              } catch (e) {
+                if (e.message === 'Done') {
+                  break;
+                }
+                this.dispatchEvent(new QUICErrorEvent({ detail: e}));
+              }
+              break;
+            }
+            // @ts-ignore
+            const socketSend = promisify(this.socket.send).bind(this.socket);
+            try {
+              await socketSend(
+                dataSend,
+                0,
+                dataSendLength,
+                sendInfo.to.port,
+                sendInfo.to.addr,
+              );
+            } catch (e) {
+              // If there is in fact an error
+              // In the QUIC program, it results in a hard failure like panic
+              // But again we just emit another error
+              this.dispatchEvent(new QUICErrorEvent({ detail: e}));
+              break;
+            }
+          }
+        })()
+      );
+    }
+    await Promise.all(ps);
+  }
+
+
 
   protected handleStream = () => {
 
@@ -601,6 +1063,16 @@ class QUICServer extends EventTarget {
     // But we walso need to pass data in
     // this.addEventListener('stream');
     // this.handleStream = handleStream;
+
+    // There needs to be a default error handler
+    // otherwise errors will not be emitted
+    // Remember our async handlers should not reject
+    // We only use it due to some functions easier to use
+    this.addEventListener('error', (e) => {
+      // @ts-ignore
+      console.log('GOT an error', e.detail);
+    });
+
   }
 
   public async start({
