@@ -1,7 +1,7 @@
 import dgram from 'dgram';
 import { ReadableStream, WritableStream, } from 'stream/web';
 import { webcrypto } from 'crypto';
-import { IPv4, IPv6, Validator } from 'ip-num';
+import { bigIntToHexadecimalString, IPv4, IPv6, Validator } from 'ip-num';
 import { promisify, promise } from './src/utils';
 const quic = require('./index.node');
 
@@ -30,18 +30,56 @@ class QUICConnectionEvent extends Event {
   }
 }
 
+// If you have the web stream
+// You can also do `writableStream.getWriter().ready.then(() => {})`
+// But that's for the WRITER
+// It's worth noting that flushing the data on the QUIC connection to the
+// UDP socket may not necessarily make the stream writable again, as the
+// send buffer on the remote end may still be full. In this case, the
+// application will need to continue waiting for the stream to become
+// writable.
+
 class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   public streamId: number;
   public readable: ReadableStream<Uint8Array>;
   public writable: WritableStream<Uint8Array>;
   protected conn;
+  protected _recvPaused: boolean = false;
 
-  // Ok so we know when there is data on the stream
-  // and that means we need to ensure that it is readable here
-  // and we need to enqueue the data
-  // to do so... to construct this quic stream
-  // we need to passi n the events that are going to be emitted here
+  // /**
+  //  * Recv plug, await this to know when we can read the data.
+  //  */
+  // protected recvPlug: Promise<void> = Promise.resolve();
+  // protected resolveRecvPlug: (() => void) | null = null;
+  //
+  // /**
+  //  * Plugs the recv.
+  //  * This is idempotent.
+  //  */
+  // protected pauseRecv() {
+  //   if (this.resolveRecvPlug == null) {
+  //     this.recvPlug = new Promise<void>((resolve) => {
+  //       this.resolveRecvPlug = resolve;
+  //     });
+  //   }
+  // }
+  //
+  // /**
+  //  * Unplugs the recv.
+  //  * This is idempotent.
+  //  */
+  // protected resumeRecv() {
+  //   if (this.resolveRecvPlug != null) {
+  //     this.resolveRecvPlug();
+  //     this.resolveRecvPlug = null;
+  //   }
+  // }
+
+  public get recvPaused(): boolean {
+    return this._recvPaused;
+  }
+
 
   public constructor(
     conn,
@@ -51,28 +89,69 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     this.conn = conn;
     this.streamId = streamId;
 
+    // Try the BYOB later, it seems more performant
+    let handlerReadable: () => void;
     this.readable = new ReadableStream({
       type: 'bytes',
+      // autoAllocateChunkSize: 1024,
       start(controller) {
-
+        handlerReadable = () => {
+          if (this._recvPaused) {
+            // Do nothing if we are paused
+            return;
+          }
+          const buf = Buffer.alloc(1024);
+          let recvLength, fin;
+          try {
+            [recvLength, fin] = this.conn.streamRecv(
+              this.streamId,
+              buf
+            );
+          } catch (e) {
+            if (e.message === 'Done') {
+              // Do nothing if there was nothing to read
+              return;
+            } else {
+              // If there is an error, we do not do anything else
+              controller.error(e);
+              return;
+            }
+          }
+          // It's possible to get a 0-length buffer
+          controller.enqueue(buf.subarray(0, recvLength));
+          // If fin is true, then that means, the stream is CLOSED
+          if (fin) {
+            controller.close();
+            // If finished, we won't bother doing anything else, we finished
+            return;
+          }
+          // Now we paus receiving if the queue is full
+          if (controller.desiredSize != null && controller.desiredSize <= 0) {
+            this._recvPaused = true;
+            // this.pauseRecv();
+          }
+        };
+        this.addEventListener('readable', handlerReadable);
       },
       pull() {
-
+        // this.resumeRecv();
+        // Unpausese
+        this._recvPaused = false;
+        // This causes the readable to run again
+        // Because the stream was previously readable
+        // The pull
+        this.dispatchEvent(new Event('readable'));
       },
-      cancel() {
-
+      cancel(reason) {
+        this.removeEventListener('readable', handlerReadable);
+        this.conn.streamShutdown(
+          this.streamId,
+          quic.Shutdown.Read,
+          reasonToCode(reason)
+        );
       }
     });
 
-    // If you have the web stream
-    // You can also do `writableStream.getWriter().ready.then(() => {})`
-    // But that's for the WRITER
-
-    // It's worth noting that flushing the data on the QUIC connection to the
-    // UDP socket may not necessarily make the stream writable again, as the
-    // send buffer on the remote end may still be full. In this case, the
-    // application will need to continue waiting for the stream to become
-    // writable.
     this.writable = new WritableStream({
       start(controller) {
         // Here we start the stream
@@ -83,7 +162,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // Since the server already received a "stream ID"
         // So it already exists, and so it's already ready to be used!!!
       },
-      async write(chunk: Uint8Array, controller) {
+      async write(chunk: Uint8Array) {
         await this.streamSendFully(chunk);
       },
       async close() {
@@ -112,11 +191,24 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // than the length of the input buffer when the stream doesn’t have
     // enough capacity for the operation to complete. The application
     // should retry the operation once the stream is reported as writable again.
-    const sentLength = this.conn.streamSend(
-      this.streamId,
-      chunk,
-      fin
-    );
+    let sentLength;
+    try {
+      sentLength = this.conn.streamSend(
+        this.streamId,
+        chunk,
+        fin
+      );
+    } catch (e) {
+      // If the Done is returned
+      // then no data was sent
+      // because the stream has no capacity
+      // That is equivalent here to being sent lenght of 0
+      if (e.message === 'Done') {
+        sentLength = 0;
+      } else {
+        throw e;
+      }
+    }
     if (sentLength < chunk.length) {
       // Could also use a LOCK... but this is sort of the same thing
       // We have to wait for the next event!
@@ -167,7 +259,7 @@ class QUICConnection {
     if (stream == null) {
       // Then we have a new stream
       // That's the idea
-      stream = new QUICStream(streamId);
+      stream = new QUICStream(this.connection, streamId);
     }
 
     // Now we have the stream
@@ -521,7 +613,6 @@ class QUICServer extends EventTarget {
 
       // This is will manage handlers?
       const connection = new QUICConnection(
-
       );
 
       this.connections.set(

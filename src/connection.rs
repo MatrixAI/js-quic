@@ -466,8 +466,13 @@ impl Connection {
       &mut data,
     ) {
       Ok((read, fin)) => (read, fin),
+      // Change this to an exception
+      // DONE means it's actually done!
       // Done means there's no more data to receive
-      Err(quiche::Error::Done) => (0, true),
+      // Err(quiche::Error::Done) => (0, true),
+      // Which is different from receiving a 0-length buffer
+      // We can also change this to a different kind of thing?
+      // But if it is a result array or something else
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let mut read_and_fin = env.create_array(2)?;
@@ -495,7 +500,8 @@ impl Connection {
       fin
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // We are going to just return Done
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
