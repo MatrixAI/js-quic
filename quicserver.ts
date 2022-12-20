@@ -90,12 +90,12 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     this.streamId = streamId;
 
     // Try the BYOB later, it seems more performant
-    let handlerReadable: () => void;
+    let handleReadable : () => void;
     this.readable = new ReadableStream({
       type: 'bytes',
       // autoAllocateChunkSize: 1024,
       start(controller) {
-        handlerReadable = () => {
+        handleReadable = () => {
           if (this._recvPaused) {
             // Do nothing if we are paused
             return;
@@ -131,7 +131,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
             // this.pauseRecv();
           }
         };
-        this.addEventListener('readable', handlerReadable);
+        this.addEventListener('readable', handleReadable);
       },
       pull() {
         // this.resumeRecv();
@@ -143,7 +143,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         this.dispatchEvent(new Event('readable'));
       },
       cancel(reason) {
-        this.removeEventListener('readable', handlerReadable);
+        this.removeEventListener('readable', handleReadable);
         this.conn.streamShutdown(
           this.streamId,
           quic.Shutdown.Read,
