@@ -10,6 +10,14 @@ const quic = require('./index.node');
 // We may need an asynchronous setup first
 // Async create and async stop
 
+// The reason to code map must be supplied
+// If it is not a valid reason, we return an unknown reason
+// that is 0
+function reasonToCode(reason?: any) {
+  return 0;
+}
+
+
 class QUICConnectionEvent extends Event {
   public detail;
   constructor(
@@ -22,11 +30,12 @@ class QUICConnectionEvent extends Event {
   }
 }
 
-class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
+class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   public streamId: number;
   public readable: ReadableStream<Uint8Array>;
   public writable: WritableStream<Uint8Array>;
+  protected conn;
 
   // Ok so we know when there is data on the stream
   // and that means we need to ensure that it is readable here
@@ -35,10 +44,13 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   // we need to passi n the events that are going to be emitted here
 
   public constructor(
-    streamId,
-    conn
+    conn,
+    streamId: StreamId,
   ) {
+    super();
+    this.conn = conn;
     this.streamId = streamId;
+
     this.readable = new ReadableStream({
       type: 'bytes',
       start(controller) {
@@ -52,184 +64,73 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       }
     });
 
-    // The writable stream is a stream the user will write TO
-    // When we iterate over `conn.writable()`
-    // we are getting information about WHICH connections are open to writing
-    // A writable stream is a stream that has enough flow control capacity
-    // to send data to the peer
-    // To avoid buffering an infinite amount of the data
-    // The buffer is fixed.. it can buffer the amount that the peer allows to send
-    // Perhaps in the configuration?
-    // Then at a specific POINT in time, then we will know which stream is writable
-    // So it's done at 1 point in time
-    // It's also done possibly on EVERY single event...
-    // The event COULD be receiving a UDP message
-    // or it could a timeout event
-
-    // That sort of means... if we don't receive a packet or timeout event
-    // then the the whole thing might be blocked
-    // since only 1 transfer is allowed by default in the writable stream here
-
-    // Also during the `handle_writable` it's checking that IF there is no partial responses
-    // Like almost a buffer, it doesn't bother to write anything
-
-    // When doing `conn.streamSend`
-    // If it is DONE it could mean that NO data is written
-    // In that case, I use a 0-length number of bytes written
-    // That actually can mean the stream has no capacity
-    // So it is possible that less data is written into the QUIC stream
-
-    // At that point... we actually need to block our own writable stream from progressing
-
-    // One issue, when we write something to his JS stream, we are writing an atomic object
-    // if that atomic object is "partially" written, which is possible
-    // Then we have a problem, cause while we might block... we should not be retrying things
-
-    // This means that the number of written bytes returned can be lower
-    // than the length of the input buffer when the stream doesn’t have
-    // enough capacity for the operation to complete. The application
-    // should retry the operation once the stream is reported as writable again.
-
-    // The writable stream can have a `highWaterMark`
-    // this can be use for counts, or number of bytes
-    // it doesn't really work well here...
-    // since we actually don't know how much is still available
-    // and a partial amount might be consumed
-    // and that partial amount need to be considered...
-
-    // Another way is that with the web streams
-    // the third way of backpressure is that `write()` method can return a promise
-    // If that promise is not yet resolved, then the writable stream can be blocked
-    // Therefore if we are writing to the QUIC stream, and less than the full data is written
-    // Then we hold... until we can write the full amount, which means the promise is not resolved yet
-    // But how to do this?
-
     // If you have the web stream
     // You can also do `writableStream.getWriter().ready.then(() => {})`
     // But that's for the WRITER
-
-    // We have 3 pieces of backpressure
-
-    // Writer -> WritableStream -> QUIC stream
-
-    // The RPC stream handler needs to make use of the Writer
-    // We care about WritableStream -> QUIC stream
-    // So the problem is that `write()` must return a promise that only resolves
-    // WHEN all the data is written!!
-
-    // It seems then we should really be using `ByteLengthQueuingStrategy`
-    // Cause if we use count queuing strategy... then we would...
-
-    // Actually it sort of makes sense
-    // If you were to write 1 MiB chunk immediately
-    // The expectation is that you will wait until this is written to
-
-    // Ok we can do this, by holding the `write()` promise
-    // HOWEVER
-
-    // Another issue is that handle_stream in the RS example
-    // Only calls `conn.steam_send` once
-    // It is not looping it
-    // probably cause why it would bother
-    // The conn still needs to flush before streams would be writable again
-
-    // The conn flushing occurs right afterwards
-    // When it is infact looped to send data onto the UDP socket from `conn.send`
-    // But at this point in time, we are still not performing "stream_send" again
-
-    // We go back to waiting for another event... either another UDP message
-    // or a timeout event
-
-    // I'm still thinking that if... we were to send out data on the UDP socket
-    // we could go BACK and end up finishing the write to the `stream_send`
-    // And at the same time end up triggering more data to be sent out on the UDP socket
-    // Like why does it have to wait for the other side to come back?
-    // I reckon as soon as I have data in the stream... then more data should be sent out
-
-    // I think this was a limitation of the IO system in the rust examples
-
-    // Amazing... so the reason that it doesn't just immediately retry writing to the stream is:
 
     // It's worth noting that flushing the data on the QUIC connection to the
     // UDP socket may not necessarily make the stream writable again, as the
     // send buffer on the remote end may still be full. In this case, the
     // application will need to continue waiting for the stream to become
     // writable.
-
-    // So even if we flush all the data out of the QUIC connection
-    // the stream may still be full
-    // cause the remote end hasn't actually fully processed that data
-    // I see.. that's why we have to wait for the next event (UDP message or timeout) and
-    // then check
-
     this.writable = new WritableStream({
       start(controller) {
-
+        // Here we start the stream
+        // Called when the objectis constructed
+        // It should aim to get access to the underlying SINK
+        // So what does it really mean here?
+        // We have nothing to do here for now
+        // Since the server already received a "stream ID"
+        // So it already exists, and so it's already ready to be used!!!
       },
       async write(chunk: Uint8Array, controller) {
-
-        // when we write to somethign
-        // we need to trigger the handle writable?
-        // but this means we are trying to write to something right?
-        // so if the previous write has not occurred, this would not happe
-        // wait in what sense is this the `fin` packet?
-        // it's not
-
-        // We are not just sending
-        // More data may be sent later
-
-        // This will result in an infinite loop the problem is
-        // We actually need to keep around the data until the next event
-        // So there is this thing of "partial" responses...?
-        // Because we have to wait for the next event
-
-        // setTimeout(() => ... )
-        // or something?
-        // like what are we doing here?
-        // you sort of have to...
-        // put your handler up for the next event
-
-
-        let sentLength = 0;
-        while (sentLength < chunk.length) {
-          const sentLength_ = this.conn.streamSend(
-            this.streamId,
-            chunk.subarray(sentLength),
-            false
-          );
-          sentLength += sentLength_;
-        }
-
-        // This could throw an error...
-        // but `0` also means it is DONE
-        // It means the length is 0...
-        // const sentLength = this.conn.streamSend(
-        //   this.streamId,
-        //   chunk,
-        //   false
-        // );
-
-        // This means we are cannot finish
-        // And we need to wait until it is finished
-        // There's a problem though
-        // How do we wait for a promise for this to be the case?
-        // Plus we have to actually sort of not return this promise until that is the case
-        // Or we have an event that is emitted until that is the case!??
-        // if (sentLength < chunk.length) {
-        // }
-
-
-
-        console.log(chunk);
+        await this.streamSendFully(chunk);
       },
-      close() {
-
+      async close() {
+        // Send an empty buffer and also `true` to indicate that it is finished!
+        await this.streamSendFully(Buffer.from([]), true);
       },
-      abort(reason) {
-
+      abort(reason?: any) {
+        // Abort can be called even if there are writes are queued up
+        // The chunks are meant to be thrown away
+        // We could tell it to shutdown
+        // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
+        // The receiver can discard any data it already received on that stream
+        // We don't have "unidirectional" streams so that's not important...
+        this.conn.streamShutdown(
+          this.streamId,
+          quic.Shutdown.Write,
+          reasonToCode(reason)
+        );
       }
     });
 
+  }
+
+  async streamSendFully(chunk, fin = false) {
+    // This means that the number of written bytes returned can be lower
+    // than the length of the input buffer when the stream doesn’t have
+    // enough capacity for the operation to complete. The application
+    // should retry the operation once the stream is reported as writable again.
+    const sentLength = this.conn.streamSend(
+      this.streamId,
+      chunk,
+      fin
+    );
+    if (sentLength < chunk.length) {
+      // Could also use a LOCK... but this is sort of the same thing
+      // We have to wait for the next event!
+      await new Promise((resolve) => {
+        this.addEventListener(
+          'writable',
+          resolve,
+          { once: true }
+        );
+      });
+      return await this.streamSendFully(
+        chunk.subarray(sentLength)
+      );
+    }
   }
 }
 
@@ -617,6 +518,11 @@ class QUICServer extends EventTarget {
       // using streams, that should be fine
 
       // We are setting the CONNECTION object here
+
+      // This is will manage handlers?
+      const connection = new QUICConnection(
+
+      );
 
       this.connections.set(
         scid.toString('binary'),
