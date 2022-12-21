@@ -5,18 +5,16 @@ import { bigIntToHexadecimalString, IPv4, IPv6, Validator } from 'ip-num';
 import { promisify, promise } from './src/utils';
 const quic = require('./index.node');
 
-// So here we imagine we have multiple events that we need to setup
-// And then subsequently create web streams over it
-// We may need an asynchronous setup first
-// Async create and async stop
+type StreamId = number;
+type ConnectionId = string;
+type Connection = any;
 
-// The reason to code map must be supplied
-// If it is not a valid reason, we return an unknown reason
-// that is 0
 function reasonToCode(reason?: any) {
+  // The reason to code map must be supplied
+  // If it is not a valid reason, we return an unknown reason
+  // that is 0
   return 0;
 }
-
 
 class QUICConnectionEvent extends Event {
   public detail;
@@ -30,15 +28,6 @@ class QUICConnectionEvent extends Event {
   }
 }
 
-// If you have the web stream
-// You can also do `writableStream.getWriter().ready.then(() => {})`
-// But that's for the WRITER
-// It's worth noting that flushing the data on the QUIC connection to the
-// UDP socket may not necessarily make the stream writable again, as the
-// send buffer on the remote end may still be full. In this case, the
-// application will need to continue waiting for the stream to become
-// writable.
-
 class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   public streamId: number;
@@ -47,39 +36,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   protected conn;
   protected _recvPaused: boolean = false;
 
-  // /**
-  //  * Recv plug, await this to know when we can read the data.
-  //  */
-  // protected recvPlug: Promise<void> = Promise.resolve();
-  // protected resolveRecvPlug: (() => void) | null = null;
-  //
-  // /**
-  //  * Plugs the recv.
-  //  * This is idempotent.
-  //  */
-  // protected pauseRecv() {
-  //   if (this.resolveRecvPlug == null) {
-  //     this.recvPlug = new Promise<void>((resolve) => {
-  //       this.resolveRecvPlug = resolve;
-  //     });
-  //   }
-  // }
-  //
-  // /**
-  //  * Unplugs the recv.
-  //  * This is idempotent.
-  //  */
-  // protected resumeRecv() {
-  //   if (this.resolveRecvPlug != null) {
-  //     this.resolveRecvPlug();
-  //     this.resolveRecvPlug = null;
-  //   }
-  // }
-
   public get recvPaused(): boolean {
     return this._recvPaused;
   }
-
 
   public constructor(
     conn,
@@ -226,28 +185,89 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   }
 }
 
-type StreamId = number;
-
 // The only reason to encapsulate is to make it easier
 // for JS modelling here
 // Otherwise in rust we will have a ES6 map of the streams
 // And I can refer to the connection here
 // We have to have events that make this thing writable/readable
 // Note that ON every packet... there could be writable/readable events
-class QUICConnection {
+class QUICConnection extends EventTarget {
 
-  // Internal quic native connection object
-  protected connection;
-
-  // A single connection can have multiple streams
-  // Wait so we are modelling this separately
-  // Or encapsulating it?
-  // Cause we already have quic connections
+  /**
+   * Underlying QUIC connection
+   */
+  protected connection: Connection;
   protected streams: Map<StreamId, QUICStream> = new Map();
 
   public constructor (connection) {
+    super();
     this.connection = connection;
+    // We are going to react to events here?
+    // Or we just create the streams either way?
+
+    // This event is used when the connectoin is READY
+    // That could be in early data or is established
+
+    // This way the `QUICConnection`
+    // can translate a "ready" event
+    // directly to stream events
+    // But note that a QUIC connection event can occur for different
+    // reasons
+    // It could just be a data event
+    // And we would want to say a data event can only occur
+    // If the connection is in early data or is established
+
+    // Let's change this a data event
+    // A data event means there's some data
+    // And it is in fact a socket event
+    // And this may have been constructed
+
+    this.addEventListener(
+      'data',
+      (e) => {
+
+        this.connection.recv(e.detail.data, e.detail.recvInfo);
+
+        if (this.connection.isInEarlyData() && this.connection.isEstablished()) {
+
+          // What streams can be written to?
+          for (const streamId of this.connection.writable()) {
+            let quicStream = this.streams.get(streamId);
+            if (quicStream == null) {
+              quicStream = new QUICStream(this.connection, streamId);
+            }
+            // This triggers a writable event
+            // If nothing is listening on this
+            // The event is discarded
+            // But when the stream is first created
+            // It will be ready to be written to
+            // But if it is blocked it will wait
+            // for the next writable event
+            // This event won't be it...
+            // So it's only useful for existing streams
+            quicStream.dispatchEvent(new Event('writable'));
+          }
+
+          // What streams can be read from?
+          for (const streamId of this.connection.readable()) {
+            let quicStream = this.streams.get(streamId);
+            if (quicStream == null) {
+              quicStream = new QUICStream(this.connection, streamId);
+            }
+            // We must emit a readable event, otherwise the quic stream
+            // will not actually read anything
+            quicStream.dispatchEvent(new Event('readable'));
+          }
+
+        }
+
+      }
+    );
+
+
   }
+
+
 
   protected handleStream(streamId: StreamId) {
     // so what are we doing here?
@@ -300,8 +320,7 @@ class QUICServer extends EventTarget {
   protected key;
   protected config;
 
-  // This is really managing connections
-  protected connections: Map<string, any> = new Map();
+  protected connections: Map<ConnectionId, any> = new Map();
 
   // Note that this has to be "indexed" by the connection
   // Any given connection is going to have a set of streams
@@ -605,15 +624,17 @@ class QUICServer extends EventTarget {
 
       console.log('WE GOT A CONNECTION!', conn);
 
-      // SO we should not require partial responses
-      // We will manage backpressure on both ends
-      // using streams, that should be fine
-
-      // We are setting the CONNECTION object here
+      // Here we this means we are creating a QUICConnection
+      // if we do this, then we have a JS object
+      // encapsulating the native QUIC object
+      // Which itself is a Rust struct that encapsulates a Quiche object
+      // So QUICConnection { napi::Connection { quiche::Connection }}
+      // Quite a bit of wrapping...
+      // Note that there is a auto derive that allows us to immediately refer to self
+      // without `self.0`, we can try that later
 
       // This is will manage handlers?
-      const connection = new QUICConnection(
-      );
+      const connection = new QUICConnection(conn);
 
       this.connections.set(
         scid.toString('binary'),
