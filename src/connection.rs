@@ -344,7 +344,7 @@ impl Connection {
     // This would mean that there's nothing to send
     let (write, send_info) = match self.0.send(&mut data) {
       Ok((write, send_info)) => (write, Some(send_info)),
-      Err(quiche::Error::Done) => (0, None),
+      // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = send_info.map(|info| {
