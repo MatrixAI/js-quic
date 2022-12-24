@@ -1,4 +1,4 @@
-class QUICStream {
+class QUICStream extends EventTarget {
 
 }
 

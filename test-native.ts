@@ -1,3 +1,3 @@
-import x from './src/native';
+import { native } from './src';
 
-console.log(x);
+console.log(native.quiche);

@@ -22,8 +22,28 @@ type PromiseDeconstructed<T> = {
   rejectP: (reason?: any) => void;
 };
 
+type ConnectionId = Opaque<'ConnectionId', string>;
+
+/**
+ * Crypto utility object
+ * Remember ever Node Buffer is an ArrayBuffer
+ */
+type Crypto = {
+  sign(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+  ): Promise<ArrayBuffer>;
+  verify(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+    sig: ArrayBuffer,
+  ): Promise<boolean>;
+};
+
 export type {
   Opaque,
   Callback,
   PromiseDeconstructed,
+  ConnectionId,
+  Crypto,
 };

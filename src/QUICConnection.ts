@@ -1,4 +1,4 @@
-class QUICConnection {
+class QUICConnection extends EventTarget {
 
 }
 
