@@ -116,9 +116,9 @@ function isMusl(): boolean {
 }
 
 function requireBinding(target: string) {
-  const localBinding = fs.existsSync(path.join(projectRoot, `quiche.${target}.node`));
+  const localBinding = fs.existsSync(path.join(projectRoot, `quic.${target}.node`));
   if (localBinding) {
-    return require(path.join(projectRoot, `quiche.${target}.node`));
+    return require(path.join(projectRoot, `quic.${target}.node`));
   } else {
     return require(`@matrixai/quic-${target}`)
   }

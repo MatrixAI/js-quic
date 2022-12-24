@@ -11,7 +11,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "napi": {
-    "name": "index"
+    "name": "quic"
   },
   "scripts": {
     "prepare": "tsc -p ./tsconfig.build.json",
@@ -27,7 +27,7 @@
     "lint-shell": "find ./src ./tests ./scripts -type f -regextype posix-extended -regex '.*\\.(sh)' -exec shellcheck {} +",
     "docs": "rimraf ./docs && typedoc --gitRevision master --tsconfig ./tsconfig.build.json --out ./docs src",
     "bench": "rimraf ./benches/results && ts-node ./benches",
-    "napi-build": "napi build --platform --js ./src/native/index.js --dts ./src/native/index.d.ts",
+    "napi-build": "napi build --platform",
     "napi-build-prod": "napi build --release"
   },
   "dependencies": {
