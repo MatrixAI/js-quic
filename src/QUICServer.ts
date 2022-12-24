@@ -162,21 +162,28 @@ class QUICServer extends EventTarget {
         connection
       );
 
-
-
     } else {
       connection = this.connections.get(
         dcid.toString('binary') as ConnectionId
-      );
-      actualId = dcid;
+      )!;
       if (connection == null) {
         connection = this.connections.get(
           connId.toString('binary') as ConnectionId
-        );
-        actualId = connId;
+        )!;
       }
-
     }
+
+    const recvInfo = {
+      to: {
+        addr: this.socket.address().address,
+        port: this.socket.address().port
+      },
+      from: {
+        addr: rinfo.address,
+        port: rinfo.port
+      },
+    };
+
 
 
 
@@ -187,6 +194,32 @@ class QUICServer extends EventTarget {
   protected handleTimeout = () => {
 
   };
+
+
+  // We have to "send" data back on the connection
+  // even if nothing is worht processing atm...
+  // The idea is that the connection object should have a `data`
+  // event handler...
+
+  // EVERY single connection
+  // needs to be checked
+  // perhaps what we can do is apply this to each of the connection objects
+  // However the above can only apply to 1 connection object
+  // It the sends out data on the socket
+  // Only the server can do this
+  // Because it has to iterate over each connection to do so
+  // However it could iterate over each connection to emit data
+  // So it has to EMIT to the connection receiving this data
+  // While also emitting to ALL connections to try and receive data?
+  // But it cannot do this... because it has to send it to the socket
+  // Furthermore... you could just have
+  // QUICConnection.recv
+  // QUICConnection.send
+  // You do not need to "emit" an event to them anymore
+  // You just need to call the methods
+  // And they will do what they need to do
+
+
 
   // The reason this is needed
   // is due to the usage of webcrypto
