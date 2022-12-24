@@ -1,5 +1,5 @@
 import type { ConnectionId, Crypto } from './types';
-import type { Header, Config } from './native/types';
+import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import { Validator } from 'ip-num';
 import Logger from '@matrixai/logger';
@@ -53,6 +53,9 @@ class QUICServer extends EventTarget {
     const dcid: Buffer = Buffer.from(header.dcid);
     const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
     const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
+
+    // This is going to be the wrapped QUICConnection
+    let connection: QUICConnection;
 
     // Check if this packet corresponds to an existing connection
     if (
@@ -136,7 +139,7 @@ class QUICServer extends EventTarget {
 
       const scid = Buffer.from(header.dcid);
 
-      conn = quiche.Connection.accept(
+      const conn = quiche.Connection.accept(
         scid, // This is actually the originally derived DCID
         odcid, // This is the original DCID...
         {
@@ -150,8 +153,28 @@ class QUICServer extends EventTarget {
         this.config
       );
 
+      const connectionId = scid.toString('binary') as ConnectionId;
+
+      connection = new QUICConnection();
+
+      this.connections.set(
+        connectionId,
+        connection
+      );
+
+
 
     } else {
+      connection = this.connections.get(
+        dcid.toString('binary') as ConnectionId
+      );
+      actualId = dcid;
+      if (connection == null) {
+        connection = this.connections.get(
+          connId.toString('binary') as ConnectionId
+        );
+        actualId = connId;
+      }
 
     }
 
