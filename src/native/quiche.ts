@@ -21,9 +21,9 @@ interface Quiche {
   PROTOCOL_VERSION: number;
   MAX_DATAGRAM_SIZE: number;
   MAX_UDP_PACKET_SIZE: number;
-  CongestionControlAlgorithm: CongestionControlAlgorithm;
-  Shutdown: Shutdown;
-  Type: Type;
+  CongestionControlAlgorithm: typeof CongestionControlAlgorithm;
+  Shutdown: typeof Shutdown;
+  Type: typeof Type;
   negotiateVersion(
     scid: Uint8Array,
     dcid: Uint8Array,

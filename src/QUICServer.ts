@@ -1,9 +1,11 @@
 import type { ConnectionId, Crypto } from './types';
+import type { Header, Config } from './native/types';
 import dgram from 'dgram';
 import { Validator } from 'ip-num';
 import Logger from '@matrixai/logger';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
+import * as events from './events';
 import * as utils from './utils';
 
 // When we start a QUIC server
@@ -31,9 +33,131 @@ class QUICServer extends EventTarget {
   protected socket: dgram.Socket;
   protected host: string;
   protected port: number;
-  protected clients: Map<ConnectionId, QUICConnection> = new Map();
+  protected logger: Logger;
+  protected crypto: {
+    key: ArrayBuffer;
+    ops: Crypto;
+  };
+  protected config: Config;
+  protected connections: Map<ConnectionId, QUICConnection> = new Map();
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+    const socketSend = utils.promisify(this.socket.send).bind(this.socket);
+    let header: Header;
+    try {
+      // Maximum length of a connection ID
+      header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
+    } catch (e) {
+      return;
+    }
+    const dcid: Buffer = Buffer.from(header.dcid);
+    const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
+    const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
+
+    // Check if this packet corresponds to an existing connection
+    if (
+      !this.connections.has(dcid.toString('binary') as ConnectionId) &&
+      !this.connections.has(connId.toString('binary') as ConnectionId)
+    ) {
+
+      if (header.ty !== quiche.Type.Initial) {
+        return;
+      }
+
+      // Version Negotiation
+      if (!quiche.versionIsSupported(header.version)) {
+        const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        const versionDatagramLength = quiche.negotiateVersion(
+          header.scid,
+          header.dcid,
+          versionDatagram
+        );
+        try {
+          await socketSend(
+            versionDatagram,
+            0,
+            versionDatagramLength,
+            rinfo.port,
+            rinfo.address,
+          );
+        } catch (e) {
+          this.dispatchEvent(new events.QUICErrorEvent({ detail: e }));
+        }
+        return;
+      }
+
+      const token: Uint8Array | undefined = header.token;
+      if (token == null) {
+        return;
+      }
+
+      // Stateless Retry
+      if (token.byteLength === 0) {
+        const token = await this.mintToken(
+          Buffer.from(header.dcid),
+          rinfo.address
+        );
+        const retryDatagram = Buffer.allocUnsafe(
+          quiche.MAX_DATAGRAM_SIZE
+        );
+        const retryDatagramLength = quiche.retry(
+          header.scid, // Client initial packet source ID
+          header.dcid, // Client initial packet destination ID
+          connId, // Server's new source ID that is derived
+          token,
+          header.version,
+          retryDatagram
+        );
+        try {
+          await socketSend(
+            retryDatagram,
+            0,
+            retryDatagramLength,
+            rinfo.port,
+            rinfo.address,
+          );
+        } catch (e) {
+          this.dispatchEvent(new events.QUICErrorEvent({ detail: e }));
+        }
+        return;
+      }
+
+      const odcid = await this.validateToken(
+        Buffer.from(token),
+        rinfo.address,
+      );
+      if (odcid == null) {
+        return;
+      }
+
+      if (connId.byteLength !== dcid.byteLength) {
+        return;
+      }
+
+      const scid = Buffer.from(header.dcid);
+
+      conn = quiche.Connection.accept(
+        scid, // This is actually the originally derived DCID
+        odcid, // This is the original DCID...
+        {
+          addr: this.socket.address().address,
+          port: this.socket.address().port
+        },
+        {
+          addr: rinfo.address,
+          port: rinfo.port
+        },
+        this.config
+      );
+
+
+    } else {
+
+    }
+
+
+
+
 
   };
 
@@ -52,11 +176,6 @@ class QUICServer extends EventTarget {
   // Webcrypto is the best to use for now
   // Relying on libsodium here is not a good idea!
 
-  protected crypto?: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
-  protected logger: Logger;
 
   // The crypto in this case is **necessary**
   // It is necessary to sign and stuff
@@ -75,6 +194,38 @@ class QUICServer extends EventTarget {
     super();
     this.logger = logger;
     this.crypto = crypto;
+
+    // Also need to sort out the configuration
+    const config = new quiche.Config();
+    config.loadCertChainFromPemFile(
+      './tmp/localhost.crt'
+    );
+    config.loadPrivKeyFromPemFile(
+      './tmp/localhost.key'
+    );
+    config.verifyPeer(false);
+    config.grease(true);
+    config.setMaxIdleTimeout(5000);
+    config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
+    config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
+    config.setInitialMaxData(10000000);
+    config.setInitialMaxStreamDataBidiLocal(1000000);
+    config.setInitialMaxStreamDataBidiRemote(1000000);
+    config.setInitialMaxStreamsBidi(100);
+    config.setInitialMaxStreamsUni(100);
+    config.setDisableActiveMigration(true);
+    config.setApplicationProtos(
+      [
+        'hq-interop',
+        'hq-29',
+        'hq-28',
+        'hq-27',
+        'http/0.9'
+      ]
+    );
+    config.enableEarlyData();
+
+
   }
 
   public async start({
@@ -130,6 +281,39 @@ class QUICServer extends EventTarget {
     // There's no waiting for connections to stop
     // Cause that doesn't exist on the UDP socket level
     this.socket.close();
+  }
+
+  protected async mintToken(data, sourceAddress): Promise<Buffer> {
+    const msg = {
+      addr: sourceAddress,
+      dcid: data.toString('base64url'),
+    };
+    const msgJSON = JSON.stringify(msg);
+    const msgData = Buffer.from(msgJSON);
+    const sig = Buffer.from(await this.crypto.ops.sign(this.crypto.key, msgData));
+    const token = {
+      msg: msgData.toString('base64url'),
+      sig: sig.toString('base64url'),
+    };
+    return Buffer.from(JSON.stringify(token));
+  }
+
+  protected async validateToken(data, sourceAddress): Promise<Buffer | undefined> {
+    const token = JSON.parse(data.toString());
+    const msgData = Buffer.from(token.msg, 'base64url');
+    const sig = Buffer.from(token.sig, 'base64url');
+    // If the token was not issued by us
+    const check = await this.crypto.ops.verify(this.crypto.key, msgData, sig);
+    if (!check) {
+      return;
+    }
+    const msg = JSON.parse(msgData.toString());
+    // If the embedded address doesn't match..
+    if (msg.addr !== sourceAddress) {
+      return;
+    }
+    // The original destination connection ID is therefore correct
+    return Buffer.from(msg.dcid, 'base64url');
   }
 
 }

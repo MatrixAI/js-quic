@@ -50,7 +50,30 @@ function promise<T = void>(): PromiseDeconstructed<T> {
   };
 }
 
+/**
+ * Zero-copy wraps ArrayBuffer-like objects into Buffer
+ * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
+ */
+function bufferWrap(
+  array: BufferSource,
+  offset?: number,
+  length?: number,
+): Buffer {
+  if (Buffer.isBuffer(array)) {
+    return array;
+  } else if (ArrayBuffer.isView(array)) {
+    return Buffer.from(
+      array.buffer,
+      offset ?? array.byteOffset,
+      length ?? array.byteLength,
+    );
+  } else {
+    return Buffer.from(array, offset, length);
+  }
+}
+
 export {
   promisify,
-  promise
+  promise,
+  bufferWrap
 };
