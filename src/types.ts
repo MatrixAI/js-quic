@@ -1,4 +1,11 @@
 /**
+ * Opaque types are wrappers of existing types
+ * that require smart constructors
+ */
+type Opaque<K, T> = T & { readonly [brand]: K };
+declare const brand: unique symbol;
+
+/**
  * Generic callback
  */
 type Callback<P extends Array<any> = [], R = any, E extends Error = Error> = {
@@ -16,6 +23,7 @@ type PromiseDeconstructed<T> = {
 };
 
 export type {
+  Opaque,
   Callback,
   PromiseDeconstructed,
 };

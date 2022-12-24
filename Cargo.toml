@@ -8,6 +8,7 @@ exclude = ["index.node"]
 
 [lib]
 crate-type = ["cdylib"]
+path = "src/native/napi/lib.rs"
 
 [dependencies]
 napi = { version = "2", features = ["async", "napi6", "serde-json"] }

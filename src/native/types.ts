@@ -1,0 +1,288 @@
+import type { Opaque } from '../types';
+
+type QuicheTimeInstant = Opaque<'QuicheTimeInstant', object>;
+
+interface Config {
+  loadCertChainFromPemFile(file: string): void
+  loadPrivKeyFromPemFile(file: string): void
+  loadVerifyLocationsFromFile(file: string): void
+  loadVerifyLocationsFromDirectory(dir: string): void
+  verifyPeer(verify: boolean): void
+  grease(grease: boolean): void
+  logKeys(): void
+  setTicketKey(key: Uint8Array): void
+  enableEarlyData(): void
+  setApplicationProtos(protosList: Array<string>): void
+  setApplicationProtosWireFormat(protos: Uint8Array): void
+  setMaxIdleTimeout(timeout: number): void
+  setMaxRecvUdpPayloadSize(size: number): void
+  setMaxSendUdpPayloadSize(size: number): void
+  setInitialMaxData(v: number): void
+  setInitialMaxStreamDataBidiLocal(v: number): void
+  setInitialMaxStreamDataBidiRemote(v: number): void
+  setInitialMaxStreamDataUni(v: number): void
+  setInitialMaxStreamsBidi(v: number): void
+  setInitialMaxStreamsUni(v: number): void
+  setAckDelayExponent(v: number): void
+  setMaxAckDelay(v: number): void
+  setActiveConnectionIdLimit(v: number): void
+  setDisableActiveMigration(v: boolean): void
+  setCcAlgorithmName(name: string): void
+  setCcAlgorithm(algo: CongestionControlAlgorithm): void
+  enableHystart(v: boolean): void
+  enablePacing(v: boolean): void
+  enableDgram(enabled: boolean, recvQueueLen: number, sendQueueLen: number): void
+  setMaxConnectionWindow(v: number): void
+  setStatelessResetToken(v?: bigint | undefined | null): void
+  setDisableDcidReuse(v: boolean): void
+};
+
+interface ConfigConstructor {
+  new(): Config;
+};
+
+interface Connection {
+  setSession(session: Uint8Array): void
+  recv(data: Uint8Array, recvInfo: RecvInfo): number
+  send(data: Uint8Array): [number, SendInfo | null]
+  sendOnPath(data: Uint8Array, from?: Host | undefined | null, to?: Host | undefined | null): [number, SendInfo | null]
+  sendQuantum(): number
+  sendQuantumOnPath(localHost: Host, peerHost: Host): number
+  streamRecv(streamId: number, data: Uint8Array): [number, boolean]
+  streamSend(streamId: number, data: Uint8Array, fin: boolean): number
+  streamPriority(streamId: number, urgency: number, incremental: boolean): void
+  streamShutdown(streamId: number, direction: Shutdown, err: number): void
+  streamCapacity(streamId: number): number
+  streamReadable(streamId: number): boolean
+  streamWritable(streamId: number, len: number): boolean
+  streamFinished(streamId: number): boolean
+  peerStreamsLeftBidi(): number
+  peerStreamsLeftUni(): number
+  readable(): StreamIter
+  writable(): StreamIter
+  maxSendUdpPayloadSize(): number
+  dgramRecv(data: Uint8Array): number
+  dgramRecvVec(): Uint8Array | null
+  dgramRecvPeek(data: Uint8Array, len: number): number
+  dgramRecvFrontLen(): number | null
+  dgramRecvQueueLen(): number
+  dgramRecvQueueByteSize(): number
+  dgramSendQueueLen(): number
+  dgramSendQueueByteSize(): number
+  isDgramSendQueueFull(): boolean
+  isDgramRecvQueueFull(): boolean
+  dgramSend(data: Uint8Array): void
+  dgramSendVec(data: Uint8Array): void
+  dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void
+  dgramMaxWritableLen(): number | null
+  timeout(): number | null
+  onTimeout(): void
+  probePath(localHost: Host, peerHost: Host): number
+  migrateSource(localHost: Host): number
+  migrate(localHost: Host, peerHost: Host): number
+  newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number
+  activeSourceCids(): number
+  maxActiveSourceCids(): number
+  sourceCidsLeft(): number
+  retireDestinationCid(dcidSeq: number): void
+  pathEventNext(): PathEvent;
+  retiredScidNext(): Uint8Array | null
+  availableDcids(): number
+  pathsIter(from: Host): HostIter
+  close(app: boolean, err: number, reason: Uint8Array): void
+  traceId(): string
+  applicationProto(): Uint8Array
+  serverName(): string | null
+  peerCertChain(): Array<Uint8Array> | null
+  session(): Uint8Array | null
+  sourceId(): Uint8Array
+  destinationId(): Uint8Array
+  isEstablished(): boolean
+  isResumed(): boolean
+  isInEarlyData(): boolean
+  isReadable(): boolean
+  isPathValidated(from: Host, to: Host): boolean
+  isDraining(): boolean
+  isClosed(): boolean
+  isTimedOut(): boolean
+  peerError(): ConnectionError | null
+  localError(): ConnectionError | null
+  stats(): Stats
+  pathStats(): Array<PathStats>
+};
+
+interface ConnectionConstructor {
+  connect(
+    scid: Uint8Array,
+    localHost: Host,
+    remoteHost: Host,
+    config: Config
+  ): Connection
+  accept(
+    scid: Uint8Array,
+    odcid: Uint8Array | undefined | null,
+    localHost: Host,
+    remoteHost: Host,
+    config: Config
+  ): Connection
+};
+
+interface Header {
+  ty: Type
+  version: number
+  dcid: Uint8Array
+  scid: Uint8Array
+  token?: Uint8Array
+  versions?: Array<number>
+};
+
+interface HeaderConstructor {
+  fromSlice(data: Uint8Array, dcidLen: number): Header
+};
+
+const enum CongestionControlAlgorithm {
+  Reno = 0,
+  CUBIC = 1,
+  BBR = 2
+};
+
+const enum Shutdown {
+  Read = 0,
+  Write = 1
+};
+
+const enum Type {
+  Initial = 0,
+  Retry = 1,
+  Handshake = 2,
+  ZeroRTT = 3,
+  VersionNegotiation = 4,
+  Short = 5
+}
+
+type ConnectionError = {
+  isApp: boolean;
+  errorCode: number;
+  reason: Array<number>;
+};
+
+type Stats = {
+  recv: number;
+  sent: number;
+  lost: number;
+  retrans: number;
+  sentBytes: number;
+  recvBytes: number;
+  lostBytes: number;
+  streamRetransBytes: number;
+  pathsCount: number;
+  peerMaxIdleTimeout: number;
+  peerMaxUdpPayloadSize: number;
+  peerInitialMaxData: number;
+  peerInitialMaxStreamDataBidiLocal: number;
+  peerInitialMaxStreamDataBidiRemote: number;
+  peerInitialMaxStreamDataUni: number;
+  peerInitialMaxStreamsBidi: number;
+  peerInitialMaxStreamsUni: number;
+  peerAckDelayExponent: number;
+  peerMaxAckDelay: number;
+  peerDisableActiveMigration: boolean;
+  peerActiveConnIdLimit: number;
+  peerMaxDatagramFrameSize?: number;
+};
+
+type Host = {
+  addr: string;
+  port: number;
+};
+
+type SendInfo = {
+  /** The local address the packet should be sent from. */
+  from: Host;
+  /** The remote address the packet should be sent to. */
+  to: Host;
+  /** The time to send the packet out for pacing. */
+  at: QuicheTimeInstant;
+};
+
+type RecvInfo = {
+  /** The remote address the packet was received from. */
+  from: Host
+  /** The local address the packet was sent to. */
+  to: Host
+};
+
+type PathStats = {
+  localHost: Host
+  peerHost: Host
+  active: boolean
+  recv: number
+  sent: number
+  lost: number
+  retrans: number
+  rtt: number
+  cwnd: number
+  sentBytes: number
+  recvBytes: number
+  lostBytes: number
+  streamRetransBytes: number
+  pmtu: number
+  deliveryRate: number
+};
+
+type PathEvent = {
+  type: 'New',
+  local: Host,
+  peer: Host,
+} | {
+  type: 'Validated',
+  local: Host,
+  peer: Host,
+} | {
+  type: 'Closed',
+  local: Host,
+  peer: Host,
+} | {
+  type: 'ReusedSourceConnectionId',
+  seq: number,
+  old: [Host, Host],
+  new: [Host, Host],
+} | {
+  type: 'PeerMigrated',
+  old: Host,
+  new: Host,
+};
+
+type StreamIter = {
+  [Symbol.iterator](): Iterator<number, void, void>;
+};
+
+type HostIter = {
+  [Symbol.iterator](): Iterator<Host, void, void>;
+};
+
+type PathStatsIter = {
+  [Symbol.iterator](): Iterator<PathStats, void, void>;
+};
+
+export type {
+  CongestionControlAlgorithm,
+  Shutdown,
+  Type,
+  ConnectionError,
+  Stats,
+  Host,
+  SendInfo,
+  RecvInfo,
+  PathStats,
+  StreamIter,
+  HostIter,
+  PathStatsIter,
+  PathEvent,
+  Config,
+  ConfigConstructor,
+  Connection,
+  ConnectionConstructor,
+  Header,
+  HeaderConstructor,
+};
