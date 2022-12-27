@@ -84,7 +84,7 @@ class QUICServer extends EventTarget {
             rinfo.address,
           );
         } catch (e) {
-          this.dispatchEvent(new events.QUICErrorEvent({ detail: e }));
+          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         }
         return;
       }
@@ -120,7 +120,7 @@ class QUICServer extends EventTarget {
             rinfo.address,
           );
         } catch (e) {
-          this.dispatchEvent(new events.QUICErrorEvent({ detail: e }));
+          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         }
         return;
       }
@@ -155,11 +155,28 @@ class QUICServer extends EventTarget {
 
       const connectionId = scid.toString('binary') as ConnectionId;
 
-      connection = new QUICConnection();
+      connection = new QUICConnection(conn);
+
+      // Nobody else really has acess to this
+      // The problem is that we don't really hand over the connection the end user
+      // Therefore they wouldn't event know to associate an error handler on the connection
+      // Which means any exceptions would end up being thrown into the node runtime and crash it
+      // So how would we deal with this?
+
+      // The user already has to attach an error handler for every server
+      // then attach it again for every connection
+      connection.addEventListener('error', () => {
+        console.log('CONNECTION HAS A ERROR');
+      });
 
       this.connections.set(
         connectionId,
         connection
+      );
+
+      // We now have a connection!
+      this.dispatchEvent(
+        new events.QUICConnectionEvent({ detail: connection })
       );
 
     } else {
@@ -184,41 +201,33 @@ class QUICServer extends EventTarget {
       },
     };
 
+    connection.recv(data, recvInfo);
 
-
-
-
-
+    const ps: Array<Promise<void>> = [];
+    for (const connection of this.connections.values()) {
+      const data = connection.send();
+      if (data == null) {
+        break;
+      }
+      const [dataSend, sendInfo] = data;
+      ps.push((async () => {
+        try {
+          await socketSend(
+            dataSend,
+            sendInfo.to.port,
+            sendInfo.to.addr
+          );
+        } catch (e) {
+          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
+        }
+      })());
+    }
+    await Promise.all(ps);
   };
 
   protected handleTimeout = () => {
 
   };
-
-
-  // We have to "send" data back on the connection
-  // even if nothing is worht processing atm...
-  // The idea is that the connection object should have a `data`
-  // event handler...
-
-  // EVERY single connection
-  // needs to be checked
-  // perhaps what we can do is apply this to each of the connection objects
-  // However the above can only apply to 1 connection object
-  // It the sends out data on the socket
-  // Only the server can do this
-  // Because it has to iterate over each connection to do so
-  // However it could iterate over each connection to emit data
-  // So it has to EMIT to the connection receiving this data
-  // While also emitting to ALL connections to try and receive data?
-  // But it cannot do this... because it has to send it to the socket
-  // Furthermore... you could just have
-  // QUICConnection.recv
-  // QUICConnection.send
-  // You do not need to "emit" an event to them anymore
-  // You just need to call the methods
-  // And they will do what they need to do
-
 
 
   // The reason this is needed

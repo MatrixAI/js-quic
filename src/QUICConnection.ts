@@ -1,4 +1,7 @@
-import type { Connection } from './native/types';
+import type { Connection, RecvInfo, SendInfo } from './native/types';
+import type { StreamId } from './types';
+import QUICStream from './QUICStream';
+import { quiche } from './native';
 import * as errors from './errors';
 import * as events from './events';
 
@@ -10,23 +13,62 @@ import * as events from './events';
 class QUICConnection extends EventTarget {
 
   public connection: Connection;
+  protected streams: Map<StreamId, QUICStream> = new Map();
+
+  public constructor(connection: Connection) {
+    super();
+    this.connection = connection;
+  }
 
   /**
    * Called when the server receives data intended for the connection.
+   * Do we wait for stream writes to actually be done?
+   * Or we go straight to answering?
+   * Cause emitting readable/writable events, is running the handlers.
    */
-  public recv(data, recvInfo) {
-    let recvLength;
+  public recv(data: Uint8Array, recvInfo: RecvInfo) {
     try {
-      recvLength = this.connection.recv(data, recvInfo);
+      this.connection.recv(data, recvInfo);
     } catch (e) {
-      this.dispatchEvent(new events.QUICErrorEvent({ detail: e }));
+      this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
       return;
     }
+    // Process all streams
+    if (this.connection.isInEarlyData() || this.connection.isEstablished()) {
+      // Every time the connection is ready, we are going to create streams
+      // and process it accordingly
+      for (const streamId of this.connection.writable() as Iterable<StreamId>) {
+        let quicStream = this.streams.get(streamId);
+        if (quicStream == null) {
+          quicStream = new QUICStream(
+            this.connection,
+            streamId
+          );
+        }
+        // This triggers a writable event
+        // If nothing is listening on this
+        // The event is discarded
+        // But when the stream is first created
+        // It will be ready to be written to
+        // But if it is blocked it will wait
+        // for the next writable event
+        // This event won't be it...
+        // So it's only useful for existing streams
+        quicStream.dispatchEvent(
+          new events.QUICStreamWritableEvent()
+        );
+      }
 
-    // We dispatch events on the connection
-    // not on the server anymore
-
-
+      for (const streamId of this.connection.readable() as Iterable<StreamId>) {
+        let quicStream = this.streams.get(streamId);
+        if (quicStream == null) {
+          quicStream = new QUICStream(this.connection, streamId);
+        }
+        // We must emit a readable event, otherwise the quic stream
+        // will not actually read anything
+        quicStream.dispatchEvent(new Event('readable'));
+      }
+    }
   }
 
   /**
@@ -38,11 +80,46 @@ class QUICConnection extends EventTarget {
    *
    * Perhaps this is called by `QUICClient` too?
    */
-  public send() {
-    // Call the internal send
-    // Then actually send to the socket?
-    // ?
-
+  public send(): [Uint8Array, SendInfo] | undefined {
+    const dataSend = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
+    let dataSendLength;
+    let sendInfo;
+    try {
+      [dataSendLength, sendInfo] = this.connection.send(
+        dataSend
+      );
+    } catch (e) {
+      if (e.message === 'Done') {
+        return;
+      }
+      // This will run any event handler attached to this
+      this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
+      try {
+        this.connection.close(
+          false, // Not an application error, was a library error
+          0x01,  // Arbitrary error code of 0x01
+          Buffer.from('Failed to send data') // The message!
+        );
+      } catch (e) {
+        if (e.message === 'Done') {
+          return;
+        }
+        this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
+      }
+      // This mirrors the TCP net socket behaviour
+      this.dispatchEvent(
+        new events.QUICConnectionCloseEvent({ detail: true })
+      );
+      return;
+    }
+    return [
+      dataSend.subarray(0, dataSendLength),
+      sendInfo
+    ];
+    // This is the `send` done for a SINGLE connection
+    // But it has to be done for every single connection
+    // Only the server has access to this, and it needs
+    // to manage this appropriately
   }
 
 }

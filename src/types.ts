@@ -40,10 +40,13 @@ type Crypto = {
   ): Promise<boolean>;
 };
 
+type StreamId = Opaque<'StreamId', number>;
+
 export type {
   Opaque,
   Callback,
   PromiseDeconstructed,
   ConnectionId,
   Crypto,
+  StreamId,
 };
