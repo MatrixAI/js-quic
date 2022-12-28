@@ -165,8 +165,10 @@ class QUICServer extends EventTarget {
       // Should also pass in all the connections too
       // to allow for garbage collection?
       connection = new QUICConnection({
+        connectionId,
         connection: conn,
-        connections: this.connections
+        connections: this.connections,
+        handleTimeout: this.handleTimeout
       });
 
       // Nobody else really has acess to this
@@ -247,10 +249,43 @@ class QUICServer extends EventTarget {
     // seems kind of slow
     // but that seems to be an issue
 
+    for (const connection of this.connections.values()) {
+      if (connection.isClosed()) {
+        this.connections.delete(connection.connectionId);
+      }
+    }
+
   };
 
-  protected handleTimeout = () => {
+  protected handleTimeout = async () => {
+    const socketSend = utils.promisify(this.socket.send).bind(this.socket);
 
+    const ps: Array<Promise<void>> = [];
+    for (const connection of this.connections.values()) {
+      const data = connection.send();
+      if (data == null) {
+        break;
+      }
+      const [dataSend, sendInfo] = data;
+      ps.push((async () => {
+        try {
+          await socketSend(
+            dataSend,
+            sendInfo.to.port,
+            sendInfo.to.addr
+          );
+        } catch (e) {
+          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
+        }
+      })());
+    }
+    await Promise.all(ps);
+
+    for (const connection of this.connections.values()) {
+      if (connection.isClosed()) {
+        this.connections.delete(connection.connectionId);
+      }
+    }
   };
 
 

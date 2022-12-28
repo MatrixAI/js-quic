@@ -12,21 +12,84 @@ import * as events from './events';
  */
 class QUICConnection extends EventTarget {
 
+  public readonly connectionId: ConnectionId;
   public connection: Connection;
   public connections: Map<ConnectionId, QUICConnection>;
   public streams: Map<StreamId, QUICStream> = new Map();
 
+  protected handleTimeout: () => Promise<void>;
+
+  protected timer?: ReturnType<typeof setTimeout>;
+
   public constructor({
+    connectionId,
     connection,
     connections,
+    handleTimeout
   }: {
+    connectionId: ConnectionId;
     connection: Connection;
-    connections: Map<ConnectionId, QUICConnection>
+    connections: Map<ConnectionId, QUICConnection>,
+    handleTimeout: () => Promise<void>,
   }) {
     super();
+    this.connectionId = connectionId;
     this.connection = connection;
     this.connections = connections;
+    // do we use `handleTimeot`
+    this.handleTimeout = handleTimeout;
+
+    // Setup the timeout timer
+    this.setTimeout();
+
+    // It's possible that the timer
+    // of the connection may change as we query it
+    // On each even that is
   }
+
+  // and we should potentally ask aon each timer
+  // CHECK if this changes depending on the situation
+  // or if it is still the same
+  // if not, then 1 timer is enough
+  // but it's interestingly that the loop
+  // is that the lowest timeout
+  // Why does it
+  // in the upstream code, it iterates over all connectiosn
+  // and calls the `conn.on_timeout()` not just the single connection
+  // public timeout(): number | null {
+  //   return this.connection.timeout();
+  // }
+
+  public setTimeout() {
+    const time = this.connection.timeout();
+
+    console.log('The time that gets set', time);
+
+    if (time != null) {
+      this.timer = setTimeout(
+        async () => {
+          // Do we call this?
+          // If so, we must continue
+          this.connection.onTimeout();
+
+          // The server must handle the timeout too!?
+          await this.handleTimeout();
+
+          // Do we reset the timeout afterwards?
+          // So that the next timeout is called?
+          // Could this result in an infinite loop?
+          // I'm not sure
+          this.setTimeout();
+
+        },
+        time
+      );
+    } else {
+      clearTimeout(this.timer);
+      delete this.timer;
+    }
+  }
+
 
   /**
    * Called when the server receives data intended for the connection.
