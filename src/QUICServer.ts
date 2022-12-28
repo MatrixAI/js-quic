@@ -49,6 +49,8 @@ class QUICServer extends EventTarget {
   protected connections: Map<ConnectionId, QUICConnection> = new Map();
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+    this.logger.debug('Handling Message');
+
     const socketSend = utils.promisify(this.socket.send).bind(this.socket);
     let header: Header;
     try {
@@ -301,10 +303,10 @@ class QUICServer extends EventTarget {
       key: ArrayBuffer;
       ops: Crypto;
     },
-    logger: Logger;
+    logger?: Logger;
   }) {
     super();
-    this.logger = logger;
+    this.logger = logger ?? new Logger(this.constructor.name);
     this.crypto = crypto;
 
     // Also need to sort out the configuration

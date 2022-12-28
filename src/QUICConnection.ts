@@ -1,3 +1,4 @@
+import Logger from '@matrixai/logger';
 import type { Connection, RecvInfo, SendInfo } from './native/types';
 import type { ConnectionId, StreamId } from './types';
 import QUICStream from './QUICStream';
@@ -20,19 +21,23 @@ class QUICConnection extends EventTarget {
   protected handleTimeout: () => Promise<void>;
 
   protected timer?: ReturnType<typeof setTimeout>;
+  protected logger: Logger;
 
   public constructor({
     connectionId,
     connection,
     connections,
-    handleTimeout
+    handleTimeout,
+    logger
   }: {
     connectionId: ConnectionId;
     connection: Connection;
     connections: Map<ConnectionId, QUICConnection>,
     handleTimeout: () => Promise<void>,
+    logger?: Logger
   }) {
     super();
+    this.logger = logger ?? new Logger(this.constructor.name);
     this.connectionId = connectionId;
     this.connection = connection;
     this.connections = connections;

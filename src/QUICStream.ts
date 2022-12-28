@@ -1,8 +1,8 @@
-import { ReadableStream, WritableStream, } from 'stream/web';
-import { quiche } from './native';
 import type { StreamId } from './types';
 import type { Connection } from './native/types';
-import QUICConnection from './QUICConnection';
+import Logger from '@matrixai/logger';
+import { ReadableStream, WritableStream, } from 'stream/web';
+import { quiche } from './native';
 
 function reasonToCode(reason?: any) {
   // The reason to code map must be supplied
@@ -25,6 +25,8 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
   protected _recvPaused: boolean = false;
 
+  protected logger: Logger;
+
   public get sendClosed(): boolean {
     return this._sendClosed;
   }
@@ -42,13 +44,16 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       streamId,
       connection,
       streams,
+      logger,
     }: {
-      streamId: StreamId,
-      connection: Connection,
-      streams: Map<StreamId, QUICStream>,
+      streamId: StreamId;
+      connection: Connection;
+      streams: Map<StreamId, QUICStream>;
+      logger?: Logger;
     }
   ) {
     super();
+    this.logger = logger ?? new Logger(this.constructor.name);
     this.streamId = streamId;
     this.connection = connection;
     this.streams = streams;
