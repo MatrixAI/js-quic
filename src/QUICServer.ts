@@ -30,6 +30,13 @@ import * as utils from './utils';
  * 'listen'
  */
 class QUICServer extends EventTarget {
+
+  // we need to make the error event emit out side
+  // ith as to be default
+  // stopImmediatePropagation
+  // but that's from the one that is registered
+  // so this is a bit of a problem!
+
   protected socket: dgram.Socket;
   protected host: string;
   protected port: number;
@@ -155,7 +162,11 @@ class QUICServer extends EventTarget {
 
       const connectionId = scid.toString('binary') as ConnectionId;
 
-      connection = new QUICConnection(conn);
+      // Should also pass in all the connections too
+      // to allow for garbage collection?
+      connection = new QUICConnection({
+        connection: conn
+      });
 
       // Nobody else really has acess to this
       // The problem is that we don't really hand over the connection the end user
@@ -203,6 +214,11 @@ class QUICServer extends EventTarget {
 
     connection.recv(data, recvInfo);
 
+    // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
+    // When the connection timer expires (that is, any time on_timeout() is also called).
+    // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
+    // When the application receives data from the peer (for example any time stream_recv() is called).
+
     const ps: Array<Promise<void>> = [];
     for (const connection of this.connections.values()) {
       const data = connection.send();
@@ -223,23 +239,18 @@ class QUICServer extends EventTarget {
       })());
     }
     await Promise.all(ps);
+
+    // seems we iterate over the connections that are closed here
+    // and end up removing them
+    // and this is done on all the connections
+    // seems kind of slow
+    // but that seems to be an issue
+
   };
 
   protected handleTimeout = () => {
 
   };
-
-
-  // The reason this is needed
-  // is due to the usage of webcrypto
-  // to be able to use the `key`
-  // and hmac stuff
-  // to derive stuff
-  // webcrypto.subtle.sign
-  // webcrypto.subtle.verify
-
-  // Webcrypto is the best to use for now
-  // Relying on libsodium here is not a good idea!
 
 
   // The crypto in this case is **necessary**
@@ -338,9 +349,21 @@ class QUICServer extends EventTarget {
     this.host = socketAddress.address;
     this.port = socketAddress.port;
     this.socket.on('message', this.handleMessage);
+    this.socket.on('error', (e) => {
+      this.dispatchEvent(
+        new events.QUICServerErrorEvent({ detail: e })
+      );
+    });
   }
 
   public async stop() {
+
+    // Here we are attempting to gracefully stop all the connections
+    // Not sure if there's any relevant code we should be using
+    for (const connection of this.connections.values()) {
+      await connection.stop();
+    }
+
     // If we want to close the socket
     // this is all we need to do
     // There's no waiting for connections to stop
