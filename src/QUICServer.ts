@@ -351,6 +351,7 @@ class QUICServer extends EventTarget {
       ]
     );
     config.enableEarlyData();
+    this.config = config;
   }
 
   public async start({
