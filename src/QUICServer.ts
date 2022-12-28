@@ -49,8 +49,9 @@ class QUICServer extends EventTarget {
   protected connections: Map<ConnectionId, QUICConnection> = new Map();
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-    const receiveAddress = utils.buildAddress(rinfo.address, rinfo.port);
-    this.logger.debug(`Receiving UDP packet from ${receiveAddress}`);
+    const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
+    this.logger.debug(`Handling UDP packet from ${peerAddress}`);
+
     const socketSend = utils.promisify(this.socket.send).bind(this.socket);
     let header: Header;
     try {
@@ -62,12 +63,16 @@ class QUICServer extends EventTarget {
         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         return;
       }
-      this.logger.debug(`Received UDP packet is not a QUIC packet`);
+
+      // We need a way to identify the packet
+      this.logger.debug(`UDP packet from ${peerAddress} is not a QUIC packet`);
       return;
     }
+
     this.logger.debug(
-      `Processing ${Object.keys(quiche.Type)[header.ty]} QUIC packet`
+      `UDP packet is a ${Object.keys(quiche.Type)[header.ty]} QUIC packet`
     );
+
     const dcid: Buffer = Buffer.from(header.dcid);
     const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
     const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
@@ -77,22 +82,24 @@ class QUICServer extends EventTarget {
 
     // Check if this packet corresponds to an existing connection
     if (
-      !this.connections.has(dcid.toString('binary') as ConnectionId) &&
-      !this.connections.has(connId.toString('binary') as ConnectionId)
+      !this.connections.has(dcid.toString('hex') as ConnectionId) &&
+      !this.connections.has(connId.toString('hex') as ConnectionId)
     ) {
-
+      this.logger.debug(`QUIC packet is for a new connection`);
       if (header.ty !== quiche.Type.Initial) {
+        this.logger.debug(`QUIC packet must be Initial for new connections`);
         return;
       }
-
       // Version Negotiation
       if (!quiche.versionIsSupported(header.version)) {
+        this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
         const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         const versionDatagramLength = quiche.negotiateVersion(
           header.scid,
           header.dcid,
           versionDatagram
         );
+        this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
         try {
           await socketSend(
             versionDatagram,
@@ -104,16 +111,20 @@ class QUICServer extends EventTarget {
         } catch (e) {
           this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         }
+        this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
         return;
       }
 
       const token: Uint8Array | undefined = header.token;
       if (token == null) {
+        this.logger.debug(`QUIC Initial packet must have a token buffer even if empty`);
         return;
       }
 
       // Stateless Retry
       if (token.byteLength === 0) {
+        this.logger.debug(`QUIC packet token is empty, performing stateless retry`);
+
         const token = await this.mintToken(
           Buffer.from(header.dcid),
           rinfo.address
@@ -129,6 +140,7 @@ class QUICServer extends EventTarget {
           header.version,
           retryDatagram
         );
+        this.logger.debug(`Send Retry packet to ${peerAddress}`);
         try {
           await socketSend(
             retryDatagram,
@@ -140,6 +152,7 @@ class QUICServer extends EventTarget {
         } catch (e) {
           this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         }
+        this.logger.debug(`Sent Retry packet to ${peerAddress}`);
         return;
       }
 
@@ -147,16 +160,20 @@ class QUICServer extends EventTarget {
         Buffer.from(token),
         rinfo.address,
       );
+
       if (odcid == null) {
+        this.logger.debug(`QUIC packet token failed validation`);
         return;
       }
 
       if (connId.byteLength !== dcid.byteLength) {
+        this.logger.debug(`QUIC packet token failed validation`);
         return;
       }
 
       const scid = Buffer.from(header.dcid);
 
+      this.logger.debug(`Accepting new connection from QUIC packet`);
       const conn = quiche.Connection.accept(
         scid, // This is actually the originally derived DCID
         odcid, // This is the original DCID...
@@ -171,15 +188,16 @@ class QUICServer extends EventTarget {
         this.config
       );
 
-      const connectionId = scid.toString('binary') as ConnectionId;
+      // Let's use hex strings instead
+      const connectionId = scid.toString('hex') as ConnectionId;
 
-      // Should also pass in all the connections too
-      // to allow for garbage collection?
       connection = new QUICConnection({
+        // Note that if a connection ID changes, how do we deal with this?
         connectionId,
         connection: conn,
         connections: this.connections,
-        handleTimeout: this.handleTimeout
+        handleTimeout: this.handleTimeout,
+        logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
       });
 
       // Nobody else really has acess to this
@@ -199,18 +217,18 @@ class QUICServer extends EventTarget {
         connection
       );
 
-      // We now have a connection!
       this.dispatchEvent(
         new events.QUICConnectionEvent({ detail: connection })
       );
 
     } else {
+      this.logger.debug(`QUIC packet is for an existing connection`);
       connection = this.connections.get(
-        dcid.toString('binary') as ConnectionId
+        dcid.toString('hex') as ConnectionId
       )!;
       if (connection == null) {
         connection = this.connections.get(
-          connId.toString('binary') as ConnectionId
+          connId.toString('hex') as ConnectionId
         )!;
       }
     }
@@ -266,6 +284,7 @@ class QUICServer extends EventTarget {
       }
     }
 
+    this.logger.debug(`Handled UDP packet from ${peerAddress}`);
   };
 
   protected handleTimeout = async () => {

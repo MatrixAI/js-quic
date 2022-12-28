@@ -38,6 +38,9 @@ class QUICConnection extends EventTarget {
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
+
+    this.logger.info(`Constructing ${this.constructor.name}`);
+
     this.connectionId = connectionId;
     this.connection = connection;
     this.connections = connections;
@@ -50,6 +53,8 @@ class QUICConnection extends EventTarget {
     // It's possible that the timer
     // of the connection may change as we query it
     // On each even that is
+
+    this.logger.info(`Constructed ${this.constructor.name}`);
   }
 
   // and we should potentally ask aon each timer
@@ -68,6 +73,11 @@ class QUICConnection extends EventTarget {
   public setTimeout() {
     const time = this.connection.timeout();
 
+    // Turns out this is `null` at the beginning
+    // So nothing gets set
+    // Therefore I imagine it must change over time
+    // We have to poll the library on every event
+    // To check!
     console.log('The time that gets set', time);
 
     if (time != null) {
@@ -103,6 +113,9 @@ class QUICConnection extends EventTarget {
    * Cause emitting readable/writable events, is running the handlers.
    */
   public recv(data: Uint8Array, recvInfo: RecvInfo) {
+
+    this.logger.debug('Receive QUIC packet data');
+
     try {
       this.connection.recv(data, recvInfo);
     } catch (e) {
@@ -115,6 +128,9 @@ class QUICConnection extends EventTarget {
     }
     // Process all streams
     if (this.connection.isInEarlyData() || this.connection.isEstablished()) {
+
+      this.logger.debug(`Connection is in early data or is established`);
+
       // Every time the connection is ready, we are going to create streams
       // and process it accordingly
       for (const streamId of this.connection.writable() as Iterable<StreamId>) {
@@ -154,6 +170,8 @@ class QUICConnection extends EventTarget {
         quicStream.dispatchEvent(new Event('readable'));
       }
     }
+
+    this.logger.debug('Received QUIC packet data');
   }
 
   /**
@@ -166,6 +184,8 @@ class QUICConnection extends EventTarget {
    * Perhaps this is called by `QUICClient` too?
    */
   public send(): [Uint8Array, SendInfo] | undefined {
+    this.logger.debug('Send QUIC packet data');
+
     const dataSend = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
     let dataSendLength;
     let sendInfo;
@@ -212,6 +232,9 @@ class QUICConnection extends EventTarget {
       );
       return;
     }
+
+    this.logger.debug('Sent QUIC packet data');
+
     return [
       dataSend.subarray(0, dataSendLength),
       sendInfo
@@ -233,6 +256,7 @@ class QUICConnection extends EventTarget {
    * An explicit stop closes the streams first, then closes the connections
    */
   public async stop() {
+    this.logger.info(`Stopping ${this.constructor.name}`);
 
     // Connection error codes are
     // 0x00: No error
@@ -266,6 +290,8 @@ class QUICConnection extends EventTarget {
     // JUST because we close
     // doesn't mean isClosed is true
     // we don't know
+
+    this.logger.info(`Stopped ${this.constructor.name}`);
 
   }
 
