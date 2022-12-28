@@ -1,5 +1,5 @@
 import type { Connection, RecvInfo, SendInfo } from './native/types';
-import type { StreamId } from './types';
+import type { ConnectionId, StreamId } from './types';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as errors from './errors';
@@ -13,15 +13,19 @@ import * as events from './events';
 class QUICConnection extends EventTarget {
 
   public connection: Connection;
+  public connections: Map<ConnectionId, QUICConnection>;
   public streams: Map<StreamId, QUICStream> = new Map();
 
   public constructor({
-    connection
+    connection,
+    connections,
   }: {
-    connection: Connection
+    connection: Connection;
+    connections: Map<ConnectionId, QUICConnection>
   }) {
     super();
     this.connection = connection;
+    this.connections = connections;
   }
 
   /**
@@ -34,6 +38,10 @@ class QUICConnection extends EventTarget {
     try {
       this.connection.recv(data, recvInfo);
     } catch (e) {
+      // The `connection.recv` AUTOMATICALLY
+      // calls `connection.close` internally
+      // when there's an error
+      // So it's possible at this point the connection is already closed
       this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
       return;
     }
@@ -117,6 +125,7 @@ class QUICConnection extends EventTarget {
         // You have tell ALL the streams to shutdown
         // It's not graceful though
 
+        // If we close here...
 
         this.connection.close(
           false, // Not an application error, was a library error
@@ -184,6 +193,19 @@ class QUICConnection extends EventTarget {
         throw e;
       }
     }
+
+    // do we remove
+    // JUST because we close
+    // doesn't mean isClosed is true
+    // we don't know
+
+  }
+
+  // An external system has to poll
+  // to know when our connection is actually closed
+  // Cause closing is lazy
+  public isClosed() {
+    return this.connection.isClosed();
   }
 
 }

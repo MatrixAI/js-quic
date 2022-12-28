@@ -78,6 +78,15 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
             } else {
               // If there is an error, we do not do anything else
               controller.error(e);
+
+              // I am not sure if this is necessary
+              // Let's see what happens
+              this.connection.streamShutdown(
+                this.streamId,
+                quiche.Shutdown.Read,
+                reasonToCode(e)
+              );
+
               return;
             }
           }

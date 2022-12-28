@@ -165,7 +165,8 @@ class QUICServer extends EventTarget {
       // Should also pass in all the connections too
       // to allow for garbage collection?
       connection = new QUICConnection({
-        connection: conn
+        connection: conn,
+        connections: this.connections
       });
 
       // Nobody else really has acess to this
