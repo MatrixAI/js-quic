@@ -36,7 +36,7 @@ class QUICConnection extends EventTarget {
     this.connectionId = connectionId;
     this.connection = connection;
     this.connections = connections;
-    // do we use `handleTimeot`
+    // do we use `handleTimeout`
     this.handleTimeout = handleTimeout;
 
     // Setup the timeout timer

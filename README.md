@@ -342,3 +342,37 @@ https://stackoverflow.com/questions/57476533/why-is-statically-linking-glibc-dis
 https://news.ycombinator.com/item?id=21907870
 
 Also I can see that the control for all of this in cargo. You can see `libc`, `libm`
+
+---
+
+```sh
+# Build the the native binary
+npm run napi-build
+
+# Put certificates in `./tmp`
+step certificate create \
+  localhost localhost.crt localhost.key \
+  --profile self-signed \
+  --subtle \
+  --no-password \
+  --insecure \
+  --force \
+  --san 127.0.0.1 \
+  --san ::1 \
+  --not-after 31536000s
+
+cargo run --bin quiche-client -- 'http://127.0.0.1:55555'
+
+# Run without verifying TLS cause the certs are self-signed
+cargo run --bin quiche-client -- --no-verify 'http://127.0.0.1:55555'
+
+cd ./apps
+```
+
+To run quiche apps:
+
+```
+cd apps
+cargo run --bin quiche-server -- --listen 127.0.0.1:55555
+cargo run --bin quiche-client -- --no-verify 'https://127.0.0.1:55555'
+```

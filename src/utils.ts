@@ -1,4 +1,5 @@
 import type { Callback, PromiseDeconstructed } from './types';
+import { Validator } from 'ip-num';
 
 /**
  * Convert callback-style to promise-style
@@ -72,8 +73,26 @@ function bufferWrap(
   }
 }
 
+/**
+ * Given host and port, create an address string.
+ */
+function buildAddress(host: string, port: number = 0): string {
+  let address: string;
+  const [isIPv4] = Validator.isValidIPv4String(host);
+  const [isIPv6] = Validator.isValidIPv6String(host);
+  if (isIPv4) {
+    address = `${host}:${port}`;
+  } else if (isIPv6) {
+    address = `[${host}]:${port}`;
+  } else {
+    address = `${host}:${port}`;
+  }
+  return address;
+}
+
 export {
   promisify,
   promise,
-  bufferWrap
+  bufferWrap,
+  buildAddress
 };

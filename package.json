@@ -1,6 +1,9 @@
 {
   "name": "@matrixai/quic",
   "version": "0.0.1",
+  "bin": {
+    "server": "dist/bin/server.js"
+  },
   "author": "Roger Qiu",
   "description": "QUIC",
   "license": "Apache-2.0",
@@ -27,8 +30,9 @@
     "lint-shell": "find ./src ./tests ./scripts -type f -regextype posix-extended -regex '.*\\.(sh)' -exec shellcheck {} +",
     "docs": "rimraf ./docs && typedoc --gitRevision master --tsconfig ./tsconfig.build.json --out ./docs src",
     "bench": "rimraf ./benches/results && ts-node ./benches",
-    "napi-build": "napi build --platform",
-    "napi-build-prod": "napi build --release"
+    "napi-build": "napi build --no-dts-header --platform --js false",
+    "napi-build-prod": "napi build --release",
+    "server": "ts-node src/bin/server.ts"
   },
   "dependencies": {
     "@matrixai/async-init": "^1.8.1",

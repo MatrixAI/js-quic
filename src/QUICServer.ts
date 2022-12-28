@@ -309,6 +309,10 @@ class QUICServer extends EventTarget {
 
     // Also need to sort out the configuration
     const config = new quiche.Config();
+
+    // Change this to TLSConfig
+    // Private key PEM
+    // Cert Chain PEM
     config.loadCertChainFromPemFile(
       './tmp/localhost.crt'
     );
@@ -347,6 +351,8 @@ class QUICServer extends EventTarget {
     host?: string,
     port?: number,
   } = {}) {
+    let address = utils.buildAddress(host, port);
+    this.logger.info(`Starting ${this.constructor.name} on ${address}`);
     const [isIPv4] = Validator.isValidIPv4String(host);
     const [isIPv6] = Validator.isValidIPv6String(host);
     let type: 'udp4' | 'udp6';
@@ -390,9 +396,13 @@ class QUICServer extends EventTarget {
         new events.QUICServerErrorEvent({ detail: e })
       );
     });
+    address = utils.buildAddress(this.host, this.port);
+    this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
   public async stop() {
+    const address = utils.buildAddress(this.host, this.port);
+    this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
 
     // Here we are attempting to gracefully stop all the connections
     // Not sure if there's any relevant code we should be using
@@ -405,6 +415,7 @@ class QUICServer extends EventTarget {
     // There's no waiting for connections to stop
     // Cause that doesn't exist on the UDP socket level
     this.socket.close();
+    this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
   protected async mintToken(data, sourceAddress): Promise<Buffer> {
