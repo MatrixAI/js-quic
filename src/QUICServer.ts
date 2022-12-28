@@ -4,7 +4,7 @@ import dgram from 'dgram';
 import { Validator } from 'ip-num';
 import Logger from '@matrixai/logger';
 import QUICConnection from './QUICConnection';
-import { quiche } from './native';
+import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
 
@@ -49,16 +49,25 @@ class QUICServer extends EventTarget {
   protected connections: Map<ConnectionId, QUICConnection> = new Map();
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-    this.logger.debug('Handling Message');
-
+    const receiveAddress = utils.buildAddress(rinfo.address, rinfo.port);
+    this.logger.debug(`Receiving UDP packet from ${receiveAddress}`);
     const socketSend = utils.promisify(this.socket.send).bind(this.socket);
     let header: Header;
     try {
       // Maximum length of a connection ID
       header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
     } catch (e) {
+      // Only `InvalidPacket` is a valid error here
+      if (e.message !== 'InvalidPacket') {
+        this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+        return;
+      }
+      this.logger.debug(`Received UDP packet is not a QUIC packet`);
       return;
     }
+    this.logger.debug(
+      `Processing ${Object.keys(quiche.Type)[header.ty]} QUIC packet`
+    );
     const dcid: Buffer = Buffer.from(header.dcid);
     const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
     const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
@@ -342,8 +351,6 @@ class QUICServer extends EventTarget {
       ]
     );
     config.enableEarlyData();
-
-
   }
 
   public async start({

@@ -46,7 +46,7 @@ async function main(argv = process.argv): Promise<number> {
 
   const server = new QUICServer({
     crypto,
-    logger
+    logger,
   });
 
   await server.start({

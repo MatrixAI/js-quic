@@ -140,18 +140,18 @@ interface HeaderConstructor {
   fromSlice(data: Uint8Array, dcidLen: number): Header
 };
 
-const enum CongestionControlAlgorithm {
+enum CongestionControlAlgorithm {
   Reno = 0,
   CUBIC = 1,
   BBR = 2
 };
 
-const enum Shutdown {
+enum Shutdown {
   Read = 0,
   Write = 1
 };
 
-const enum Type {
+enum Type {
   Initial = 0,
   Retry = 1,
   Handshake = 2,
