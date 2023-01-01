@@ -126,11 +126,26 @@ class QUICClient extends EventTarget {
     // ---
 
     // We have to fill it out with random stuff
+    // Random source connection ID
+    // The SCID is what the client uses to identify itself.
     const scid = Buffer.allocUnsafe(quiche.MAX_CONN_ID_LEN);
 
-    // What is the local address?
-    // And the peer address
+    // Set the array buffer accordingly
+    this.crypto.ops.randomBytes(
+      scid.buffer.slice(
+        scid.byteOffset,
+        scid.byteOffset + scid.byteLength
+      )
+    );
 
+    // we don't actually use the URL
+    // it's not important for us
+    // maybe it is useful later.
+    // the server name is optional
+    // it's only used for verifying the peer certificate
+    // however we don't really do this... because we are using custom  verification
+
+    // New QUIC connection, this will start to initiate the handshake
     const conn = quiche.Connection.connect(
       scid,
       {
@@ -143,6 +158,41 @@ class QUICClient extends EventTarget {
       },
       this.config
     );
+
+    // const data = Buffer.alloc(quiche.MAX_DATAGRAM_SIZE);
+    // conn.send(data);
+
+    // Ok we should be creating a `QUICConnection` here
+    // just like in the server
+    // Then use the `send()` which will give back us the data to be sent out on the UDP socket
+    // After sending the INITIAL packet
+    // it will then expect to receive data on the UDP socket
+    // At that point the receive info is built up
+    // Then it is passed to `conn.recv`
+    // HOWEVER what if we have multiple connections
+    // which ones should be indexing into?
+    // Should we be parsing the packet just like on the server side
+    // And then identifying the connection based on the SCID or DCID
+    // since every client... uses SCID to identify themselves
+
+    // Then it tries to read it until it times out
+    // Or if there is no more UDP packets to read
+    // This is seems unnceessary  with handle message
+
+    // Check if is closed
+
+    // Process writes if the connection is established
+
+    // Afterwards, it processes all readable streams
+    // Deal with closing streams
+
+    // Send out on connection
+
+    // Send out on the socket
+
+    // Check if connection is closed
+
+    // Otherwise go back to the sleep waiting loop
 
 
   }
