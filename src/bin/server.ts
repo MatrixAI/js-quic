@@ -39,6 +39,9 @@ async function main(argv = process.argv): Promise<number> {
           data
         );
       },
+      randomBytes: async (data: ArrayBuffer) => {
+        webcrypto.getRandomValues(new Uint8Array(data));
+      },
     }
   };
 

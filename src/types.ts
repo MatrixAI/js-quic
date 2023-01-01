@@ -38,6 +38,9 @@ type Crypto = {
     data: ArrayBuffer,
     sig: ArrayBuffer,
   ): Promise<boolean>;
+  randomBytes(
+    data: ArrayBuffer,
+  ): Promise<void>;
 };
 
 type StreamId = Opaque<'StreamId', number>;
