@@ -1,5 +1,11 @@
-import type { Callback, PromiseDeconstructed, Host } from './types';
+import type {
+  Callback,
+  PromiseDeconstructed,
+  ConnectionId,
+  Host
+} from './types';
 import { IPv4, IPv6, Validator } from 'ip-num';
+import { data } from '@matrixai/logger/dist/formatting';
 
 /**
  * Convert callback-style to promise-style
@@ -108,9 +114,27 @@ function resolvesZeroIP(ip: Host): Host {
   }
 }
 
+function toConnectionId(data: Uint8Array): ConnectionId {
+  return Array.from(
+    data,
+    n => n.toString(16).padStart(2, '0')
+  ).join('') as ConnectionId;
+}
+
+function fromConnectionId(connId: ConnectionId): Uint8Array {
+  const data = new Uint8Array(connId.length / 2);
+  for (let i = 0; i < connId.length; i += 2) {
+    data[i / 2] = parseInt(connId.substring(i, i + 2), 16);
+  }
+  return data;
+}
+
+
 export {
   promisify,
   promise,
   bufferWrap,
-  buildAddress
+  buildAddress,
+  toConnectionId,
+  fromConnectionId,
 };

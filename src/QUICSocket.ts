@@ -1,3 +1,4 @@
+import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import {
@@ -5,6 +6,7 @@ import {
   ready,
 } from '@matrixai/async-init/dist/StartStop';
 import { Validator } from 'ip-num';
+import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
 
@@ -34,6 +36,92 @@ class QUICSocket extends EventTarget {
   protected host: string;
   protected port: number;
   protected logger: Logger;
+
+  /**
+   * Handle the datagram from UDP socket
+   * The `data` buffer could be multiple coalesced QUIC packets.
+   * It could also be a non-QUIC packet data.
+   * If it is non-QUIC, we can discard the data.
+   * If there are multiple coalesced QUIC packets, it is expected that
+   * all packets are intended for the same connection. This means we only
+   * need to parse the first QUIC packet to determinine what connection to route
+   * the data to.
+   */
+  protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+    let header: Header;
+    try {
+      // Why we would we ever use anything else?
+      // This is a constant!
+      header = quiche.Header.fromSlice(
+        data,
+        quiche.MAX_CONN_ID_LEN
+      );
+    } catch (e) {
+      // Only `InvalidPacket` is a valid error here
+      if (e.message !== 'InvalidPacket') {
+        this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
+      }
+      return;
+    }
+
+    // If this packet is a short header
+    // the DCID is decoded based on the dcid length
+    // However the SCID is actually:
+    // header.scid: ConnectionId::default()
+    // What is this?
+    // The default connection id is a `from_vec(Vec::new())`
+    // I think it's just an empty Uint8Array
+    // With length of 0
+    // Ok that makes sense now
+
+    // DCID is the only thing that will always exist
+    // We must use this as a way to route the connections
+    // How do we decide how to do this?
+    // We must maintain a "connection" map here
+    // That is QUIC connections... etc.
+    // Furthermore the DCID may also not exist in the map
+    // In that case it can be a NEW connection
+    // But if it doesn't follow the new connections
+    // it must be discarded too
+
+    // When we pass this QUICSocket into the  the QUICClient
+    // or to QUICServer
+    // like
+    // we can use await, to indicate when it is started
+    // it doesn't already need to be started
+
+    // const s = new QUICServer({ socket: QUICSocket });
+    // const c1 = new QUICClient({ socket: QUICSocket });
+    // const c2 = new QUICClient({ socket: QUICSocket });
+
+    // Then upon doing `s.start()`
+    // and `c1.start()`
+    // We need to therefore "register" its connections with this handleMessage dispatch
+
+    // Ok so the problem is that there could be multiple packets in the datagram
+    // In the initial packet we have the random DCID that the client creates
+    // But it also randomly chooses its SCID
+
+    // On the server side, we are converting the `dcid` to `connId`
+    // Which is a deterministic hash of it, well a "signed" version of it
+
+    // So we have DCID, SCID and CONNID
+
+    // At any time, endpoints can change the DCID they transmit to a value that has not been used on
+    // **another** path.
+
+    // During version neogtiation
+    // i
+
+
+
+
+
+
+
+    // This has to do some muxing
+
+  };
 
   // you can proceed to run a server in it
   // by telling the socket to create a server
@@ -114,7 +202,7 @@ class QUICSocket extends EventTarget {
     this.port = socketAddress.port;
     this.socket.on('error', (e) => {
       this.dispatchEvent(
-        new events.QUICServerErrorEvent({ detail: e })
+        new events.QUICSocketErrorEvent({ detail: e })
       );
     });
     address = utils.buildAddress(this.host, this.port);

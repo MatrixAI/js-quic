@@ -73,6 +73,7 @@ class QUICStreamWritableEvent extends Event {
 }
 
 export {
+  QUICSocketErrorEvent,
   QUICServerErrorEvent,
   QUICConnectionErrorEvent,
   QUICConnectionCloseEvent,
