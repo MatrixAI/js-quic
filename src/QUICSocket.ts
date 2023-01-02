@@ -64,6 +64,12 @@ class QUICSocket extends EventTarget {
       return;
     }
 
+    // The DCID is the ID that the remote peer picked for us.
+    // Unlike the SCID it is guaranteed to exist for all QUIC packets.
+    const dcid = header.dcid;
+
+
+
     // If this packet is a short header
     // the DCID is decoded based on the dcid length
     // However the SCID is actually:
