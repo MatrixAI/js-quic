@@ -178,11 +178,11 @@ class QUICServer extends EventTarget {
         scid, // This is actually the originally derived DCID
         odcid, // This is the original DCID...
         {
-          addr: this.socket.address().address,
+          host: this.socket.address().address,
           port: this.socket.address().port
         },
         {
-          addr: rinfo.address,
+          host: rinfo.address,
           port: rinfo.port
         },
         this.config
@@ -235,11 +235,11 @@ class QUICServer extends EventTarget {
 
     const recvInfo = {
       to: {
-        addr: this.socket.address().address,
+        host: this.socket.address().address,
         port: this.socket.address().port
       },
       from: {
-        addr: rinfo.address,
+        host: rinfo.address,
         port: rinfo.port
       },
     };
@@ -263,7 +263,7 @@ class QUICServer extends EventTarget {
           await socketSend(
             dataSend,
             sendInfo.to.port,
-            sendInfo.to.addr
+            sendInfo.to.host
           );
         } catch (e) {
           this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
@@ -302,7 +302,7 @@ class QUICServer extends EventTarget {
           await socketSend(
             dataSend,
             sendInfo.to.port,
-            sendInfo.to.addr
+            sendInfo.to.host
           );
         } catch (e) {
           this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))

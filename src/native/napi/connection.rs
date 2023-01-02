@@ -120,15 +120,15 @@ impl From<quiche::Shutdown> for Shutdown {
 
 #[napi(object)]
 #[derive(Serialize, Deserialize)]
-pub struct Host {
-  pub addr: String,
+pub struct HostPort {
+  pub host: String,
   pub port: u16,
 }
 
-impl TryFrom<Host> for SocketAddr {
+impl TryFrom<HostPort> for SocketAddr {
   type Error = io::Error;
-  fn try_from(host: Host) -> io::Result<Self> {
-    (host.addr, host.port).to_socket_addrs()?.next().ok_or(
+  fn try_from(host: HostPort) -> io::Result<Self> {
+    (host.host, host.port).to_socket_addrs()?.next().ok_or(
       io::Error::new(
         io::ErrorKind::Other,
         "Could not convert host to socket address"
@@ -137,10 +137,10 @@ impl TryFrom<Host> for SocketAddr {
   }
 }
 
-impl From<SocketAddr> for Host {
+impl From<SocketAddr> for HostPort {
   fn from(socket_addr: SocketAddr) -> Self {
-    Host {
-      addr: socket_addr.ip().to_string(),
+    HostPort {
+      host: socket_addr.ip().to_string(),
       port: socket_addr.port(),
     }
   }
@@ -149,9 +149,9 @@ impl From<SocketAddr> for Host {
 #[napi(object)]
 pub struct SendInfo {
   /// The local address the packet should be sent from.
-  pub from: Host,
+  pub from: HostPort,
   /// The remote address the packet should be sent to.
-  pub to: Host,
+  pub to: HostPort,
   /// The time to send the packet out for pacing.
   pub at: External<std::time::Instant>,
 }
@@ -159,9 +159,9 @@ pub struct SendInfo {
 #[napi(object)]
 pub struct RecvInfo {
   /// The remote address the packet was received from.
-  pub from: Host,
+  pub from: HostPort,
   /// The local address the packet was sent to.
-  pub to: Host,
+  pub to: HostPort,
 }
 
 #[napi]
@@ -175,9 +175,10 @@ impl Connection {
   /// This can take both IP addresses and hostnames
   #[napi(factory)]
   pub fn connect(
+    server_name: Option<String>,
     scid: Uint8Array,
-    local_host: Host,
-    remote_host: Host,
+    local_host: HostPort,
+    remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
     // These addresses are passed in from the outside
@@ -209,7 +210,7 @@ impl Connection {
     let scid = quiche::ConnectionId::from_ref(&scid);
 
     let connection = quiche::connect(
-      None,
+      server_name.as_deref(),
       &scid,
       local_addr,
       remote_addr,
@@ -227,8 +228,8 @@ impl Connection {
   pub fn accept(
     scid: Uint8Array,
     odcid: Option<Uint8Array>,
-    local_host: Host,
-    remote_host: Host,
+    local_host: HostPort,
+    remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
 
@@ -348,12 +349,12 @@ impl Connection {
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = send_info.map(|info| {
-      let from = Host {
-        addr: info.from.ip().to_string(),
+      let from = HostPort {
+        host: info.from.ip().to_string(),
         port: info.from.port(),
       };
-      let to = Host {
-        addr: info.to.ip().to_string(),
+      let to = HostPort {
+        host: info.to.ip().to_string(),
         port: info.to.port(),
       };
       let at = External::new(info.at);
@@ -373,8 +374,8 @@ impl Connection {
     &mut self,
     env: Env,
     mut data: Uint8Array,
-    from: Option<Host>,
-    to: Option<Host>
+    from: Option<HostPort>,
+    to: Option<HostPort>
   ) -> napi::Result<Array> {
     // If we want to "preserve" the error
     // We have to then provide a Some(Result)
@@ -417,12 +418,12 @@ impl Connection {
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = send_info.map(|info| {
-      let from = Host {
-        addr: info.from.ip().to_string(),
+      let from = HostPort {
+        host: info.from.ip().to_string(),
         port: info.from.port(),
       };
-      let to = Host {
-        addr: info.to.ip().to_string(),
+      let to = HostPort {
+        host: info.to.ip().to_string(),
         port: info.to.port(),
       };
       let at = External::new(info.at);
@@ -440,7 +441,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn send_quantum_on_path(&self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+  pub fn send_quantum_on_path(&self, local_host: HostPort, peer_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -755,8 +756,8 @@ impl Connection {
   #[napi]
   pub fn probe_path(
     &mut self,
-    local_host: Host,
-    peer_host: Host
+    local_host: HostPort,
+    peer_host: HostPort
   ) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
@@ -779,7 +780,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn migrate_source(&mut self, local_host: Host) -> napi::Result<i64> {
+  pub fn migrate_source(&mut self, local_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -791,7 +792,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn migrate(&mut self, local_host: Host, peer_host: Host) -> napi::Result<i64> {
+  pub fn migrate(&mut self, local_host: HostPort, peer_host: HostPort) -> napi::Result<i64> {
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -881,7 +882,7 @@ impl Connection {
   }
 
   #[napi]
-  pub fn paths_iter(&self, from: Host) -> napi::Result<path::HostIter> {
+  pub fn paths_iter(&self, from: HostPort) -> napi::Result<path::HostIter> {
     let from_addr: SocketAddr = from.try_into().or_else(
       |err: io::Error| Err(
         napi::Error::new(napi::Status::InvalidArg, err.to_string())
@@ -982,8 +983,8 @@ impl Connection {
   #[napi]
   pub fn is_path_validated(
     &self,
-    from: Host,
-    to: Host
+    from: HostPort,
+    to: HostPort
   ) -> napi::Result<bool> {
     let from_addr: SocketAddr = from.try_into().or_else(
       |err: io::Error| Err(

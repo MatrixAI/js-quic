@@ -45,9 +45,9 @@ interface Connection {
   setSession(session: Uint8Array): void
   recv(data: Uint8Array, recvInfo: RecvInfo): number
   send(data: Uint8Array): [number, SendInfo | null]
-  sendOnPath(data: Uint8Array, from?: Host | undefined | null, to?: Host | undefined | null): [number, SendInfo | null]
+  sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null]
   sendQuantum(): number
-  sendQuantumOnPath(localHost: Host, peerHost: Host): number
+  sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number
   streamRecv(streamId: number, data: Uint8Array): [number, boolean]
   streamSend(streamId: number, data: Uint8Array, fin: boolean): number
   streamPriority(streamId: number, urgency: number, incremental: boolean): void
@@ -77,9 +77,9 @@ interface Connection {
   dgramMaxWritableLen(): number | null
   timeout(): number | null
   onTimeout(): void
-  probePath(localHost: Host, peerHost: Host): number
-  migrateSource(localHost: Host): number
-  migrate(localHost: Host, peerHost: Host): number
+  probePath(localHost: HostPort, peerHost: HostPort): number
+  migrateSource(localHost: HostPort): number
+  migrate(localHost: HostPort, peerHost: HostPort): number
   newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number
   activeSourceCids(): number
   maxActiveSourceCids(): number
@@ -88,7 +88,7 @@ interface Connection {
   pathEventNext(): PathEvent;
   retiredScidNext(): Uint8Array | null
   availableDcids(): number
-  pathsIter(from: Host): HostIter
+  pathsIter(from: HostPort): HostIter
   close(app: boolean, err: number, reason: Uint8Array): void
   traceId(): string
   applicationProto(): Uint8Array
@@ -101,7 +101,7 @@ interface Connection {
   isResumed(): boolean
   isInEarlyData(): boolean
   isReadable(): boolean
-  isPathValidated(from: Host, to: Host): boolean
+  isPathValidated(from: HostPort, to: HostPort): boolean
   isDraining(): boolean
   isClosed(): boolean
   isTimedOut(): boolean
@@ -113,16 +113,17 @@ interface Connection {
 
 interface ConnectionConstructor {
   connect(
+    serverName: string | undefined | null,
     scid: Uint8Array,
-    localHost: Host,
-    remoteHost: Host,
+    localHost: HostPort,
+    remoteHost: HostPort,
     config: Config
   ): Connection
   accept(
     scid: Uint8Array,
     odcid: Uint8Array | undefined | null,
-    localHost: Host,
-    remoteHost: Host,
+    localHost: HostPort,
+    remoteHost: HostPort,
     config: Config
   ): Connection
 };
@@ -191,30 +192,30 @@ type Stats = {
   peerMaxDatagramFrameSize?: number;
 };
 
-type Host = {
-  addr: string;
+type HostPort = {
+  host: string;
   port: number;
 };
 
 type SendInfo = {
   /** The local address the packet should be sent from. */
-  from: Host;
+  from: HostPort;
   /** The remote address the packet should be sent to. */
-  to: Host;
+  to: HostPort;
   /** The time to send the packet out for pacing. */
   at: QuicheTimeInstant;
 };
 
 type RecvInfo = {
   /** The remote address the packet was received from. */
-  from: Host
+  from: HostPort
   /** The local address the packet was sent to. */
-  to: Host
+  to: HostPort
 };
 
 type PathStats = {
-  localHost: Host
-  peerHost: Host
+  localHost: HostPort
+  peerHost: HostPort
   active: boolean
   recv: number
   sent: number
@@ -232,25 +233,25 @@ type PathStats = {
 
 type PathEvent = {
   type: 'New',
-  local: Host,
-  peer: Host,
+  local: HostPort,
+  peer: HostPort,
 } | {
   type: 'Validated',
-  local: Host,
-  peer: Host,
+  local: HostPort,
+  peer: HostPort,
 } | {
   type: 'Closed',
-  local: Host,
-  peer: Host,
+  local: HostPort,
+  peer: HostPort,
 } | {
   type: 'ReusedSourceConnectionId',
   seq: number,
-  old: [Host, Host],
-  new: [Host, Host],
+  old: [HostPort, HostPort],
+  new: [HostPort, HostPort],
 } | {
   type: 'PeerMigrated',
-  old: Host,
-  new: Host,
+  old: HostPort,
+  new: HostPort,
 };
 
 type StreamIter = {
@@ -258,7 +259,7 @@ type StreamIter = {
 };
 
 type HostIter = {
-  [Symbol.iterator](): Iterator<Host, void, void>;
+  [Symbol.iterator](): Iterator<HostPort, void, void>;
 };
 
 type PathStatsIter = {
@@ -271,7 +272,7 @@ export type {
   Type,
   ConnectionError,
   Stats,
-  Host,
+  HostPort as Host,
   SendInfo,
   RecvInfo,
   PathStats,

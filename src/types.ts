@@ -45,6 +45,26 @@ type Crypto = {
 
 type StreamId = Opaque<'StreamId', number>;
 
+/**
+ * Host is always an IP address
+ */
+type Host = Opaque<'Host', string>;
+
+/**
+ * Hostnames are resolved to IP addresses
+ */
+type Hostname = Opaque<'Hostname', string>;
+
+/**
+ * Ports are numbers from 0 to 65535
+ */
+type Port = Opaque<'Port', number>;
+
+/**
+ * Combination of `<HOST>:<PORT>`
+ */
+type Address = Opaque<'Address', string>;
+
 export type {
   Opaque,
   Callback,
@@ -52,4 +72,8 @@ export type {
   ConnectionId,
   Crypto,
   StreamId,
+  Host,
+  Hostname,
+  Port,
+  Address,
 };

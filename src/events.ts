@@ -1,5 +1,17 @@
 import type QUICConnection from "./QUICConnection";
 
+class QUICSocketErrorEvent extends Event {
+  public detail: Error;
+  constructor(
+    options: EventInit & {
+      detail: Error
+    }
+  ) {
+    super('error', options);
+    this.detail = options.detail;
+  }
+}
+
 class QUICServerErrorEvent extends Event {
   public detail: Error;
   constructor(

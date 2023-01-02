@@ -1,4 +1,4 @@
-import type { Crypto } from './types';
+import type { ConnectionId, Crypto } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
@@ -27,17 +27,21 @@ class QUICClient extends EventTarget {
     ops: Crypto;
   };
   protected config: Config;
+  protected connections: Map<ConnectionId, Connection>;
 
   public constructor({
-    crypto
+    crypto,
+    connections = new Map(),
   }: {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
-    }
+    };
+    connections?: Map<ConnectionId, Connection>;
   }) {
     super();
     this.crypto = crypto;
+    this.connections = connections;
 
     // The socket is registered to be readable
     // so it is indeed meant to be done with the `handleMessage`
@@ -147,13 +151,14 @@ class QUICClient extends EventTarget {
 
     // New QUIC connection, this will start to initiate the handshake
     const conn = quiche.Connection.connect(
+      null,
       scid,
       {
-        addr: this.socket.address().address,
+        host: this.socket.address().address,
         port: this.socket.address().port,
       },
       {
-        addr: host,
+        host: host,
         port: port
       },
       this.config

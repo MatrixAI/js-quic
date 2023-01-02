@@ -1,5 +1,5 @@
-import type { Callback, PromiseDeconstructed } from './types';
-import { Validator } from 'ip-num';
+import type { Callback, PromiseDeconstructed, Host } from './types';
+import { IPv4, IPv6, Validator } from 'ip-num';
 
 /**
  * Convert callback-style to promise-style
@@ -88,6 +88,24 @@ function buildAddress(host: string, port: number = 0): string {
     address = `${host}:${port}`;
   }
   return address;
+}
+
+/**
+ * Zero IPs should be resolved to localhost when used as the target
+ * This is usually done automatically, but utp-native doesn't do this
+ */
+function resolvesZeroIP(ip: Host): Host {
+  const [isIPv4] = Validator.isValidIPv4String(ip);
+  const [isIPv6] = Validator.isValidIPv6String(ip);
+  const zeroIPv4 = new IPv4('0.0.0.0');
+  const zeroIPv6 = new IPv6('::');
+  if (isIPv4 && new IPv4(ip).isEquals(zeroIPv4)) {
+    return '127.0.0.1' as Host;
+  } else if (isIPv6 && new IPv6(ip).isEquals(zeroIPv6)) {
+    return '::1' as Host;
+  } else {
+    return ip;
+  }
 }
 
 export {

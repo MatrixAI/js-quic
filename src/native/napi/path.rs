@@ -9,18 +9,18 @@ use crate::connection;
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum PathEvent {
-  New { local: connection::Host, peer: connection::Host},
-  Validated { local: connection::Host, peer: connection::Host },
-  FailedValidation { local: connection::Host, peer: connection::Host },
-  Closed { local: connection::Host, peer: connection::Host },
+  New { local: connection::HostPort, peer: connection::HostPort },
+  Validated { local: connection::HostPort, peer: connection::HostPort },
+  FailedValidation { local: connection::HostPort, peer: connection::HostPort },
+  Closed { local: connection::HostPort, peer: connection::HostPort },
   ReusedSourceConnectionId {
     seq: u64,
-    old: (connection::Host, connection::Host),
-    new: (connection::Host, connection::Host),
+    old: (connection::HostPort, connection::HostPort),
+    new: (connection::HostPort, connection::HostPort),
   },
   PeerMigrated {
-    old: connection::Host,
-    new: connection::Host,
+    old: connection::HostPort,
+    new: connection::HostPort,
   }
 }
 
@@ -28,29 +28,29 @@ impl From<quiche::PathEvent> for PathEvent {
   fn from(path_event: quiche::PathEvent) -> Self {
     match path_event {
       quiche::PathEvent::New(local, peer) => PathEvent::New {
-        local: connection::Host::from(local),
-        peer: connection::Host::from(peer),
+        local: connection::HostPort::from(local),
+        peer: connection::HostPort::from(peer),
       },
       quiche::PathEvent::Validated(local, peer) => PathEvent::Validated {
-        local: connection::Host::from(local),
-        peer: connection::Host::from(peer),
+        local: connection::HostPort::from(local),
+        peer: connection::HostPort::from(peer),
       },
       quiche::PathEvent::FailedValidation(local, peer) => PathEvent::FailedValidation {
-        local: connection::Host::from(local),
-        peer: connection::Host::from(peer),
+        local: connection::HostPort::from(local),
+        peer: connection::HostPort::from(peer),
       },
       quiche::PathEvent::Closed(local, peer) => PathEvent::Closed {
-        local: connection::Host::from(local),
-        peer: connection::Host::from(peer),
+        local: connection::HostPort::from(local),
+        peer: connection::HostPort::from(peer),
       },
       quiche::PathEvent::ReusedSourceConnectionId(seq, old, new) => PathEvent::ReusedSourceConnectionId {
         seq,
-        old: (connection::Host::from(old.0), connection::Host::from(old.1)),
-        new: (connection::Host::from(new.0), connection::Host::from(new.1)),
+        old: (connection::HostPort::from(old.0), connection::HostPort::from(old.1)),
+        new: (connection::HostPort::from(new.0), connection::HostPort::from(new.1)),
       },
       quiche::PathEvent::PeerMigrated(old, new) => PathEvent::PeerMigrated {
-        old: connection::Host::from(old),
-        new: connection::Host::from(new),
+        old: connection::HostPort::from(old),
+        new: connection::HostPort::from(new),
       },
     }
   }
@@ -62,7 +62,7 @@ pub struct HostIter(pub (crate) quiche::SocketAddrIter);
 
 #[napi]
 impl Generator for HostIter {
-  type Yield = connection::Host;
+  type Yield = connection::HostPort;
   type Next = ();
   type Return = ();
 
@@ -79,8 +79,8 @@ impl Generator for HostIter {
 /// that I cannot access
 #[napi(object)]
 pub struct PathStats {
-  pub local_host: connection::Host,
-  pub peer_host: connection::Host,
+  pub local_host: connection::HostPort,
+  pub peer_host: connection::HostPort,
   pub active: bool,
   pub recv: i64,
   pub sent: i64,
@@ -99,8 +99,8 @@ pub struct PathStats {
 impl From<quiche::PathStats> for PathStats {
   fn from(path_stats: quiche::PathStats) -> Self {
     PathStats {
-      local_host: connection::Host::from(path_stats.local_addr),
-      peer_host: connection::Host::from(path_stats.peer_addr),
+      local_host: connection::HostPort::from(path_stats.local_addr),
+      peer_host: connection::HostPort::from(path_stats.peer_addr),
       active: path_stats.active,
       recv: path_stats.recv as i64,
       sent: path_stats.sent as i64,
