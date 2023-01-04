@@ -206,6 +206,9 @@ class QUICSocket extends EventTarget {
     // if it is for handling a new connection
     // Then we must use a "single" server to do this
     // But on the client side
+    // The DCID is the ID that the remote peer picked for us.
+    // Unlike the SCID it is guaranteed to exist for all QUIC packets.
+    // const dcid = header.dcid;
 
 
 
