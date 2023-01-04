@@ -1,3 +1,7 @@
+import type QUICClient from './QUICClient';
+import type QUICServer from './QUICServer';
+import type QUICConnection from './QUICConnection';
+import type { ConnectionId, Crypto } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
@@ -28,6 +32,13 @@ import * as utils from './utils';
 
 // so that's my problem
 
+// we create a connection map?
+// and create a type for it
+// but who creates it
+// it's not the quic socket?
+// or do we keep it here?
+// and if so... how does servers and shit make use of it?
+
 interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
@@ -36,6 +47,19 @@ class QUICSocket extends EventTarget {
   protected host: string;
   protected port: number;
   protected logger: Logger;
+
+  protected server: QUICServer;
+
+  // This is being shared between the server and clients
+  protected connectionMap: Map<ConnectionId, QUICConnection>;
+
+  // There's actually only one thing I need here
+  // The the other stuff is not relevant
+  // Although the same type could be used over and over?
+  protected crypto: {
+    key: ArrayBuffer;
+    ops: Crypto;
+  };
 
   /**
    * Handle the datagram from UDP socket
@@ -48,21 +72,142 @@ class QUICSocket extends EventTarget {
    * the data to.
    */
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+    // The data buffer may have multiple coalesced QUIC packets.
+    // This header is parsed from the first packet.
     let header: Header;
     try {
-      // Why we would we ever use anything else?
-      // This is a constant!
       header = quiche.Header.fromSlice(
         data,
         quiche.MAX_CONN_ID_LEN
       );
     } catch (e) {
-      // Only `InvalidPacket` is a valid error here
+      // `InvalidPacket` means that this is not a QUIC packet.
+      // If so, then we just ignore the packet.
       if (e.message !== 'InvalidPacket') {
+        // Only emit an error if it is not an `InvalidPacket` error.
         this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
       }
       return;
     }
+
+    // Apparently if it is a UDP datagram
+    // it could be a QUIC datagram, and not part of any connection
+    // However I don't know how the DCID would work in a QUIC dgram
+    // We have not explored this yet
+
+    // const dcid = Buffer.from(header.dcid);
+
+    // const dcidDerived = utils.bufferWrap(
+    //   await this.crypto.ops.sign(
+    //     this.crypto.key,
+    //     dcid
+    //   )
+    // ).subarray(0, quiche.MAX_CONN_ID_LEN);
+
+    // dcidPeer <- dcid of the peer
+    // scidPeer <- scid of the peer?
+    // but we have a packet
+    // dcidPacket
+
+    // When a client sends the first packet
+    // I might say that a connection hasn't been created until it is ready
+    // However this means the ID might not exist in the map
+    // If that's the case, then wouldn't that mean...?
+    // No because the client generated SCID is what is the DCID coming back in
+    // At that point... that has to work that way
+
+    // Destination Connection ID is the ID the remote peer chose for us.
+    const dcid = utils.toConnectionId(header.dcid);
+
+    // Derive our SCID using HMAC signing.
+    const dcidDerived = new Uint8Array(
+      await this.crypto.ops.sign(
+        this.crypto.key,
+        header.dcid
+      ),
+      0,
+      quiche.MAX_CONN_ID_LEN
+    );
+
+    // This Source Connection ID here represents the ID we choose for ourselves.
+    const scid = utils.toConnectionId(dcidDerived);
+
+    // Now both must be checked
+    let conn;
+    if (
+      !this.connectionMap.has(dcid) &&
+      !this.connectionMap.has(scid)
+    ) {
+      // It doesn't exist
+      // possibly new connection
+      // Tell the server to handle it
+      // The server has to distinguish the socket
+
+      // If a server is not registered
+      // then this packet is useless, and we can discard it
+      if (this.server == null) {
+        return;
+      }
+
+      // This is an event handler
+      // This will push events to calling functions in other classes
+      // Those classes may end up calling back to this object to trigger sends
+      conn = await this.server.handleNewConnection(data, rinfo, header);
+
+      // If there's no connection yet
+      // Then the server is in the middle of the version negotiation/stateless retry
+      // or the handshake process
+      if (conn == null) {
+        return;
+      }
+
+    } else {
+      // Connection exists
+      // could be a server conn
+      // could be a client conn
+      // just propagate it...
+
+      conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
+      // If we have a connection
+      // We can proceed to tell tehe conn to do things
+
+    }
+
+    // Do we do the same thing here?
+    // Is the idea we write to the socket here?
+    // Or can we pass it on... and it will end up managing it from there
+    // But if so, how do we ensure we can write the sockets?
+
+
+
+
+    // Because of `toString('hex')`
+
+
+    // We must then "hash" it with hmac system
+    // This has to be done BEFORE we hand off to the server
+    // Since we MUST check the connection map
+    // To know whether to hand off to a client or server
+    // Furthermore can we then simplify to just a connection!?
+    // We must have the connection map here
+    // That connection map must then be shared with the client and server
+    // But it must exist here
+
+
+
+
+
+
+    // We have to dispatch to the appropriate system
+    // Depending on the connection ID
+    // note that if it is not an existing connection ID
+    // Then we assume that means it is for creating a new one
+    // If it is not, it is discarded
+    // if it is for handling a new connection
+    // Then we must use a "single" server to do this
+    // But on the client side
+
+
 
     // If this packet is a short header
     // the DCID is decoded based on the dcid length
@@ -129,12 +274,18 @@ class QUICSocket extends EventTarget {
   // furthermore you have to add handlers
   // or the muxing/demuxing handlers
   public constructor({
+    crypto,
     logger
   }: {
+    crypto: {
+      key: ArrayBuffer;
+      ops: Crypto;
+    },
     logger?: Logger;
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
+    this.crypto = crypto;
   }
 
   /**
@@ -232,10 +383,59 @@ class QUICSocket extends EventTarget {
     this.socket.close();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
+
+  /**
+   * Sends UDP datagram
+   */
+  public async send(data, offset, length, port, address) {
+    return new Promise<void>((resolve, reject) => {
+      this.socket.send(data, offset, length, port, address, (err) => {
+        if (err != null) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Registers a client to the socket
+   * This is a new client, but clients don't die by itself?
+   */
+  public addClient(client: QUICClient) {
+
+  }
+
+  /**
+   * Sets a single server to the socket
+   * You can only have 1 server for the socket
+   * The socket message handling can dispatch new connections to the new server
+   * Consider it is an event... therefore a new connection
+   * Although that would be if there's an event being emitted
+   * One way is to make QUICSocket an EventTarget
+   * Then for server to add a handler to it, by doing addEventListener('connection', ...)
+   * Or something else
+   * But why bother with this pub/sub system
+   * Just go straight to calling a thing
+   * We can call this.server.handleConnection()
+   * Why `handleConnection` because technically it's built on top of the handleMessage
+   * Thatbecomes the key idea there
+   * handleNewConnection
+   * And all sorts of other stuff!
+   * Or whatever it needs to be
+   */
+  public setServer(server: QUICServer) {
+    this.server = server;
+  }
+
 }
 
 export default QUICSocket;
 
+// KMS at the root level just for managing its own key
+// Vault system for managing token lifecycles
+// - all sorts of goodies here
 
 // TODO:
 // if the quic socket is shared
@@ -244,3 +444,43 @@ export default QUICSocket;
 // nah something has to maintain the collection structure
 // it's possible that multiple clients keep allocating themselves to the client
 // perhaps even multiple clients and multiple servers
+
+/*
+
+const quicSocket = new QUICSocket();
+await quicSocket.start({
+  host: '::',
+  port: 0
+});
+
+// Here we can start doing things
+
+
+// This way we can complete connections
+// The socket you have to register the client and shit
+// But you don't directly work against
+// It has to make use of it!
+// That's the key point!!!
+
+const c1 = new QUICClient({ socket: quicSocket });
+await c1.start();
+
+const c2 = new QUICClient({ socket: quicSocket });
+await c2.start();
+
+const s1 = new QUICServer({ socket: quicSocket });
+await s1.start();
+
+When they start it ends up calling the rest of the system.
+
+The socket is shared between the 3.
+
+If it is not passed in, it will create their own socket and will be registered appropriately.
+
+Remember you can either pass a socket, or host/port combination to start things independently.
+
+Unless you want to be able to rebind?
+
+
+
+*/

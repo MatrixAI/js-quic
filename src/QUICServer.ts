@@ -7,6 +7,7 @@ import QUICConnection from './QUICConnection';
 import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
+import QUICSocket from './QUICSocket';
 
 // When we start a QUIC server
 // we have to start with some TLS details
@@ -37,7 +38,9 @@ class QUICServer extends EventTarget {
   // but that's from the one that is registered
   // so this is a bit of a problem!
 
-  protected socket: dgram.Socket;
+  // protected socket: dgram.Socket;
+  protected socket: QUICSocket;
+
   protected host: string;
   protected port: number;
   protected logger: Logger;
@@ -47,6 +50,62 @@ class QUICServer extends EventTarget {
   };
   protected config: Config;
   protected connections: Map<ConnectionId, QUICConnection> = new Map();
+
+  //
+  public async handleNewConnection(
+    data,
+    rinfo,
+    header,
+  ): Promise<QUICConnection | undefined> {
+
+    // We may return nothing
+    // in which case nothing occurs
+
+    if (header.ty !== quiche.Type.Initial) {
+      return;
+    }
+    if (!quiche.versionIsSupported(header.version)) {
+      this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
+      const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      const versionDatagramLength = quiche.negotiateVersion(
+        header.scid,
+        header.dcid,
+        versionDatagram
+      );
+      this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
+      try {
+        await this.socket.send(
+          versionDatagram,
+          0,
+          versionDatagramLength,
+          rinfo.port,
+          rinfo.address,
+        );
+      } catch (e) {
+        this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+      }
+      this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
+      return;
+    }
+
+    const token: Uint8Array | undefined = header.token;
+    if (token == null) {
+      return;
+    }
+
+    // Stateless Retry
+    if (token.byteLength === 0) {
+    }
+
+    // Here we end up creating a connection
+    const conn = quiche.Connection.accept();
+
+
+    // If we are going to do this
+    // Do we call back to the socket
+    // meaning?
+
+  }
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
     const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
