@@ -55,245 +55,245 @@ class QUICServer extends EventTarget {
     return this.socket.port;
   }
 
-  protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-    const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
-    this.logger.debug(`Handling UDP packet from ${peerAddress}`);
+  // protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+  //   const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
+  //   this.logger.debug(`Handling UDP packet from ${peerAddress}`);
 
-    const socketSend = utils.promisify(this.socket.send).bind(this.socket);
-    let header: Header;
-    try {
-      // Maximum length of a connection ID
-      header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
-    } catch (e) {
-      // Only `InvalidPacket` is a valid error here
-      if (e.message !== 'InvalidPacket') {
-        this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
-        return;
-      }
+  //   const socketSend = utils.promisify(this.socket.send).bind(this.socket);
+  //   let header: Header;
+  //   try {
+  //     // Maximum length of a connection ID
+  //     header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
+  //   } catch (e) {
+  //     // Only `InvalidPacket` is a valid error here
+  //     if (e.message !== 'InvalidPacket') {
+  //       this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+  //       return;
+  //     }
 
-      // We need a way to identify the packet
-      this.logger.debug(`UDP packet from ${peerAddress} is not a QUIC packet`);
-      return;
-    }
+  //     // We need a way to identify the packet
+  //     this.logger.debug(`UDP packet from ${peerAddress} is not a QUIC packet`);
+  //     return;
+  //   }
 
-    this.logger.debug(
-      `UDP packet is a ${Object.keys(quiche.Type)[header.ty]} QUIC packet`
-    );
+  //   this.logger.debug(
+  //     `UDP packet is a ${Object.keys(quiche.Type)[header.ty]} QUIC packet`
+  //   );
 
-    const dcid: Buffer = Buffer.from(header.dcid);
-    const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
-    const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
+  //   const dcid: Buffer = Buffer.from(header.dcid);
+  //   const dcidSignature = utils.bufferWrap(await this.crypto.ops.sign(this.crypto.key, dcid));
+  //   const connId = dcidSignature.subarray(0, quiche.MAX_CONN_ID_LEN);
 
-    // This is going to be the wrapped QUICConnection
-    let connection: QUICConnection;
+  //   // This is going to be the wrapped QUICConnection
+  //   let connection: QUICConnection;
 
-    // Check if this packet corresponds to an existing connection
-    if (
-      !this.connections.has(dcid.toString('hex') as ConnectionId) &&
-      !this.connections.has(connId.toString('hex') as ConnectionId)
-    ) {
-      this.logger.debug(`QUIC packet is for a new connection`);
-      if (header.ty !== quiche.Type.Initial) {
-        this.logger.debug(`QUIC packet must be Initial for new connections`);
-        return;
-      }
-      // Version Negotiation
-      if (!quiche.versionIsSupported(header.version)) {
-        this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
-        const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-        const versionDatagramLength = quiche.negotiateVersion(
-          header.scid,
-          header.dcid,
-          versionDatagram
-        );
-        this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
-        try {
-          await socketSend(
-            versionDatagram,
-            0,
-            versionDatagramLength,
-            rinfo.port,
-            rinfo.address,
-          );
-        } catch (e) {
-          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
-        }
-        this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
-        return;
-      }
+  //   // Check if this packet corresponds to an existing connection
+  //   if (
+  //     !this.connections.has(dcid.toString('hex') as ConnectionId) &&
+  //     !this.connections.has(connId.toString('hex') as ConnectionId)
+  //   ) {
+  //     this.logger.debug(`QUIC packet is for a new connection`);
+  //     if (header.ty !== quiche.Type.Initial) {
+  //       this.logger.debug(`QUIC packet must be Initial for new connections`);
+  //       return;
+  //     }
+  //     // Version Negotiation
+  //     if (!quiche.versionIsSupported(header.version)) {
+  //       this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
+  //       const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+  //       const versionDatagramLength = quiche.negotiateVersion(
+  //         header.scid,
+  //         header.dcid,
+  //         versionDatagram
+  //       );
+  //       this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
+  //       try {
+  //         await socketSend(
+  //           versionDatagram,
+  //           0,
+  //           versionDatagramLength,
+  //           rinfo.port,
+  //           rinfo.address,
+  //         );
+  //       } catch (e) {
+  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+  //       }
+  //       this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
+  //       return;
+  //     }
 
-      const token: Uint8Array | undefined = header.token;
-      if (token == null) {
-        this.logger.debug(`QUIC Initial packet must have a token buffer even if empty`);
-        return;
-      }
+  //     const token: Uint8Array | undefined = header.token;
+  //     if (token == null) {
+  //       this.logger.debug(`QUIC Initial packet must have a token buffer even if empty`);
+  //       return;
+  //     }
 
-      // Stateless Retry
-      if (token.byteLength === 0) {
-        this.logger.debug(`QUIC packet token is empty, performing stateless retry`);
+  //     // Stateless Retry
+  //     if (token.byteLength === 0) {
+  //       this.logger.debug(`QUIC packet token is empty, performing stateless retry`);
 
-        const token = await this.mintToken(
-          Buffer.from(header.dcid),
-          rinfo.address
-        );
+  //       const token = await this.mintToken(
+  //         Buffer.from(header.dcid),
+  //         rinfo.address
+  //       );
 
-        const retryDatagram = Buffer.allocUnsafe(
-          quiche.MAX_DATAGRAM_SIZE
-        );
-        const retryDatagramLength = quiche.retry(
-          header.scid, // Client initial packet source ID
-          header.dcid, // Client initial packet destination ID
-          connId, // Server's new source ID that is derived
-          token,
-          header.version,
-          retryDatagram
-        );
-        this.logger.debug(`Send Retry packet to ${peerAddress}`);
-        try {
-          await socketSend(
-            retryDatagram,
-            0,
-            retryDatagramLength,
-            rinfo.port,
-            rinfo.address,
-          );
-        } catch (e) {
-          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
-        }
-        this.logger.debug(`Sent Retry packet to ${peerAddress}`);
-        return;
-      }
+  //       const retryDatagram = Buffer.allocUnsafe(
+  //         quiche.MAX_DATAGRAM_SIZE
+  //       );
+  //       const retryDatagramLength = quiche.retry(
+  //         header.scid, // Client initial packet source ID
+  //         header.dcid, // Client initial packet destination ID
+  //         connId, // Server's new source ID that is derived
+  //         token,
+  //         header.version,
+  //         retryDatagram
+  //       );
+  //       this.logger.debug(`Send Retry packet to ${peerAddress}`);
+  //       try {
+  //         await socketSend(
+  //           retryDatagram,
+  //           0,
+  //           retryDatagramLength,
+  //           rinfo.port,
+  //           rinfo.address,
+  //         );
+  //       } catch (e) {
+  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+  //       }
+  //       this.logger.debug(`Sent Retry packet to ${peerAddress}`);
+  //       return;
+  //     }
 
-      const odcid = await this.validateToken(
-        Buffer.from(token),
-        rinfo.address,
-      );
+  //     const odcid = await this.validateToken(
+  //       Buffer.from(token),
+  //       rinfo.address,
+  //     );
 
-      if (odcid == null) {
-        this.logger.debug(`QUIC packet token failed validation`);
-        return;
-      }
+  //     if (odcid == null) {
+  //       this.logger.debug(`QUIC packet token failed validation`);
+  //       return;
+  //     }
 
-      if (connId.byteLength !== dcid.byteLength) {
-        this.logger.debug(`QUIC packet token failed validation`);
-        return;
-      }
+  //     if (connId.byteLength !== dcid.byteLength) {
+  //       this.logger.debug(`QUIC packet token failed validation`);
+  //       return;
+  //     }
 
-      const scid = Buffer.from(header.dcid);
+  //     const scid = Buffer.from(header.dcid);
 
-      this.logger.debug(`Accepting new connection from QUIC packet`);
-      const conn = quiche.Connection.accept(
-        scid, // This is actually the originally derived DCID
-        odcid, // This is the original DCID...
-        {
-          host: this.socket.address().address,
-          port: this.socket.address().port
-        },
-        {
-          host: rinfo.address,
-          port: rinfo.port
-        },
-        this.config
-      );
+  //     this.logger.debug(`Accepting new connection from QUIC packet`);
+  //     const conn = quiche.Connection.accept(
+  //       scid, // This is actually the originally derived DCID
+  //       odcid, // This is the original DCID...
+  //       {
+  //         host: this.socket.address().address,
+  //         port: this.socket.address().port
+  //       },
+  //       {
+  //         host: rinfo.address,
+  //         port: rinfo.port
+  //       },
+  //       this.config
+  //     );
 
-      // Let's use hex strings instead
-      const connectionId = scid.toString('hex') as ConnectionId;
+  //     // Let's use hex strings instead
+  //     const connectionId = scid.toString('hex') as ConnectionId;
 
-      connection = new QUICConnection({
-        // Note that if a connection ID changes, how do we deal with this?
-        connectionId,
-        connection: conn,
-        connections: this.connections,
-        handleTimeout: this.handleTimeout,
-        logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
-      });
+  //     connection = new QUICConnection({
+  //       // Note that if a connection ID changes, how do we deal with this?
+  //       connectionId,
+  //       connection: conn,
+  //       connections: this.connections,
+  //       handleTimeout: this.handleTimeout,
+  //       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
+  //     });
 
-      // Nobody else really has acess to this
-      // The problem is that we don't really hand over the connection the end user
-      // Therefore they wouldn't event know to associate an error handler on the connection
-      // Which means any exceptions would end up being thrown into the node runtime and crash it
-      // So how would we deal with this?
+  //     // Nobody else really has acess to this
+  //     // The problem is that we don't really hand over the connection the end user
+  //     // Therefore they wouldn't event know to associate an error handler on the connection
+  //     // Which means any exceptions would end up being thrown into the node runtime and crash it
+  //     // So how would we deal with this?
 
-      // The user already has to attach an error handler for every server
-      // then attach it again for every connection
-      connection.addEventListener('error', () => {
-        console.log('CONNECTION HAS A ERROR');
-      });
+  //     // The user already has to attach an error handler for every server
+  //     // then attach it again for every connection
+  //     connection.addEventListener('error', () => {
+  //       console.log('CONNECTION HAS A ERROR');
+  //     });
 
-      this.connections.set(
-        connectionId,
-        connection
-      );
+  //     this.connections.set(
+  //       connectionId,
+  //       connection
+  //     );
 
-      this.dispatchEvent(
-        new events.QUICConnectionEvent({ detail: connection })
-      );
+  //     this.dispatchEvent(
+  //       new events.QUICConnectionEvent({ detail: connection })
+  //     );
 
-    } else {
-      this.logger.debug(`QUIC packet is for an existing connection`);
-      connection = this.connections.get(
-        dcid.toString('hex') as ConnectionId
-      )!;
-      if (connection == null) {
-        connection = this.connections.get(
-          connId.toString('hex') as ConnectionId
-        )!;
-      }
-    }
+  //   } else {
+  //     this.logger.debug(`QUIC packet is for an existing connection`);
+  //     connection = this.connections.get(
+  //       dcid.toString('hex') as ConnectionId
+  //     )!;
+  //     if (connection == null) {
+  //       connection = this.connections.get(
+  //         connId.toString('hex') as ConnectionId
+  //       )!;
+  //     }
+  //   }
 
-    const recvInfo = {
-      to: {
-        host: this.socket.address().address,
-        port: this.socket.address().port
-      },
-      from: {
-        host: rinfo.address,
-        port: rinfo.port
-      },
-    };
+  //   const recvInfo = {
+  //     to: {
+  //       host: this.socket.address().address,
+  //       port: this.socket.address().port
+  //     },
+  //     from: {
+  //       host: rinfo.address,
+  //       port: rinfo.port
+  //     },
+  //   };
 
-    connection.recv(data, recvInfo);
+  //   connection.recv(data, recvInfo);
 
-    // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
-    // When the connection timer expires (that is, any time on_timeout() is also called).
-    // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
-    // When the application receives data from the peer (for example any time stream_recv() is called).
+  //   // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
+  //   // When the connection timer expires (that is, any time on_timeout() is also called).
+  //   // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
+  //   // When the application receives data from the peer (for example any time stream_recv() is called).
 
-    const ps: Array<Promise<void>> = [];
-    for (const connection of this.connections.values()) {
-      const data = connection.send();
-      if (data == null) {
-        break;
-      }
-      const [dataSend, sendInfo] = data;
-      ps.push((async () => {
-        try {
-          await socketSend(
-            dataSend,
-            sendInfo.to.port,
-            sendInfo.to.host
-          );
-        } catch (e) {
-          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
-        }
-      })());
-    }
-    await Promise.all(ps);
+  //   const ps: Array<Promise<void>> = [];
+  //   for (const connection of this.connections.values()) {
+  //     const data = connection.send();
+  //     if (data == null) {
+  //       break;
+  //     }
+  //     const [dataSend, sendInfo] = data;
+  //     ps.push((async () => {
+  //       try {
+  //         await socketSend(
+  //           dataSend,
+  //           sendInfo.to.port,
+  //           sendInfo.to.host
+  //         );
+  //       } catch (e) {
+  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
+  //       }
+  //     })());
+  //   }
+  //   await Promise.all(ps);
 
-    // seems we iterate over the connections that are closed here
-    // and end up removing them
-    // and this is done on all the connections
-    // seems kind of slow
-    // but that seems to be an issue
+  //   // seems we iterate over the connections that are closed here
+  //   // and end up removing them
+  //   // and this is done on all the connections
+  //   // seems kind of slow
+  //   // but that seems to be an issue
 
-    for (const connection of this.connections.values()) {
-      if (connection.isClosed()) {
-        this.connections.delete(connection.connectionId);
-      }
-    }
+  //   for (const connection of this.connections.values()) {
+  //     if (connection.isClosed()) {
+  //       this.connections.delete(connection.connectionId);
+  //     }
+  //   }
 
-    this.logger.debug(`Handled UDP packet from ${peerAddress}`);
-  };
+  //   this.logger.debug(`Handled UDP packet from ${peerAddress}`);
+  // };
 
   protected handleTimeout = async () => {
     const socketSend = utils.promisify(this.socket.send).bind(this.socket);

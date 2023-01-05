@@ -5,12 +5,18 @@ import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as errors from './errors';
 import * as events from './events';
+import {
+  CreateDestroy,
+  ready,
+} from '@matrixai/async-init/dist/CreateDestroy';
 
 /**
  * Think of this as equivalent to `net.Socket`.
  * Errors here are emitted to the connection only.
  * Not to the server.
  */
+interface QUICConnection extends CreateDestroy {}
+@CreateDestroy()
 class QUICConnection extends EventTarget {
 
   public readonly connectionId: ConnectionId;
