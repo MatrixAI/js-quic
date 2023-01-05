@@ -13,39 +13,15 @@ import { Validator } from 'ip-num';
 import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
-
-// We can use this to share a socket
-// because this has to start a socket
-// but also, this means when we "start"
-// you may start with a pre-existing socket?
-// Plus do we mean to have a QUICPeer
-// and we form connections off that socket too?
-// or just form connections directly?
-
-// form client connection directly
-// take as a a server
-// we start with a QUIC socket
-// you can create connections off it
-// and you can create a server off it
-// what does it mean to be a client?
-// it's more than a generic counnection right
-
-// so that's my problem
-
-// we create a connection map?
-// and create a type for it
-// but who creates it
-// it's not the quic socket?
-// or do we keep it here?
-// and if so... how does servers and shit make use of it?
+import * as errors from './errors';
 
 interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
 
   protected socket: dgram.Socket;
-  protected host: string;
-  protected port: number;
+  protected _host: string;
+  protected _port: number;
   protected logger: Logger;
 
   protected server: QUICServer;
@@ -60,6 +36,16 @@ class QUICSocket extends EventTarget {
     key: ArrayBuffer;
     ops: Crypto;
   };
+
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public get host() {
+    return this._host;
+  }
+
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public get port() {
+    return this._port;
+  }
 
   /**
    * Handle the datagram from UDP socket
@@ -271,6 +257,16 @@ class QUICSocket extends EventTarget {
 
   };
 
+  /**
+   * Handle error on the DGRAM socket
+   */
+  protected handleError = (e: Error) => {
+    this.dispatchEvent(
+      new events.QUICSocketErrorEvent({ detail: e })
+    );
+  };
+
+
   // you can proceed to run a server in it
   // by telling the socket to create a server
   // you cannot run 2 servers with the same socket
@@ -336,8 +332,9 @@ class QUICSocket extends EventTarget {
     });
     const { p: errorP, rejectP: rejectErrorP, } = utils.promise();
     this.socket.once('error', rejectErrorP);
-    // This uses `getaddrinfo` under the hood, which respects the hosts file
-    // Which is equivalent to `dns.lookup`
+    // This resolves DNS via `getaddrinfo` under the hood.
+    // It which respects the hosts file.
+    // This makes it equivalent to `dns.lookup`.
     const socketBind = utils.promisify(this.socket.bind).bind(this.socket);
     const socketBindP = socketBind(port, host);
     try {
@@ -352,36 +349,19 @@ class QUICSocket extends EventTarget {
     this.socket.removeListener('error', rejectErrorP);
     const socketAddress = this.socket.address();
     // This is the resolved IP, not the original hostname
-    this.host = socketAddress.address;
-    this.port = socketAddress.port;
-    this.socket.on('error', (e) => {
-      this.dispatchEvent(
-        new events.QUICSocketErrorEvent({ detail: e })
-      );
-    });
-    address = utils.buildAddress(this.host, this.port);
+    this._host = socketAddress.address;
+    this._port = socketAddress.port;
+    this.socket.on('message', this.handleMessage);
+    this.socket.on('error', this.handleError);
+    address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
-
-    // In the QUIC client we have to use dns.lookup
-    // to get the peer address
-    // Cause the UDP socket here is locally bound
-
-    // If the `host` is a hostname
-    // Then DNS must be used to look it up
-    // We must resolve to the addresses
 
     // standard TLS situation would be relevant here
     // but only if we want to do TLS name verification
-
-    // So we always create a socket in this way
-    // the question is that you must create a socket FIRST
-    // before passing it around, it's a separate object
-    // then when you do an asynchronous creation
-    // you do need to do the construction!
   }
 
   public async stop(): Promise<void> {
-    const address = utils.buildAddress(this.host, this.port);
+    const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
     this.socket.close();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);

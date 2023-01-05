@@ -3,22 +3,16 @@ import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import { Validator } from 'ip-num';
 import Logger from '@matrixai/logger';
+import {
+  StartStop,
+  ready,
+} from '@matrixai/async-init/dist/StartStop';
 import QUICConnection from './QUICConnection';
 import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
+import * as errors from './errors';
 import QUICSocket from './QUICSocket';
-
-// When we start a QUIC server
-// we have to start with some TLS details
-// This has to be done as passed data to load
-// We also start a QUIC config here
-// do we need to have a separate object?
-// I think not
-// It's not necessary
-
-// You can have a QUICServer work like TCPServer
-// Or it can work like TCPSocket
 
 
 /**
@@ -30,81 +24,35 @@ import QUICSocket from './QUICSocket';
  * 'error'
  * 'listen'
  */
+
+interface QUICServer extends StartStop {}
+@StartStop()
 class QUICServer extends EventTarget {
 
-  // we need to make the error event emit out side
-  // ith as to be default
-  // stopImmediatePropagation
-  // but that's from the one that is registered
-  // so this is a bit of a problem!
-
-  // protected socket: dgram.Socket;
   protected socket: QUICSocket;
 
-  protected host: string;
-  protected port: number;
+  // Host and port of the server?
+  // Well this is not relevnat here
+  // protected host: string;
+  // protected port: number;
+
+  public readonly isSocketShared: boolean;
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
     ops: Crypto;
   };
   protected config: Config;
-  protected connections: Map<ConnectionId, QUICConnection> = new Map();
-
-  //
-  public async handleNewConnection(
-    data,
-    rinfo,
-    header,
-  ): Promise<QUICConnection | undefined> {
-
-    // We may return nothing
-    // in which case nothing occurs
-
-    if (header.ty !== quiche.Type.Initial) {
-      return;
-    }
-    if (!quiche.versionIsSupported(header.version)) {
-      this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
-      const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      const versionDatagramLength = quiche.negotiateVersion(
-        header.scid,
-        header.dcid,
-        versionDatagram
-      );
-      this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
-      try {
-        await this.socket.send(
-          versionDatagram,
-          0,
-          versionDatagramLength,
-          rinfo.port,
-          rinfo.address,
-        );
-      } catch (e) {
-        this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
-      }
-      this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
-      return;
-    }
-
-    const token: Uint8Array | undefined = header.token;
-    if (token == null) {
-      return;
-    }
-
-    // Stateless Retry
-    if (token.byteLength === 0) {
-    }
-
-    // Here we end up creating a connection
-    const conn = quiche.Connection.accept();
 
 
-    // If we are going to do this
-    // Do we call back to the socket
-    // meaning?
+  @ready(new errors.ErrorQUICServerNotRunning())
+  public get host() {
+    return this.socket.host;
+  }
 
+  @ready(new errors.ErrorQUICServerNotRunning())
+  public get port() {
+    return this.socket.port;
   }
 
   protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
@@ -377,24 +325,31 @@ class QUICServer extends EventTarget {
     }
   };
 
-
-  // The crypto in this case is **necessary**
-  // It is necessary to sign and stuff
-  // So we cannot just be a Buffer
-  // It's got to be an ArrayBuffer
   public constructor({
     crypto,
+    socket,
     logger,
   }: {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
     },
+    socket?: QUICSocket;
     logger?: Logger;
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
     this.crypto = crypto;
+    if (socket == null) {
+      this.socket = new QUICSocket({
+        crypto,
+        logger: this.logger.getChild(QUICSocket.name)
+      });
+      this.isSocketShared = false;
+    } else {
+      this.socket = socket;
+      this.isSocketShared = true;
+    }
 
     // Also need to sort out the configuration
     const config = new quiche.Config();
@@ -432,6 +387,12 @@ class QUICServer extends EventTarget {
     this.config = config;
   }
 
+
+  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+    this.dispatchEvent(e);
+  };
+
+
   public async start({
     host = '::',
     port = 0
@@ -441,49 +402,13 @@ class QUICServer extends EventTarget {
   } = {}) {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Starting ${this.constructor.name} on ${address}`);
-    const [isIPv4] = Validator.isValidIPv4String(host);
-    const [isIPv6] = Validator.isValidIPv6String(host);
-    let type: 'udp4' | 'udp6';
-    if (isIPv4) {
-      type = 'udp4';
-    } else if (isIPv6) {
-      type = 'udp6';
-    } else {
-      // The `host` is a host name, most likely `localhost`.
-      // We cannot tell if the host will resolve to IPv4 or IPv6.
-      // Here we default to IPv4 so that `127.0.0.1` would be usable if `localhost` is used
-      type = 'udp4';
-    }
-    this.socket = dgram.createSocket({
-      type,
-      reuseAddr: false,
-      ipv6Only: false,
-    });
-    const { p: errorP, rejectP: rejectErrorP, } = utils.promise();
-    this.socket.once('error', rejectErrorP);
-    // This uses `getaddrinfo` under the hood, which respects the hosts file
-    const socketBind = utils.promisify(this.socket.bind).bind(this.socket);
-    const socketBindP = socketBind(port, host);
-    try {
-      await Promise.race([socketBindP, errorP]);
-    } catch (e) {
-      // Possible binding failure due to EINVAL or ENOTFOUND.
-      // EINVAL due to using IPv4 address where udp6 is specified.
-      // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
-      // or doesn't resolve to IPv4 if udp4 is specified.
-      throw e;
-    }
-    this.socket.removeListener('error', rejectErrorP);
-    const socketAddress = this.socket.address();
-    // This is the resolved IP, not the original hostname
-    this.host = socketAddress.address;
-    this.port = socketAddress.port;
-    this.socket.on('message', this.handleMessage);
-    this.socket.on('error', (e) => {
-      this.dispatchEvent(
-        new events.QUICServerErrorEvent({ detail: e })
+    await this.socket.start({ host, port });
+    if (!this.isSocketShared) {
+      this.socket.addEventListener(
+        'error',
+        this.handleQUICSocketError
       );
-    });
+    }
     address = utils.buildAddress(this.host, this.port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
@@ -492,18 +417,76 @@ class QUICServer extends EventTarget {
     const address = utils.buildAddress(this.host, this.port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
 
+    // Stop ALL of our connections!
     // Here we are attempting to gracefully stop all the connections
     // Not sure if there's any relevant code we should be using
     for (const connection of this.connections.values()) {
       await connection.stop();
     }
 
-    // If we want to close the socket
-    // this is all we need to do
-    // There's no waiting for connections to stop
-    // Cause that doesn't exist on the UDP socket level
-    this.socket.close();
+    await this.socket.stop();
+    if (!this.isSocketShared) {
+      this.socket.removeEventListener(
+        'error',
+        this.handleQUICSocketError
+      );
+    }
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
+  }
+
+  public async handleNewConnection(
+    data,
+    rinfo,
+    header,
+  ): Promise<QUICConnection | undefined> {
+
+    // We may return nothing
+    // in which case nothing occurs
+
+    if (header.ty !== quiche.Type.Initial) {
+      return;
+    }
+    if (!quiche.versionIsSupported(header.version)) {
+      this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
+      const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      const versionDatagramLength = quiche.negotiateVersion(
+        header.scid,
+        header.dcid,
+        versionDatagram
+      );
+      this.logger.debug(`Sending VersionNegotiation packet to ${peerAddress}`);
+      try {
+        await this.socket.send(
+          versionDatagram,
+          0,
+          versionDatagramLength,
+          rinfo.port,
+          rinfo.address,
+        );
+      } catch (e) {
+        this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
+      }
+      this.logger.debug(`Sent VersionNegotiation packet to ${peerAddress}`);
+      return;
+    }
+
+    const token: Uint8Array | undefined = header.token;
+    if (token == null) {
+      return;
+    }
+
+    // Stateless Retry
+    if (token.byteLength === 0) {
+    }
+
+    // Here we end up creating a connection
+    const conn = quiche.Connection.accept();
+
+
+    // If we are going to do this
+    // Do we call back to the socket
+    // meaning?
+
   }
 
   protected async mintToken(data, sourceAddress): Promise<Buffer> {

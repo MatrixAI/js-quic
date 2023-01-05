@@ -19,8 +19,14 @@ import * as utils from './utils';
 class QUICClient extends EventTarget {
 
   protected socket: dgram.Socket;
-  protected host: string;
-  protected port: number;
+
+  // Note that this requires DNS resolution
+  // One is that host and port of my own socket
+  // Another is the host and port of the OTHER connecting system
+  // That's also important to understand!
+  // protected host: string;
+  // protected port: number;
+
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
