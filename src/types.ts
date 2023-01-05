@@ -22,7 +22,9 @@ type PromiseDeconstructed<T> = {
   rejectP: (reason?: any) => void;
 };
 
-type ConnectionId = Opaque<'ConnectionId', string>;
+type ConnectionId = Opaque<'ConnectionId', Buffer>;
+
+type ConnectionIdString = Opaque<'ConnectionIdString', string>;
 
 /**
  * Crypto utility object
@@ -70,6 +72,7 @@ export type {
   Callback,
   PromiseDeconstructed,
   ConnectionId,
+  ConnectionIdString,
   Crypto,
   StreamId,
   Host,

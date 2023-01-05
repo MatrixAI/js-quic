@@ -1,7 +1,7 @@
 import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { ConnectionId, Crypto } from './types';
+import type { ConnectionId, ConnectionIdString, Crypto } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
@@ -27,7 +27,7 @@ class QUICSocket extends EventTarget {
   protected server: QUICServer;
 
   // This is being shared between the server and clients
-  protected connectionMap: Map<ConnectionId, QUICConnection>;
+  public connectionMap: Map<ConnectionIdString, QUICConnection>;
 
   // There's actually only one thing I need here
   // The the other stuff is not relevant
@@ -71,6 +71,8 @@ class QUICSocket extends EventTarget {
       // If so, then we just ignore the packet.
       if (e.message !== 'InvalidPacket') {
         // Only emit an error if it is not an `InvalidPacket` error.
+        // Do note, that this kind of error is a peer error.
+        // The error is not due to us.
         this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
       }
       return;
@@ -81,48 +83,26 @@ class QUICSocket extends EventTarget {
     // However I don't know how the DCID would work in a QUIC dgram
     // We have not explored this yet
 
-    // const dcid = Buffer.from(header.dcid);
-
-    // const dcidDerived = utils.bufferWrap(
-    //   await this.crypto.ops.sign(
-    //     this.crypto.key,
-    //     dcid
-    //   )
-    // ).subarray(0, quiche.MAX_CONN_ID_LEN);
-
-    // dcidPeer <- dcid of the peer
-    // scidPeer <- scid of the peer?
-    // but we have a packet
-    // dcidPacket
-
-    // When a client sends the first packet
-    // I might say that a connection hasn't been created until it is ready
-    // However this means the ID might not exist in the map
-    // If that's the case, then wouldn't that mean...?
-    // No because the client generated SCID is what is the DCID coming back in
-    // At that point... that has to work that way
-
     // Destination Connection ID is the ID the remote peer chose for us.
-    const dcid = utils.toConnectionId(header.dcid);
+    const dcid = Buffer.from(header.dcid) as ConnectionId;
+    const dcidString = utils.encodeConnectionId(dcid);
 
     // Derive our SCID using HMAC signing.
-    const dcidDerived = new Uint8Array(
+    const scid = Buffer.from(
       await this.crypto.ops.sign(
         this.crypto.key,
         header.dcid
       ),
       0,
       quiche.MAX_CONN_ID_LEN
-    );
-
-    // This Source Connection ID here represents the ID we choose for ourselves.
-    const scid = utils.toConnectionId(dcidDerived);
+    ) as ConnectionId;
+    const scidString = utils.encodeConnectionId(scid);
 
     // Now both must be checked
     let conn;
     if (
-      !this.connectionMap.has(dcid) &&
-      !this.connectionMap.has(scid)
+      !this.connectionMap.has(dcidString) &&
+      !this.connectionMap.has(scidString)
     ) {
       // It doesn't exist
       // possibly new connection
@@ -138,7 +118,12 @@ class QUICSocket extends EventTarget {
       // This is an event handler
       // This will push events to calling functions in other classes
       // Those classes may end up calling back to this object to trigger sends
-      conn = await this.server.handleNewConnection(data, rinfo, header);
+      conn = await this.server.handleNewConnection(
+        data,
+        rinfo,
+        header,
+        scid
+      );
 
       // If there's no connection yet
       // Then the server is in the middle of the version negotiation/stateless retry
@@ -153,34 +138,23 @@ class QUICSocket extends EventTarget {
       // could be a client conn
       // just propagate it...
 
-      conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
+      conn = this.connectionMap.get(
+        dcidString
+      ) ?? this.connectionMap.get(scidString)!;
       // If we have a connection
       // We can proceed to tell tehe conn to do things
 
     }
 
-    // Do we do the same thing here?
-    // Is the idea we write to the socket here?
-    // Or can we pass it on... and it will end up managing it from there
-    // But if so, how do we ensure we can write the sockets?
 
-
-
-
-    // Because of `toString('hex')`
-
-
-    // We must then "hash" it with hmac system
-    // This has to be done BEFORE we hand off to the server
-    // Since we MUST check the connection map
-    // To know whether to hand off to a client or server
-    // Furthermore can we then simplify to just a connection!?
-    // We must have the connection map here
-    // That connection map must then be shared with the client and server
-    // But it must exist here
-
-
-
+    // If we have a connection now
+    // We can proced to make work on it
+    // Note that in the case of teh above conn
+    // It may not exist in the map yet
+    // Should the QUICServer put it in?
+    // I think it should
+    // But what exactly are we doing here
+    // We should be sending it appropriately to the client or to the server
 
 
 
@@ -195,8 +169,6 @@ class QUICSocket extends EventTarget {
     // The DCID is the ID that the remote peer picked for us.
     // Unlike the SCID it is guaranteed to exist for all QUIC packets.
     // const dcid = header.dcid;
-
-
 
     // If this packet is a short header
     // the DCID is decoded based on the dcid length
@@ -243,17 +215,6 @@ class QUICSocket extends EventTarget {
 
     // At any time, endpoints can change the DCID they transmit to a value that has not been used on
     // **another** path.
-
-    // During version neogtiation
-    // i
-
-
-
-
-
-
-
-    // This has to do some muxing
 
   };
 
