@@ -1,3 +1,5 @@
+import type QUICConnection from "./QUICConnection";
+
 /**
  * Opaque types are wrappers of existing types
  * that require smart constructors
@@ -67,6 +69,8 @@ type Port = Opaque<'Port', number>;
  */
 type Address = Opaque<'Address', string>;
 
+type QUICConnectionMap = Map<ConnectionIdString, QUICConnection>;
+
 export type {
   Opaque,
   Callback,
@@ -79,4 +83,5 @@ export type {
   Hostname,
   Port,
   Address,
+  QUICConnectionMap,
 };

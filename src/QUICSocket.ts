@@ -5,10 +5,8 @@ import type { ConnectionId, ConnectionIdString, Crypto } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import {
-  StartStop,
-  ready,
-} from '@matrixai/async-init/dist/StartStop';
+import { running } from '@matrixai/async-init';
+import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import { Validator } from 'ip-num';
 import { quiche, Type } from './native';
 import * as events from './events';
@@ -347,7 +345,7 @@ class QUICSocket extends EventTarget {
    * Registers a client to the socket
    * This is a new client, but clients don't die by itself?
    */
-  public addClient(client: QUICClient) {
+  public registerClient(client: QUICClient) {
 
   }
 
@@ -369,7 +367,10 @@ class QUICSocket extends EventTarget {
    * And all sorts of other stuff!
    * Or whatever it needs to be
    */
-  public setServer(server: QUICServer) {
+  public registerServer(server: QUICServer) {
+    if (this.server != null && this.server[running]) {
+      throw new errors.ErrorQUICSocketServerDuplicate();
+    }
     this.server = server;
   }
 
@@ -424,7 +425,5 @@ If it is not passed in, it will create their own socket and will be registered a
 Remember you can either pass a socket, or host/port combination to start things independently.
 
 Unless you want to be able to rebind?
-
-
 
 */

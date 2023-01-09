@@ -1,6 +1,6 @@
 import Logger from '@matrixai/logger';
 import type { Connection, RecvInfo, SendInfo } from './native/types';
-import type { ConnectionId, StreamId } from './types';
+import type { ConnectionId, ConnectionIdString, StreamId } from './types';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as errors from './errors';
@@ -21,7 +21,7 @@ class QUICConnection extends EventTarget {
 
   public readonly connectionId: ConnectionId;
   public connection: Connection;
-  public connections: Map<ConnectionId, QUICConnection>;
+  public connections: Map<ConnectionIdString, QUICConnection>;
   public streams: Map<StreamId, QUICStream> = new Map();
 
   protected handleTimeout: () => Promise<void>;
@@ -38,7 +38,7 @@ class QUICConnection extends EventTarget {
   }: {
     connectionId: ConnectionId;
     connection: Connection;
-    connections: Map<ConnectionId, QUICConnection>,
+    connections: Map<ConnectionIdString, QUICConnection>,
     handleTimeout: () => Promise<void>,
     logger?: Logger
   }) {

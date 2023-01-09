@@ -12,12 +12,20 @@ class ErrorQUICSocketNotRunning<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket is not running';
 }
 
+class ErrorQUICSocketServerDuplicate<T> extends ErrorQUICSocket<T> {
+  static description = 'QUIC Socket already has a server that is running';
+}
+
 class ErrorQUICServer<T> extends ErrorQUIC<T> {
   static description = 'QUIC Server error';
 }
 
 class ErrorQUICServerNotRunning<T> extends ErrorQUICServer<T> {
   static description = 'QUIC Server is not running';
+}
+
+class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
 class ErrorQUICClient<T> extends ErrorQUIC<T> {
@@ -40,8 +48,10 @@ export {
   ErrorQUIC,
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,
+  ErrorQUICSocketServerDuplicate,
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
+  ErrorQUICServerSocketNotRunning,
   ErrorQUICClient,
   ErrorQUICClientNotRunning,
   ErrorQUICConnection,
