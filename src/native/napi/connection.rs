@@ -337,29 +337,31 @@ impl Connection {
   /// This writes to the data buffer passed in.
   /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
   /// This will return a JS array of `[length, send_info]`.
-  /// If the length is 0, then that there's no data to send.
-  /// The `send_info` will be set to `null`.
-  #[napi(ts_return_type = "[number, SendInfo | null]")]
+  /// It is possible for the length to be 0.
+  /// You may then send a 0-lenght buffer.
+  /// If there is nothing to be sent a Done error will be thrown.
+  #[napi(ts_return_type = "[number, SendInfo]")]
   pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
     // Convert the Done error into a 0-length write
     // This would mean that there's nothing to send
+
     let (write, send_info) = match self.0.send(&mut data) {
-      Ok((write, send_info)) => (write, Some(send_info)),
+      Ok((write, send_info)) => (write, send_info),
       // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
-    let send_info = send_info.map(|info| {
+    let send_info = {
       let from = HostPort {
-        host: info.from.ip().to_string(),
-        port: info.from.port(),
+        host: send_info.from.ip().to_string(),
+        port: send_info.from.port(),
       };
       let to = HostPort {
-        host: info.to.ip().to_string(),
-        port: info.to.port(),
+        host: send_info.to.ip().to_string(),
+        port: send_info.to.port(),
       };
-      let at = External::new(info.at);
+      let at = External::new(send_info.at);
       SendInfo { from, to, at }
-    });
+    };
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;

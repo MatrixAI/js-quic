@@ -1,4 +1,4 @@
-import type { ConnectionId, Crypto, Host, QUICConnectionMap } from './types';
+import type { ConnectionId, Crypto, Host, QUICConnectionMap, Hostname } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import { Validator } from 'ip-num';
@@ -53,102 +53,6 @@ class QUICServer extends EventTarget {
   public get port() {
     return this.socket.port;
   }
-
-  //     // Let's use hex strings instead
-  //     const connectionId = scid.toString('hex') as ConnectionId;
-
-  //     connection = new QUICConnection({
-  //       // Note that if a connection ID changes, how do we deal with this?
-  //       connectionId,
-  //       connection: conn,
-  //       connections: this.connections,
-  //       handleTimeout: this.handleTimeout,
-  //       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
-  //     });
-
-  //     // Nobody else really has acess to this
-  //     // The problem is that we don't really hand over the connection the end user
-  //     // Therefore they wouldn't event know to associate an error handler on the connection
-  //     // Which means any exceptions would end up being thrown into the node runtime and crash it
-  //     // So how would we deal with this?
-
-  //     // The user already has to attach an error handler for every server
-  //     // then attach it again for every connection
-  //     connection.addEventListener('error', () => {
-  //       console.log('CONNECTION HAS A ERROR');
-  //     });
-
-  //     this.connections.set(
-  //       connectionId,
-  //       connection
-  //     );
-
-  //     this.dispatchEvent(
-  //       new events.QUICConnectionEvent({ detail: connection })
-  //     );
-
-  //   } else {
-  //     this.logger.debug(`QUIC packet is for an existing connection`);
-  //     connection = this.connections.get(
-  //       dcid.toString('hex') as ConnectionId
-  //     )!;
-  //     if (connection == null) {
-  //       connection = this.connections.get(
-  //         connId.toString('hex') as ConnectionId
-  //       )!;
-  //     }
-  //   }
-
-  //   const recvInfo = {
-  //     to: {
-  //       host: this.socket.address().address,
-  //       port: this.socket.address().port
-  //     },
-  //     from: {
-  //       host: rinfo.address,
-  //       port: rinfo.port
-  //     },
-  //   };
-
-  //   connection.recv(data, recvInfo);
-
-  //   // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
-  //   // When the connection timer expires (that is, any time on_timeout() is also called).
-  //   // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
-  //   // When the application receives data from the peer (for example any time stream_recv() is called).
-
-  //   const ps: Array<Promise<void>> = [];
-  //   for (const connection of this.connections.values()) {
-  //     const data = connection.send();
-  //     if (data == null) {
-  //       break;
-  //     }
-  //     const [dataSend, sendInfo] = data;
-  //     ps.push((async () => {
-  //       try {
-  //         await socketSend(
-  //           dataSend,
-  //           sendInfo.to.port,
-  //           sendInfo.to.host
-  //         );
-  //       } catch (e) {
-  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
-  //       }
-  //     })());
-  //   }
-  //   await Promise.all(ps);
-
-  //   // seems we iterate over the connections that are closed here
-  //   // and end up removing them
-  //   // and this is done on all the connections
-  //   // seems kind of slow
-  //   // but that seems to be an issue
-
-  //   for (const connection of this.connections.values()) {
-  //     if (connection.isClosed()) {
-  //       this.connections.delete(connection.connectionId);
-  //     }
-  //   }
 
   protected handleTimeout = async () => {
     const socketSend = utils.promisify(this.socket.send).bind(this.socket);
@@ -264,10 +168,10 @@ class QUICServer extends EventTarget {
    * In which case, the `host` and `port` parameters here are ignored.
    */
   public async start({
-    host = '::',
+    host = '::' as Host,
     port = 0
   }: {
-    host?: string,
+    host?: Host | Hostname,
     port?: number,
   } = {}) {
     let address;
@@ -290,6 +194,75 @@ class QUICServer extends EventTarget {
     );
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
+
+
+  //     // The user already has to attach an error handler for every server
+  //     // then attach it again for every connection
+  //     connection.addEventListener('error', () => {
+  //       console.log('CONNECTION HAS A ERROR');
+  //     });
+  //     this.connections.set(
+  //       connectionId,
+  //       connection
+  //     );
+  //     this.dispatchEvent(
+  //       new events.QUICConnectionEvent({ detail: connection })
+  //     );
+
+  // It is considered a new connection
+
+
+  //   const recvInfo = {
+  //     to: {
+  //       host: this.socket.address().address,
+  //       port: this.socket.address().port
+  //     },
+  //     from: {
+  //       host: rinfo.address,
+  //       port: rinfo.port
+  //     },
+  //   };
+
+  //   connection.recv(data, recvInfo);
+
+  //   // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
+  //   // When the connection timer expires (that is, any time on_timeout() is also called).
+  //   // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
+  //   // When the application receives data from the peer (for example any time stream_recv() is called).
+
+  //   const ps: Array<Promise<void>> = [];
+  //   for (const connection of this.connections.values()) {
+  //     const data = connection.send();
+  //     if (data == null) {
+  //       break;
+  //     }
+  //     const [dataSend, sendInfo] = data;
+  //     ps.push((async () => {
+  //       try {
+  //         await socketSend(
+  //           dataSend,
+  //           sendInfo.to.port,
+  //           sendInfo.to.host
+  //         );
+  //       } catch (e) {
+  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
+  //       }
+  //     })());
+  //   }
+  //   await Promise.all(ps);
+
+  //   // seems we iterate over the connections that are closed here
+  //   // and end up removing them
+  //   // and this is done on all the connections
+  //   // seems kind of slow
+  //   // but that seems to be an issue
+
+  //   for (const connection of this.connections.values()) {
+  //     if (connection.isClosed()) {
+  //       this.connections.delete(connection.connectionId);
+  //     }
+  //   }
+
 
   /**
    * Stops the QUICServer
@@ -411,32 +384,21 @@ class QUICServer extends EventTarget {
     // Here we shall re-use the originally-derived DCID as the SCID
     scid = header.dcid as ConnectionId;
     this.logger.debug(`Accepting new connection from QUIC packet`);
-    const connection = quiche.Connection.accept(
+    return QUICConnection.acceptConnection({
       scid,
-      dcidOriginal,
-      {
-        host: this.socket.host,
-        port: this.socket.port,
-      },
-      {
-        host: rinfo.address,
-        port: rinfo.port,
-      },
-      this.config
-    );
-    // Ok now that we have a connection here
-    // do we also return this to the QUICSocket for it to manage?
-    // Or do we directly manage the connection map?
-    // Note that if a connection ID changes, how do we deal with this?
-    // What happens when we timeout?
-
-    return new QUICConnection({
-      connectionId: scid,
-      connection,
-      connections: this.connectionMap,
-      handleTimeout: this.handleTimeout,
+      dcid: dcidOriginal,
+      socket: this.socket,
+      rinfo,
+      config: this.config,
+      // handleTimeout: this.handleTimeout,
       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
     });
+
+    // A new conn ID means a new connection
+    // the old connection gets removed
+    // so one has to be aware of this
+    // Either that, or there is a seamless migration to a new connection ID
+    // In which case we need to manage it somehow
   }
 
   /**

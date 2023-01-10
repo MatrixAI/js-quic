@@ -6,6 +6,7 @@ import type {
   Host
 } from './types';
 import { IPv4, IPv6, Validator } from 'ip-num';
+import * as errors from './errors';
 
 /**
  * Convert callback-style to promise-style
@@ -122,6 +123,10 @@ function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
   return Buffer.from(connIdString, 'hex') as ConnectionId;
 }
 
+function never(): never {
+  throw new errors.ErrorQUICUndefinedBehaviour();
+}
+
 export {
   promisify,
   promise,
@@ -129,4 +134,5 @@ export {
   buildAddress,
   encodeConnectionId,
   decodeConnectionId,
+  never,
 };

@@ -162,10 +162,11 @@ export class Connection {
    * This writes to the data buffer passed in.
    * The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
    * This will return a JS array of `[length, send_info]`.
-   * If the length is 0, then that there's no data to send.
-   * The `send_info` will be set to `null`.
+   * It is possible for the length to be 0.
+   * You may then send a 0-lenght buffer.
+   * If there is nothing to be sent a Done error will be thrown.
    */
-  send(data: Uint8Array): [number, SendInfo | null]
+  send(data: Uint8Array): [number, SendInfo]
   sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null]
   sendQuantum(): number
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number

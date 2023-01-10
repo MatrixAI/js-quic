@@ -1,3 +1,4 @@
+import type { SendInfo } from './native/types';
 import type QUICConnection from "./QUICConnection";
 
 class QUICSocketErrorEvent extends Event {
@@ -44,6 +45,18 @@ class QUICConnectionCloseEvent extends Event {
     }
   ) {
     super('close', options);
+    this.detail = options.detail;
+  }
+}
+
+class QUICConnectionSendEvent extends Event {
+  public detail: [Uint8Array, SendInfo];
+  constructor(
+    options: EventInit & {
+      detail: [Uint8Array, SendInfo]
+    }
+  ) {
+    super('send', options);
     this.detail = options.detail;
   }
 }

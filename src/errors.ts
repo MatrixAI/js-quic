@@ -44,6 +44,10 @@ class ErrorQUICConnectionDestroyed<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection is destroyed';
 }
 
+class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
+  static description = 'This should never happen';
+}
+
 export {
   ErrorQUIC,
   ErrorQUICSocket,
@@ -56,4 +60,5 @@ export {
   ErrorQUICClientNotRunning,
   ErrorQUICConnection,
   ErrorQUICConnectionDestroyed,
+  ErrorQUICUndefinedBehaviour,
 };

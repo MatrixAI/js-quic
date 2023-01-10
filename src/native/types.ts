@@ -44,7 +44,7 @@ interface ConfigConstructor {
 interface Connection {
   setSession(session: Uint8Array): void
   recv(data: Uint8Array, recvInfo: RecvInfo): number
-  send(data: Uint8Array): [number, SendInfo | null]
+  send(data: Uint8Array): [number, SendInfo]
   sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null]
   sendQuantum(): number
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number

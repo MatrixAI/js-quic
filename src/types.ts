@@ -1,4 +1,6 @@
-import type QUICConnection from "./QUICConnection";
+import type dgram from 'dgram';
+import type QUICConnection from './QUICConnection';
+import type QUICStream from './QUICStream';
 
 /**
  * Opaque types are wrappers of existing types
@@ -71,6 +73,10 @@ type Address = Opaque<'Address', string>;
 
 type QUICConnectionMap = Map<ConnectionIdString, QUICConnection>;
 
+type QUICStreamMap = Map<StreamId, QUICStream>;
+
+type UDPRemoteInfo = dgram.RemoteInfo;
+
 export type {
   Opaque,
   Callback,
@@ -84,4 +90,6 @@ export type {
   Port,
   Address,
   QUICConnectionMap,
+  QUICStreamMap,
+  UDPRemoteInfo,
 };

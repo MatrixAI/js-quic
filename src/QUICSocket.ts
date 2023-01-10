@@ -1,7 +1,7 @@
 import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { ConnectionId, ConnectionIdString, Crypto } from './types';
+import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, QUICConnectionMap } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
@@ -17,19 +17,18 @@ interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
 
+  public connectionMap: QUICConnectionMap;
+
   protected socket: dgram.Socket;
   protected _host: string;
   protected _port: number;
   protected logger: Logger;
-
   protected server: QUICServer;
 
-  // This is being shared between the server and clients
-  public connectionMap: Map<ConnectionIdString, QUICConnection>;
+  protected socketBind: (port: number, host: string) => Promise<void>;
+  protected socketClose: () => Promise<void>;
+  protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  // There's actually only one thing I need here
-  // The the other stuff is not relevant
-  // Although the same type could be used over and over?
   protected crypto: {
     key: ArrayBuffer;
     ops: Crypto;
@@ -55,7 +54,7 @@ class QUICSocket extends EventTarget {
    * need to parse the first QUIC packet to determinine what connection to route
    * the data to.
    */
-  protected handleMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+  protected handleSocketMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
     // The data buffer may have multiple coalesced QUIC packets.
     // This header is parsed from the first packet.
     let header: Header;
@@ -97,7 +96,7 @@ class QUICSocket extends EventTarget {
     const scidString = utils.encodeConnectionId(scid);
 
     // Now both must be checked
-    let conn;
+    let conn: QUICConnection;
     if (
       !this.connectionMap.has(dcidString) &&
       !this.connectionMap.has(scidString)
@@ -116,7 +115,7 @@ class QUICSocket extends EventTarget {
       // This is an event handler
       // This will push events to calling functions in other classes
       // Those classes may end up calling back to this object to trigger sends
-      conn = await this.server.handleNewConnection(
+      const conn_ = await this.server.handleNewConnection(
         data,
         rinfo,
         header,
@@ -126,9 +125,19 @@ class QUICSocket extends EventTarget {
       // If there's no connection yet
       // Then the server is in the middle of the version negotiation/stateless retry
       // or the handshake process
-      if (conn == null) {
+      if (conn_ == null) {
         return;
       }
+
+      conn = conn_;
+
+      // Otherwise do we add this into our connection map?
+      // If so, how do we then remove it?
+      // If we are just meant to be polling things
+      // Since obviously the timeout doesn't really work
+      // Until we actually check it
+
+
 
     } else {
       // Connection exists
@@ -143,6 +152,78 @@ class QUICSocket extends EventTarget {
       // We can proceed to tell tehe conn to do things
 
     }
+
+    // The the system is now providing a new connection
+    // we now need to to bridge the connection
+    // to the socket
+    // it's already got its own timeout
+    // and its management of the lifecycle to the connection map
+
+    // At this point the socket is handling the datagram event
+    // It has to plump this data into the connection
+    // It's not the server's pov to do this
+    // because the client may need to do this as well
+    // And the QUICConnection cannot do it, since it doesn't have it
+    // So we have to push that adata in
+    // By calling a function
+
+    const recvInfo = {
+      to: {
+        host: this.socket.address().address,
+        port: this.socket.address().port
+      },
+      from: {
+        host: rinfo.address,
+        port: rinfo.port
+      },
+    };
+    conn.recv(data, recvInfo);
+
+    await conn.send();
+
+
+
+
+    // you can attach an event handler to the conneciton
+    // so when there's data on the connection
+    // you proceed to do this
+    // but that requires you work on every connection upon creation
+
+    // conn.on('recv', () => { sendToSocket })
+    // conn.on('timeout', () => { sendToSocket })
+
+
+    // When the conn has send event
+    // conn.on('send', () => { sendToSocket })
+
+    // Every time a stream sends
+    // this results in the connection emitting an event
+    // Does that mean the stream emits an event?
+    // No it doesn't make sense
+    // It just means we tell the connection to emit an event
+    // When a send occurs, this means we have sent the data
+    // or a close event occurs
+    // We could emit an event AFTER a send is called
+    // this could work.
+
+
+
+
+
+
+
+
+
+
+    // Ok now's the kicker
+    // I don't think we should only besending data here
+    // Instead it should be based on some other event
+    // The problem is that there's no EVENT
+    // for if the connection has anything to do
+    // we have the POLL the quiche connection if there's data
+    // So on WHAT condition do we poll?
+
+
 
 
     // If we have a connection now
@@ -219,18 +300,12 @@ class QUICSocket extends EventTarget {
   /**
    * Handle error on the DGRAM socket
    */
-  protected handleError = (e: Error) => {
+  protected handleSocketError = (e: Error) => {
     this.dispatchEvent(
       new events.QUICSocketErrorEvent({ detail: e })
     );
   };
 
-
-  // you can proceed to run a server in it
-  // by telling the socket to create a server
-  // you cannot run 2 servers with the same socket
-  // furthermore you have to add handlers
-  // or the muxing/demuxing handlers
   public constructor({
     crypto,
     logger
@@ -249,26 +324,16 @@ class QUICSocket extends EventTarget {
   /**
    * Supports IPv4 and IPv6 addresses
    * Note that if the host is `::`, this will also bind to `0.0.0.0`.
+   * The host and port here are the local host and port that the socket will bind to.
+   * If the host is a hostname such as `localhost`, this will perform do local resolution.
    */
   public async start({
-    host = '::',
+    host = '::' as Host,
     port = 0
   }: {
-    host?: string,
+    host?: Host | Hostname,
     port?: number,
   } = {}): Promise<void> {
-
-    // Remember the `host and port` here
-    // Is the host and port that the socket is being bound to
-    // This is the "local address"
-    // Not the remote address
-    // For QUICClient, what we want is actually the remote address
-    // which may then bound to random one
-    // BUT
-    // If the target address is V4, then you want to bind to ipv4
-    // and if it is V6, then you want to bind to ipv6
-    // That's the important thing
-
     let address = utils.buildAddress(host, port);
     this.logger.info(`Starting ${this.constructor.name} on ${address}`);
     const [isIPv4] = Validator.isValidIPv4String(host);
@@ -289,13 +354,15 @@ class QUICSocket extends EventTarget {
       reuseAddr: false,
       ipv6Only: false,
     });
+    this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
+    this.socketClose = utils.promisify(this.socket.close).bind(this.socket);
+    this.socketSend = utils.promisify(this.socket.send).bind(this.socket);
     const { p: errorP, rejectP: rejectErrorP, } = utils.promise();
     this.socket.once('error', rejectErrorP);
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
     // This makes it equivalent to `dns.lookup`.
-    const socketBind = utils.promisify(this.socket.bind).bind(this.socket);
-    const socketBindP = socketBind(port, host);
+    const socketBindP = this.socketBind(port, host);
     try {
       await Promise.race([socketBindP, errorP]);
     } catch (e) {
@@ -310,35 +377,33 @@ class QUICSocket extends EventTarget {
     // This is the resolved IP, not the original hostname
     this._host = socketAddress.address;
     this._port = socketAddress.port;
-    this.socket.on('message', this.handleMessage);
-    this.socket.on('error', this.handleError);
+    this.socket.on('message', this.handleSocketMessage);
+    this.socket.on('error', this.handleSocketError);
     address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
-
-    // standard TLS situation would be relevant here
-    // but only if we want to do TLS name verification
   }
 
   public async stop(): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
-    this.socket.close();
+    this.socket.off('message', this.handleSocketMessage);
+    this.socket.off('error', this.handleSocketError);
+    await this.socketClose();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
   /**
    * Sends UDP datagram
    */
-  public async send(data, offset, length, port, address) {
-    return new Promise<void>((resolve, reject) => {
-      this.socket.send(data, offset, length, port, address, (err) => {
-        if (err != null) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
+  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port?: number, address?: string): Promise<number>;
+  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port?: number): Promise<number>;
+  public async send(msg: string | Uint8Array | ReadonlyArray<any>): Promise<number>;
+  public async send(msg: string | Uint8Array, offset: number, length: number, port?: number, address?: string): Promise<number>;
+  public async send(msg: string | Uint8Array, offset: number, length: number, port?: number): Promise<number>;
+  public async send(msg: string | Uint8Array, offset: number, length: number): Promise<number>;
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public async send(...params: Array<any>): Promise<number> {
+    return this.socketSend(...params);
   }
 
   /**
@@ -377,53 +442,3 @@ class QUICSocket extends EventTarget {
 }
 
 export default QUICSocket;
-
-// KMS at the root level just for managing its own key
-// Vault system for managing token lifecycles
-// - all sorts of goodies here
-
-// TODO:
-// if the quic socket is shared
-// how is GC maintained?
-// do we use a weakmap or something
-// nah something has to maintain the collection structure
-// it's possible that multiple clients keep allocating themselves to the client
-// perhaps even multiple clients and multiple servers
-
-/*
-
-const quicSocket = new QUICSocket();
-await quicSocket.start({
-  host: '::',
-  port: 0
-});
-
-// Here we can start doing things
-
-
-// This way we can complete connections
-// The socket you have to register the client and shit
-// But you don't directly work against
-// It has to make use of it!
-// That's the key point!!!
-
-const c1 = new QUICClient({ socket: quicSocket });
-await c1.start();
-
-const c2 = new QUICClient({ socket: quicSocket });
-await c2.start();
-
-const s1 = new QUICServer({ socket: quicSocket });
-await s1.start();
-
-When they start it ends up calling the rest of the system.
-
-The socket is shared between the 3.
-
-If it is not passed in, it will create their own socket and will be registered appropriately.
-
-Remember you can either pass a socket, or host/port combination to start things independently.
-
-Unless you want to be able to rebind?
-
-*/

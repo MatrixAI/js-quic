@@ -1,8 +1,9 @@
-import type { StreamId } from './types';
+import type { QUICStreamMap, StreamId } from './types';
 import type { Connection } from './native/types';
 import Logger from '@matrixai/logger';
 import { ReadableStream, WritableStream, } from 'stream/web';
 import { quiche } from './native';
+import type QUICConnection from './QUICConnection';
 
 function reasonToCode(reason?: any) {
   // The reason to code map must be supplied
@@ -17,8 +18,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   public readable: ReadableStream<Uint8Array>;
   public writable: WritableStream<Uint8Array>;
 
-  protected connection: Connection;
-  protected streams: Map<StreamId, QUICStream>;
+  protected connection: QUICConnection;
+  protected conn: Connection;
+  protected streamMap: QUICStreamMap;
 
   protected _sendClosed: boolean = false;
   protected _recvClosed: boolean = false;
@@ -43,12 +45,12 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     {
       streamId,
       connection,
-      streams,
+      // streams,
       logger,
     }: {
       streamId: StreamId;
-      connection: Connection;
-      streams: Map<StreamId, QUICStream>;
+      connection: QUICConnection;
+      // streams: Map<StreamId, QUICStream>;
       logger?: Logger;
     }
   ) {
@@ -56,7 +58,8 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     this.logger = logger ?? new Logger(this.constructor.name);
     this.streamId = streamId;
     this.connection = connection;
-    this.streams = streams;
+    this.conn = connection.conn;
+    this.streamMap = connection.streamMap;
 
     // Try the BYOB later, it seems more performant
     let handleReadable : () => void;
@@ -72,7 +75,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
           const buf = Buffer.alloc(1024);
           let recvLength: number, fin: boolean;
           try {
-            [recvLength, fin] = this.connection.streamRecv(
+            [recvLength, fin] = this.conn.streamRecv(
               this.streamId,
               buf
             );
@@ -86,7 +89,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
               // I am not sure if this is necessary
               // Let's see what happens
-              this.connection.streamShutdown(
+              this.conn.streamShutdown(
                 this.streamId,
                 quiche.Shutdown.Read,
                 reasonToCode(e)
@@ -126,7 +129,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       },
       cancel: (reason) => {
         this.removeEventListener('readable', handleReadable);
-        this.connection.streamShutdown(
+        this.conn.streamShutdown(
           this.streamId,
           quiche.Shutdown.Read,
           reasonToCode(reason)
@@ -169,7 +172,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
         // The receiver can discard any data it already received on that stream
         // We don't have "unidirectional" streams so that's not important...
-        this.connection.streamShutdown(
+        this.conn.streamShutdown(
           this.streamId,
           quiche.Shutdown.Write,
           reasonToCode(reason)
@@ -207,7 +210,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // Once both sides are closed, this stream is no longer necessary
     // It can now be removed from the active streams
     if (this._recvClosed && this._sendClosed) {
-      this.streams.delete(this.streamId);
+      this.streamMap.delete(this.streamId);
     }
   }
 
@@ -219,7 +222,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // should retry the operation once the stream is reported as writable again.
     let sentLength;
     try {
-      sentLength = this.connection.streamSend(
+      sentLength = this.conn.streamSend(
         this.streamId,
         chunk,
         fin
