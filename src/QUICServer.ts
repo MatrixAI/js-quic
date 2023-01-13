@@ -1,12 +1,11 @@
 import type { ConnectionId, Crypto, Host, QUICConnectionMap, Hostname } from './types';
-import type { Header, Config, Connection } from './native/types';
+import type { Header, Config } from './native/types';
 import dgram from 'dgram';
-import { Validator } from 'ip-num';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import QUICConnection from './QUICConnection';
-import { quiche, Type } from './native';
+import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -27,22 +26,16 @@ interface QUICServer extends StartStop {}
 @StartStop()
 class QUICServer extends EventTarget {
 
-  protected socket: QUICSocket;
-  protected connectionMap: QUICConnectionMap;
-
-  // Host and port of the server?
-  // Well this is not relevnat here
-  // protected host: string;
-  // protected port: number;
-
   public readonly isSocketShared: boolean;
+
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
     ops: Crypto;
   };
   protected config: Config;
-
+  protected socket: QUICSocket;
+  protected connectionMap: QUICConnectionMap;
 
   @ready(new errors.ErrorQUICServerNotRunning())
   public get host() {
@@ -94,7 +87,6 @@ class QUICServer extends EventTarget {
     this.socket.registerServer(this);
     // Shares the socket connection map as well
     this.connectionMap = this.socket.connectionMap;
-
 
     const config = new quiche.Config();
     // Change this to TLSConfig
@@ -164,75 +156,6 @@ class QUICServer extends EventTarget {
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
-
-  //     // The user already has to attach an error handler for every server
-  //     // then attach it again for every connection
-  //     connection.addEventListener('error', () => {
-  //       console.log('CONNECTION HAS A ERROR');
-  //     });
-  //     this.connections.set(
-  //       connectionId,
-  //       connection
-  //     );
-  //     this.dispatchEvent(
-  //       new events.QUICConnectionEvent({ detail: connection })
-  //     );
-
-  // It is considered a new connection
-
-
-  //   const recvInfo = {
-  //     to: {
-  //       host: this.socket.address().address,
-  //       port: this.socket.address().port
-  //     },
-  //     from: {
-  //       host: rinfo.address,
-  //       port: rinfo.port
-  //     },
-  //   };
-
-  //   connection.recv(data, recvInfo);
-
-  //   // When the application receives QUIC packets from the peer (that is, any time recv() is also called).
-  //   // When the connection timer expires (that is, any time on_timeout() is also called).
-  //   // When the application sends data to the peer (for example, any time stream_send() or stream_shutdown() are called).
-  //   // When the application receives data from the peer (for example any time stream_recv() is called).
-
-  //   const ps: Array<Promise<void>> = [];
-  //   for (const connection of this.connections.values()) {
-  //     const data = connection.send();
-  //     if (data == null) {
-  //       break;
-  //     }
-  //     const [dataSend, sendInfo] = data;
-  //     ps.push((async () => {
-  //       try {
-  //         await socketSend(
-  //           dataSend,
-  //           sendInfo.to.port,
-  //           sendInfo.to.host
-  //         );
-  //       } catch (e) {
-  //         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
-  //       }
-  //     })());
-  //   }
-  //   await Promise.all(ps);
-
-  //   // seems we iterate over the connections that are closed here
-  //   // and end up removing them
-  //   // and this is done on all the connections
-  //   // seems kind of slow
-  //   // but that seems to be an issue
-
-  //   for (const connection of this.connections.values()) {
-  //     if (connection.isClosed()) {
-  //       this.connections.delete(connection.connectionId);
-  //     }
-  //   }
-
-
   /**
    * Stops the QUICServer
    */
@@ -240,7 +163,7 @@ class QUICServer extends EventTarget {
     const address = utils.buildAddress(this.host, this.port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
     for (const connection of this.connectionMap.values()) {
-      await connection.stop();
+      await connection.destroy();
     }
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
