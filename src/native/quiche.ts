@@ -7,6 +7,7 @@ import process from 'process';
 import fs from 'fs';
 import path from 'path';
 import type {
+  ConnectionErrorCode,
   CongestionControlAlgorithm,
   Shutdown,
   Type,
@@ -24,6 +25,7 @@ interface Quiche {
   CongestionControlAlgorithm: typeof CongestionControlAlgorithm;
   Shutdown: typeof Shutdown;
   Type: typeof Type;
+  ConnectionErrorCode: typeof ConnectionErrorCode;
   negotiateVersion(
     scid: Uint8Array,
     dcid: Uint8Array,

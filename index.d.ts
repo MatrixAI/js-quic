@@ -25,6 +25,25 @@ export const enum CongestionControlAlgorithm {
   CUBIC = 1,
   BBR = 2
 }
+export const enum ConnectionErrorCode {
+  NoError = 0,
+  InternalError = 1,
+  ConnectionRefused = 2,
+  FlowControlError = 3,
+  StreamLimitError = 4,
+  StreamStateError = 5,
+  FinalSizeError = 6,
+  FrameEncodingError = 7,
+  TransportParameterError = 8,
+  ConnectionIdLimitError = 9,
+  ProtocolViolation = 10,
+  InvalidToken = 11,
+  ApplicationError = 12,
+  CryptoBufferExceeded = 13,
+  KeyUpdateError = 14,
+  AEADLimitReached = 15,
+  NoViablePath = 16
+}
 export interface ConnectionError {
   isApp: boolean
   errorCode: number

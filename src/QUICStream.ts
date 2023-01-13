@@ -2,6 +2,10 @@ import type { QUICStreamMap, StreamId } from './types';
 import type { Connection } from './native/types';
 import Logger from '@matrixai/logger';
 import { ReadableStream, WritableStream, } from 'stream/web';
+import {
+  CreateDestroy,
+  ready,
+} from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import type QUICConnection from './QUICConnection';
 
@@ -12,6 +16,8 @@ function reasonToCode(reason?: any) {
   return 0;
 }
 
+interface QUICStream extends CreateDestroy {}
+@CreateDestroy()
 class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   public streamId: StreamId;
@@ -254,28 +260,15 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }
   }
 
-  // What about async creation?
-
-  public async start() {
-
-  }
-
   /**
-   * Explicit stop of the stream
+   * Explicit destruction of the stream
    * In which case we must stop both the read and write side
-   *
-   * Graceful stop of the close
    */
-  public async stop() {
+  public async destroy() {
     // Cancel the read
     this.readable.cancel();
     // But also graceful stop of the writable
     await this.writable.close();
-  }
-
-  // Do we have an async destruction?
-  public async destroy() {
-
   }
 
 }

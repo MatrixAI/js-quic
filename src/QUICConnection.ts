@@ -1,5 +1,5 @@
 import Logger from '@matrixai/logger';
-import type { Config, Connection, RecvInfo, SendInfo } from './native/types';
+import type { Config, Connection, RecvInfo, SendInfo, ConnectionErrorCode } from './native/types';
 import type { ConnectionId, ConnectionIdString, QUICConnectionMap, StreamId, UDPRemoteInfo } from './types';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
@@ -27,14 +27,19 @@ class QUICConnection extends EventTarget {
   public streamMap: Map<StreamId, QUICStream> = new Map();
   protected socket: QUICSocket;
   protected logger: Logger;
+  protected timer?: ReturnType<typeof setTimeout>;
+  protected resolveCloseP?: () => void;
 
-  // protected timer?: ReturnType<typeof setTimeout>;
-  // protected handleTimeout: () => Promise<void>;
-
+  /**
+   * Create QUICConnection by connecting to a server
+   */
   public static async connectConnection() {
 
   }
 
+  /**
+   * Create QUICConnection by accepting a client
+   */
   public static async acceptConnection({
     scid,
     dcid,
@@ -74,6 +79,19 @@ class QUICConnection extends EventTarget {
     return quicConnection;
   }
 
+  /**
+   * Call this when the timeout expires
+   */
+  protected handleTimeout = async () => {
+    this.conn.onTimeout();
+    // Must call send afterwards
+    await this.send();
+
+    // The `send` should check if it is closed
+    // The `recv` should check if it is closed
+  };
+
+
   public constructor({
     conn,
     connectionId,
@@ -92,64 +110,51 @@ class QUICConnection extends EventTarget {
     this.connectionId = connectionId;
     this.connectionMap = socket.connectionMap;
     this.socket = socket;
-
-    // do we use `handleTimeout`
-    // this.handleTimeout = handleTimeout;
-    // Setup the timeout timer
-    // this.setTimeout();
-    // It's possible that the timer
-    // of the connection may change as we query it
-    // On each even that is
+    // Sets the timeout on the first
+    this.setTimeout();
   }
 
-  // and we should potentally ask aon each timer
-  // CHECK if this changes depending on the situation
-  // or if it is still the same
-  // if not, then 1 timer is enough
-  // but it's interestingly that the loop
-  // is that the lowest timeout
-  // Why does it
-  // in the upstream code, it iterates over all connectiosn
-  // and calls the `conn.on_timeout()` not just the single connection
-  // public timeout(): number | null {
-  //   return this.connection.timeout();
-  // }
-
-  // public setTimeout() {
-  //   const time = this.connection.timeout();
-
-  //   // Turns out this is `null` at the beginning
-  //   // So nothing gets set
-  //   // Therefore I imagine it must change over time
-  //   // We have to poll the library on every event
-  //   // To check!
-  //   console.log('The time that gets set', time);
-
-  //   if (time != null) {
-  //     this.timer = setTimeout(
-  //       async () => {
-  //         // Do we call this?
-  //         // If so, we must continue
-  //         this.connection.onTimeout();
-
-  //         // The server must handle the timeout too!?
-  //         await this.handleTimeout();
-
-  //         // Do we reset the timeout afterwards?
-  //         // So that the next timeout is called?
-  //         // Could this result in an infinite loop?
-  //         // I'm not sure
-  //         this.setTimeout();
-
-  //       },
-  //       time
-  //     );
-  //   } else {
-  //     clearTimeout(this.timer);
-  //     delete this.timer;
-  //   }
-  // }
-
+  /**
+   * This provides the ability to destroy with a specific error
+   */
+  public async destroy(
+    {
+      appError = false,
+      errorCode = quiche.ConnectionErrorCode.NoError,
+      errorMessage = '',
+    }: {
+      appError?: boolean;
+      errorCode?: ConnectionErrorCode;
+      errorMessage?: string;
+    } = {}
+  ) {
+    this.logger.info(`Destroying ${this.constructor.name}`);
+    for (const stream of this.streamMap.values())  {
+      await stream.destroy();
+    }
+    try {
+      this.conn.close(
+        appError,
+        errorCode,
+        Buffer.from(errorMessage)
+      );
+    } catch (e) {
+      if (e.message !== 'Done') {
+        // No other exceptions are expected
+        utils.never();
+      }
+    }
+    if (!this.conn.isClosed()) {
+      // The `recv`, `send`, `timeout`, and `on_timeout` should continue to be called
+      const { p: closeP, resolveP: resolveCloseP } = utils.promise();
+      this.resolveCloseP = resolveCloseP;
+      await closeP;
+    }
+    this.connectionMap.delete(
+      utils.encodeConnectionId(this.connectionId)
+    );
+    this.logger.info(`Stopped ${this.constructor.name}`);
+  }
 
   /**
    * Called when the server receives data intended for the connection.
@@ -160,8 +165,24 @@ class QUICConnection extends EventTarget {
    * UDP -> Connection -> Stream
    *
    * This pushes data to the streams.
+   *
+   * This blocks other calls, specifically other `recv` and `send` calls.
+   * It also is allowed to be called while in `destroying` status.
+   * This is because `destroying` will be waiting for the closing.
+   *
+   * These are the 2 entry points into connection.
    */
+  @ready(new errors.ErrorQUICConnectionDestroyed(), true, ['destroying'])
   public recv(data: Uint8Array, recvInfo: RecvInfo) {
+
+    if (this.conn.isDraining()) {
+      // If this is true, then we no longer call `send`
+
+    } else if (this.conn.isClosed()) {
+      // If this true, then that means we are truly closed
+      if (this.resolveCloseP != null) this.resolveCloseP();
+    }
+
     try {
       this.conn.recv(data, recvInfo);
     } catch (e) {
@@ -238,7 +259,25 @@ class QUICConnection extends EventTarget {
    * We can push the connection into the stream.
    * The streams have access to the connection object.
    */
+  @ready(new errors.ErrorQUICConnectionDestroyed(), true, ['destroying'])
   public async send(): Promise<void> {
+
+    // If an event occurs
+    // We know that we are going to call `send`
+    // Cause the timer has expired
+    // If so
+
+    if (this.conn.isDraining()) {
+      // If this is true, then we no longer call `send`
+      // But we have to still continue to wait
+
+    } else if (this.conn.isClosed()) {
+      // If this true, then that means we are truly closed
+      // At this point we don't call `send`
+      // But we resolve the destruction promise if any
+      if (this.resolveCloseP != null) this.resolveCloseP();
+    }
+
     const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
     let sendLength: number;
     let sendInfo: SendInfo;
@@ -292,46 +331,42 @@ class QUICConnection extends EventTarget {
   // Maybe it just cycles through and figures out whichever one is properly closed
   // Also if a conneci
 
+
   /**
-   * An explicit stop closes the streams first, then closes the connections
+   * Sets the timeout
    */
-  public async stop() {
-    this.logger.info(`Stopping ${this.constructor.name}`);
-
-    // Connection error codes are
-    // 0x00: No error
-    // 0x01: Internal error
-    // 0x02: connectio refused
-    // 0x03: flow control error
-    // 0x04: stream limit error
-    // ... goes on
-
-    // not sure how that is achieved here
-    for (const stream of this.streamMap.values())  {
-      await stream.stop();
-    }
-
-    // I'm not sure how this really works
-    // it doesn't immediately mean the connection is closed
-    // need to wireshark to see what is actually being sent
-    try {
-      this.conn.close(
-        true,
-        0x00,
-        Buffer.from('')
+  protected setTimeout(): void {
+    const time = this.conn.timeout();
+    if (time != null) {
+      this.timer = setTimeout(
+        async () => {
+          this.setTimeout();
+          return this.handleTimeout();
+        },
+        time
       );
-    } catch (e) {
-      if (e.message !== 'Done') {
-        throw e;
-      }
+    } else {
+      clearTimeout(this.timer);
+      delete this.timer;
     }
+  }
 
-    // do we remove
-    // JUST because we close
-    // doesn't mean isClosed is true
-    // we don't know
+  protected pollConn() {
 
-    this.logger.info(`Stopped ${this.constructor.name}`);
+    this.setTimeout();
+    if (this.conn.isDraining()) {
+      // If this is true, then we no longer call `send`
+      // But we have to still continue to wait
+
+    } else if (this.conn.isClosed()) {
+      // If this true, then that means we are truly closed
+      // At this point we don't call `send`
+      // But we resolve the destruction promise if any
+      if (this.resolveCloseP != null) this.resolveCloseP();
+    } else if (this.conn.isTimedOut()) {
+      // What does this mean?
+
+    }
 
   }
 

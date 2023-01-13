@@ -54,37 +54,6 @@ class QUICServer extends EventTarget {
     return this.socket.port;
   }
 
-  protected handleTimeout = async () => {
-    const socketSend = utils.promisify(this.socket.send).bind(this.socket);
-    const ps: Array<Promise<void>> = [];
-    for (const connection of this.connectionMap.values()) {
-      const data = connection.send();
-      if (data == null) {
-        break;
-      }
-      const [dataSend, sendInfo] = data;
-      ps.push((async () => {
-        try {
-          await socketSend(
-            dataSend,
-            sendInfo.to.port,
-            sendInfo.to.host
-          );
-        } catch (e) {
-          this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }))
-        }
-      })());
-    }
-    await Promise.all(ps);
-    for (const connection of this.connectionMap.values()) {
-      if (connection.isClosed()) {
-        this.connectionMap.delete(
-          utils.encodeConnectionId(connection.connectionId)
-        );
-      }
-    }
-  };
-
   /**
    * Handle QUIC socket errors
    * This is only used if the socket is not shared
@@ -390,7 +359,6 @@ class QUICServer extends EventTarget {
       socket: this.socket,
       rinfo,
       config: this.config,
-      // handleTimeout: this.handleTimeout,
       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
     });
 
