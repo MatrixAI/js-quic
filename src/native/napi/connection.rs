@@ -1,25 +1,35 @@
-use serde::{Serialize, Deserialize};
 use std::io;
 use std::net::{
   SocketAddr,
   ToSocketAddrs,
 };
-// use std::net::ToSocketAddrs;
 use napi_derive::napi;
-// use napi::bindgen_prelude::{
-//   Env,
-//   Array,
-//   BigInt,
-//   Uint8Array,
-//   External,
-//   ToNapiValue,
-//   FromNapiValue,
-//   sys
-// };
 use napi::bindgen_prelude::*;
+use serde::{Serialize, Deserialize};
 use crate::config;
 use crate::stream;
 use crate::path;
+
+#[napi]
+pub enum ConnectionErrorCode {
+  NoError = 0x0,
+  InternalError = 0x1,
+  ConnectionRefused = 0x2,
+  FlowControlError = 0x3,
+  StreamLimitError = 0x4,
+  StreamStateError = 0x5,
+  FinalSizeError = 0x6,
+  FrameEncodingError = 0x7,
+  TransportParameterError = 0x8,
+  ConnectionIdLimitError = 0x9,
+  ProtocolViolation = 0xa,
+  InvalidToken = 0xb,
+  ApplicationError = 0xc,
+  CryptoBufferExceeded = 0xd,
+  KeyUpdateError = 0xe,
+  AEADLimitReached = 0xf,
+  NoViablePath = 0x10,
+}
 
 #[napi(object)]
 pub struct ConnectionError {

@@ -161,6 +161,26 @@ enum Type {
   Short = 5
 }
 
+enum ConnectionErrorCode {
+  NoError = 0,
+  InternalError = 1,
+  ConnectionRefused = 2,
+  FlowControlError = 3,
+  StreamLimitError = 4,
+  StreamStateError = 5,
+  FinalSizeError = 6,
+  FrameEncodingError = 7,
+  TransportParameterError = 8,
+  ConnectionIdLimitError = 9,
+  ProtocolViolation = 10,
+  InvalidToken = 11,
+  ApplicationError = 12,
+  CryptoBufferExceeded = 13,
+  KeyUpdateError = 14,
+  AEADLimitReached = 15,
+  NoViablePath = 16
+}
+
 type ConnectionError = {
   isApp: boolean;
   errorCode: number;
@@ -270,6 +290,7 @@ export type {
   CongestionControlAlgorithm,
   Shutdown,
   Type,
+  ConnectionErrorCode,
   ConnectionError,
   Stats,
   HostPort as Host,
