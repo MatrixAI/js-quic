@@ -23,6 +23,7 @@ interface QUICConnection extends CreateDestroy {}
 class QUICConnection extends EventTarget {
 
   public readonly connectionId: ConnectionId;
+  public readonly type: 'client' | 'server';
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
   public streamMap: Map<StreamId, QUICStream> = new Map();
@@ -71,6 +72,7 @@ class QUICConnection extends EventTarget {
       config
     );
     const quicConnection = new this({
+      type: 'server',
       conn,
       connectionId: scid,
       socket,
@@ -81,11 +83,13 @@ class QUICConnection extends EventTarget {
   }
 
   public constructor({
+    type,
     conn,
     connectionId,
     socket,
     logger
   }: {
+    type: 'client' | 'server';
     conn: Connection;
     connectionId: ConnectionId;
     socket: QUICSocket;
@@ -93,6 +97,7 @@ class QUICConnection extends EventTarget {
   }) {
     super();
     this.logger = logger;
+    this.type = type;
     this.conn = conn;
     this.connectionId = connectionId;
     this.connectionMap = socket.connectionMap;

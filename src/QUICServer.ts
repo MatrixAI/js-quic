@@ -1,5 +1,6 @@
-import type { ConnectionId, Crypto, Host, QUICConnectionMap, Hostname } from './types';
+import type { ConnectionId, Crypto, Host, Hostname } from './types';
 import type { Header, Config } from './native/types';
+import type QUICConnectionMap from './QUICConnectionMap';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -35,6 +36,7 @@ class QUICServer extends EventTarget {
   };
   protected config: Config;
   protected socket: QUICSocket;
+
   protected connectionMap: QUICConnectionMap;
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -162,7 +164,7 @@ class QUICServer extends EventTarget {
   public async stop() {
     const address = utils.buildAddress(this.host, this.port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
-    for (const connection of this.connectionMap.values()) {
+    for (const connection of this.connectionMap.serverConnections.values()) {
       await connection.destroy();
     }
     if (!this.isSocketShared) {
@@ -276,7 +278,7 @@ class QUICServer extends EventTarget {
     // Here we shall re-use the originally-derived DCID as the SCID
     scid = header.dcid as ConnectionId;
     this.logger.debug(`Accepting new connection from QUIC packet`);
-    return QUICConnection.acceptConnection({
+    const connection = await QUICConnection.acceptConnection({
       scid,
       dcid: dcidOriginal,
       socket: this.socket,
@@ -290,6 +292,9 @@ class QUICServer extends EventTarget {
     // so one has to be aware of this
     // Either that, or there is a seamless migration to a new connection ID
     // In which case we need to manage it somehow
+    // this.serverConnections.add(connection);
+
+    return connection;
   }
 
   /**

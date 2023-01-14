@@ -16,6 +16,10 @@ class ErrorQUICSocketServerDuplicate<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket already has a server that is running';
 }
 
+class ErrorQUICSocketConnectionsActive<T> extends ErrorQUICSocket<T> {
+  static description = 'QUIC Socket has active connections';
+}
+
 class ErrorQUICServer<T> extends ErrorQUIC<T> {
   static description = 'QUIC Server error';
 }
@@ -53,6 +57,7 @@ export {
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,
   ErrorQUICSocketServerDuplicate,
+  ErrorQUICSocketConnectionsActive,
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,

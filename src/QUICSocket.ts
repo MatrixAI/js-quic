@@ -1,8 +1,9 @@
 import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, QUICConnectionMap } from './types';
+import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname } from './types';
 import type { Header, Config, Connection } from './native/types';
+import QUICConnectionMap from './QUICConnectionMap';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -17,7 +18,7 @@ interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
 
-  public connectionMap: QUICConnectionMap;
+  public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
   protected socket: dgram.Socket;
   protected _host: string;
@@ -82,7 +83,6 @@ class QUICSocket extends EventTarget {
 
     // Destination Connection ID is the ID the remote peer chose for us.
     const dcid = Buffer.from(header.dcid) as ConnectionId;
-    const dcidString = utils.encodeConnectionId(dcid);
 
     // Derive our SCID using HMAC signing.
     const scid = Buffer.from(
@@ -93,13 +93,12 @@ class QUICSocket extends EventTarget {
       0,
       quiche.MAX_CONN_ID_LEN
     ) as ConnectionId;
-    const scidString = utils.encodeConnectionId(scid);
 
     // Now both must be checked
     let conn: QUICConnection;
     if (
-      !this.connectionMap.has(dcidString) &&
-      !this.connectionMap.has(scidString)
+      !this.connectionMap.has(dcid) &&
+      !this.connectionMap.has(scid)
     ) {
       // It doesn't exist
       // possibly new connection
@@ -145,9 +144,7 @@ class QUICSocket extends EventTarget {
       // could be a client conn
       // just propagate it...
 
-      conn = this.connectionMap.get(
-        dcidString
-      ) ?? this.connectionMap.get(scidString)!;
+      conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
       // If we have a connection
       // We can proceed to tell tehe conn to do things
 
@@ -386,6 +383,9 @@ class QUICSocket extends EventTarget {
   public async stop(): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
+    if (this.connectionMap.size > 0) {
+      throw new errors.ErrorQUICSocketConnectionsActive();
+    }
     this.socket.off('message', this.handleSocketMessage);
     this.socket.off('error', this.handleSocketError);
     await this.socketClose();

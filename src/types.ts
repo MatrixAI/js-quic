@@ -71,8 +71,6 @@ type Port = Opaque<'Port', number>;
  */
 type Address = Opaque<'Address', string>;
 
-type QUICConnectionMap = Map<ConnectionIdString, QUICConnection>;
-
 type QUICStreamMap = Map<StreamId, QUICStream>;
 
 type UDPRemoteInfo = dgram.RemoteInfo;
@@ -89,7 +87,6 @@ export type {
   Hostname,
   Port,
   Address,
-  QUICConnectionMap,
   QUICStreamMap,
   UDPRemoteInfo,
 };
