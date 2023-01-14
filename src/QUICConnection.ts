@@ -150,7 +150,7 @@ class QUICConnection extends EventTarget {
       ]);
     }
     this.connectionMap.delete(this.connectionId);
-    this.logger.info(`Stopped ${this.constructor.name}`);
+    this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
   /**
