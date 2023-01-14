@@ -90,70 +90,28 @@ class QUICSocket extends EventTarget {
       !this.connectionMap.has(dcid) &&
       !this.connectionMap.has(scid)
     ) {
-      // It doesn't exist
-      // possibly new connection
-      // Tell the server to handle it
-      // The server has to distinguish the socket
-
       // If a server is not registered
       // then this packet is useless, and we can discard it
       if (this.server == null) {
         return;
       }
-
-      // This is an event handler
-      // This will push events to calling functions in other classes
-      // Those classes may end up calling back to this object to trigger sends
-      const conn_ = await this.server.handleNewConnection(
+      const conn_ = await this.server.newConnection(
         data,
         rinfo,
         header,
         scid
       );
-
       // If there's no connection yet
       // Then the server is in the middle of the version negotiation/stateless retry
       // or the handshake process
       if (conn_ == null) {
         return;
       }
-
+      this.dispatchEvent(new events.QUICConnectionEvent({ detail: conn_ }));
       conn = conn_;
-
-      // Otherwise do we add this into our connection map?
-      // If so, how do we then remove it?
-      // If we are just meant to be polling things
-      // Since obviously the timeout doesn't really work
-      // Until we actually check it
-
-
-
     } else {
-      // Connection exists
-      // could be a server conn
-      // could be a client conn
-      // just propagate it...
-
       conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
-      // If we have a connection
-      // We can proceed to tell tehe conn to do things
-
     }
-
-    // The the system is now providing a new connection
-    // we now need to to bridge the connection
-    // to the socket
-    // it's already got its own timeout
-    // and its management of the lifecycle to the connection map
-
-    // At this point the socket is handling the datagram event
-    // It has to plump this data into the connection
-    // It's not the server's pov to do this
-    // because the client may need to do this as well
-    // And the QUICConnection cannot do it, since it doesn't have it
-    // So we have to push that adata in
-    // By calling a function
-
     const recvInfo = {
       to: {
         host: this.socket.address().address,
@@ -164,124 +122,8 @@ class QUICSocket extends EventTarget {
         port: rinfo.port
       },
     };
-    conn.recv(data, recvInfo);
-
+    await conn.recv(data, recvInfo);
     await conn.send();
-
-
-
-
-    // you can attach an event handler to the conneciton
-    // so when there's data on the connection
-    // you proceed to do this
-    // but that requires you work on every connection upon creation
-
-    // conn.on('recv', () => { sendToSocket })
-    // conn.on('timeout', () => { sendToSocket })
-
-
-    // When the conn has send event
-    // conn.on('send', () => { sendToSocket })
-
-    // Every time a stream sends
-    // this results in the connection emitting an event
-    // Does that mean the stream emits an event?
-    // No it doesn't make sense
-    // It just means we tell the connection to emit an event
-    // When a send occurs, this means we have sent the data
-    // or a close event occurs
-    // We could emit an event AFTER a send is called
-    // this could work.
-
-
-
-
-
-
-
-
-
-
-    // Ok now's the kicker
-    // I don't think we should only besending data here
-    // Instead it should be based on some other event
-    // The problem is that there's no EVENT
-    // for if the connection has anything to do
-    // we have the POLL the quiche connection if there's data
-    // So on WHAT condition do we poll?
-
-
-
-
-    // If we have a connection now
-    // We can proced to make work on it
-    // Note that in the case of teh above conn
-    // It may not exist in the map yet
-    // Should the QUICServer put it in?
-    // I think it should
-    // But what exactly are we doing here
-    // We should be sending it appropriately to the client or to the server
-
-
-
-    // We have to dispatch to the appropriate system
-    // Depending on the connection ID
-    // note that if it is not an existing connection ID
-    // Then we assume that means it is for creating a new one
-    // If it is not, it is discarded
-    // if it is for handling a new connection
-    // Then we must use a "single" server to do this
-    // But on the client side
-    // The DCID is the ID that the remote peer picked for us.
-    // Unlike the SCID it is guaranteed to exist for all QUIC packets.
-    // const dcid = header.dcid;
-
-    // If this packet is a short header
-    // the DCID is decoded based on the dcid length
-    // However the SCID is actually:
-    // header.scid: ConnectionId::default()
-    // What is this?
-    // The default connection id is a `from_vec(Vec::new())`
-    // I think it's just an empty Uint8Array
-    // With length of 0
-    // Ok that makes sense now
-
-    // DCID is the only thing that will always exist
-    // We must use this as a way to route the connections
-    // How do we decide how to do this?
-    // We must maintain a "connection" map here
-    // That is QUIC connections... etc.
-    // Furthermore the DCID may also not exist in the map
-    // In that case it can be a NEW connection
-    // But if it doesn't follow the new connections
-    // it must be discarded too
-
-    // When we pass this QUICSocket into the  the QUICClient
-    // or to QUICServer
-    // like
-    // we can use await, to indicate when it is started
-    // it doesn't already need to be started
-
-    // const s = new QUICServer({ socket: QUICSocket });
-    // const c1 = new QUICClient({ socket: QUICSocket });
-    // const c2 = new QUICClient({ socket: QUICSocket });
-
-    // Then upon doing `s.start()`
-    // and `c1.start()`
-    // We need to therefore "register" its connections with this handleMessage dispatch
-
-    // Ok so the problem is that there could be multiple packets in the datagram
-    // In the initial packet we have the random DCID that the client creates
-    // But it also randomly chooses its SCID
-
-    // On the server side, we are converting the `dcid` to `connId`
-    // Which is a deterministic hash of it, well a "signed" version of it
-
-    // So we have DCID, SCID and CONNID
-
-    // At any time, endpoints can change the DCID they transmit to a value that has not been used on
-    // **another** path.
-
   };
 
   /**

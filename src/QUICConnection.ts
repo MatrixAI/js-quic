@@ -72,15 +72,16 @@ class QUICConnection extends EventTarget {
       },
       config
     );
-    const quicConnection = new this({
+    const connection = new this({
       type: 'server',
       conn,
       connectionId: scid,
       socket,
       logger,
     });
-    logger.info(`Constructing ${this.name}`);
-    return quicConnection;
+    socket.connectionMap.set(connection.connectionId, connection);
+    logger.info(`Created ${this.name}`);
+    return connection;
   }
 
   public constructor({

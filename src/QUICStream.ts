@@ -51,12 +51,10 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     {
       streamId,
       connection,
-      // streams,
       logger,
     }: {
       streamId: StreamId;
       connection: QUICConnection;
-      // streams: Map<StreamId, QUICStream>;
       logger?: Logger;
     }
   ) {

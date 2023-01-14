@@ -178,7 +178,7 @@ class QUICServer extends EventTarget {
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
-  public async handleNewConnection(
+  public async newConnection(
     data: Buffer,
     rinfo: dgram.RemoteInfo,
     header: Header,
@@ -209,9 +209,6 @@ class QUICServer extends EventTarget {
           rinfo.address,
         );
       } catch (e) {
-        this.logger.error(
-          `Failed sending VersionNegotiation packet to ${peerAddress} - ${e.name}:${e.message}`
-        );
         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         return;
       }
@@ -249,9 +246,6 @@ class QUICServer extends EventTarget {
           rinfo.address,
         );
       } catch (e) {
-        this.logger.error(
-          `Failed sending Retry packet to ${peerAddress} - ${e.name}:${e.message}`
-        );
         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
         return;
       }
