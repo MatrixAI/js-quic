@@ -35,16 +35,6 @@ class QUICSocket extends EventTarget {
     ops: Crypto;
   };
 
-  @ready(new errors.ErrorQUICSocketNotRunning())
-  public get host() {
-    return this._host;
-  }
-
-  @ready(new errors.ErrorQUICSocketNotRunning())
-  public get port() {
-    return this._port;
-  }
-
   /**
    * Handle the datagram from UDP socket
    * The `data` buffer could be multiple coalesced QUIC packets.
@@ -316,6 +306,16 @@ class QUICSocket extends EventTarget {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
     this.crypto = crypto;
+  }
+
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public get host() {
+    return this._host;
+  }
+
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public get port() {
+    return this._port;
   }
 
   /**

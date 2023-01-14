@@ -39,16 +39,6 @@ class QUICServer extends EventTarget {
 
   protected connectionMap: QUICConnectionMap;
 
-  @ready(new errors.ErrorQUICServerNotRunning())
-  public get host() {
-    return this.socket.host;
-  }
-
-  @ready(new errors.ErrorQUICServerNotRunning())
-  public get port() {
-    return this.socket.port;
-  }
-
   /**
    * Handle QUIC socket errors
    * This is only used if the socket is not shared
@@ -124,6 +114,16 @@ class QUICServer extends EventTarget {
     this.config = config;
   }
 
+  @ready(new errors.ErrorQUICServerNotRunning())
+  public get host() {
+    return this.socket.host;
+  }
+
+  @ready(new errors.ErrorQUICServerNotRunning())
+  public get port() {
+    return this.socket.port;
+  }
+
   /**
    * Starts the QUICServer
    *
@@ -142,6 +142,10 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(host, port);
       this.logger.info(`Starting ${this.constructor.name} on ${address}`);
       await this.socket.start({ host, port });
+      this.socket.addEventListener(
+        'error',
+        this.handleQUICSocketError
+      );
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
       // If the socket is shared, it must already be started
@@ -151,10 +155,6 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(this.socket.host, this.socket.port);
       this.logger.info(`Starting ${this.constructor.name} on ${address}`);
     }
-    this.socket.addEventListener(
-      'error',
-      this.handleQUICSocketError
-    );
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
@@ -170,11 +170,11 @@ class QUICServer extends EventTarget {
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
       await this.socket.stop();
+      this.socket.removeEventListener(
+        'error',
+        this.handleQUICSocketError
+      );
     }
-    this.socket.removeEventListener(
-      'error',
-      this.handleQUICSocketError
-    );
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
