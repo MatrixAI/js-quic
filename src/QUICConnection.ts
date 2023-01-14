@@ -1,5 +1,6 @@
 import type QUICSocket from './QUICSocket';
-import type { ConnectionId, QUICConnectionMap, StreamId, UDPRemoteInfo } from './types';
+import type QUICConnectionMap from './QUICConnectionMap';
+import type { ConnectionId, StreamId, UDPRemoteInfo } from './types';
 import type { Config, Connection, RecvInfo, SendInfo, ConnectionErrorCode } from './native/types';
 import {
   CreateDestroy,
@@ -147,9 +148,7 @@ class QUICConnection extends EventTarget {
         closeP
       ]);
     }
-    this.connectionMap.delete(
-      utils.encodeConnectionId(this.connectionId)
-    );
+    this.connectionMap.delete(this.connectionId);
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
