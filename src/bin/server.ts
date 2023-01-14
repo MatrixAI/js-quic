@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import type { Host } from '../types';
+import type * as events from '../events';
 import process from 'process';
 import { webcrypto } from 'crypto';
 import Logger from '@matrixai/logger';
@@ -53,7 +55,7 @@ async function main(argv = process.argv): Promise<number> {
   });
 
   await server.start({
-    host: '127.0.0.1',
+    host: '127.0.0.1' as Host,
     port: 55555
   });
 
@@ -66,6 +68,14 @@ async function main(argv = process.argv): Promise<number> {
   process.on('SIGTERM', handleSignal);
   process.on('SIGTERM', handleSignal);
   process.on('SIGHUP', handleSignal);
+
+
+  // Wait are we adding new connections here?
+
+  server.addEventListener('connection', (e: events.QUICServerConnectionEvent) => {
+    console.log('got the connection', e.detail);
+  });
+
 
   process.exitCode = 0;
   return process.exitCode;

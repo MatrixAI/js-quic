@@ -78,7 +78,7 @@ class QUICSocket extends EventTarget {
     const scid = Buffer.from(
       await this.crypto.ops.sign(
         this.crypto.key,
-        header.dcid
+        dcid // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
       ),
       0,
       quiche.MAX_CONN_ID_LEN
@@ -99,6 +99,7 @@ class QUICSocket extends EventTarget {
         data,
         rinfo,
         header,
+        dcid,
         scid
       );
       // If there's no connection yet
@@ -107,7 +108,6 @@ class QUICSocket extends EventTarget {
       if (conn_ == null) {
         return;
       }
-      this.dispatchEvent(new events.QUICConnectionEvent({ detail: conn_ }));
       conn = conn_;
     } else {
       conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;

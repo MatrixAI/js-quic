@@ -1,13 +1,13 @@
 import type QUICConnection from "./QUICConnection";
 
-class QUICConnectionEvent extends Event {
+class QUICServerConnectionEvent extends Event {
   public detail: QUICConnection;
   constructor(
     options: EventInit & {
       detail: QUICConnection
     }
   ) {
-    super('error', options);
+    super('connection', options);
     this.detail = options.detail;
   }
 }
@@ -62,7 +62,7 @@ class QUICConnectionErrorEvent extends Event {
 }
 
 export {
-  QUICConnectionEvent,
+  QUICServerConnectionEvent,
   QUICStreamReadableEvent,
   QUICStreamWritableEvent,
   QUICSocketErrorEvent,

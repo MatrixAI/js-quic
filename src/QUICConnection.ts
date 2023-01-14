@@ -317,6 +317,10 @@ class QUICConnection extends EventTarget {
    */
   protected setTimeout(): void {
     const time = this.conn.timeout();
+
+    // Does this ever time out?
+    console.log('EVER TIMEOUT', time);
+
     if (time != null) {
       clearTimeout(this.timer);
       this.timer = setTimeout(

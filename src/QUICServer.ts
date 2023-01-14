@@ -114,12 +114,12 @@ class QUICServer extends EventTarget {
     this.config = config;
   }
 
-  @ready(new errors.ErrorQUICServerNotRunning())
+  @ready(new errors.ErrorQUICServerNotRunning(), false, ['stopping'])
   public get host() {
     return this.socket.host;
   }
 
-  @ready(new errors.ErrorQUICServerNotRunning())
+  @ready(new errors.ErrorQUICServerNotRunning(), false, ['stopping'])
   public get port() {
     return this.socket.port;
   }
@@ -182,9 +182,9 @@ class QUICServer extends EventTarget {
     data: Buffer,
     rinfo: dgram.RemoteInfo,
     header: Header,
+    dcid: ConnectionId,
     scid: ConnectionId,
   ): Promise<QUICConnection | undefined> {
-    this.logger.debug(`QUIC packet is for a new connection`);
     const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
     if (header.ty !== quiche.Type.Initial) {
       this.logger.debug(`QUIC packet must be Initial for new connections`);
@@ -222,7 +222,7 @@ class QUICServer extends EventTarget {
     // Stateless Retry
     if (token.byteLength === 0) {
       const token = await this.mintToken(
-        header.dcid as ConnectionId,
+        dcid,
         rinfo.address as Host
       );
       const retryDatagram = Buffer.allocUnsafe(
@@ -259,18 +259,18 @@ class QUICServer extends EventTarget {
       rinfo.address as Host
     );
     if (dcidOriginal == null) {
-      this.logger.debug(`QUIC packet token failed validation`);
+      this.logger.debug(`QUIC packet token failed validation due to missing DCID`);
       return;
     }
     // Check that the newly-derived DCID (passed in as the SCID) is the same
     // length as the packet DCID.
     // This ensures that the derivation process hasn't changed.
     if (scid.byteLength !== header.dcid.byteLength) {
-      this.logger.debug(`QUIC packet token failed validation`);
+      this.logger.debug(`QUIC packet token failed validation due to mismatched length`);
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    scid = header.dcid as ConnectionId;
+    scid = Buffer.from(header.dcid) as ConnectionId;
     this.logger.debug(`Accepting new connection from QUIC packet`);
     const connection = await QUICConnection.acceptConnection({
       scid,
@@ -280,6 +280,8 @@ class QUICServer extends EventTarget {
       config: this.config,
       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
     });
+
+    this.dispatchEvent(new events.QUICServerConnectionEvent({ detail: connection }));
 
     // A new conn ID means a new connection
     // the old connection gets removed
@@ -355,7 +357,7 @@ class QUICServer extends EventTarget {
     }
     let msgData;
     try {
-      JSON.parse(msgBuffer.toString())
+      msgData = JSON.parse(msgBuffer.toString())
     } catch {
       return;
     }
