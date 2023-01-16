@@ -185,6 +185,7 @@ class QUICConnection extends EventTarget {
               streamId,
               connection: this,
             });
+            this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
           // This triggers a writable event
           // If nothing is listening on this
@@ -206,6 +207,7 @@ class QUICConnection extends EventTarget {
               streamId,
               connection: this,
             });
+            this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
           // We must emit a readable event, otherwise the quic stream
           // will not actually read anything

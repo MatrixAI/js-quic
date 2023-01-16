@@ -73,7 +73,12 @@ async function main(argv = process.argv): Promise<number> {
   // Wait are we adding new connections here?
 
   server.addEventListener('connection', (e: events.QUICServerConnectionEvent) => {
+    const conn = e.detail;
     console.log('got the connection', e.detail);
+    conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
+      const stream = e.detail;
+      console.log('got the stream', stream);
+    });
   });
 
 
