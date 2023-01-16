@@ -35,16 +35,24 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
   protected logger: Logger;
 
-  public get sendClosed(): boolean {
-    return this._sendClosed;
-  }
-
-  public get recvClosed(): boolean {
-    return this._recvClosed;
-  }
-
-  public get recvPaused(): boolean {
-    return this._recvPaused;
+  public static async createStream({
+    streamId,
+    connection,
+    logger = new Logger(`${this.name} ${streamId}`)
+  }: {
+    streamId: StreamId;
+    connection: QUICConnection;
+    logger?: Logger;
+  }): Promise<QUICStream> {
+    logger.info(`Creating ${this.name}`);
+    const stream = new this({
+      streamId,
+      connection,
+      logger
+    });
+    connection.streamMap.set(stream.streamId, stream);
+    logger.info(`Created ${this.name}`);
+    return stream;
   }
 
   public constructor(
@@ -55,11 +63,11 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }: {
       streamId: StreamId;
       connection: QUICConnection;
-      logger?: Logger;
+      logger: Logger;
     }
   ) {
     super();
-    this.logger = logger ?? new Logger(this.constructor.name);
+    this.logger = logger;
     this.streamId = streamId;
     this.connection = connection;
     this.conn = connection.conn;
@@ -209,6 +217,18 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
   }
 
+  public get sendClosed(): boolean {
+    return this._sendClosed;
+  }
+
+  public get recvClosed(): boolean {
+    return this._recvClosed;
+  }
+
+  public get recvPaused(): boolean {
+    return this._recvPaused;
+  }
+
   protected gcStream() {
     // Only GC this stream if both recv is closed and send is closed
     // Once both sides are closed, this stream is no longer necessary
@@ -263,12 +283,14 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    * In which case we must stop both the read and write side
    */
   public async destroy() {
+    this.logger.info(`Destroying ${this.constructor.name}`);
     // Cancel the read
     this.readable.cancel();
     // But also graceful stop of the writable
     await this.writable.close();
+    this.streamMap.delete(this.streamId);
+    this.logger.info(`Destroyed ${this.constructor.name}`);
   }
-
 }
 
 export default QUICStream;

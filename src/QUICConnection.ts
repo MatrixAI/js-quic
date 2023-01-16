@@ -49,7 +49,7 @@ class QUICConnection extends EventTarget {
     socket,
     rinfo,
     config,
-    logger = new Logger(this.name),
+    logger = new Logger(`${this.name} ${scid.toString('hex')}`),
   }: {
     scid: ConnectionId;
     dcid: ConnectionId;
@@ -178,13 +178,30 @@ class QUICConnection extends EventTarget {
         return;
       }
       if (!this.conn.isDraining() && (this.conn.isInEarlyData() || this.conn.isEstablished())) {
+        for (const streamId of this.conn.readable() as Iterable<StreamId>) {
+          let quicStream = this.streamMap.get(streamId);
+          if (quicStream == null) {
+            quicStream = await QUICStream.createStream({
+              streamId,
+              connection: this,
+              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`)
+            });
+            console.log('NEW STERAM ON READ', streamId);
+            this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
+          }
+          // We must emit a readable event, otherwise the quic stream
+          // will not actually read anything
+          quicStream.dispatchEvent(new events.QUICStreamReadableEvent());
+        }
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
           if (quicStream == null) {
-            quicStream = new QUICStream({
+            quicStream = await QUICStream.createStream({
               streamId,
               connection: this,
+              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`)
             });
+            this.streamMap.set(streamId, quicStream);
             this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
           // This triggers a writable event
@@ -199,19 +216,6 @@ class QUICConnection extends EventTarget {
           quicStream.dispatchEvent(
             new events.QUICStreamWritableEvent()
           );
-        }
-        for (const streamId of this.conn.readable() as Iterable<StreamId>) {
-          let quicStream = this.streamMap.get(streamId);
-          if (quicStream == null) {
-            quicStream = new QUICStream({
-              streamId,
-              connection: this,
-            });
-            this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
-          }
-          // We must emit a readable event, otherwise the quic stream
-          // will not actually read anything
-          quicStream.dispatchEvent(new events.QUICStreamReadableEvent());
         }
       }
     } finally {
