@@ -426,7 +426,7 @@ impl Connection {
     };
     let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
       Ok((write, send_info)) => (write, Some(send_info)),
-      Err(quiche::Error::Done) => (0, None),
+      // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = send_info.map(|info| {
@@ -633,7 +633,7 @@ impl Connection {
       &mut data,
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -644,7 +644,7 @@ impl Connection {
   ) -> napi::Result<Option<Uint8Array>> {
     match self.0.dgram_recv_vec() {
       Ok(v) => return Ok(Some(v.into())),
-      Err(quiche::Error::Done) => return Ok(None),
+      // Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -656,7 +656,7 @@ impl Connection {
       len as usize,
     ) {
       Ok(v) => return Ok(v as i64),
-      Err(quiche::Error::Done) => return Ok(0),
+      // Err(quiche::Error::Done) => return Ok(0),
       Err(e) => return Err(napi::Error::from_reason(e.to_string()))
     };
   }
@@ -706,7 +706,7 @@ impl Connection {
     ) {
       Ok(v) => return Ok(v),
       // If no data is sent, also return Ok
-      Err(quiche::Error::Done) => return Ok(()),
+      // Err(quiche::Error::Done) => return Ok(()),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -720,7 +720,7 @@ impl Connection {
       data.to_vec()
     ) {
       Ok(v) => return Ok(v),
-      Err(quiche::Error::Done) => return Ok(()),
+      // Err(quiche::Error::Done) => return Ok(()),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }

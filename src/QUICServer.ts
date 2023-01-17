@@ -91,7 +91,7 @@ class QUICServer extends EventTarget {
     );
     config.verifyPeer(false);
     config.grease(true);
-    config.setMaxIdleTimeout(5000);
+    config.setMaxIdleTimeout(6000);
     config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
     config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
     config.setInitialMaxData(10000000);

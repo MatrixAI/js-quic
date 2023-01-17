@@ -79,7 +79,7 @@ async function main(argv = process.argv): Promise<number> {
 
   const handleConnection = (e: events.QUICServerConnectionEvent) => {
     const conn = e.detail;
-    console.log('Got Connection', conn.connectionId);
+    console.log('Got Connection', conn.connectionId.toString());
 
     conn.addEventListener('stream', handleStream);
     conn.addEventListener('destroy', () => {
