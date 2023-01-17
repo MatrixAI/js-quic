@@ -1,14 +1,13 @@
 import type QUICConnection from "./QUICConnection";
-import type { ConnectionId, ConnectionIdString } from "./types";
-import * as utils from './utils';
+import QUICConnectionId from './QUICConnectionId';
 
-class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
+class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
   public [Symbol.toStringTag]: string = 'QUICConnectionMap';
-  protected _serverConnections: Map<ConnectionIdString, QUICConnection> = new Map();
-  protected _clientConnections: Map<ConnectionIdString, QUICConnection> = new Map();
+  protected _serverConnections: Map<string, QUICConnection> = new Map();
+  protected _clientConnections: Map<string, QUICConnection> = new Map();
 
   public constructor(
-    connections?: Iterable<readonly [ConnectionId, QUICConnection]>
+    connections?: Iterable<readonly [QUICConnectionId, QUICConnection]>
   ) {
     if (connections != null) {
       for (const [connectionId, connection] of connections) {
@@ -26,7 +25,7 @@ class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
    * This uses `ConnectionIdString` because it is too complex to map
    * `ConnectionId` to `ConnectionIdString` and back.
    */
-  public get serverConnections(): ReadonlyMap<ConnectionIdString, QUICConnection> {
+  public get serverConnections(): ReadonlyMap<string, QUICConnection> {
     return this._serverConnections;
   }
 
@@ -35,36 +34,32 @@ class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
    * This uses `ConnectionIdString` because it is too complex to map
    * `ConnectionId` to `ConnectionIdString` and back.
    */
-  public get clientConnections(): ReadonlyMap<ConnectionIdString, QUICConnection> {
+  public get clientConnections(): ReadonlyMap<string, QUICConnection> {
     return this._clientConnections;
   }
 
-  public has(connectionId: ConnectionId): boolean {
-    const connectionIdString = utils.encodeConnectionId(connectionId);
-    return this._serverConnections.has(connectionIdString) ||
-           this._clientConnections.has(connectionIdString);
+  public has(connectionId: QUICConnectionId): boolean {
+    return this._serverConnections.has(connectionId.toString()) ||
+           this._clientConnections.has(connectionId.toString());
   }
 
-  public get(connectionId: ConnectionId): QUICConnection | undefined {
-    const connectionIdString = utils.encodeConnectionId(connectionId);
-    return this._serverConnections.get(connectionIdString) ??
-           this._clientConnections.get(connectionIdString);
+  public get(connectionId: QUICConnectionId): QUICConnection | undefined {
+    return this._serverConnections.get(connectionId.toString()) ??
+           this._clientConnections.get(connectionId.toString());
   }
 
-  public set(connectionId: ConnectionId, connection: QUICConnection): this {
-    const connectionIdString = utils.encodeConnectionId(connectionId);
+  public set(connectionId: QUICConnectionId, connection: QUICConnection): this {
     if (connection.type === 'server') {
-      this._serverConnections.set(connectionIdString, connection);
+      this._serverConnections.set(connectionId.toString(), connection);
     } else if (connection.type === 'client') {
-      this._clientConnections.set(connectionIdString, connection);
+      this._clientConnections.set(connectionId.toString(), connection);
     }
     return this;
   }
 
-  public delete(connectionId: ConnectionId): boolean {
-    const connectionIdString = utils.encodeConnectionId(connectionId);
-    return this._serverConnections.delete(connectionIdString) ||
-           this._clientConnections.delete(connectionIdString);
+  public delete(connectionId: QUICConnectionId): boolean {
+    return this._serverConnections.delete(connectionId.toString()) ||
+           this._clientConnections.delete(connectionId.toString());
   }
 
   public clear(): void {
@@ -75,30 +70,30 @@ class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
   public forEach(
     callback: (
       value: QUICConnection,
-      key: ConnectionId,
-      map: Map<ConnectionId, QUICConnection>
+      key: QUICConnectionId,
+      map: Map<QUICConnectionId, QUICConnection>
     ) => void,
     thisArg?: any
   ): void {
     this._serverConnections.forEach((value, key) => {
-      callback.bind(thisArg)(value, utils.decodeConnectionId(key), this);
+      callback.bind(thisArg)(value, QUICConnectionId.fromString(key), this);
     });
     this._clientConnections.forEach((value, key) => {
-      callback.bind(thisArg)(value, utils.decodeConnectionId(key), this);
+      callback.bind(thisArg)(value, QUICConnectionId.fromString(key), this);
     });
   }
 
-  public [Symbol.iterator](): IterableIterator<[ConnectionId, QUICConnection]> {
+  public [Symbol.iterator](): IterableIterator<[QUICConnectionId, QUICConnection]> {
     const serverIterator = this._serverConnections[Symbol.iterator]();
     const clientIterator = this._clientConnections[Symbol.iterator]();
     const iterator = {
-      next: (): IteratorResult<[ConnectionId, QUICConnection], void> => {
+      next: (): IteratorResult<[QUICConnectionId, QUICConnection], void> => {
         const serverResult = serverIterator.next();
         if (!serverResult.done) {
           const [key, value] = serverResult.value;
           return {
             done: false,
-            value: [utils.decodeConnectionId(key), value]
+            value: [QUICConnectionId.fromString(key), value]
           };
         }
         const clientResult = clientIterator.next();
@@ -106,7 +101,7 @@ class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
           const [key, value] = clientResult.value;
           return {
             done: false,
-            value: [utils.decodeConnectionId(key), value]
+            value: [QUICConnectionId.fromString(key), value]
           };
         }
         return { done: true, value: undefined };
@@ -116,13 +111,13 @@ class QUICConnectionMap implements Map<ConnectionId, QUICConnection> {
     return iterator;
   }
 
-  public entries(): IterableIterator<[ConnectionId, QUICConnection]> {
+  public entries(): IterableIterator<[QUICConnectionId, QUICConnection]> {
     return this[Symbol.iterator]();
   }
 
-  public keys(): IterableIterator<ConnectionId> {
+  public keys(): IterableIterator<QUICConnectionId> {
     const iterator = {
-      next: (): IteratorResult<ConnectionId, void> => {
+      next: (): IteratorResult<QUICConnectionId, void> => {
         const result = this[Symbol.iterator]().next();
         if (!result.done) {
           return {

@@ -4,6 +4,7 @@ import type QUICConnection from './QUICConnection';
 import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
 import QUICConnectionMap from './QUICConnectionMap';
+import QUICConnectionId from './QUICConnectionId';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -77,17 +78,17 @@ class QUICSocket extends EventTarget {
     // We have not explored this yet
 
     // Destination Connection ID is the ID the remote peer chose for us.
-    const dcid = Buffer.from(header.dcid) as ConnectionId;
+    const dcid = new QUICConnectionId(header.dcid);
 
     // Derive our SCID using HMAC signing.
-    const scid = Buffer.from(
+    const scid = new QUICConnectionId(
       await this.crypto.ops.sign(
         this.crypto.key,
         dcid // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
       ),
       0,
       quiche.MAX_CONN_ID_LEN
-    ) as ConnectionId;
+    );
 
     const remoteInfo = {
       host: rinfo.address as Host,

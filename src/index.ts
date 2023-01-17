@@ -3,6 +3,7 @@ export { default as QUICServer } from './QUICServer';
 export { default as QUICClient } from './QUICClient';
 export { default as QUICConnectionMap } from './QUICConnectionMap';
 export { default as QUICConnection } from './QUICConnection';
+export { default as QUICConnectionId } from './QUICConnectionId';
 export { default as QUICStream } from './QUICStream';
 export * as utils from './utils';
 export * as errors from './errors';

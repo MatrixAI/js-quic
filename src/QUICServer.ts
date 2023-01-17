@@ -1,6 +1,7 @@
 import type { ConnectionId, Crypto, Host, Hostname, Port, RemoteInfo } from './types';
 import type { Header, Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
+import QUICConnectionId from './QUICConnectionId';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
@@ -181,8 +182,8 @@ class QUICServer extends EventTarget {
     data: Buffer,
     remoteInfo: RemoteInfo,
     header: Header,
-    dcid: ConnectionId,
-    scid: ConnectionId,
+    dcid: QUICConnectionId,
+    scid: QUICConnectionId,
   ): Promise<QUICConnection | undefined> {
     const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
     if (header.ty !== quiche.Type.Initial) {
@@ -269,7 +270,7 @@ class QUICServer extends EventTarget {
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    scid = Buffer.from(header.dcid) as ConnectionId;
+    scid = new QUICConnectionId(header.dcid);
     this.logger.debug(`Accepting new connection from QUIC packet`);
     const connection = await QUICConnection.acceptConnection({
       scid,
@@ -277,7 +278,7 @@ class QUICServer extends EventTarget {
       socket: this.socket,
       remoteInfo,
       config: this.config,
-      logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
+      logger: this.logger.getChild(`${QUICConnection.name} ${scid}`)
     });
 
     this.dispatchEvent(new events.QUICServerConnectionEvent({ detail: connection }));
@@ -298,10 +299,10 @@ class QUICServer extends EventTarget {
    * It will authenticate the data by providing a signature signed by our key.
    */
   protected async mintToken(
-    dcid: ConnectionId,
+    dcid: QUICConnectionId,
     peerHost: Host
   ): Promise<Buffer> {
-    const msgData = { dcid: utils.encodeConnectionId(dcid), host: peerHost };
+    const msgData = { dcid: dcid.toString(), host: peerHost };
     const msgJSON = JSON.stringify(msgData);
     const msgBuffer = Buffer.from(msgJSON);
     const msgSig = Buffer.from(
@@ -329,7 +330,7 @@ class QUICServer extends EventTarget {
   protected async validateToken(
     tokenBuffer: Buffer,
     peerHost: Host
-  ): Promise<ConnectionId | undefined> {
+  ): Promise<QUICConnectionId | undefined> {
     let tokenData;
     try {
       tokenData = JSON.parse(tokenBuffer.toString());
@@ -372,7 +373,7 @@ class QUICServer extends EventTarget {
     if (msgData.host !== peerHost) {
       return;
     }
-    return utils.decodeConnectionId(msgData.dcid);
+    return QUICConnectionId.fromString(msgData.dcid);
   }
 
 }

@@ -49,6 +49,16 @@ class QUICServerErrorEvent extends Event {
   }
 }
 
+// The stream, may come with initial information
+// So we can put the remote info regarding that
+// Into the stream
+// Each stream will have a fixed conn ID
+// Then again... it's possible for the stream to have varying peer info too
+// It sort of depends again
+// Since you could be handling 1 stream
+// Then another stream runs, concurrently from a different remote host
+// So you never really get the initial thing
+
 class QUICConnectionStreamEvent extends Event {
   public detail: QUICStream;
   constructor(

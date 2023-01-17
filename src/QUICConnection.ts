@@ -1,5 +1,6 @@
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
+import type QUICConnectionId from './QUICConnectionId';
 import type { Host, ConnectionId, Port, StreamId, RemoteInfo } from './types';
 import type { Config, Connection, SendInfo, ConnectionErrorCode } from './native/types';
 import {
@@ -28,7 +29,7 @@ interface QUICConnection extends CreateDestroy {}
 @CreateDestroy()
 class QUICConnection extends EventTarget {
 
-  public readonly connectionId: ConnectionId;
+  public readonly connectionId: QUICConnectionId;
   public readonly type: 'client' | 'server';
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
@@ -48,9 +49,9 @@ class QUICConnection extends EventTarget {
    */
   public static async connectConnection({
     scid,
-    logger = new Logger(`${this.name} ${scid.toString('hex')}`),
+    logger = new Logger(`${this.name} ${scid}`),
   }: {
-    scid: ConnectionId;
+    scid: QUICConnectionId;
     logger?: Logger;
   }) {
     logger.info(`Create ${this.name}`);
@@ -66,10 +67,10 @@ class QUICConnection extends EventTarget {
     socket,
     remoteInfo,
     config,
-    logger = new Logger(`${this.name} ${scid.toString('hex')}`),
+    logger = new Logger(`${this.name} ${scid}`),
   }: {
-    scid: ConnectionId;
-    dcid: ConnectionId;
+    scid: QUICConnectionId;
+    dcid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
     config: Config;
@@ -112,7 +113,7 @@ class QUICConnection extends EventTarget {
   }: {
     type: 'client' | 'server';
     conn: Connection;
-    connectionId: ConnectionId;
+    connectionId: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
     logger: Logger;
