@@ -17,12 +17,11 @@ import QUICSocket from './QUICSocket';
  * You must provide a error handler `addEventListener('error')`.
  * Otherwise errors will just be ignored.
  *
- * 'close'
- * 'connection'
- * 'error'
- * 'listen'
+ * Events:
+ * - connection
+ * - error - (could be a QUICSocketErrorEvent OR QUICServerErrorEvent)
+ * - stop
  */
-
 interface QUICServer extends StartStop {}
 @StartStop()
 class QUICServer extends EventTarget {
@@ -140,7 +139,7 @@ class QUICServer extends EventTarget {
     let address;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
-      this.logger.info(`Starting ${this.constructor.name} on ${address}`);
+      this.logger.info(`Start ${this.constructor.name} on ${address}`);
       await this.socket.start({ host, port });
       this.socket.addEventListener(
         'error',
@@ -153,7 +152,7 @@ class QUICServer extends EventTarget {
         throw new errors.ErrorQUICServerSocketNotRunning();
       }
       address = utils.buildAddress(this.socket.host, this.socket.port);
-      this.logger.info(`Starting ${this.constructor.name} on ${address}`);
+      this.logger.info(`Start ${this.constructor.name} on ${address}`);
     }
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
@@ -163,7 +162,7 @@ class QUICServer extends EventTarget {
    */
   public async stop() {
     const address = utils.buildAddress(this.host, this.port);
-    this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
+    this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     for (const connection of this.connectionMap.serverConnections.values()) {
       await connection.destroy();
     }
@@ -175,6 +174,7 @@ class QUICServer extends EventTarget {
         this.handleQUICSocketError
       );
     }
+    this.dispatchEvent(new events.QUICServerStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 

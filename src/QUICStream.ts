@@ -1,3 +1,4 @@
+import type QUICConnection from './QUICConnection';
 import type { QUICStreamMap, StreamId } from './types';
 import type { Connection } from './native/types';
 import Logger from '@matrixai/logger';
@@ -7,7 +8,7 @@ import {
   ready,
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
-import type QUICConnection from './QUICConnection';
+import * as events from './events';
 
 function reasonToCode(reason?: any) {
   // The reason to code map must be supplied
@@ -16,6 +17,14 @@ function reasonToCode(reason?: any) {
   return 0;
 }
 
+/**
+ * Events:
+ * - destroy
+ *
+ * Swap from using `readable` and `writable` to just function calls.
+ * It's basically the same, since it's just the connection telling the stream
+ * is readable/writable. Rather than creating events for it.
+ */
 interface QUICStream extends CreateDestroy {}
 @CreateDestroy()
 class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
@@ -44,7 +53,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     connection: QUICConnection;
     logger?: Logger;
   }): Promise<QUICStream> {
-    logger.info(`Creating ${this.name}`);
+    logger.info(`Create ${this.name}`);
     const stream = new this({
       streamId,
       connection,
@@ -229,6 +238,36 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     return this._recvPaused;
   }
 
+  /**
+   * Explicit destruction of the stream
+   * In which case we must stop both the read and write side
+   */
+  public async destroy() {
+    this.logger.info(`Destroy ${this.constructor.name}`);
+    // Cancel the read
+    this.readable.cancel();
+    // But also graceful stop of the writable
+    await this.writable.close();
+    this.streamMap.delete(this.streamId);
+    this.dispatchEvent(new events.QUICStreamDestroyEvent());
+    this.logger.info(`Destroyed ${this.constructor.name}`);
+  }
+
+  // TODO
+  // Tell it to read
+  public read() {
+    // The QUICConnection says `stream.read()`
+    // unpauses the read
+  }
+
+  // TODO
+  // Tell it to write
+  public write() {
+    // The QUICConnection says `stream.write()`
+    // unpauses the write
+  }
+
+
   protected gcStream() {
     // Only GC this stream if both recv is closed and send is closed
     // Once both sides are closed, this stream is no longer necessary
@@ -276,20 +315,6 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         chunk.subarray(sentLength)
       );
     }
-  }
-
-  /**
-   * Explicit destruction of the stream
-   * In which case we must stop both the read and write side
-   */
-  public async destroy() {
-    this.logger.info(`Destroying ${this.constructor.name}`);
-    // Cancel the read
-    this.readable.cancel();
-    // But also graceful stop of the writable
-    await this.writable.close();
-    this.streamMap.delete(this.streamId);
-    this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 }
 

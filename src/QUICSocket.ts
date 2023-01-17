@@ -14,6 +14,11 @@ import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
 
+/**
+ * Events:
+ * - error
+ * - stop
+ */
 interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
@@ -174,7 +179,7 @@ class QUICSocket extends EventTarget {
     port?: number,
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
-    this.logger.info(`Starting ${this.constructor.name} on ${address}`);
+    this.logger.info(`Start ${this.constructor.name} on ${address}`);
     const [isIPv4] = Validator.isValidIPv4String(host);
     const [isIPv6] = Validator.isValidIPv6String(host);
     let type: 'udp4' | 'udp6';
@@ -224,13 +229,14 @@ class QUICSocket extends EventTarget {
 
   public async stop(): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
-    this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
+    this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     if (this.connectionMap.size > 0) {
       throw new errors.ErrorQUICSocketConnectionsActive();
     }
     this.socket.off('message', this.handleSocketMessage);
     this.socket.off('error', this.handleSocketError);
     await this.socketClose();
+    this.dispatchEvent(new events.QUICSocketStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 

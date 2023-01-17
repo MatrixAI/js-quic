@@ -18,6 +18,11 @@ import * as errors from './errors';
  * Think of this as equivalent to `net.Socket`.
  * Errors here are emitted to the connection only.
  * Not to the server.
+ *
+ * Events (events are executed post-facto):
+ * - stream - when new stream is created
+ * - destroy - when destruction is done
+ * - error - when an error is emitted
  */
 interface QUICConnection extends CreateDestroy {}
 @CreateDestroy()
@@ -36,8 +41,15 @@ class QUICConnection extends EventTarget {
   /**
    * Create QUICConnection by connecting to a server
    */
-  public static async connectConnection() {
-
+  public static async connectConnection({
+    scid,
+    logger = new Logger(`${this.name} ${scid.toString('hex')}`),
+  }: {
+    scid: ConnectionId;
+    logger?: Logger;
+  }) {
+    logger.info(`Create ${this.name}`);
+    logger.info(`Created ${this.name}`);
   }
 
   /**
@@ -57,8 +69,8 @@ class QUICConnection extends EventTarget {
     rinfo: UDPRemoteInfo;
     config: Config;
     logger?: Logger;
-  }) {
-    logger.info(`Creating ${this.name}`);
+  }): Promise<QUICConnection> {
+    logger.info(`Create ${this.name}`);
     const conn = quiche.Connection.accept(
       scid,
       dcid,
@@ -122,7 +134,7 @@ class QUICConnection extends EventTarget {
       errorMessage?: string;
     } = {}
   ) {
-    this.logger.info(`Destroying ${this.constructor.name}`);
+    this.logger.info(`Destroy ${this.constructor.name}`);
     for (const stream of this.streamMap.values())  {
       await stream.destroy();
     }
@@ -150,6 +162,7 @@ class QUICConnection extends EventTarget {
       ]);
     }
     this.connectionMap.delete(this.connectionId);
+    this.dispatchEvent(new events.QUICConnectionDestroyEvent());
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
@@ -322,15 +335,19 @@ class QUICConnection extends EventTarget {
    * Sets the timeout
    */
   protected setTimeout(): void {
+    console.group('setTimeout');
     const time = this.conn.timeout();
-
-    // Does this ever time out?
-    console.log('EVER TIMEOUT', time);
+    console.log('Time given:', time);
 
     if (time != null) {
+      console.log('Resetting the timeout');
+
       clearTimeout(this.timer);
       this.timer = setTimeout(
         async () => {
+
+          console.log('TIMEOUT HANDLER CALLED');
+
           // This would only run if the `recv` and `send` is not called
           // Otherwise this handler would be cleared each time and be reset
           this.conn.onTimeout();
@@ -340,9 +357,14 @@ class QUICConnection extends EventTarget {
         time
       );
     } else {
+
+      console.log('Clearing the timeout');
+
       clearTimeout(this.timer);
       delete this.timer;
     }
+
+    console.groupEnd();
   }
 }
 
