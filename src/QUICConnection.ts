@@ -1,7 +1,7 @@
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { ConnectionId, StreamId, UDPRemoteInfo } from './types';
-import type { Config, Connection, RecvInfo, SendInfo, ConnectionErrorCode } from './native/types';
+import type { Host, ConnectionId, Port, StreamId, RemoteInfo } from './types';
+import type { Config, Connection, SendInfo, ConnectionErrorCode } from './native/types';
 import {
   CreateDestroy,
   ready,
@@ -33,10 +33,15 @@ class QUICConnection extends EventTarget {
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
   public streamMap: Map<StreamId, QUICStream> = new Map();
+
   protected logger: Logger;
   protected socket: QUICSocket;
   protected timer?: ReturnType<typeof setTimeout>;
   protected resolveCloseP?: () => void;
+
+  // These can change on every `recv` call
+  protected _remoteHost: Host;
+  protected _remotePort: Port;
 
   /**
    * Create QUICConnection by connecting to a server
@@ -59,14 +64,14 @@ class QUICConnection extends EventTarget {
     scid,
     dcid,
     socket,
-    rinfo,
+    remoteInfo,
     config,
     logger = new Logger(`${this.name} ${scid.toString('hex')}`),
   }: {
     scid: ConnectionId;
     dcid: ConnectionId;
     socket: QUICSocket;
-    rinfo: UDPRemoteInfo;
+    remoteInfo: RemoteInfo;
     config: Config;
     logger?: Logger;
   }): Promise<QUICConnection> {
@@ -79,8 +84,8 @@ class QUICConnection extends EventTarget {
         port: socket.port,
       },
       {
-        host: rinfo.address,
-        port: rinfo.port,
+        host: remoteInfo.host,
+        port: remoteInfo.port,
       },
       config
     );
@@ -89,6 +94,7 @@ class QUICConnection extends EventTarget {
       conn,
       connectionId: scid,
       socket,
+      remoteInfo,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -101,12 +107,14 @@ class QUICConnection extends EventTarget {
     conn,
     connectionId,
     socket,
+    remoteInfo,
     logger
   }: {
     type: 'client' | 'server';
     conn: Connection;
     connectionId: ConnectionId;
     socket: QUICSocket;
+    remoteInfo: RemoteInfo;
     logger: Logger;
   }) {
     super();
@@ -116,8 +124,26 @@ class QUICConnection extends EventTarget {
     this.connectionId = connectionId;
     this.connectionMap = socket.connectionMap;
     this.socket = socket;
+    this._remoteHost = remoteInfo.host;
+    this._remotePort = remoteInfo.port;
     // Sets the timeout on the first
     this.setTimeout();
+  }
+
+  public get remoteHost() {
+    return this._remoteHost;
+  }
+
+  public get remotePort() {
+    return this._remotePort;
+  }
+
+  public get localHost() {
+    return this.socket.host;
+  }
+
+  public get localPort() {
+    return this.socket.port;
   }
 
   /**
@@ -174,12 +200,28 @@ class QUICConnection extends EventTarget {
    * However no streams are allowed to read or write.
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
-  public async recv(data: Uint8Array, recvInfo: RecvInfo) {
+  public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
     try {
       if (this.conn.isClosed()) {
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
       }
+      // The remote info may have changed on each receive
+      // here we update!
+      // This still requires testing to see what happens
+      this._remoteHost = remoteInfo.host;
+      this._remotePort = remoteInfo.port;
+      // Used by quiche
+      const recvInfo = {
+        to: {
+          host: this.localHost,
+          port: this.localPort
+        },
+        from: {
+          host: remoteInfo.host,
+          port: remoteInfo.port
+        },
+      };
       try {
         this.conn.recv(data, recvInfo);
       } catch (e) {

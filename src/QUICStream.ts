@@ -294,7 +294,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       // If the Done is returned
       // then no data was sent
       // because the stream has no capacity
-      // That is equivalent here to being sent lenght of 0
+      // That is equivalent here to being sent length of 0
       if (e.message === 'Done') {
         sentLength = 0;
       } else {

@@ -1,7 +1,6 @@
-import type { ConnectionId, Crypto, Host, Hostname } from './types';
+import type { ConnectionId, Crypto, Host, Hostname, Port, RemoteInfo } from './types';
 import type { Header, Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
@@ -180,12 +179,12 @@ class QUICServer extends EventTarget {
 
   public async newConnection(
     data: Buffer,
-    rinfo: dgram.RemoteInfo,
+    remoteInfo: RemoteInfo,
     header: Header,
     dcid: ConnectionId,
     scid: ConnectionId,
   ): Promise<QUICConnection | undefined> {
-    const peerAddress = utils.buildAddress(rinfo.address, rinfo.port);
+    const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
     if (header.ty !== quiche.Type.Initial) {
       this.logger.debug(`QUIC packet must be Initial for new connections`);
       return;
@@ -205,8 +204,8 @@ class QUICServer extends EventTarget {
           versionDatagram,
           0,
           versionDatagramLength,
-          rinfo.port,
-          rinfo.address,
+          remoteInfo.port,
+          remoteInfo.host,
         );
       } catch (e) {
         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
@@ -223,7 +222,7 @@ class QUICServer extends EventTarget {
     if (token.byteLength === 0) {
       const token = await this.mintToken(
         dcid,
-        rinfo.address as Host
+        remoteInfo.host
       );
       const retryDatagram = Buffer.allocUnsafe(
         quiche.MAX_DATAGRAM_SIZE
@@ -242,8 +241,8 @@ class QUICServer extends EventTarget {
           retryDatagram,
           0,
           retryDatagramLength,
-          rinfo.port,
-          rinfo.address,
+          remoteInfo.port,
+          remoteInfo.host,
         );
       } catch (e) {
         this.dispatchEvent(new events.QUICServerErrorEvent({ detail: e }));
@@ -256,7 +255,7 @@ class QUICServer extends EventTarget {
     // While the DCID embedded in the token is the original DCID that the client first created.
     const dcidOriginal = await this.validateToken(
       Buffer.from(token),
-      rinfo.address as Host
+      remoteInfo.host
     );
     if (dcidOriginal == null) {
       this.logger.debug(`QUIC packet token failed validation due to missing DCID`);
@@ -276,7 +275,7 @@ class QUICServer extends EventTarget {
       scid,
       dcid: dcidOriginal,
       socket: this.socket,
-      rinfo,
+      remoteInfo,
       config: this.config,
       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString('hex')}`)
     });

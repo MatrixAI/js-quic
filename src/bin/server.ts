@@ -72,15 +72,25 @@ async function main(argv = process.argv): Promise<number> {
 
   // Wait are we adding new connections here?
 
-  server.addEventListener('connection', (e: events.QUICServerConnectionEvent) => {
-    const conn = e.detail;
-    console.log('got the connection', e.detail);
-    conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
-      const stream = e.detail;
-      console.log('got the stream', stream);
-    });
-  });
+  const handleStream = (e: events.QUICConnectionStreamEvent) => {
+    const stream = e.detail;
+    console.log('Got Stream', stream.streamId);
+  };
 
+  const handleConnection = (e: events.QUICServerConnectionEvent) => {
+    const conn = e.detail;
+    console.log('Got Connection', conn.connectionId);
+
+    conn.addEventListener('stream', handleStream);
+    conn.addEventListener('destroy', () => {
+      conn.removeEventListener('stream', handleStream);
+    }, { once: true });
+  };
+
+  server.addEventListener('connection', handleConnection);
+  server.addEventListener('stop', () => {
+    server.removeEventListener('connection', handleConnection);
+  }, { once: true});
 
   process.exitCode = 0;
   return process.exitCode;

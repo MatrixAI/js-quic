@@ -1,7 +1,7 @@
 import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname } from './types';
+import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
 import QUICConnectionMap from './QUICConnectionMap';
 import dgram from 'dgram';
@@ -89,6 +89,11 @@ class QUICSocket extends EventTarget {
       quiche.MAX_CONN_ID_LEN
     ) as ConnectionId;
 
+    const remoteInfo = {
+      host: rinfo.address as Host,
+      port: rinfo.port as Port,
+    };
+
     // Now both must be checked
     let conn: QUICConnection;
     if (
@@ -102,7 +107,7 @@ class QUICSocket extends EventTarget {
       }
       const conn_ = await this.server.newConnection(
         data,
-        rinfo,
+        remoteInfo,
         header,
         dcid,
         scid
@@ -117,17 +122,10 @@ class QUICSocket extends EventTarget {
     } else {
       conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
     }
-    const recvInfo = {
-      to: {
-        host: this.socket.address().address,
-        port: this.socket.address().port
-      },
-      from: {
-        host: rinfo.address,
-        port: rinfo.port
-      },
-    };
-    await conn.recv(data, recvInfo);
+    await conn.recv(
+      data,
+      remoteInfo
+    );
     await conn.send();
   };
 

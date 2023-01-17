@@ -73,7 +73,10 @@ type Address = Opaque<'Address', string>;
 
 type QUICStreamMap = Map<StreamId, QUICStream>;
 
-type UDPRemoteInfo = dgram.RemoteInfo;
+type RemoteInfo = {
+  host: Host;
+  port: Port;
+};
 
 export type {
   Opaque,
@@ -88,5 +91,5 @@ export type {
   Port,
   Address,
   QUICStreamMap,
-  UDPRemoteInfo,
+  RemoteInfo,
 };
