@@ -7,7 +7,7 @@ import QUICConnectionMap from './QUICConnectionMap';
 import QUICConnectionId from './QUICConnectionId';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import { running } from '@matrixai/async-init';
+import { running, destroyed } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import { Validator } from 'ip-num';
 import { quiche, Type } from './native';
@@ -127,7 +127,15 @@ class QUICSocket extends EventTarget {
       data,
       remoteInfo
     );
-    await conn.send();
+
+    // The `conn.recv` now may actually destroy the connection
+    // In that sense, there's nothing to send
+    // That's the `conn.destroy` might call `conn.send`
+    // So it's all sent
+
+    if (!conn[destroyed]) {
+      await conn.send();
+    }
   };
 
   /**

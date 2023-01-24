@@ -9,6 +9,7 @@ import {
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import * as events from './events';
+import * as errors from './errors';
 
 function reasonToCode(reason?: any) {
   // The reason to code map must be supplied
@@ -88,7 +89,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       type: 'bytes',
       // autoAllocateChunkSize: 1024,
       start: (controller) => {
-        handleReadable = () => {
+        handleReadable = async () => {
           if (this._recvPaused) {
             // Do nothing if we are paused
             return;
@@ -101,6 +102,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
               buf
             );
           } catch (e) {
+
+            console.log('The e', e.message);
+
             if (e.message === 'Done') {
               // Do nothing if there was nothing to read
               return;
@@ -119,16 +123,33 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
               return;
             }
           }
+
+          console.log('ENQUEUING');
+
           // It's possible to get a 0-length buffer
           controller.enqueue(buf.subarray(0, recvLength));
           // If fin is true, then that means, the stream is CLOSED
           if (fin) {
 
+            console.log('FINISHED');
+
             // If the other peer signalled fin
             // we get fin her being true
             // and we close the controller, indicating the closing of the stream
 
+            // IF YOU CLOSE the controller
+            // then cancel has no effect
+            // therenothing gets called there
             controller.close();
+
+            this.removeEventListener('readable', handleReadable);
+            this._recvClosed = true;
+            await this.gcStream();
+
+            // You have to do what you would be done
+            // in the case of cancellation
+
+
             // If finished, we won't bother doing anything else, we finished
             return;
           }
@@ -148,7 +169,10 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // The pull
         this.dispatchEvent(new Event('readable'));
       },
-      cancel: (reason) => {
+      cancel: async (reason) => {
+
+        console.log('----------THE cancel callback-------');
+
         this.removeEventListener('readable', handleReadable);
         this.conn.streamShutdown(
           this.streamId,
@@ -161,8 +185,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // At this point in the peer side
         // if they were to call `streamFinished()`
         // It would be true
-        this.gcStream();
-
+        await this.gcStream();
 
       }
     });
@@ -181,12 +204,14 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         await this.streamSendFully(chunk);
       },
       close: async () => {
+        console.log('----------THE close callback-------');
+
         // Send an empty buffer and also `true` to indicate that it is finished!
         await this.streamSendFully(Buffer.from([]), true);
         this._sendClosed = true;
-        this.gcStream();
+        await this.gcStream();
       },
-      abort: (reason?: any) => {
+      abort: async (reason?: any) => {
         // Abort can be called even if there are writes are queued up
         // The chunks are meant to be thrown away
         // We could tell it to shutdown
@@ -200,7 +225,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         );
 
         this._sendClosed = true;
-        this.gcStream();
+        await this.gcStream();
       }
     });
 
@@ -240,14 +265,36 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
   /**
    * Explicit destruction of the stream
-   * In which case we must stop both the read and write side
    */
   public async destroy() {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    // Cancel the read
-    this.readable.cancel();
-    // But also graceful stop of the writable
-    await this.writable.close();
+    // If the streams are locked, this means they are in-use
+    // or they have been composed with `pipeThrough` or `pipeTo`.
+    // At this point the management of their lifecycle is no longer
+    // `QUICStream`'s responsibility.
+    // If they not already closed, we cannot proceed with destroying
+    // this `QUICStream`.
+    if (
+      (this.readable.locked && !this._recvClosed)
+      ||
+      (this.writable.locked && !this._sendClosed)
+    ) {
+      // The `QUICConnection` may then result in a partial destruction,
+      // some of its `QUICStream` may be destroyed
+      // This means the destruction may need to be retried.
+      // However a proper destruction should destroy the users of
+      // the `QUICStream` first before destroying the `QUICConnection`.
+      throw new errors.ErrorQUICStreamLockedAndActive();
+    }
+    // If the streams are not locked, and they haven't been closed yet,
+    // we can close them here.
+    if (!this.readable.locked && !this._recvClosed) {
+      console.warn('------ CANCEL READABLE -----');
+      await this.readable.cancel();
+    }
+    if (!this.writable.locked && !this._sendClosed) {
+      await this.writable.close();
+    }
     this.streamMap.delete(this.streamId);
     this.dispatchEvent(new events.QUICStreamDestroyEvent());
     this.logger.info(`Destroyed ${this.constructor.name}`);
@@ -267,13 +314,14 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // unpauses the write
   }
 
-
-  protected gcStream() {
+  protected async gcStream() {
+    console.log('===========GC STREAM=============');
     // Only GC this stream if both recv is closed and send is closed
     // Once both sides are closed, this stream is no longer necessary
     // It can now be removed from the active streams
     if (this._recvClosed && this._sendClosed) {
-      this.streamMap.delete(this.streamId);
+      console.log('===========GC STREAM CALLS DESTROY=============');
+      await this.destroy();
     }
   }
 

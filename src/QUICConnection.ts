@@ -225,7 +225,7 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
-        console.log('Did a recv', data.byteLength);
+        // console.log('Did a recv', data.byteLength);
         this.conn.recv(data, recvInfo);
       } catch (e) {
         // Depending on the exception, the `this.conn.recv`
@@ -244,7 +244,7 @@ class QUICConnection extends EventTarget {
               connection: this,
               logger: this.logger.getChild(`${QUICStream.name} ${streamId}`)
             });
-            console.log('NEW STERAM ON READ', streamId);
+            // console.log('NEW STERAM ON READ', streamId);
             this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
           // We must emit a readable event, otherwise the quic stream
@@ -317,7 +317,7 @@ class QUICConnection extends EventTarget {
     try {
       if (this.conn.isClosed()) {
 
-        console.log('I AM RESOLVING THE CLOSE');
+        // console.log('I AM RESOLVING THE CLOSE');
 
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
@@ -329,11 +329,11 @@ class QUICConnection extends EventTarget {
       let sendInfo: SendInfo;
       while (true) {
         try {
-          console.log('Did a send');
+          // console.log('Did a send');
           [sendLength, sendInfo] = this.conn.send(sendBuffer);
         } catch (e) {
           if (e.message === 'Done') {
-            console.log('SEND IS DONE');
+            // console.log('SEND IS DONE');
             return;
           }
           try {
@@ -396,7 +396,7 @@ class QUICConnection extends EventTarget {
    * Sets the timeout
    */
   protected setTimeout(): void {
-    console.group('setTimeout');
+    // console.group('setTimeout');
     // During construction, this ends up being null
     const time = this.conn.timeout();
 
@@ -409,44 +409,44 @@ class QUICConnection extends EventTarget {
     // the time given becomes 1 second
     // Why did it reduce to 1000 ms?
 
-    console.log('Time given:', time);
+    // console.log('Time given:', time);
 
-    console.log('IS DRAINING', this.conn.isDraining());
+    // console.log('IS DRAINING', this.conn.isDraining());
 
     // Do note there is a change in one of our methods
     // I think I remember, we still need to change over to that
     // To enusre that exceptions mean `Done`
-    console.log('PATH STATS', this.conn.pathStats());
+    // console.log('PATH STATS', this.conn.pathStats());
 
     if (time != null) {
-      console.log('Resetting the timeout');
+      // console.log('Resetting the timeout');
 
       clearTimeout(this.timer);
       this.timer = setTimeout(
         async () => {
 
-          console.log('TIMEOUT HANDLER CALLED');
-          console.log('draining', this.conn.isDraining());
-          console.log('closed', this.conn.isClosed());
-          console.log('timed out', this.conn.isTimedOut());
-          console.log('established', this.conn.isEstablished());
-          console.log('in early data', this.conn.isInEarlyData());
-          console.log('resumed', this.conn.isResumed());
+          // console.log('TIMEOUT HANDLER CALLED');
+          // console.log('draining', this.conn.isDraining());
+          // console.log('closed', this.conn.isClosed());
+          // console.log('timed out', this.conn.isTimedOut());
+          // console.log('established', this.conn.isEstablished());
+          // console.log('in early data', this.conn.isInEarlyData());
+          // console.log('resumed', this.conn.isResumed());
 
           // This would only run if the `recv` and `send` is not called
           // Otherwise this handler would be cleared each time and be reset
           this.conn.onTimeout();
 
-          console.log('AFTER ON TIMEOUT');
+          // console.log('AFTER ON TIMEOUT');
           // DRAINING IS FALSE
-          console.log('draining', this.conn.isDraining());
+          // console.log('draining', this.conn.isDraining());
           // CLOSED IS TRUE
-          console.log('closed', this.conn.isClosed());
+          // console.log('closed', this.conn.isClosed());
           // TIMEDOUT IS TRUE
-          console.log('timed out', this.conn.isTimedOut());
-          console.log('established', this.conn.isEstablished());
-          console.log('in early data', this.conn.isInEarlyData());
-          console.log('resumed', this.conn.isResumed());
+          // console.log('timed out', this.conn.isTimedOut());
+          // console.log('established', this.conn.isEstablished());
+          // console.log('in early data', this.conn.isInEarlyData());
+          // console.log('resumed', this.conn.isResumed());
 
           // Trigger a send, this will also set the timeout again at the end
           await this.send();
@@ -455,13 +455,13 @@ class QUICConnection extends EventTarget {
       );
     } else {
 
-      console.log('Clearing the timeout');
+      // console.log('Clearing the timeout');
 
       clearTimeout(this.timer);
       delete this.timer;
     }
 
-    console.groupEnd();
+    // console.groupEnd();
   }
 }
 
