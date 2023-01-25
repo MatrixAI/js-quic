@@ -11,13 +11,6 @@ import { quiche } from './native';
 import * as events from './events';
 import * as errors from './errors';
 
-function reasonToCode(reason?: any) {
-  // The reason to code map must be supplied
-  // If it is not a valid reason, we return an unknown reason
-  // that is 0
-  return 0;
-}
-
 /**
  * Events:
  * - destroy
@@ -38,6 +31,15 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   protected conn: Connection;
   protected streamMap: QUICStreamMap;
 
+  // QUIC SIDE
+  // stream recv
+  // stream send
+
+  // WEBSTREAM SIDE
+  // stream read
+  // stream write
+
+
   protected _sendClosed: boolean = false;
   protected _recvClosed: boolean = false;
 
@@ -45,19 +47,42 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
   protected logger: Logger;
 
+  /**
+   * Error method of the readable controller
+   */
+  protected readableControllerError: (error?: any) => void;
+
+  /**
+   * Error method of the writable controller
+   */
+  protected writableControllerError: (error?: any) => void;
+
+  protected shutdownReasonToCode: (reason?: any) => number | PromiseLike<number>;
+
+  /**
+   * For `shutdownReasonToCode`, return 0 means "unknown reason"
+   * It is the catch all for codes.
+   * So it is the default reason.
+   *
+   * It may receive any reason for cancellation.
+   * It may receive an exception when streamRecv fails!
+   */
   public static async createStream({
     streamId,
     connection,
+    shutdownReasonToCode = () => 0,
     logger = new Logger(`${this.name} ${streamId}`)
   }: {
     streamId: StreamId;
     connection: QUICConnection;
+    shutdownReasonToCode?: (reason?: any) => number | PromiseLike<number>;
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
     const stream = new this({
       streamId,
       connection,
+      shutdownReasonToCode,
       logger
     });
     connection.streamMap.set(stream.streamId, stream);
@@ -69,10 +94,12 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     {
       streamId,
       connection,
+      shutdownReasonToCode,
       logger,
     }: {
       streamId: StreamId;
       connection: QUICConnection;
+      shutdownReasonToCode: (reason?: any) => number | PromiseLike<number>;
       logger: Logger;
     }
   ) {
@@ -82,6 +109,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     this.connection = connection;
     this.conn = connection.conn;
     this.streamMap = connection.streamMap;
+    this.shutdownReasonToCode = shutdownReasonToCode;
+
+
 
     // Try the BYOB later, it seems more performant
     let handleReadable : () => void;
@@ -89,6 +119,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       type: 'bytes',
       // autoAllocateChunkSize: 1024,
       start: (controller) => {
+
+        this.readableControllerError = controller.error.bind(controller);
+
         handleReadable = async () => {
           if (this._recvPaused) {
             // Do nothing if we are paused
@@ -102,36 +135,46 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
               buf
             );
           } catch (e) {
-
-            console.log('The e', e.message);
-
             if (e.message === 'Done') {
+              console.log('Stream reported: done');
+
+              // We need to know why we would even have this?
+              // If the handle readable is removed?
+
+
               // Do nothing if there was nothing to read
+
+              // If it is done
+              // should we consider the same as `fin`?
+              // Well usually
+              // The `fin` will be true prior
+              // And should be `Done`
+
               return;
             } else {
+
+              console.log('Stream reported: error');
+
               // If there is an error, we do not do anything else
               controller.error(e);
+              this.removeEventListener('readable', handleReadable);
+              await this.shutdownRecv(false, true, e);
 
-              // I am not sure if this is necessary
-              // Let's see what happens
-              this.conn.streamShutdown(
-                this.streamId,
-                quiche.Shutdown.Read,
-                reasonToCode(e)
-              );
+              // this.shutdownRecv(await this.shutdownReasonToCode(e));
+              // this._recvClosed = true;
+              // await this.gcStream();
 
               return;
             }
           }
 
-          console.log('ENQUEUING');
-
           // It's possible to get a 0-length buffer
           controller.enqueue(buf.subarray(0, recvLength));
+
           // If fin is true, then that means, the stream is CLOSED
           if (fin) {
 
-            console.log('FINISHED');
+            console.log('Stream reported: fin');
 
             // If the other peer signalled fin
             // we get fin her being true
@@ -141,15 +184,11 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
             // then cancel has no effect
             // therenothing gets called there
             controller.close();
-
             this.removeEventListener('readable', handleReadable);
-            this._recvClosed = true;
-            await this.gcStream();
+            await this.shutdownRecv(true, false);
 
-            // You have to do what you would be done
-            // in the case of cancellation
-
-
+            // this._recvClosed = true;
+            // await this.gcStream();
             // If finished, we won't bother doing anything else, we finished
             return;
           }
@@ -174,24 +213,24 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         console.log('----------THE cancel callback-------');
 
         this.removeEventListener('readable', handleReadable);
-        this.conn.streamShutdown(
-          this.streamId,
-          quiche.Shutdown.Read,
-          reasonToCode(reason)
-        );
+        await this.shutdownRecv(false, true, reason);
 
-        this._recvClosed = true;
-
-        // At this point in the peer side
-        // if they were to call `streamFinished()`
-        // It would be true
-        await this.gcStream();
+        // this.shutdownRecv(await this.shutdownReasonToCode(reason));
+        // this._recvClosed = true;
+        // await this.gcStream();
 
       }
     });
 
     this.writable = new WritableStream({
       start: (controller) => {
+
+        this.writableControllerError = controller.error.bind(controller);
+
+        // When the writable is finished
+        // we can tell it to end
+        // but to do so
+
         // Here we start the stream
         // Called when the objectis constructed
         // It should aim to get access to the underlying SINK
@@ -207,9 +246,13 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         console.log('----------THE close callback-------');
 
         // Send an empty buffer and also `true` to indicate that it is finished!
-        await this.streamSendFully(Buffer.from([]), true);
-        this._sendClosed = true;
-        await this.gcStream();
+
+        // await this.streamSendFully(Buffer.from([]), true);
+        // this._sendClosed = true;
+        // await this.gcStream();
+
+        await this.shutdownSend(false, false);
+
       },
       abort: async (reason?: any) => {
         // Abort can be called even if there are writes are queued up
@@ -218,37 +261,19 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
         // The receiver can discard any data it already received on that stream
         // We don't have "unidirectional" streams so that's not important...
-        this.conn.streamShutdown(
-          this.streamId,
-          quiche.Shutdown.Write,
-          reasonToCode(reason)
-        );
 
-        this._sendClosed = true;
-        await this.gcStream();
+        await this.shutdownSend(false, true, reason);
+
+        // this.conn.streamShutdown(
+        //   this.streamId,
+        //   quiche.Shutdown.Write,
+        //   reasonToCode(reason)
+        // );
+        // this._sendClosed = true;
+        // await this.gcStream();
+
       }
     });
-
-    // If we shutdown a stream
-    // we kind of need to garbage collect the streams
-    // in quiche streams are just stream ids
-    // but here we are objects
-    // we must remove ourselves
-    // but how do we know if we are fully closed
-    // on the read/write?
-
-    // If the child object dies
-    // we have to have a destructor
-    // that then is called
-    // We can use this to "stop" the system
-    // and when we do, we remove ourselves from the parent object
-    // We could also emit an event to the parent in doing so
-    // But that's not really necessary
-    // No need to use events when function calls are sufficient
-    // Since there's no pub/sub here
-    // Each shutdown is one possible way of shutting down
-    // Wiat if we are closing
-
   }
 
   public get sendClosed(): boolean {
@@ -264,9 +289,18 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   }
 
   /**
-   * Explicit destruction of the stream
+   * This method can be arrived top-down or bottom-up:
+   *
+   * 1. Top-down control flow - means explicit destruction from QUICConnection
+   * 2. Bottom-up control flow - means stream events from users of this stream
    */
-  public async destroy() {
+  public async destroy(
+    {
+      force = false
+    }: {
+      force?: boolean
+    } = {}
+  ) {
     this.logger.info(`Destroy ${this.constructor.name}`);
     // If the streams are locked, this means they are in-use
     // or they have been composed with `pipeThrough` or `pipeTo`.
@@ -284,7 +318,23 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       // This means the destruction may need to be retried.
       // However a proper destruction should destroy the users of
       // the `QUICStream` first before destroying the `QUICConnection`.
-      throw new errors.ErrorQUICStreamLockedAndActive();
+
+      // Wait a minute it sort of depends
+
+      if (force) {
+        // Force close the streams by erroring out
+        if (!this._recvClosed) {
+          this.readableControllerError();
+          // we need to actually close the quic side
+        }
+        if (!this._sendClosed) {
+          this.writableControllerError();
+          // we need to actually close the quic side
+
+        }
+      } else {
+        throw new errors.ErrorQUICStreamLockedAndActive();
+      }
     }
     // If the streams are not locked, and they haven't been closed yet,
     // we can close them here.
@@ -314,16 +364,16 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // unpauses the write
   }
 
-  protected async gcStream() {
-    console.log('===========GC STREAM=============');
-    // Only GC this stream if both recv is closed and send is closed
-    // Once both sides are closed, this stream is no longer necessary
-    // It can now be removed from the active streams
-    if (this._recvClosed && this._sendClosed) {
-      console.log('===========GC STREAM CALLS DESTROY=============');
-      await this.destroy();
-    }
-  }
+  // protected async gcStream() {
+  //   console.log('===========GC STREAM=============');
+  //   // Only GC this stream if both recv is closed and send is closed
+  //   // Once both sides are closed, this stream is no longer necessary
+  //   // It can now be removed from the active streams
+  //   if (this._recvClosed && this._sendClosed) {
+  //     console.log('===========GC STREAM CALLS DESTROY=============');
+  //     await this.destroy();
+  //   }
+  // }
 
 
   protected async streamSendFully(chunk, fin = false) {
@@ -363,6 +413,66 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         chunk.subarray(sentLength)
       );
     }
+  }
+
+  /**
+   * This is called from events on the stream
+   */
+  protected async closeRecv(
+    isClosed: boolean = false,
+    isError: boolean = false,
+    reason?: any
+  ) {
+    this.logger.info(`Close Recv`);
+    if (!isClosed) {
+      if (isError) {
+        const code = await this.shutdownReasonToCode(reason);
+        this.conn.streamShutdown(
+          this.streamId,
+          quiche.Shutdown.Read,
+          code
+        );
+      }
+    }
+    this._recvClosed = true;
+    if (this._recvClosed && this._sendClosed) {
+      await this.destroy();
+    }
+    this.logger.info(`Closed Recv`);
+  }
+
+  /**
+   * This is called from events on the stream
+   */
+  protected async closeSend(
+    isClosed: boolean = false,
+    isError: boolean = false,
+    reason?: any
+  ) {
+    this.logger.info(`Close Send`);
+    // If the QUIC stream is already closed
+    // there's nothign to do on the QUIC stream
+    if (!isClosed) {
+      if (isError) {
+        // If there is an error, we will shutdown with a code
+        const code = await this.shutdownReasonToCode(reason);
+        this.conn.streamShutdown(
+          this.streamId,
+          quiche.Shutdown.Write,
+          code
+        );
+      } else {
+        // If there wasn't an error, we will send an empty frame
+        // with the `fin` set to true
+        await this.streamSendFully(new Uint8Array(), true);
+      }
+    }
+    // Indicate that the sending side is closed
+    this._sendClosed = true;
+    if (this._recvClosed && this._sendClosed) {
+      await this.destroy();
+    }
+    this.logger.info(`Closed Send`);
   }
 }
 

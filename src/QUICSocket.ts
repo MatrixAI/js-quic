@@ -132,6 +132,11 @@ class QUICSocket extends EventTarget {
     // In that sense, there's nothing to send
     // That's the `conn.destroy` might call `conn.send`
     // So it's all sent
+    // So we should only send things if it isn't already destroyed
+    // Remember that there is 3 possible events to the QUICConnection
+    // send, recv, timeout
+    // That's it.
+    // Each send/recv/timeout may result in a destruction
 
     if (!conn[destroyed]) {
       await conn.send();
