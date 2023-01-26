@@ -52,13 +52,22 @@ class ErrorQUICStream<T> extends ErrorQUIC<T> {
   static description = 'QUIC Stream error';
 }
 
-class ErrorQUICStreamLockedAndActive<T> extends ErrorQUIC<T> {
+class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream is destroyed';
+}
+
+class ErrorQUICStreamLocked<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream is locked and is not closed on readable or writable';
+}
+
+class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream force close';
 }
 
 class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
   static description = 'This should never happen';
 }
+
 
 export {
   ErrorQUIC,
@@ -74,6 +83,8 @@ export {
   ErrorQUICConnection,
   ErrorQUICConnectionDestroyed,
   ErrorQUICStream,
-  ErrorQUICStreamLockedAndActive,
+  ErrorQUICStreamDestroyed,
+  ErrorQUICStreamLocked,
+  ErrorQUICStreamClose,
   ErrorQUICUndefinedBehaviour,
 };

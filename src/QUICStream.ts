@@ -6,6 +6,7 @@ import { ReadableStream, WritableStream, } from 'stream/web';
 import {
   CreateDestroy,
   ready,
+  status
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import * as events from './events';
@@ -158,7 +159,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
               // If there is an error, we do not do anything else
               controller.error(e);
               this.removeEventListener('readable', handleReadable);
-              await this.shutdownRecv(false, true, e);
+              await this.closeRecv(false, true, e);
 
               // this.shutdownRecv(await this.shutdownReasonToCode(e));
               // this._recvClosed = true;
@@ -185,7 +186,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
             // therenothing gets called there
             controller.close();
             this.removeEventListener('readable', handleReadable);
-            await this.shutdownRecv(true, false);
+            await this.closeRecv(true, false);
 
             // this._recvClosed = true;
             // await this.gcStream();
@@ -213,7 +214,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         console.log('----------THE cancel callback-------');
 
         this.removeEventListener('readable', handleReadable);
-        await this.shutdownRecv(false, true, reason);
+        await this.closeRecv(false, true, reason);
 
         // this.shutdownRecv(await this.shutdownReasonToCode(reason));
         // this._recvClosed = true;
@@ -251,7 +252,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // this._sendClosed = true;
         // await this.gcStream();
 
-        await this.shutdownSend(false, false);
+        await this.closeSend(false, false);
 
       },
       abort: async (reason?: any) => {
@@ -262,7 +263,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // The receiver can discard any data it already received on that stream
         // We don't have "unidirectional" streams so that's not important...
 
-        await this.shutdownSend(false, true, reason);
+        await this.closeSend(false, true, reason);
 
         // this.conn.streamShutdown(
         //   this.streamId,
@@ -302,48 +303,38 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     } = {}
   ) {
     this.logger.info(`Destroy ${this.constructor.name}`);
+
     // If the streams are locked, this means they are in-use
     // or they have been composed with `pipeThrough` or `pipeTo`.
     // At this point the management of their lifecycle is no longer
     // `QUICStream`'s responsibility.
     // If they not already closed, we cannot proceed with destroying
     // this `QUICStream`.
-    if (
-      (this.readable.locked && !this._recvClosed)
-      ||
-      (this.writable.locked && !this._sendClosed)
-    ) {
-      // The `QUICConnection` may then result in a partial destruction,
-      // some of its `QUICStream` may be destroyed
-      // This means the destruction may need to be retried.
-      // However a proper destruction should destroy the users of
-      // the `QUICStream` first before destroying the `QUICConnection`.
-
-      // Wait a minute it sort of depends
-
-      if (force) {
-        // Force close the streams by erroring out
-        if (!this._recvClosed) {
-          this.readableControllerError();
-          // we need to actually close the quic side
-        }
-        if (!this._sendClosed) {
-          this.writableControllerError();
-          // we need to actually close the quic side
-
-        }
-      } else {
-        throw new errors.ErrorQUICStreamLockedAndActive();
-      }
-    }
     // If the streams are not locked, and they haven't been closed yet,
-    // we can close them here.
+
     if (!this.readable.locked && !this._recvClosed) {
-      console.warn('------ CANCEL READABLE -----');
       await this.readable.cancel();
     }
     if (!this.writable.locked && !this._sendClosed) {
       await this.writable.close();
+    }
+    if (this.readable.locked && !this._recvClosed) {
+      if (!force) {
+        throw new errors.ErrorQUICStreamLocked();
+      } else {
+        const e = new errors.ErrorQUICStreamClose();
+        this.readableControllerError(e);
+        await this.closeRecv(false, true, e);
+      }
+    }
+    if (this.writable.locked && !this._sendClosed) {
+      if (!force) {
+        throw new errors.ErrorQUICStreamLocked();
+      } else {
+        const e = new errors.ErrorQUICStreamClose();
+        this.writableControllerError(e);
+        await this.closeSend(false, true, e);
+      }
     }
     this.streamMap.delete(this.streamId);
     this.dispatchEvent(new events.QUICStreamDestroyEvent());
@@ -351,30 +342,20 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
   }
 
   // TODO
-  // Tell it to read
+  // Tell it to read (replace the dispatch of event)
+  @ready(new errors.ErrorQUICStreamDestroyed)
   public read() {
     // The QUICConnection says `stream.read()`
     // unpauses the read
   }
 
   // TODO
-  // Tell it to write
+  // Tell it to write (replace the dispatch of the event)
+  @ready(new errors.ErrorQUICStreamDestroyed)
   public write() {
     // The QUICConnection says `stream.write()`
     // unpauses the write
   }
-
-  // protected async gcStream() {
-  //   console.log('===========GC STREAM=============');
-  //   // Only GC this stream if both recv is closed and send is closed
-  //   // Once both sides are closed, this stream is no longer necessary
-  //   // It can now be removed from the active streams
-  //   if (this._recvClosed && this._sendClosed) {
-  //     console.log('===========GC STREAM CALLS DESTROY=============');
-  //     await this.destroy();
-  //   }
-  // }
-
 
   protected async streamSendFully(chunk, fin = false) {
     // This means that the number of written bytes returned can be lower
@@ -435,7 +416,13 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       }
     }
     this._recvClosed = true;
-    if (this._recvClosed && this._sendClosed) {
+    if (
+      this[status] !== 'destroying' &&
+      this._recvClosed &&
+      this._sendClosed
+    ) {
+      // Only destroy if we are not already destroying
+      // and that both recv and send is closed
       await this.destroy();
     }
     this.logger.info(`Closed Recv`);
@@ -469,7 +456,13 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }
     // Indicate that the sending side is closed
     this._sendClosed = true;
-    if (this._recvClosed && this._sendClosed) {
+    if (
+      this[status] !== 'destroying' &&
+      this._recvClosed &&
+      this._sendClosed
+    ) {
+      // Only destroy if we are not already destroying
+      // and that both recv and send is closed
       await this.destroy();
     }
     this.logger.info(`Closed Send`);
