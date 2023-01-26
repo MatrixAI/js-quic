@@ -247,9 +247,7 @@ class QUICConnection extends EventTarget {
             // console.log('NEW STERAM ON READ', streamId);
             this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
-          // We must emit a readable event, otherwise the quic stream
-          // will not actually read anything
-          quicStream.dispatchEvent(new events.QUICStreamReadableEvent());
+          quicStream.read();
         }
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
@@ -262,18 +260,7 @@ class QUICConnection extends EventTarget {
             this.streamMap.set(streamId, quicStream);
             this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
-          // This triggers a writable event
-          // If nothing is listening on this
-          // The event is discarded
-          // But when the stream is first created
-          // It will be ready to be written to
-          // But if it is blocked it will wait
-          // for the next writable event
-          // This event won't be it...
-          // So it's only useful for existing streams
-          quicStream.dispatchEvent(
-            new events.QUICStreamWritableEvent()
-          );
+          quicStream.write();
         }
       }
     } finally {

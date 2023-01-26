@@ -69,51 +69,30 @@ async function main(argv = process.argv): Promise<number> {
   process.on('SIGTERM', handleSignal);
   process.on('SIGHUP', handleSignal);
 
-
-  // Wait are we adding new connections here?
-
   const handleStream = async (e: events.QUICConnectionStreamEvent) => {
     const stream = e.detail;
+
     console.log('Got Stream', stream.streamId);
 
     // Once we have the stream
     // We need to interact with the stream and read out the data
     const writer = stream.writable.getWriter();
 
-    // It only reads once (this auto cancels and releases the reader)
-    // As long as the `fin` is true
+    // It only reads once this auto releases the internal reader
     for await (const read of stream.readable) {
       const readBuffer = Buffer.from(read);
       console.log('STREAM READ: ', readBuffer, JSON.stringify(readBuffer.toString('utf-8')));
     }
-    // const reader = stream.readable.getReader();
-    // const { done, value: read } = await reader.read();
-    // const readBuffer = Buffer.from(read!);
-    // console.log('STREAM READ: ', readBuffer, JSON.stringify(readBuffer.toString('utf-8')));
-
-    // console.log(stream.readable.cancel.toString());
-
-
-    // You should do this (if it is closed, this has no effect)
+    // If the `fin` was received, the stream would be cancelled
+    // Then this is unnecessary, but it's still good practice.
     await stream.readable.cancel();
 
-    // await reader.cancel('abc');
-    // reader.releaseLock();
-
-    // console.log('>>>>>> AFTER readable.cancel >>>>>');
-    // The message is GET /\r\n
-    // No http3 version
-    // So it's a bit straange
-
     await writer.write(Buffer.from('Hello World'));
-
     await writer.close();
-    console.log('>>>>>> AFTER writer.close >>>>>');
+    // Always release your locks
     writer.releaseLock();
 
-    // If the stream is already destroyed
-    // there's no need to call this anymore
-    await stream.destroy();
+    // The stream will be auto destroyed
   };
 
   const handleConnection = (e: events.QUICServerConnectionEvent) => {
