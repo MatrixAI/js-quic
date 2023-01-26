@@ -93,6 +93,7 @@ async function main(argv = process.argv): Promise<number> {
 
     // console.log(stream.readable.cancel.toString());
 
+
     // You should do this (if it is closed, this has no effect)
     await stream.readable.cancel();
 

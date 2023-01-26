@@ -278,7 +278,7 @@ class QUICConnection extends EventTarget {
       }
     } finally {
 
-      console.log('RECV FINALLY');
+      // console.log('RECV FINALLY');
 
       // Set the timeout
       this.setTimeout();
@@ -373,7 +373,7 @@ class QUICConnection extends EventTarget {
       }
     } finally {
 
-      console.log('SEND FINALLY');
+      // console.log('SEND FINALLY');
 
       this.setTimeout();
       if (

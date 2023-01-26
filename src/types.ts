@@ -78,6 +78,17 @@ type RemoteInfo = {
   port: Port;
 };
 
+/**
+ * Maps reason (most likely an exception) to a stream code.
+ * Use `0` to indicate unknown/default reason.
+ */
+type StreamReasonToCode = (type: 'recv' | 'send', reason?: any) => number | PromiseLike<number>;
+
+/**
+ * Maps code to a reason. 0 usually indicates unknown/default reason.
+ */
+type StreamCodeToReason = (type: 'recv' | 'send', code: number) => any | PromiseLike<any>;
+
 export type {
   Opaque,
   Callback,
@@ -92,4 +103,6 @@ export type {
   Address,
   QUICStreamMap,
   RemoteInfo,
+  StreamReasonToCode,
+  StreamCodeToReason,
 };
