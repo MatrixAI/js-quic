@@ -271,6 +271,11 @@ class QUICClient extends EventTarget {
     this.logger.info(`Destroyed ${this.constructor.name} on ${address}`);
   }
 
+  // Unlike the server
+  // upon a connection failing/destroying
+  // it should result in the CLIENT also being destroyed
+
+
 }
 
 export default QUICClient;
