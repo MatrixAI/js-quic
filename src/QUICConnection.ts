@@ -47,7 +47,7 @@ class QUICConnection extends EventTarget {
   /**
    * Create QUICConnection by connecting to a server
    */
-  public static async connectConnection({
+  public static async connectQUICConnection({
     scid,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
@@ -61,7 +61,7 @@ class QUICConnection extends EventTarget {
   /**
    * Create QUICConnection by accepting a client
    */
-  public static async acceptConnection({
+  public static async acceptQUICConnection({
     scid,
     dcid,
     socket,
@@ -239,12 +239,11 @@ class QUICConnection extends EventTarget {
         for (const streamId of this.conn.readable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
           if (quicStream == null) {
-            quicStream = await QUICStream.createStream({
+            quicStream = await QUICStream.createQUICStream({
               streamId,
               connection: this,
               logger: this.logger.getChild(`${QUICStream.name} ${streamId}`)
             });
-            // console.log('NEW STERAM ON READ', streamId);
             this.dispatchEvent(new events.QUICConnectionStreamEvent({ detail: quicStream }));
           }
           quicStream.read();
@@ -252,7 +251,7 @@ class QUICConnection extends EventTarget {
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
           if (quicStream == null) {
-            quicStream = await QUICStream.createStream({
+            quicStream = await QUICStream.createQUICStream({
               streamId,
               connection: this,
               logger: this.logger.getChild(`${QUICStream.name} ${streamId}`)

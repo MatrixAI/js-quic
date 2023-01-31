@@ -107,6 +107,12 @@ class QUICStreamDestroyEvent extends Event {
   }
 }
 
+class QUICClientDestroyEvent extends Event {
+  constructor(options?: EventInit) {
+    super('destroy', options);
+  }
+}
+
 export {
   QUICSocketStopEvent,
   QUICSocketErrorEvent,
@@ -116,7 +122,6 @@ export {
   QUICConnectionStreamEvent,
   QUICConnectionDestroyEvent,
   QUICConnectionErrorEvent,
-  QUICStreamReadableEvent, // TODO, remove in favour of methods
-  QUICStreamWritableEvent, // TODO, remove in favour of methods
   QUICStreamDestroyEvent,
+  QUICClientDestroyEvent,
 };

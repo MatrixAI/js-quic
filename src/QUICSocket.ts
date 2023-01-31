@@ -32,6 +32,8 @@ class QUICSocket extends EventTarget {
   protected logger: Logger;
   protected server: QUICServer;
 
+  protected resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>;
+
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
@@ -154,17 +156,20 @@ class QUICSocket extends EventTarget {
 
   public constructor({
     crypto,
+    resolveHostname = utils.resolveHostname,
     logger
   }: {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
     },
+    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
     this.crypto = crypto;
+    this.resolveHostname = resolveHostname;
   }
 
   @ready(new errors.ErrorQUICSocketNotRunning())
@@ -185,26 +190,18 @@ class QUICSocket extends EventTarget {
    */
   public async start({
     host = '::' as Host,
-    port = 0
+    port = 0 as Port
   }: {
     host?: Host | Hostname,
-    port?: number,
+    port?: Port,
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Start ${this.constructor.name} on ${address}`);
-    const [isIPv4] = Validator.isValidIPv4String(host);
-    const [isIPv6] = Validator.isValidIPv6String(host);
-    let type: 'udp4' | 'udp6';
-    if (isIPv4) {
-      type = 'udp4';
-    } else if (isIPv6) {
-      type = 'udp6';
-    } else {
-      // The `host` is a host name, most likely `localhost`.
-      // We cannot tell if the host will resolve to IPv4 or IPv6.
-      // Here we default to IPv4 so that `127.0.0.1` would be usable if `localhost` is used
-      type = 'udp4';
-    }
+    // Resolves the host which could be a hostname and acquire the type
+    const [host_, type] = await utils.resolveHost(
+      host,
+      this.resolveHostname
+    );
     this.socket = dgram.createSocket({
       type,
       reuseAddr: false,
@@ -218,7 +215,7 @@ class QUICSocket extends EventTarget {
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
     // This makes it equivalent to `dns.lookup`.
-    const socketBindP = this.socketBind(port, host);
+    const socketBindP = this.socketBind(port, host_);
     try {
       await Promise.race([socketBindP, errorP]);
     } catch (e) {

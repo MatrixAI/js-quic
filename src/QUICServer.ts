@@ -113,12 +113,12 @@ class QUICServer extends EventTarget {
     this.config = config;
   }
 
-  @ready(new errors.ErrorQUICServerNotRunning(), false, ['stopping'])
+  @ready(new errors.ErrorQUICServerNotRunning())
   public get host() {
     return this.socket.host;
   }
 
-  @ready(new errors.ErrorQUICServerNotRunning(), false, ['stopping'])
+  @ready(new errors.ErrorQUICServerNotRunning())
   public get port() {
     return this.socket.port;
   }
@@ -131,12 +131,12 @@ class QUICServer extends EventTarget {
    */
   public async start({
     host = '::' as Host,
-    port = 0
+    port = 0 as Port
   }: {
     host?: Host | Hostname,
-    port?: number,
+    port?: Port,
   } = {}) {
-    let address;
+    let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
@@ -161,7 +161,7 @@ class QUICServer extends EventTarget {
    * Stops the QUICServer
    */
   public async stop() {
-    const address = utils.buildAddress(this.host, this.port);
+    const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     for (const connection of this.connectionMap.serverConnections.values()) {
       await connection.destroy();
@@ -272,7 +272,7 @@ class QUICServer extends EventTarget {
     // Here we shall re-use the originally-derived DCID as the SCID
     scid = new QUICConnectionId(header.dcid);
     this.logger.debug(`Accepting new connection from QUIC packet`);
-    const connection = await QUICConnection.acceptConnection({
+    const connection = await QUICConnection.acceptQUICConnection({
       scid,
       dcid: dcidOriginal,
       socket: this.socket,
@@ -288,7 +288,6 @@ class QUICServer extends EventTarget {
     // so one has to be aware of this
     // Either that, or there is a seamless migration to a new connection ID
     // In which case we need to manage it somehow
-    // this.serverConnections.add(connection);
 
     return connection;
   }

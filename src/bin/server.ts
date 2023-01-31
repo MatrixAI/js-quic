@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import type { Host } from '../types';
+import type { Host, Port } from '../types';
 import type * as events from '../events';
 import process from 'process';
 import { webcrypto } from 'crypto';
@@ -56,7 +56,7 @@ async function main(argv = process.argv): Promise<number> {
 
   await server.start({
     host: '127.0.0.1' as Host,
-    port: 55555
+    port: 55555 as Port
   });
 
   const handleSignal = async () => {

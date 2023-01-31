@@ -1,69 +1,140 @@
-import type { ConnectionId, Crypto } from './types';
+import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
+import dns from 'dns';
 import Logger from '@matrixai/logger';
 import { Validator } from 'ip-num';
+import {
+  CreateDestroy,
+  ready,
+  status
+} from '@matrixai/async-init/dist/CreateDestroy';
+import { running } from '@matrixai/async-init';
 import { Quiche, quiche, Type } from './native';
 import * as utils from './utils';
+import * as errors from './errors';
+import * as events from './events';
+import QUICSocket from './QUICSocket';
+import QUICConnectionMap from './QUICConnectionMap';
 
-// because this is meant to be an actual QUIC client object you create
-// whereas the other is really an abstraction around a QUIC connection
-
-// we start with a buffer
-// each quic client is connected to 1 server?
-// yea, so create multiple quic clients
-// but also remember that it's the quic connection that matters
-
-// the Crypto might require some randomisation needs
-
+/**
+ * You must provide a error handler `addEventListener('error')`.
+ * Otherwise errors will just be ignored.
+ *
+ * Events:
+ * - error - (could be a QUICSocketErrorEvent OR QUICClientErrorEvent)
+ * - destroy
+ */
+interface QUICClient extends CreateDestroy {}
+@CreateDestroy()
 class QUICClient extends EventTarget {
 
-  protected socket: dgram.Socket;
-
-  // Note that this requires DNS resolution
-  // One is that host and port of my own socket
-  // Another is the host and port of the OTHER connecting system
-  // That's also important to understand!
-  // protected host: string;
-  // protected port: number;
-
+  public readonly isSocketShared: boolean;
+  protected socket: QUICSocket;
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
     ops: Crypto;
   };
   protected config: Config;
-  protected connections: Map<ConnectionId, Connection>;
+  protected connectionMap: QUICConnectionMap;
+
+  public static async createQUICClient({
+    host = '::' as Host,
+    port = 0 as Port,
+    crypto,
+    socket,
+    logger = new Logger(`${this.name}`),
+  }: {
+    host?: Host | Hostname,
+    port?: Port,
+    crypto: {
+      key: ArrayBuffer;
+      ops: Crypto;
+    },
+    socket?: QUICSocket;
+    logger?: Logger;
+  }) {
+    let address: string;
+    let isSocketShared: boolean;
+    let client: QUICClient;
+    if (socket == null) {
+      address = utils.buildAddress(host, port);
+      logger.info(`Create ${this.name} on ${address}`);
+      socket = new QUICSocket({
+        crypto,
+        logger: logger.getChild(QUICSocket.name)
+      });
+      isSocketShared = false;
+      client = new QUICClient({
+        crypto,
+        socket,
+        isSocketShared,
+        logger
+      });
+      await socket.start({
+        host,
+        port
+      });
+      address = utils.buildAddress(socket.host, socket.port);
+    } else {
+      if (!socket[running]) {
+        throw new errors.ErrorQUICServerSocketNotRunning();
+      }
+      isSocketShared = true;
+      address = utils.buildAddress(socket.host, socket.port);
+      logger.info(`Create ${this.name} on ${address}`);
+      client = new QUICClient({
+        crypto,
+        socket,
+        isSocketShared,
+        logger
+      });
+    }
+    logger.info(`Created ${this.name} on ${address}`);
+    return client;
+  }
+
+  /**
+   * Handle QUIC socket errors
+   * This is only used if the socket is not shared
+   * If the socket is shared, then it is expected that the user
+   * would listen on error events on the socket itself
+   * Otherwise this will propagate such errors to the server
+   */
+  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+    this.dispatchEvent(e);
+  };
 
   public constructor({
     crypto,
-    connections = new Map(),
+    socket,
+    isSocketShared,
+    logger,
   }: {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
     };
-    connections?: Map<ConnectionId, Connection>;
+    socket: QUICSocket;
+    isSocketShared: boolean;
+    logger: Logger;
   }) {
     super();
+    this.logger = logger;
     this.crypto = crypto;
-    this.connections = connections;
-
-    // The socket is registered to be readable
-    // so it is indeed meant to be done with the `handleMessage`
-    // So a single `handleMessage` needs to understand how to route it
-
+    this.socket = socket;
+    this.isSocketShared = isSocketShared;
+    // Registers itself to the socket
+    this.socket.registerClient(this);
+    // Shares the socket connection map as well
+    this.connectionMap = this.socket.connectionMap;
+    if (!isSocketShared) {
+      this.socket.addEventListener('error', this.handleQUICSocketError);
+    }
     const config = new quiche.Config();
     config.verifyPeer(false);
-    config.setApplicationProtos(
-      [
-        'hq-interop',
-        'hq-29',
-        'hq-28',
-        'hq-27',
-        'http/0.9'
-      ]
-    );
+    config.grease(true);
     config.setMaxIdleTimeout(5000);
     config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
     config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
@@ -73,13 +144,27 @@ class QUICClient extends EventTarget {
     config.setInitialMaxStreamsBidi(100);
     config.setInitialMaxStreamsUni(100);
     config.setDisableActiveMigration(true);
-
+    config.setApplicationProtos(
+      [
+        'hq-interop',
+        'hq-29',
+        'hq-28',
+        'hq-27',
+        'http/0.9'
+      ]
+    );
+    config.enableEarlyData();
     this.config = config;
+  }
 
+  @ready(new errors.ErrorQUICClientDestroyed())
+  public get host() {
+    return this.socket.host;
+  }
 
-
-
-
+  @ready(new errors.ErrorQUICClientDestroyed())
+  public get port() {
+    return this.socket.port;
   }
 
   // We need to be able to share the socket
@@ -93,47 +178,6 @@ class QUICClient extends EventTarget {
     host?: string,
     port?: number,
   } = {}) {
-    let address = utils.buildAddress(host, port);
-    this.logger.info(`Starting ${this.constructor.name} on ${address}`);
-    const [isIPv4] = Validator.isValidIPv4String(host);
-    const [isIPv6] = Validator.isValidIPv6String(host);
-    let type: 'udp4' | 'udp6';
-    if (isIPv4) {
-      type = 'udp4';
-    } else if (isIPv6) {
-      type = 'udp6';
-    } else {
-      // The `host` is a host name, most likely `localhost`.
-      // We cannot tell if the host will resolve to IPv4 or IPv6.
-      // Here we default to IPv4 so that `127.0.0.1` would be usable if `localhost` is used
-      type = 'udp4';
-    }
-    this.socket = dgram.createSocket({
-      type,
-      reuseAddr: false,
-      ipv6Only: false,
-    });
-    const { p: errorP, rejectP: rejectErrorP, } = utils.promise();
-    this.socket.once('error', rejectErrorP);
-    // This uses `getaddrinfo` under the hood, which respects the hosts file
-    const socketBind = utils.promisify(this.socket.bind).bind(this.socket);
-    const socketBindP = socketBind(port, host);
-    try {
-      await Promise.race([socketBindP, errorP]);
-    } catch (e) {
-      // Possible binding failure due to EINVAL or ENOTFOUND.
-      // EINVAL due to using IPv4 address where udp6 is specified.
-      // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
-      // or doesn't resolve to IPv4 if udp4 is specified.
-      throw e;
-    }
-    this.socket.removeListener('error', rejectErrorP);
-    const socketAddress = this.socket.address();
-    // This is the resolved IP, not the original hostname
-    this.host = socketAddress.address;
-    this.port = socketAddress.port;
-
-    // ---
 
     // We have to fill it out with random stuff
     // Random source connection ID
@@ -208,12 +252,19 @@ class QUICClient extends EventTarget {
 
   }
 
-  public async stop() {
-    const address = utils.buildAddress(this.host, this.port);
-    this.logger.info(`Stopping ${this.constructor.name} on ${address}`);
 
-    this.socket.close();
-    this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
+  public async destroy() {
+    const address = utils.buildAddress(this.socket.host, this.socket.port);
+    this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
+    // Destroy the current connection too
+
+
+    if (!this.isSocketShared) {
+      await this.socket.stop();
+      this.socket.removeEventListener('error', this.handleQUICSocketError);
+    }
+    this.dispatchEvent(new events.QUICClientDestroyEvent());
+    this.logger.info(`Destroyed ${this.constructor.name} on ${address}`);
   }
 
 }

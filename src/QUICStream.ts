@@ -55,7 +55,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    * It may receive any reason for cancellation.
    * It may receive an exception when streamRecv fails!
    */
-  public static async createStream({
+  public static async createQUICStream({
     streamId,
     connection,
     reasonToCode = () => 0,

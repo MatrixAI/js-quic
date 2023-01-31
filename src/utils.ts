@@ -3,10 +3,45 @@ import type {
   PromiseDeconstructed,
   ConnectionId,
   ConnectionIdString,
-  Host
+  Host,
+  Hostname
 } from './types';
+import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import * as errors from './errors';
+
+/**
+ * This will resolve a hostname to the first host.
+ * It could be an IPv6 address or IPv4 address.
+ * This uses the OS's DNS resolution system.
+ */
+async function resolveHostname(hostname: Hostname): Promise<Host> {
+  const result = await dns.promises.lookup(
+    hostname,
+    { family: 0, all: false, verbatim: true }
+  );
+  return result.address as Host;
+}
+
+/**
+ * This will resolve a Host or Hostname to Host and `udp4` or `udp6`.
+ * The `resolveHostname` can be overridden.
+ */
+async function resolveHost(
+  host: Host | Hostname,
+  resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>
+): Promise<[Host, 'udp4' | 'udp6']> {
+  const [isIPv4] = Validator.isValidIPv4String(host);
+  const [isIPv6] = Validator.isValidIPv6String(host);
+  if (isIPv4) {
+    return [host as Host, 'udp4'];
+  } else if (isIPv6) {
+    return [host as Host, 'udp6'];
+  } else {
+    host = await resolveHostname(host as Hostname);
+    return resolveHost(host, resolveHostname);
+  }
+}
 
 /**
  * Convert callback-style to promise-style
@@ -128,6 +163,8 @@ function never(): never {
 }
 
 export {
+  resolveHostname,
+  resolveHost,
   promisify,
   promise,
   bufferWrap,

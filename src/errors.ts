@@ -36,8 +36,12 @@ class ErrorQUICClient<T> extends ErrorQUIC<T> {
   static description = 'QUIC Client error';
 }
 
-class ErrorQUICClientNotRunning<T> extends ErrorQUICClient<T> {
-  static description = 'QUIC Client is not running';
+class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client is destroyed';
+}
+
+class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Client cannot be created with an unstarted shared QUIC socket';
 }
 
 class ErrorQUICConnection<T> extends ErrorQUIC<T> {
@@ -68,7 +72,6 @@ class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
   static description = 'This should never happen';
 }
 
-
 export {
   ErrorQUIC,
   ErrorQUICSocket,
@@ -79,7 +82,8 @@ export {
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
   ErrorQUICClient,
-  ErrorQUICClientNotRunning,
+  ErrorQUICClientDestroyed,
+  ErrorQUICClientSocketNotRunning,
   ErrorQUICConnection,
   ErrorQUICConnectionDestroyed,
   ErrorQUICStream,
