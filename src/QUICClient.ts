@@ -79,7 +79,7 @@ class QUICClient extends EventTarget {
       address = utils.buildAddress(socket.host, socket.port);
     } else {
       if (!socket[running]) {
-        throw new errors.ErrorQUICServerSocketNotRunning();
+        throw new errors.ErrorQUICClientSocketNotRunning();
       }
       isSocketShared = true;
       address = utils.buildAddress(socket.host, socket.port);
