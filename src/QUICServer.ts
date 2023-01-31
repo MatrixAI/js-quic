@@ -169,6 +169,7 @@ class QUICServer extends EventTarget {
     for (const connection of this.connectionMap.serverConnections.values()) {
       await connection.destroy();
     }
+    this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
       await this.socket.stop();

@@ -30,7 +30,7 @@ class QUICSocket extends EventTarget {
   protected _host: string;
   protected _port: number;
   protected logger: Logger;
-  protected server: QUICServer;
+  protected server?: QUICServer;
 
   protected resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>;
 
@@ -286,6 +286,13 @@ class QUICSocket extends EventTarget {
 
   }
 
+  // But we already have a connection map
+  // well yea, we are checking liveness of connections
+  // But client destruction is only way to destory connections
+  // But if the client connection fails
+  // we need to simultaneously destroy the client
+
+
   /**
    * Sets a single server to the socket
    * You can only have 1 server for the socket
@@ -309,6 +316,12 @@ class QUICSocket extends EventTarget {
       throw new errors.ErrorQUICSocketServerDuplicate();
     }
     this.server = server;
+  }
+
+  public deregisterServer(server: QUICServer) {
+    if (this.server === server) {
+      delete this.server;
+    }
   }
 
 }
