@@ -274,6 +274,16 @@ class QUICSocket extends EventTarget {
    */
   public registerClient(client: QUICClient) {
 
+    // So what really this does?
+    // Is this about creating a connection?
+    // So we can add the connection to the map?
+    // And if we are doing
+    // QUICConnection.createQUICConnection
+
+    // Then that means, we are really creating that connection in the async creator
+    // That means the async creator needs to create teh `connection` and call it too
+
+
   }
 
   /**

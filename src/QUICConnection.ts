@@ -49,13 +49,42 @@ class QUICConnection extends EventTarget {
    */
   public static async connectQUICConnection({
     scid,
+    socket,
+    remoteInfo,
+    config,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
+    socket: QUICSocket;
+    remoteInfo: RemoteInfo;
+    config: Config;
     logger?: Logger;
   }) {
-    logger.info(`Create ${this.name}`);
-    logger.info(`Created ${this.name}`);
+    logger.info(`Connect ${this.name}`);
+    const conn = quiche.Connection.connect(
+      null,
+      scid,
+      {
+        host: socket.host,
+        port: socket.port
+      },
+      {
+        host: remoteInfo.host,
+        port: remoteInfo.port,
+      },
+      config
+    );
+    const connection = new this({
+      type: 'client',
+      conn,
+      connectionId: scid,
+      socket,
+      remoteInfo,
+      logger,
+    });
+    socket.connectionMap.set(connection.connectionId, connection);
+    logger.info(`Connected ${this.name}`);
+    return connection;
   }
 
   /**
@@ -76,7 +105,7 @@ class QUICConnection extends EventTarget {
     config: Config;
     logger?: Logger;
   }): Promise<QUICConnection> {
-    logger.info(`Create ${this.name}`);
+    logger.info(`Accept ${this.name}`);
     const conn = quiche.Connection.accept(
       scid,
       dcid,
@@ -99,7 +128,7 @@ class QUICConnection extends EventTarget {
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
-    logger.info(`Created ${this.name}`);
+    logger.info(`Accepted ${this.name}`);
     return connection;
   }
 

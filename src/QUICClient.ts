@@ -170,6 +170,8 @@ class QUICClient extends EventTarget {
     return this.socket.port;
   }
 
+
+
   public async start({
     host = '::',
     port = 0
@@ -177,6 +179,9 @@ class QUICClient extends EventTarget {
     host?: string,
     port?: number,
   } = {}) {
+
+    // QUICConnection.connectQUICConnection
+
 
     // We have to fill it out with random stuff
     // Random source connection ID
@@ -199,19 +204,19 @@ class QUICClient extends EventTarget {
     // however we don't really do this... because we are using custom  verification
 
     // New QUIC connection, this will start to initiate the handshake
-    const conn = quiche.Connection.connect(
-      null,
-      scid,
-      {
-        host: this.socket.address().address,
-        port: this.socket.address().port,
-      },
-      {
-        host: host,
-        port: port
-      },
-      this.config
-    );
+    // const conn = quiche.Connection.connect(
+    //   null,
+    //   scid,
+    //   {
+    //     host: this.socket.address().address,
+    //     port: this.socket.address().port,
+    //   },
+    //   {
+    //     host: host,
+    //     port: port
+    //   },
+    //   this.config
+    // );
 
     // const data = Buffer.alloc(quiche.MAX_DATAGRAM_SIZE);
     // conn.send(data);
