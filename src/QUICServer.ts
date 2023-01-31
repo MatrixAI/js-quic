@@ -52,6 +52,7 @@ class QUICServer extends EventTarget {
   public constructor({
     crypto,
     socket,
+    resolveHostname = utils.resolveHostname,
     logger,
   }: {
     crypto: {
@@ -59,6 +60,7 @@ class QUICServer extends EventTarget {
       ops: Crypto;
     },
     socket?: QUICSocket;
+    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
@@ -67,6 +69,7 @@ class QUICServer extends EventTarget {
     if (socket == null) {
       this.socket = new QUICSocket({
         crypto,
+        resolveHostname,
         logger: this.logger.getChild(QUICSocket.name)
       });
       this.isSocketShared = false;

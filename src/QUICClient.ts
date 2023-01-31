@@ -44,6 +44,7 @@ class QUICClient extends EventTarget {
     port = 0 as Port,
     crypto,
     socket,
+    resolveHostname = utils.resolveHostname,
     logger = new Logger(`${this.name}`),
   }: {
     host?: Host | Hostname,
@@ -53,6 +54,7 @@ class QUICClient extends EventTarget {
       ops: Crypto;
     },
     socket?: QUICSocket;
+    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     let address: string;
@@ -63,6 +65,7 @@ class QUICClient extends EventTarget {
       logger.info(`Create ${this.name} on ${address}`);
       socket = new QUICSocket({
         crypto,
+        resolveHostname,
         logger: logger.getChild(QUICSocket.name)
       });
       isSocketShared = false;
@@ -167,10 +170,6 @@ class QUICClient extends EventTarget {
     return this.socket.port;
   }
 
-  // We need to be able to share the socket
-  // especially if the client and server must exist on the same spot
-  // and multiple clients too
-  // so this is something we need to consider
   public async start({
     host = '::',
     port = 0

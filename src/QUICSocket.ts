@@ -124,6 +124,11 @@ class QUICSocket extends EventTarget {
       conn = conn_;
     } else {
       conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
+
+      // The connection may be a client or server connection
+      // When we register a client, we have to put the connection in our
+      // connection map
+
     }
     await conn.recv(
       data,
