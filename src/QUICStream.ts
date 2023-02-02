@@ -135,7 +135,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // with the `fin` set to true
         // If this itself results in an error, we can continue
         // But continue to do the below
-        await this.streamSend(new Uint8Array(), true);
+        await this.streamSend(new Uint8Array(0), true);
         await this.closeSend();
       },
       abort: async (reason?: any) => {
@@ -238,7 +238,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }
   }
 
-  protected async streamRecv() {
+  protected async streamRecv(): Promise<void> {
     const buf = Buffer.alloc(1024);
     let recvLength: number, fin: boolean;
     try {
@@ -278,7 +278,10 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       }
     }
     // It's possible to get a 0-length buffer
-    this.readableController.enqueue(buf.subarray(0, recvLength));
+    // In fact 0-length buffers are used to "open" a stream
+    if (recvLength > 0) {
+      this.readableController.enqueue(buf.subarray(0, recvLength));
+    }
     // If fin is true, then that means, the stream is CLOSED
     if (fin) {
       console.log('Stream reported: fin');
@@ -296,7 +299,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }
   }
 
-  protected async streamSend(chunk: Uint8Array, fin = false) {
+  protected async streamSend(chunk: Uint8Array, fin = false): Promise<void> {
     // This means that the number of written bytes returned can be lower
     // than the length of the input buffer when the stream doesn’t have
     // enough capacity for the operation to complete. The application
@@ -312,9 +315,13 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       // If the Done is returned
       // then no data was sent
       // because the stream has no capacity
-      // That is equivalent here to being sent length of 0
       if (e.message === 'Done') {
-        sentLength = 0;
+        // If the chunk size itself is 0,
+        // it is still possible to have no capacity
+        // to send a 0-length buffer.
+        // To indicate this we set the sentLength to -1.
+        // This ensures that we are always blocked below.
+        sentLength = -1;
       } else {
         // We may receive a `StreamStopped(u64)` exception
         // meaning the peer has signalled for us to stop writing
@@ -343,8 +350,9 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       const { p: writableP, resolveP: resolveWritableP } = utils.promise();
       this.resolveWritableP = resolveWritableP;
       await writableP;
+      // If the `sentLength` is -1, then it will be raised to `0`
       return await this.streamSend(
-        chunk.subarray(sentLength),
+        chunk.subarray(Math.max(sentLength, 0)),
         fin
       );
     }
