@@ -9,6 +9,7 @@ import {
   status
 } from '@matrixai/async-init/dist/CreateDestroy';
 import Logger from '@matrixai/logger';
+import { Lock } from '@matrixai/async-locks';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as events from './events';
@@ -42,6 +43,8 @@ class QUICConnection extends EventTarget {
   protected timer?: ReturnType<typeof setTimeout>;
   protected resolveCloseP?: () => void;
 
+  protected streamIdLock: Lock = new Lock();
+
   /**
    * Client initiated bidirectional stream starts at 0.
    * Increment by 4 to get the next ID.
@@ -54,17 +57,17 @@ class QUICConnection extends EventTarget {
    */
   protected streamIdServerBidi: StreamId = 0b01 as StreamId;
 
-  /**
-   * Client initiated unidirectional stream starts at 2.
-   * Increment by 4 to get the next ID.
-   */
-  protected streamIdClientUni: StreamId = 0b10 as StreamId;
+  // /**
+  //  * Client initiated unidirectional stream starts at 2.
+  //  * Increment by 4 to get the next ID.
+  //  */
+  // protected streamIdClientUni: StreamId = 0b10 as StreamId;
 
-  /**
-   * Server initiated unidirectional stream starts at 3.
-   * Increment by 4 to get the next ID.
-   */
-  protected streamIdServerUni: StreamId = 0b11 as StreamId;
+  // /**
+  //  * Server initiated unidirectional stream starts at 3.
+  //  * Increment by 4 to get the next ID.
+  //  */
+  // protected streamIdServerUni: StreamId = 0b11 as StreamId;
 
   // These can change on every `recv` call
   protected _remoteHost: Host;
@@ -444,48 +447,66 @@ class QUICConnection extends EventTarget {
   /**
    * Creates a new stream on the connection.
    * Only supports bidi streams atm.
+   * This is a serialised call, it must be blocking.
    */
   @ready(new errors.ErrorQUICConnectionDestroyed())
   public async streamNew(streamType: 'bidi' = 'bidi'): Promise<QUICStream> {
-    let streamId: StreamId;
-    if (this.type === 'client' && streamType === 'bidi') {
-      streamId = this.streamIdClientBidi;
-    } else if (this.type === 'server' && streamType === 'bidi') {
-      streamId = this.streamIdServerBidi;
-    }
-    // If we are in draining state
-    // we cannot call this anymore
-    // Hre ewe send the stream id
-    // with stream capacity will fail
-    // We send a 0-length buffer first
-    const quicStream = await QUICStream.createQUICStream({
-      streamId: streamId!,
-      connection: this,
-      logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
-    });
-    const writer = quicStream.writable.getWriter();
+    // Technically you can do concurrent bidi and uni style streams
+    // but no support for uni streams yet
+    // So we don't bother with it
+    return await this.streamIdLock.withF(async () => {
+      let streamId: StreamId;
+      if (this.type === 'client' && streamType === 'bidi') {
+        streamId = this.streamIdClientBidi;
+      } else if (this.type === 'server' && streamType === 'bidi') {
+        streamId = this.streamIdServerBidi;
+      }
 
-    try {
-      // This will now wait until the 0-length buffer is actually sent
-      await writer.write(new Uint8Array(0));
-      writer.releaseLock();
-    } catch (e) {
-      // You must release the lock even before you run destroy
-      writer.releaseLock();
-      // If the write failed, it will only close the sending side
-      // But in this case, it means we actually failed to open the stream entirely
-      // In which case we destroy the stream
-      // Do we need to release the writer?
-      await quicStream.destroy();
-      throw e;
-    }
-    // Ok the stream is opened and working
-    if (this.type === 'client' && streamType === 'bidi') {
-      this.streamIdClientBidi = this.streamIdClientBidi + 4 as StreamId;
-    } else if (this.type === 'server' && streamType === 'bidi') {
-      this.streamIdServerBidi = this.streamIdServerBidi + 4 as StreamId;
-    }
-    return quicStream;
+      // If you call this again
+      // you will get another stream ID
+      // but the problem is that
+      // if you call it multiple times concurrently
+      // you'll have an issue
+      // this can only be called one at a time
+      // This is not allowed to be concurrent
+      // You cannot open many streams all concurrently
+      // since stream creations are serialised
+
+
+      // If we are in draining state
+      // we cannot call this anymore
+      // Hre ewe send the stream id
+      // with stream capacity will fail
+      // We send a 0-length buffer first
+      const quicStream = await QUICStream.createQUICStream({
+        streamId: streamId!,
+        connection: this,
+        logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
+      });
+      const writer = quicStream.writable.getWriter();
+
+      try {
+        // This will now wait until the 0-length buffer is actually sent
+        await writer.write(new Uint8Array(0));
+        writer.releaseLock();
+      } catch (e) {
+        // You must release the lock even before you run destroy
+        writer.releaseLock();
+        // If the write failed, it will only close the sending side
+        // But in this case, it means we actually failed to open the stream entirely
+        // In which case we destroy the stream
+        // Do we need to release the writer?
+        await quicStream.destroy();
+        throw e;
+      }
+      // Ok the stream is opened and working
+      if (this.type === 'client' && streamType === 'bidi') {
+        this.streamIdClientBidi = this.streamIdClientBidi + 4 as StreamId;
+      } else if (this.type === 'server' && streamType === 'bidi') {
+        this.streamIdServerBidi = this.streamIdServerBidi + 4 as StreamId;
+      }
+      return quicStream;
+    });
   }
 
   /**
