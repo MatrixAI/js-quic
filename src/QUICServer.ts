@@ -182,7 +182,7 @@ class QUICServer extends EventTarget {
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
-  public async newConnection(
+  public async connectionNew(
     data: Buffer,
     remoteInfo: RemoteInfo,
     header: Header,

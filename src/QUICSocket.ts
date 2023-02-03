@@ -108,7 +108,7 @@ class QUICSocket extends EventTarget {
       if (this.server == null) {
         return;
       }
-      const conn_ = await this.server.newConnection(
+      const conn_ = await this.server.connectionNew(
         data,
         remoteInfo,
         header,

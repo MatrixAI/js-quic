@@ -1,7 +1,6 @@
 import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
 import dgram from 'dgram';
-import dns from 'dns';
 import Logger from '@matrixai/logger';
 import { Validator } from 'ip-num';
 import {
@@ -15,7 +14,9 @@ import * as utils from './utils';
 import * as errors from './errors';
 import * as events from './events';
 import QUICSocket from './QUICSocket';
+import QUICConnection from './QUICConnection';
 import QUICConnectionMap from './QUICConnectionMap';
+import QUICConnectionId from './QUICConnectionId';
 
 /**
  * You must provide a error handler `addEventListener('error')`.
@@ -37,18 +38,28 @@ class QUICClient extends EventTarget {
     ops: Crypto;
   };
   protected config: Config;
+  protected connection: QUICConnection;
   protected connectionMap: QUICConnectionMap;
 
   public static async createQUICClient({
     host = '::' as Host,
     port = 0 as Port,
+    localHost = '::' as Host,
+    localPort = 0 as Port,
     crypto,
     socket,
     resolveHostname = utils.resolveHostname,
     logger = new Logger(`${this.name}`),
   }: {
+    // Remote host/port
     host?: Host | Hostname,
     port?: Port,
+
+    // If you want to use a local host/prot
+    // Starting a quic server is just purely host and port
+    // this is also the local host and port
+    localHost?: Host | Hostname,
+    localPort?: Port,
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
@@ -57,84 +68,10 @@ class QUICClient extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
-    let address: string;
     let isSocketShared: boolean;
     let client: QUICClient;
-    if (socket == null) {
-      address = utils.buildAddress(host, port);
-      logger.info(`Create ${this.name} on ${address}`);
-      socket = new QUICSocket({
-        crypto,
-        resolveHostname,
-        logger: logger.getChild(QUICSocket.name)
-      });
-      isSocketShared = false;
-      client = new QUICClient({
-        crypto,
-        socket,
-        isSocketShared,
-        logger
-      });
-      await socket.start({
-        host,
-        port
-      });
-      address = utils.buildAddress(socket.host, socket.port);
-    } else {
-      if (!socket[running]) {
-        throw new errors.ErrorQUICClientSocketNotRunning();
-      }
-      isSocketShared = true;
-      address = utils.buildAddress(socket.host, socket.port);
-      logger.info(`Create ${this.name} on ${address}`);
-      client = new QUICClient({
-        crypto,
-        socket,
-        isSocketShared,
-        logger
-      });
-    }
-    logger.info(`Created ${this.name} on ${address}`);
-    return client;
-  }
-
-  /**
-   * Handle QUIC socket errors
-   * This is only used if the socket is not shared
-   * If the socket is shared, then it is expected that the user
-   * would listen on error events on the socket itself
-   * Otherwise this will propagate such errors to the server
-   */
-  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(e);
-  };
-
-  public constructor({
-    crypto,
-    socket,
-    isSocketShared,
-    logger,
-  }: {
-    crypto: {
-      key: ArrayBuffer;
-      ops: Crypto;
-    };
-    socket: QUICSocket;
-    isSocketShared: boolean;
-    logger: Logger;
-  }) {
-    super();
-    this.logger = logger;
-    this.crypto = crypto;
-    this.socket = socket;
-    this.isSocketShared = isSocketShared;
-    // Registers itself to the socket
-    this.socket.registerClient(this);
-    // Shares the socket connection map as well
-    this.connectionMap = this.socket.connectionMap;
-    if (!isSocketShared) {
-      this.socket.addEventListener('error', this.handleQUICSocketError);
-    }
+    const scid = new QUICConnectionId(quiche.MAX_CONN_ID_LEN);
+    await crypto.ops.randomBytes(scid);
     const config = new quiche.Config();
     config.verifyPeer(false);
     config.grease(true);
@@ -157,7 +94,105 @@ class QUICClient extends EventTarget {
       ]
     );
     config.enableEarlyData();
-    this.config = config;
+    let address = utils.buildAddress(host, port);
+    // Resolve the host via DNS
+    const [host_] = await utils.resolveHost(host, resolveHostname);
+    logger.info(`Create ${this.name} to ${address}`);
+
+    if (socket == null) {
+      socket = new QUICSocket({
+        crypto,
+        resolveHostname,
+        logger: logger.getChild(QUICSocket.name)
+      });
+      isSocketShared = false;
+      await socket.start({
+        host: localHost,
+        port: localPort
+      });
+      const connection = await QUICConnection.connectQUICConnection({
+        scid,
+        socket,
+        remoteInfo: {
+          host: host_,
+          port
+        },
+        config,
+        logger: logger.getChild(`${QUICConnection.name} ${scid}`)
+      });
+      client = new QUICClient({
+        crypto,
+        socket,
+        connection,
+        isSocketShared,
+        logger
+      });
+    } else {
+      if (!socket[running]) {
+        throw new errors.ErrorQUICClientSocketNotRunning();
+      }
+      isSocketShared = true;
+      const connection = await QUICConnection.connectQUICConnection({
+        scid,
+        socket,
+        remoteInfo: {
+          host: host_,
+          port
+        },
+        config,
+        logger: logger.getChild(`${QUICConnection.name} ${scid}`)
+      });
+      client = new QUICClient({
+        crypto,
+        socket,
+        isSocketShared,
+        connection,
+        logger
+      });
+    }
+    address = utils.buildAddress(host_, port);
+    logger.info(`Created ${this.name} to ${address}`);
+    return client;
+  }
+
+  /**
+   * Handle QUIC socket errors
+   * This is only used if the socket is not shared
+   * If the socket is shared, then it is expected that the user
+   * would listen on error events on the socket itself
+   * Otherwise this will propagate such errors to the server
+   */
+  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+    this.dispatchEvent(e);
+  };
+
+  public constructor({
+    crypto,
+    socket,
+    isSocketShared,
+    connection,
+    logger,
+  }: {
+    crypto: {
+      key: ArrayBuffer;
+      ops: Crypto;
+    };
+    socket: QUICSocket;
+    isSocketShared: boolean;
+    connection: QUICConnection;
+    logger: Logger;
+  }) {
+    super();
+    this.logger = logger;
+    this.crypto = crypto;
+    this.socket = socket;
+    this.isSocketShared = isSocketShared;
+    // Registers itself to the socket
+    this.socket.registerClient(this);
+    this.connection = connection;
+    if (!isSocketShared) {
+      this.socket.addEventListener('error', this.handleQUICSocketError);
+    }
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
@@ -169,93 +204,6 @@ class QUICClient extends EventTarget {
   public get port() {
     return this.socket.port;
   }
-
-
-
-  public async start({
-    host = '::',
-    port = 0
-  }: {
-    host?: string,
-    port?: number,
-  } = {}) {
-
-    // QUICConnection.connectQUICConnection
-
-
-    // We have to fill it out with random stuff
-    // Random source connection ID
-    // The SCID is what the client uses to identify itself.
-    const scid = Buffer.allocUnsafe(quiche.MAX_CONN_ID_LEN);
-
-    // Set the array buffer accordingly
-    this.crypto.ops.randomBytes(
-      scid.buffer.slice(
-        scid.byteOffset,
-        scid.byteOffset + scid.byteLength
-      )
-    );
-
-    // we don't actually use the URL
-    // it's not important for us
-    // maybe it is useful later.
-    // the server name is optional
-    // it's only used for verifying the peer certificate
-    // however we don't really do this... because we are using custom  verification
-
-    // New QUIC connection, this will start to initiate the handshake
-    // const conn = quiche.Connection.connect(
-    //   null,
-    //   scid,
-    //   {
-    //     host: this.socket.address().address,
-    //     port: this.socket.address().port,
-    //   },
-    //   {
-    //     host: host,
-    //     port: port
-    //   },
-    //   this.config
-    // );
-
-    // const data = Buffer.alloc(quiche.MAX_DATAGRAM_SIZE);
-    // conn.send(data);
-
-    // Ok we should be creating a `QUICConnection` here
-    // just like in the server
-    // Then use the `send()` which will give back us the data to be sent out on the UDP socket
-    // After sending the INITIAL packet
-    // it will then expect to receive data on the UDP socket
-    // At that point the receive info is built up
-    // Then it is passed to `conn.recv`
-    // HOWEVER what if we have multiple connections
-    // which ones should be indexing into?
-    // Should we be parsing the packet just like on the server side
-    // And then identifying the connection based on the SCID or DCID
-    // since every client... uses SCID to identify themselves
-
-    // Then it tries to read it until it times out
-    // Or if there is no more UDP packets to read
-    // This is seems unnceessary  with handle message
-
-    // Check if is closed
-
-    // Process writes if the connection is established
-
-    // Afterwards, it processes all readable streams
-    // Deal with closing streams
-
-    // Send out on connection
-
-    // Send out on the socket
-
-    // Check if connection is closed
-
-    // Otherwise go back to the sleep waiting loop
-
-
-  }
-
 
   public async destroy() {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
@@ -274,7 +222,6 @@ class QUICClient extends EventTarget {
   // Unlike the server
   // upon a connection failing/destroying
   // it should result in the CLIENT also being destroyed
-
 
 }
 
