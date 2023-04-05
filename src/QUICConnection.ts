@@ -38,10 +38,19 @@ class QUICConnection extends EventTarget {
   public connectionMap: QUICConnectionMap;
   public streamMap: Map<StreamId, QUICStream> = new Map();
 
+  // This basically allows one to await this promise
+  // once resolved, always resolved...
+  // note that this may be rejected... at the beginning
+  // if the connection setup fails (not sure how this can work yet)
+  public readonly establishedP: Promise<void>;
+  protected resolveEstablishedP: () => void;
+  protected rejectEstablishedP: (reason?: any) => void;
+
   protected logger: Logger;
   protected socket: QUICSocket;
   protected timer?: ReturnType<typeof setTimeout>;
   protected resolveCloseP?: () => void;
+
 
   protected streamIdLock: Lock = new Lock();
 
@@ -103,6 +112,9 @@ class QUICConnection extends EventTarget {
       },
       config
     );
+
+    console.log('CLIENT SIDE CONNECTION IS BEING CONNECTED');
+
     const connection = new this({
       type: 'client',
       conn,
@@ -185,9 +197,22 @@ class QUICConnection extends EventTarget {
     this.socket = socket;
     this._remoteHost = remoteInfo.host;
     this._remotePort = remoteInfo.port;
-    console.log('CONSTRUCTION');
     // Sets the timeout on the first
     this.setTimeout();
+
+    // Note that you must be able to reject too
+    // otherwise one might await for establishment forever
+    // the server side has to code up their own bootstrap
+    // but the client side just uses the quiche library
+    const {
+      p: establishedP,
+      resolveP: resolveEstablishedP,
+      rejectP: rejectEstablishedP
+    } = utils.promise();
+    this.establishedP = establishedP;
+    this.resolveEstablishedP = resolveEstablishedP;
+    this.rejectEstablishedP = rejectEstablishedP;
+
   }
 
   public get remoteHost() {
@@ -260,7 +285,7 @@ class QUICConnection extends EventTarget {
   }
 
   /**
-   * Called when the server receives data intended for the connection.
+   * Called when the socket receives data from the remote side intended for this connection.
    * UDP -> Connection -> Stream
    * This pushes data to the streams.
    * When the connection is draining, we can still receive data.
@@ -300,6 +325,12 @@ class QUICConnection extends EventTarget {
         );
         return;
       }
+
+      // Here we can resolve our promises!
+      if (this.conn.isEstablished()) {
+        this.resolveEstablishedP();
+      }
+
       if (!this.conn.isDraining() && (this.conn.isInEarlyData() || this.conn.isEstablished())) {
         for (const streamId of this.conn.readable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
@@ -350,8 +381,10 @@ class QUICConnection extends EventTarget {
   }
 
   /**
-   * Called when the server has to send back data.
+   * Called when the socket has to send back data on this connection.
    * This is better understood as "flushing" the connection send buffer.
+   * This is because the data to send actually comes from the quiche library
+   * and any data that is currently buffered on the streams.
    * It will send everything into the UDP socket.
    *
    * UDP <- Connection <- Stream

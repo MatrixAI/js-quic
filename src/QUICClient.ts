@@ -38,7 +38,7 @@ class QUICClient extends EventTarget {
     ops: Crypto;
   };
   protected config: Config;
-  protected connection: QUICConnection;
+  protected _connection: QUICConnection;
   protected connectionMap: QUICConnectionMap;
 
   public static async createQUICClient({
@@ -69,10 +69,10 @@ class QUICClient extends EventTarget {
     logger?: Logger;
   }) {
     let isSocketShared: boolean;
-    let client: QUICClient;
     const scid = new QUICConnectionId(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scid);
     const config = new quiche.Config();
+    // TODO: disable this (because we still need to run with TLS)
     config.verifyPeer(false);
     config.grease(true);
     config.setMaxIdleTimeout(5000);
@@ -99,6 +99,7 @@ class QUICClient extends EventTarget {
     const [host_] = await utils.resolveHost(host, resolveHostname);
     logger.info(`Create ${this.name} to ${address}`);
 
+    let connection: QUICConnection;
     if (socket == null) {
       socket = new QUICSocket({
         crypto,
@@ -110,7 +111,7 @@ class QUICClient extends EventTarget {
         host: localHost,
         port: localPort
       });
-      const connection = await QUICConnection.connectQUICConnection({
+      connection = await QUICConnection.connectQUICConnection({
         scid,
         socket,
         remoteInfo: {
@@ -119,20 +120,13 @@ class QUICClient extends EventTarget {
         },
         config,
         logger: logger.getChild(`${QUICConnection.name} ${scid}`)
-      });
-      client = new QUICClient({
-        crypto,
-        socket,
-        connection,
-        isSocketShared,
-        logger
       });
     } else {
       if (!socket[running]) {
         throw new errors.ErrorQUICClientSocketNotRunning();
       }
       isSocketShared = true;
-      const connection = await QUICConnection.connectQUICConnection({
+      connection = await QUICConnection.connectQUICConnection({
         scid,
         socket,
         remoteInfo: {
@@ -142,14 +136,75 @@ class QUICClient extends EventTarget {
         config,
         logger: logger.getChild(`${QUICConnection.name} ${scid}`)
       });
-      client = new QUICClient({
-        crypto,
-        socket,
-        isSocketShared,
-        connection,
-        logger
-      });
     }
+
+    // This has to exist already during creation
+    // It is not an instance level thing... but we can attach it somewhat?
+    // Do we make this a static property?
+    connection.addEventListener('error', (e: events.QUICConnectionErrorEvent) => {
+      console.log('WE GOT an error', e.detail);
+    });
+
+    // the conneciton object is created on the clinet side
+    // but nothing is actually done on the QUICCOnnection.connectQUICConnection
+    // we actually need to trigger send to flush data to the remote end
+    // and we need to do the entire bootstrapping process
+    // do we do this in the QUICClient
+    // or do we do this in the creation of quic connection?
+    // we need to do this in the QUICCLient
+    // because the QUICSever is what is does the bootstrapping
+    // so we should do it here too
+    // and that way we force it here to be the place where the connection is actually bootstrapped
+
+    // Here we start the sending process
+    // This flushes the data to the UDP socket
+    // This starts the LOOP
+    // no error happens here
+    // it will all go to the above event
+    await connection.send();
+
+    // We have to read back data from the connection now
+    // Because it's coming back from the socket?
+    // acutally no... because!
+    // THE UDP socket handles any data being sent back to us
+    // so the initial send is all that is needed!
+
+    // ok but then who calls connection.send again?
+    // again the udp socket does, after calling recv, it calls send again
+    // and the conversation is started
+    // what we have to do here is to WAIT until it is established
+    // and we have to bascially WAIT and sleep until this is true
+    // this is technically a busy loop
+    // because we don't really know when it is established?
+    // or we should have it in the connection
+    // we can have it as a promise
+    // and as soon as estbalished it is true
+    // and can always be set to true
+    // then we just "resolve" at all times
+    // then once resolved always resolved
+    // that might be easier
+    // since it's part of the loop... essentially
+    // no busy loop requried
+
+    // connection.conn.isEstablished();
+
+    // This is waiting for the connection to be established
+    // If there's an error like above
+    // we have to BREAK here
+    // or we can rely on the idea that this promise can be broken if an error gets dispatched
+    await connection.establishedP;
+
+    console.log('THE CONNECTION IS REALLY ESTABLISHED!');
+
+    // Note that there is no timeout here
+
+    const client = new QUICClient({
+      crypto,
+      socket,
+      connection,
+      isSocketShared,
+      logger
+    });
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
     return client;
@@ -163,6 +218,13 @@ class QUICClient extends EventTarget {
    * Otherwise this will propagate such errors to the server
    */
   protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+    this.dispatchEvent(e);
+  };
+
+  // This actually needs to track the connection error event too
+  // THIS IS FOR THE INSTANCE
+  // we also need it prior during creation!
+  protected handleQUICConnectionError = (e: events.QUICConnectionErrorEvent) => {
     this.dispatchEvent(e);
   };
 
@@ -189,7 +251,7 @@ class QUICClient extends EventTarget {
     this.isSocketShared = isSocketShared;
     // Registers itself to the socket
     this.socket.registerClient(this);
-    this.connection = connection;
+    this._connection = connection;
     if (!isSocketShared) {
       this.socket.addEventListener('error', this.handleQUICSocketError);
     }
@@ -205,12 +267,20 @@ class QUICClient extends EventTarget {
     return this.socket.port;
   }
 
+  @ready(new errors.ErrorQUICClientDestroyed())
+  public get connection() {
+    // This is supposed to return a specialised INTERFACE
+    // so we aren't just returning QUICConnection
+    // the difference between internal interface and external interface
+    return this._connection;
+  }
+
   public async destroy() {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
-    // Destroy the current connection too
 
-
+    // We may want to allow one to specialise this
+    await this._connection.destroy();
     if (!this.isSocketShared) {
       await this.socket.stop();
       this.socket.removeEventListener('error', this.handleQUICSocketError);

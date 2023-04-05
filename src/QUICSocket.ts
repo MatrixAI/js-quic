@@ -27,8 +27,8 @@ class QUICSocket extends EventTarget {
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
   protected socket: dgram.Socket;
-  protected _host: string;
-  protected _port: number;
+  protected _host: Host;
+  protected _port: Port;
   protected logger: Logger;
   protected server?: QUICServer;
 
@@ -54,6 +54,10 @@ class QUICSocket extends EventTarget {
    * the data to.
    */
   protected handleSocketMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
+
+    console.log('WE GOT A PACKET');
+
+
     // The data buffer may have multiple coalesced QUIC packets.
     // This header is parsed from the first packet.
     let header: Header;
@@ -177,11 +181,23 @@ class QUICSocket extends EventTarget {
     this.resolveHostname = resolveHostname;
   }
 
+  /**
+   * Gets the bound resolved host IP (not hostname).
+   * This can be the IPv4 or IPv6 address.
+   * This could be a wildcard address which means all interfaces.
+   * Note that `::` can mean all IPv4 and all IPv6.
+   * Whereas `0.0.0.0` means only all IPv4.
+   */
   @ready(new errors.ErrorQUICSocketNotRunning())
   public get host() {
     return this._host;
   }
 
+  /**
+   * Gets the bound resolved port.
+   * This cannot be `0`.
+   * Because `0` is always resolved to a specific port.
+   */
   @ready(new errors.ErrorQUICSocketNotRunning())
   public get port() {
     return this._port;
@@ -195,10 +211,12 @@ class QUICSocket extends EventTarget {
    */
   public async start({
     host = '::' as Host,
-    port = 0 as Port
+    port = 0 as Port,
+    ipv6Only = false,
   }: {
     host?: Host | Hostname,
     port?: Port,
+    ipv6Only?: boolean,
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Start ${this.constructor.name} on ${address}`);
@@ -210,7 +228,7 @@ class QUICSocket extends EventTarget {
     this.socket = dgram.createSocket({
       type,
       reuseAddr: false,
-      ipv6Only: false,
+      ipv6Only,
     });
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
     this.socketClose = utils.promisify(this.socket.close).bind(this.socket);
@@ -233,8 +251,8 @@ class QUICSocket extends EventTarget {
     this.socket.removeListener('error', rejectErrorP);
     const socketAddress = this.socket.address();
     // This is the resolved IP, not the original hostname
-    this._host = socketAddress.address;
-    this._port = socketAddress.port;
+    this._host = socketAddress.address as Host;
+    this._port = socketAddress.port as Port;
     this.socket.on('message', this.handleSocketMessage);
     this.socket.on('error', this.handleSocketError);
     address = utils.buildAddress(this._host, this._port);
@@ -245,7 +263,9 @@ class QUICSocket extends EventTarget {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     if (this.connectionMap.size > 0) {
-      throw new errors.ErrorQUICSocketConnectionsActive();
+      throw new errors.ErrorQUICSocketConnectionsActive(
+        `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
+      );
     }
     this.socket.off('message', this.handleSocketMessage);
     this.socket.off('error', this.handleSocketError);

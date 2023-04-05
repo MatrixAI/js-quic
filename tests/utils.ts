@@ -1,5 +1,9 @@
 import { webcrypto } from 'crypto';
 
+async function sleep(ms: number): Promise<void> {
+  return await new Promise<void>((r) => setTimeout(r, ms));
+}
+
 /**
  * Generate 256-bit HMAC key using webcrypto.
  * Web Crypto prefers using the `CryptoKey` type.
@@ -73,6 +77,7 @@ async function randomBytes(data: ArrayBuffer) {
 }
 
 export {
+  sleep,
   generateKey,
   sign,
   verify,
