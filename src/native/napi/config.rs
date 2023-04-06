@@ -1,5 +1,6 @@
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
+// use boring::ssl::SslContext;
 
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
@@ -39,6 +40,47 @@ impl Config {
   pub fn new() -> Result<Self> {
     let config = quiche::Config::new(
       quiche::PROTOCOL_VERSION
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?;
+    return Ok(Config(config));
+  }
+
+  #[napi(factory)]
+  pub fn with_boring_ssl_ctx(
+    version: i64,
+    certPEM: Uint8Array,
+    keyPEM: Uint8Array,
+  ) -> Result<Self> {
+
+    let x509 = boring::x509::X509::from_pem(
+      &certPEM.into_vec()
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?;
+
+
+    let ssl_ctx_builder = boring::ssl::SslContext::builder(
+      boring::ssl::SslMethod::tls(),
+    ).or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    )?;
+
+    ssl_ctx_builder.set_verify(
+      boring::ssl::SslVerifyMode::PEER
+    );
+
+    ssl_ctx_builder.set_certificate(
+      &x509
+    );
+
+    let ssl_ctx = ssl_ctx_builder.build();
+
+
+
+    let config = quiche::Config::with_boring_ssl_ctx(
+      version as u32,
+
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;

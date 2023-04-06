@@ -45,13 +45,14 @@ describe(QUICClient.name, () => {
       logger: logger.getChild(QUICServer.name)
     });
 
+    // THIS SHOULD BE LISTENING on ALL IPV4 and ALL IPV6
     await server.start({
-      host: '127.0.0.1' as Host,
+      host: '::' as Host,
       port: 0 as Port
     });
 
-    // console.log('SERVER LOCAL HOST', server.host);
-    // console.log('SERVER LOCAL PORT', server.port);
+    console.log('SERVER LOCAL HOST', server.host);
+    console.log('SERVER LOCAL PORT', server.port);
 
     server.addEventListener(
       'connection',
@@ -75,12 +76,33 @@ describe(QUICClient.name, () => {
     // which is 1 specific QUICConnection
     // This means we need to host a localhost too
     // Note that HOST must be IP, we don't expect to resolve the hostnames yet
-    const client = await QUICClient.createQUICClient({
-      host: server.host,
-      port: server.port,
-      crypto,
-      logger: logger.getChild(QUICClient.name)
-    });
+
+    // We can expect an error here if it fails
+
+    // OK I THINK I UNDERSTAND
+    // you cannot use :: as the wildcard for localHost on the client side
+    // because that doesn't really make sense
+
+    // Imagine you were sharing a socket between server and client
+    // as in the case of P2P
+    // then the server is using a dual stack socket
+    // it's type is udp6
+    // Then how can we then connect to IPv4 addresses?
+
+    let client;
+    try {
+      client = await QUICClient.createQUICClient({
+        // host: server.host,
+        host: '::ffff:127.0.0.1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name)
+      });
+    } catch (e) {
+      console.log(e);
+      throw e;
+    }
 
     // The connection should be created
     // Note that we aren't telling what to do with TLS?

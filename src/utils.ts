@@ -38,6 +38,9 @@ async function resolveHost(
   } else if (isIPv6) {
     return [host as Host, 'udp6'];
   } else {
+
+    console.log('NEITHER IPV4 nor IPV6');
+
     host = await resolveHostname(host as Hostname);
     return resolveHost(host, resolveHostname);
   }
@@ -132,21 +135,25 @@ function buildAddress(host: string, port: number = 0): string {
   return address;
 }
 
+function isHostWildcard(host: Host): boolean {
+  return host === '0.0.0.0' || host === '::';
+}
+
 /**
  * Zero IPs should be resolved to localhost when used as the target
  * This is usually done automatically, but utp-native doesn't do this
  */
-function resolvesZeroIP(ip: Host): Host {
-  const [isIPv4] = Validator.isValidIPv4String(ip);
-  const [isIPv6] = Validator.isValidIPv6String(ip);
+function resolvesZeroIP(host: Host): Host {
+  const [isIPv4] = Validator.isValidIPv4String(host);
+  const [isIPv6] = Validator.isValidIPv6String(host);
   const zeroIPv4 = new IPv4('0.0.0.0');
   const zeroIPv6 = new IPv6('::');
-  if (isIPv4 && new IPv4(ip).isEquals(zeroIPv4)) {
+  if (isIPv4 && new IPv4(host).isEquals(zeroIPv4)) {
     return '127.0.0.1' as Host;
-  } else if (isIPv6 && new IPv6(ip).isEquals(zeroIPv6)) {
+  } else if (isIPv6 && new IPv6(host).isEquals(zeroIPv6)) {
     return '::1' as Host;
   } else {
-    return ip;
+    return host;
   }
 }
 
@@ -169,6 +176,8 @@ export {
   promise,
   bufferWrap,
   buildAddress,
+  resolvesZeroIP,
+  isHostWildcard,
   encodeConnectionId,
   decodeConnectionId,
   never,

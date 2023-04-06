@@ -444,6 +444,9 @@ class QUICConnection extends EventTarget {
           return;
         }
         try {
+
+          // console.log('ATTEMPTING SEND', sendBuffer, 0, sendLength, sendInfo.to.port, sendInfo.to.host);
+
           await this.socket.send(
             sendBuffer,
             0,

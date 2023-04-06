@@ -41,9 +41,17 @@ class QUICClient extends EventTarget {
   protected _connection: QUICConnection;
   protected connectionMap: QUICConnectionMap;
 
+  /**
+   * Creates a QUIC Client
+   * @param options
+   * @param options.host - target host, if wildcard, it is resolved to its localhost `0.0.0.0` becomes `127.0.0.1` and `::` becomes `::1`
+   */
   public static async createQUICClient({
-    host = '::' as Host,
-    port = 0 as Port,
+    host,
+    port,
+    // The value of this can be `::`
+    // But this implies "dual stack" client
+    // If you are sharing a UDP socket between client and server
     localHost = '::' as Host,
     localPort = 0 as Port,
     crypto,
@@ -52,8 +60,8 @@ class QUICClient extends EventTarget {
     logger = new Logger(`${this.name}`),
   }: {
     // Remote host/port
-    host?: Host | Hostname,
-    port?: Port,
+    host: Host | Hostname,
+    port: Port,
 
     // If you want to use a local host/prot
     // Starting a quic server is just purely host and port
@@ -68,6 +76,8 @@ class QUICClient extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
+
+
     let isSocketShared: boolean;
     const scid = new QUICConnectionId(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scid);
@@ -96,7 +106,26 @@ class QUICClient extends EventTarget {
     config.enableEarlyData();
     let address = utils.buildAddress(host, port);
     // Resolve the host via DNS
-    const [host_] = await utils.resolveHost(host, resolveHostname);
+    let [host_] = await utils.resolveHost(host, resolveHostname);
+    // If the target host is in fact an zero IP, it cannot be used
+    // as a target host, so we need to resolve it to a non-zero IP
+    // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: is
+    // resolved to ::1
+    host_ = utils.resolvesZeroIP(host_);
+
+    // let host_ = host as Host;
+
+
+
+    // At thes same time
+    // the localHost is NOT allowed to be a zero IP
+    // but also we will resolve it too
+    // if it is the case
+    // but we also need to resolve that host name
+
+    console.log('TARGET HOST', host_);
+
+
     logger.info(`Create ${this.name} to ${address}`);
 
     let connection: QUICConnection;
@@ -107,9 +136,26 @@ class QUICClient extends EventTarget {
         logger: logger.getChild(QUICSocket.name)
       });
       isSocketShared = false;
+
+      // // The `localHost` is not allowed to be a zero IP
+      // let [localHost_] = await utils.resolveHost(localHost, resolveHostname);
+      // // So what actually happens if this was actually `::` or `0.0.0.0`?
+      // localHost_ = utils.resolvesZeroIP(localHost_);
+      // console.log('CLIENT LOCAL HOST RESOLVED', localHost_);
+
+
+      // If `localHost` is `::`, that should mean this is dual stack (which udp6) packet
+      // But the `host` is 127.0.0.1... so it wants to send a udp4 packet
+      // Maybe that's the problem here?
+
+      // A dual stack bound socket cannot send IPv4 packets
+      // because it is bound to :: and it has to use udp6 packets
+      // That's the issue here
+
       await socket.start({
         host: localHost,
-        port: localPort
+        port: localPort,
+        // type: 'udp4'
       });
       connection = await QUICConnection.connectQUICConnection({
         scid,
@@ -138,65 +184,28 @@ class QUICClient extends EventTarget {
       });
     }
 
-    // This has to exist already during creation
-    // It is not an instance level thing... but we can attach it somewhat?
-    // Do we make this a static property?
-    connection.addEventListener('error', (e: events.QUICConnectionErrorEvent) => {
-      console.log('WE GOT an error', e.detail);
-    });
+    console.log('CLIENT HOST', socket.host);
+    console.log('CLIENT PORT', socket.port);
 
-    // the conneciton object is created on the clinet side
-    // but nothing is actually done on the QUICCOnnection.connectQUICConnection
-    // we actually need to trigger send to flush data to the remote end
-    // and we need to do the entire bootstrapping process
-    // do we do this in the QUICClient
-    // or do we do this in the creation of quic connection?
-    // we need to do this in the QUICCLient
-    // because the QUICSever is what is does the bootstrapping
-    // so we should do it here too
-    // and that way we force it here to be the place where the connection is actually bootstrapped
-
-    // Here we start the sending process
-    // This flushes the data to the UDP socket
-    // This starts the LOOP
-    // no error happens here
-    // it will all go to the above event
+    const {
+      p: errorP,
+      rejectP: rejectErrorP
+    } = utils.promise();
+    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
+      rejectErrorP(e.detail);
+    };
+    connection.addEventListener(
+      'error',
+      handleConnectionError,
+      { once: true }
+    );
+    // This will not raise an error
     await connection.send();
 
-    // We have to read back data from the connection now
-    // Because it's coming back from the socket?
-    // acutally no... because!
-    // THE UDP socket handles any data being sent back to us
-    // so the initial send is all that is needed!
-
-    // ok but then who calls connection.send again?
-    // again the udp socket does, after calling recv, it calls send again
-    // and the conversation is started
-    // what we have to do here is to WAIT until it is established
-    // and we have to bascially WAIT and sleep until this is true
-    // this is technically a busy loop
-    // because we don't really know when it is established?
-    // or we should have it in the connection
-    // we can have it as a promise
-    // and as soon as estbalished it is true
-    // and can always be set to true
-    // then we just "resolve" at all times
-    // then once resolved always resolved
-    // that might be easier
-    // since it's part of the loop... essentially
-    // no busy loop requried
-
-    // connection.conn.isEstablished();
-
-    // This is waiting for the connection to be established
-    // If there's an error like above
-    // we have to BREAK here
-    // or we can rely on the idea that this promise can be broken if an error gets dispatched
-    await connection.establishedP;
-
-    console.log('THE CONNECTION IS REALLY ESTABLISHED!');
-
-    // Note that there is no timeout here
+    // This will wait to be established, while also rejecting on error
+    await Promise.race([connection.establishedP, errorP]);
+    // Remove the temporary connection error handler
+    connection.removeEventListener('error', handleConnectionError);
 
     const client = new QUICClient({
       crypto,
@@ -221,9 +230,11 @@ class QUICClient extends EventTarget {
     this.dispatchEvent(e);
   };
 
-  // This actually needs to track the connection error event too
-  // THIS IS FOR THE INSTANCE
-  // we also need it prior during creation!
+  /**
+   * Handles QUIC connection errors
+   * This is always used because QUICClient is
+   * one to one with QUICConnection
+   */
   protected handleQUICConnectionError = (e: events.QUICConnectionErrorEvent) => {
     this.dispatchEvent(e);
   };
@@ -251,10 +262,17 @@ class QUICClient extends EventTarget {
     this.isSocketShared = isSocketShared;
     // Registers itself to the socket
     this.socket.registerClient(this);
-    this._connection = connection;
     if (!isSocketShared) {
-      this.socket.addEventListener('error', this.handleQUICSocketError);
+      this.socket.addEventListener(
+        'error',
+        this.handleQUICSocketError
+      );
     }
+    this._connection = connection;
+    this._connection.addEventListener(
+      'error',
+      this.handleQUICConnectionError
+    );
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())

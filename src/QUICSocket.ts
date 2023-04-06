@@ -55,7 +55,7 @@ class QUICSocket extends EventTarget {
    */
   protected handleSocketMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
 
-    console.log('WE GOT A PACKET');
+    console.log('WE GOT A PACKET', rinfo);
 
 
     // The data buffer may have multiple coalesced QUIC packets.
@@ -212,21 +212,31 @@ class QUICSocket extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
+    type,
     ipv6Only = false,
   }: {
     host?: Host | Hostname,
     port?: Port,
+    type?: 'udp4' | 'udp6',
     ipv6Only?: boolean,
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Start ${this.constructor.name} on ${address}`);
     // Resolves the host which could be a hostname and acquire the type
-    const [host_, type] = await utils.resolveHost(
+    const [host_, type_] = await utils.resolveHost(
       host,
       this.resolveHostname
     );
+
+    // If using `::`, the socket type is udp6
+    // but with `ipv6Only` as false, then it will still listen on 0.0.0.0
+    // Dual stack
+
+    console.log('SOCKET TYPE', type, type_);
     this.socket = dgram.createSocket({
-      type,
+      // Overridding the type here
+      // Basically if it is defined, it overrides it
+      type: (type !== undefined) ? type : type_,
       reuseAddr: false,
       ipv6Only,
     });
