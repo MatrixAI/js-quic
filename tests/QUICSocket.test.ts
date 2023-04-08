@@ -122,7 +122,7 @@ describe(QUICSocket.name, () => {
     ipv6Socket.off('message', handleIPv6SocketMessage);
     dualStackSocket.off('message', handleDualStackSocketMessage);
   });
-  test('ipv4 to ipv4', async () => {
+  test.only('ipv4 to ipv4 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -148,10 +148,142 @@ describe(QUICSocket.name, () => {
     ]);
     await socket.stop();
   });
-  test('ipv4 to dual stack', async () => {
-
+  test.only('ipv4 to ipv6 fails', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    await socket.start({
+      host: '127.0.0.1' as Host,
+    });
+    expect(socket.type).toBe('ipv4');
+    const msg = Buffer.from('Hello World');
+    await expect(
+      socket.send(
+        msg,
+        ipv6SocketPort,
+        '::1',
+      )
+    ).rejects.toThrow('EINVAL');
+    await socket.stop();
+  });
+  test.only('ipv4 to dual stack succeeds', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    await socket.start({
+      host: '127.0.0.1' as Host,
+    });
+    expect(socket.type).toBe('ipv4');
+    const msg = Buffer.from('Hello World');
+    await socket.send(
+      msg,
+      dualStackSocketPort,
+      '127.0.0.1',
+    );
+    await expect(dualStackSocketMessageP).resolves.toEqual([
+      msg,
+      {
+        address: '::ffff:127.0.0.1', // Note that this is an IPv4 mapped IPv6 address
+        family: 'IPv6',
+        port: socket.port,
+        size: msg.byteLength
+      }
+    ]);
+    await socket.stop();
   });
 
+  test.only('ipv6 to ipv6 succeeds', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    await socket.start({
+      host: '::1' as Host,
+    });
+    expect(socket.type).toBe('ipv6');
+    const msg = Buffer.from('Hello World');
+    await socket.send(
+      msg,
+      ipv6SocketPort,
+      '::1',
+    );
+    await expect(ipv6SocketMessageP).resolves.toEqual([
+      msg,
+      {
+        address: '::1',
+        family: 'IPv6',
+        port: socket.port,
+        size: msg.byteLength
+      }
+    ]);
+    await socket.stop();
+  });
+
+  test.only('ipv6 to ipv4 fails', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    await socket.start({
+      host: '::1' as Host,
+    });
+    expect(socket.type).toBe('ipv6');
+    const msg = Buffer.from('Hello World');
+    await expect(
+      socket.send(
+        msg,
+        ipv4SocketPort,
+        '127.0.0.1',
+      )
+    ).rejects.toThrow('EINVAL');
+    // Does not work with IPv4 mapped IPv6 addresses
+    await expect(
+      socket.send(
+        msg,
+        ipv4SocketPort,
+        '::ffff:127.0.0.1',
+      )
+    ).rejects.toThrow('ENETUNREACH');
+    await socket.stop();
+  });
+
+
+  test.only('ipv6 to dual stack succeeds', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    await socket.start({
+      host: '::1' as Host,
+    });
+    expect(socket.type).toBe('ipv6');
+    const msg = Buffer.from('Hello World');
+    await socket.send(
+      msg,
+      dualStackSocketPort,
+      '::1',
+    );
+    await expect(dualStackSocketMessageP).resolves.toEqual([
+      msg,
+      {
+        address: '::1',
+        family: 'IPv6',
+        port: socket.port,
+        size: msg.byteLength
+      }
+    ]);
+    // Does not work with IPv4 mapped IPv6 addresses
+    await expect(
+      socket.send(
+        msg,
+        dualStackSocketPort,
+        '::ffff:127.0.0.1',
+      )
+    ).rejects.toThrow('ENETUNREACH');
+    await socket.stop();
+  });
 
   test.only('dual stack to ipv4', async () => {
     const socket = new QUICSocket({

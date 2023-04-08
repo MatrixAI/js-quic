@@ -321,6 +321,9 @@ class QUICSocket extends EventTarget {
   @ready(new errors.ErrorQUICSocketNotRunning())
   public async send(...params: Array<any>): Promise<number> {
 
+    // We can use the 2 exceptions here
+    // and now we know what works
+
     // Oh man we need to examine the parameters here now
     // there are 2 case where  this occurs
 
