@@ -3,6 +3,7 @@ import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
 import QUICSocket from '@/QUICSocket';
 import * as utils from '@/utils';
+import * as errors from '@/errors';
 import * as testsUtils from './utils';
 
 describe(QUICSocket.name, () => {
@@ -122,7 +123,7 @@ describe(QUICSocket.name, () => {
     ipv6Socket.off('message', handleIPv6SocketMessage);
     dualStackSocket.off('message', handleDualStackSocketMessage);
   });
-  test.only('ipv4 to ipv4 succeeds', async () => {
+  test('ipv4 to ipv4 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -148,7 +149,7 @@ describe(QUICSocket.name, () => {
     ]);
     await socket.stop();
   });
-  test.only('ipv4 to ipv6 fails', async () => {
+  test('ipv4 to ipv6 fails', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -164,10 +165,10 @@ describe(QUICSocket.name, () => {
         ipv6SocketPort,
         '::1',
       )
-    ).rejects.toThrow('EINVAL');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     await socket.stop();
   });
-  test.only('ipv4 to dual stack succeeds', async () => {
+  test('ipv4 to dual stack succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -194,7 +195,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('ipv6 to ipv6 succeeds', async () => {
+  test('ipv6 to ipv6 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -221,7 +222,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('ipv6 to ipv4 fails', async () => {
+  test('ipv6 to ipv4 fails', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -237,7 +238,7 @@ describe(QUICSocket.name, () => {
         ipv4SocketPort,
         '127.0.0.1',
       )
-    ).rejects.toThrow('EINVAL');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     // Does not work with IPv4 mapped IPv6 addresses
     await expect(
       socket.send(
@@ -245,12 +246,12 @@ describe(QUICSocket.name, () => {
         ipv4SocketPort,
         '::ffff:127.0.0.1',
       )
-    ).rejects.toThrow('ENETUNREACH');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     await socket.stop();
   });
 
 
-  test.only('ipv6 to dual stack succeeds', async () => {
+  test('ipv6 to dual stack succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -281,11 +282,11 @@ describe(QUICSocket.name, () => {
         dualStackSocketPort,
         '::ffff:127.0.0.1',
       )
-    ).rejects.toThrow('ENETUNREACH');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     await socket.stop();
   });
 
-  test.only('dual stack to ipv4 succeeds', async () => {
+  test('dual stack to ipv4 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -302,7 +303,7 @@ describe(QUICSocket.name, () => {
         ipv4SocketPort,
         '127.0.0.1',
       )
-    ).rejects.toThrow('EINVAL');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     // Succeeds if sent with IPv4 mapped IPv6 address
     await socket.send(
       msg,
@@ -321,7 +322,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('dual stack to ipv6 succeeds', async () => {
+  test('dual stack to ipv6 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -348,7 +349,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('dual stack to dual stack succeeds', async () => {
+  test('dual stack to dual stack succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -365,7 +366,7 @@ describe(QUICSocket.name, () => {
         dualStackSocketPort,
         '127.0.0.1',
       )
-    ).rejects.toThrow('EINVAL');
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
 
     await socket.send(
       msg,
@@ -402,7 +403,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test('', async () => {
+  test.skip('', async () => {
     const socket = new QUICSocket({
       crypto,
       logger

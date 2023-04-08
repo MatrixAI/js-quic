@@ -20,12 +20,8 @@ class ErrorQUICSocketConnectionsActive<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket has active connections';
 }
 
-class ErrorQUICSocketSendIPv4<T> extends ErrorQUICSocket<T> {
-  static description = 'QUIC Socket cannot send to IPv4 host';
-}
-
-class ErrorQUICSocketSendIPv6<T> extends ErrorQUICSocket<T> {
-  static description = 'QUIC Socket cannot send to IPv6 host';
+class ErrorQUICSocketInvalidSendAddress<T> extends ErrorQUICSocket<T> {
+  static description = 'QUIC Socket cannot send to the specified address';
 }
 
 class ErrorQUICServer<T> extends ErrorQUIC<T> {
@@ -86,8 +82,7 @@ export {
   ErrorQUICSocketNotRunning,
   ErrorQUICSocketServerDuplicate,
   ErrorQUICSocketConnectionsActive,
-  ErrorQUICSocketSendIPv4,
-  ErrorQUICSocketSendIPv6,
+  ErrorQUICSocketInvalidSendAddress,
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,

@@ -28,6 +28,10 @@ function isIPv6(host: string) {
   // Test if the host is an IPv4 mapped IPv6 address.
   // In the future, `isValidIPv6String` should be able to handle this
   // and this code can be removed.
+  return isIPv4MappedIPv6(host);
+}
+
+function isIPv4MappedIPv6(host: string) {
   if (host.startsWith('::ffff:')) {
     const ipv4 = host.slice('::ffff:'.length);
     if (isIPv4(ipv4)) {
@@ -190,6 +194,7 @@ function never(): never {
 export {
   isIPv4,
   isIPv6,
+  isIPv4MappedIPv6,
   resolveHostname,
   resolveHost,
   promisify,

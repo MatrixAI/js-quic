@@ -311,48 +311,47 @@ class QUICSocket extends EventTarget {
 
   /**
    * Sends UDP datagram
+   * The UDP socket here is connectionless.
+   * The port and address are necessary.
    */
-  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port?: number, address?: string): Promise<number>;
-  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port?: number): Promise<number>;
-  public async send(msg: string | Uint8Array | ReadonlyArray<any>): Promise<number>;
-  public async send(msg: string | Uint8Array, offset: number, length: number, port?: number, address?: string): Promise<number>;
-  public async send(msg: string | Uint8Array, offset: number, length: number, port?: number): Promise<number>;
-  public async send(msg: string | Uint8Array, offset: number, length: number): Promise<number>;
+  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port: number, address: string): Promise<number>;
+  public async send(msg: string | Uint8Array, offset: number, length: number, port: number, address: string): Promise<number>;
   @ready(new errors.ErrorQUICSocketNotRunning())
   public async send(...params: Array<any>): Promise<number> {
-
-    // We can use the 2 exceptions here
-    // and now we know what works
-
-    // Oh man we need to examine the parameters here now
-    // there are 2 case where  this occurs
-
-    // if we are an ipv6 socket, can we send data to a mapped ipv4? I"m not sure
-    // wen eed to check!
-
-    // if (this._type === 'ipv4&ipv6') {
-    //   if (
-    //     params.length === 3 && typeof params[2] === 'string'
-    //   ) {
-    //     const host = params[2];
-    //     if (utils.isIPv4(host)) {
-    //       // We must map it to ipv6 address
-    //     }
-    //     // Check if we are dual stack and IPv4
-    //   }
-    // }
-
-    // We do this on QUICClient and QUICServer instead
-    // Becuase I think the addresses should be changed at the higher level
-
-
-    // We could throw an error here before
-    // because WE KNOW
-    // what happens...
-    // if you rely on the non-mapped address
-    // Let's see
-
-
+    let index: number;
+    if (params.length === 3 && typeof params[2] === 'string') {
+      index = 2;
+    } else if (params.length === 5 && typeof params[4] === 'string') {
+      index = 4;
+    } else {
+      throw new TypeError('QUICSocket.send requires `port` and `address` parameters');
+    }
+    const host = params[index] as Host | Hostname;
+    const [host_, udpType] = await utils.resolveHost(
+      host,
+      this.resolveHostname
+    );
+    if (udpType === 'udp4' && this._type !== 'ipv4') {
+      // This prevents EINVAL
+      throw new errors.ErrorQUICSocketInvalidSendAddress(
+        'Cannot send to an IPv4 address on a non-IPv4 QUICSocket',
+      );
+    } else if (udpType === 'udp6' && this._type === 'ipv4') {
+      // This prevents EINVAL
+      throw new errors.ErrorQUICSocketInvalidSendAddress(
+        'Cannot send to an IPv6 address on an IPv4 QUICSocket',
+      );
+    } else if (
+      udpType === 'udp6'
+      && this._type !== 'ipv4&ipv6'
+      && utils.isIPv4MappedIPv6(host_)
+    ) {
+      // This prevents ENETUNREACH
+      throw new errors.ErrorQUICSocketInvalidSendAddress(
+        'Cannot send to an IPv4 mapped IPv6 address on a non-dual-stack QUICSocket',
+      );
+    }
+    params[index] = host_;
     return this.socketSend(...params);
   }
 
