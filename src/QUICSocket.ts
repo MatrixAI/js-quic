@@ -242,13 +242,6 @@ class QUICSocket extends EventTarget {
       host,
       this.resolveHostname
     );
-
-    // If we are doing udp6 here
-    // that implies the ability to send ipv4 packets
-    // We don't know yet
-    // So we need to check if this is possible
-
-
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr: false,
@@ -285,9 +278,6 @@ class QUICSocket extends EventTarget {
     } else if (udpType === 'udp6') {
       this._type = 'ipv6';
     }
-
-    console.log('THE ADDRESS', this.socket.address());
-
     this.socket.on('message', this.handleSocketMessage);
     this.socket.on('error', this.handleSocketError);
     address = utils.buildAddress(this._host, this._port);
