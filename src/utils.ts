@@ -11,6 +11,33 @@ import { IPv4, IPv6, Validator } from 'ip-num';
 import * as errors from './errors';
 
 /**
+ * Is it an IPv4 address?
+ */
+function isIPv4(host: string) {
+  const [isIPv4] = Validator.isValidIPv4String(host);
+  return isIPv4;
+}
+
+/**
+ * Is it an IPv6 address?
+ * This supports IPv4 mapped IPv6 addresses
+ */
+function isIPv6(host: string) {
+  const [isIPv6] = Validator.isValidIPv6String(host);
+  if (isIPv6) return true;
+  // Test if the host is an IPv4 mapped IPv6 address.
+  // In the future, `isValidIPv6String` should be able to handle this
+  // and this code can be removed.
+  if (host.startsWith('::ffff:')) {
+    const ipv4 = host.slice('::ffff:'.length);
+    if (isIPv4(ipv4)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * This will resolve a hostname to the first host.
  * It could be an IPv6 address or IPv4 address.
  * This uses the OS's DNS resolution system.
@@ -31,16 +58,11 @@ async function resolveHost(
   host: Host | Hostname,
   resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>
 ): Promise<[Host, 'udp4' | 'udp6']> {
-  const [isIPv4] = Validator.isValidIPv4String(host);
-  const [isIPv6] = Validator.isValidIPv6String(host);
-  if (isIPv4) {
+  if (isIPv4(host)) {
     return [host as Host, 'udp4'];
-  } else if (isIPv6) {
+  } else if (isIPv6(host)) {
     return [host as Host, 'udp6'];
   } else {
-
-    console.log('NEITHER IPV4 nor IPV6');
-
     host = await resolveHostname(host as Hostname);
     return resolveHost(host, resolveHostname);
   }
@@ -123,11 +145,9 @@ function bufferWrap(
  */
 function buildAddress(host: string, port: number = 0): string {
   let address: string;
-  const [isIPv4] = Validator.isValidIPv4String(host);
-  const [isIPv6] = Validator.isValidIPv6String(host);
-  if (isIPv4) {
+  if (isIPv4(host)) {
     address = `${host}:${port}`;
-  } else if (isIPv6) {
+  } else if (isIPv6(host)) {
     address = `[${host}]:${port}`;
   } else {
     address = `${host}:${port}`;
@@ -144,13 +164,11 @@ function isHostWildcard(host: Host): boolean {
  * This is usually done automatically, but utp-native doesn't do this
  */
 function resolvesZeroIP(host: Host): Host {
-  const [isIPv4] = Validator.isValidIPv4String(host);
-  const [isIPv6] = Validator.isValidIPv6String(host);
   const zeroIPv4 = new IPv4('0.0.0.0');
   const zeroIPv6 = new IPv6('::');
-  if (isIPv4 && new IPv4(host).isEquals(zeroIPv4)) {
+  if (isIPv4(host) && new IPv4(host).isEquals(zeroIPv4)) {
     return '127.0.0.1' as Host;
-  } else if (isIPv6 && new IPv6(host).isEquals(zeroIPv6)) {
+  } else if (isIPv6(host) && new IPv6(host).isEquals(zeroIPv6)) {
     return '::1' as Host;
   } else {
     return host;
@@ -170,6 +188,8 @@ function never(): never {
 }
 
 export {
+  isIPv4,
+  isIPv6,
   resolveHostname,
   resolveHost,
   promisify,

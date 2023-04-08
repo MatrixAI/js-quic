@@ -24,11 +24,18 @@ interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
 
+  // we need a quick way to know whether this socket
+  // is a dual stack socket or not
+  // and also whether it is ipv4 or ipv6
+
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
   protected socket: dgram.Socket;
   protected _host: Host;
   protected _port: Port;
+  protected _type: 'ipv4' | 'ipv6' | 'ipv4&ipv6';
+
+
   protected logger: Logger;
   protected server?: QUICServer;
 
@@ -204,6 +211,15 @@ class QUICSocket extends EventTarget {
   }
 
   /**
+   * Gets the type of socket
+   * It can be ipv4-only, ipv6-only or dual stack
+   */
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public get type(): 'ipv4' | 'ipv6' | 'ipv4&ipv6' {
+    return this._type;
+  }
+
+  /**
    * Supports IPv4 and IPv6 addresses
    * Note that if the host is `::`, this will also bind to `0.0.0.0`.
    * The host and port here are the local host and port that the socket will bind to.
@@ -212,31 +228,29 @@ class QUICSocket extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
-    type,
     ipv6Only = false,
   }: {
     host?: Host | Hostname,
     port?: Port,
-    type?: 'udp4' | 'udp6',
     ipv6Only?: boolean,
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Start ${this.constructor.name} on ${address}`);
-    // Resolves the host which could be a hostname and acquire the type
-    const [host_, type_] = await utils.resolveHost(
+    // Resolves the host which could be a hostname and acquire the type.
+    // If the host is an IPv4 mapped IPv6 address, then the type should be udp6.
+    const [host_, udpType] = await utils.resolveHost(
       host,
       this.resolveHostname
     );
 
-    // If using `::`, the socket type is udp6
-    // but with `ipv6Only` as false, then it will still listen on 0.0.0.0
-    // Dual stack
+    // If we are doing udp6 here
+    // that implies the ability to send ipv4 packets
+    // We don't know yet
+    // So we need to check if this is possible
 
-    console.log('SOCKET TYPE', type, type_);
+
     this.socket = dgram.createSocket({
-      // Overridding the type here
-      // Basically if it is defined, it overrides it
-      type: (type !== undefined) ? type : type_,
+      type: udpType,
       reuseAddr: false,
       ipv6Only,
     });
@@ -263,6 +277,17 @@ class QUICSocket extends EventTarget {
     // This is the resolved IP, not the original hostname
     this._host = socketAddress.address as Host;
     this._port = socketAddress.port as Port;
+    // Dual stack only exists for `::` and `!ipv6Only`
+    if (host_ === '::' && !ipv6Only) {
+      this._type = 'ipv4&ipv6';
+    } else if (udpType === 'udp4') {
+      this._type = 'ipv4';
+    } else if (udpType === 'udp6') {
+      this._type = 'ipv6';
+    }
+
+    console.log('THE ADDRESS', this.socket.address());
+
     this.socket.on('message', this.handleSocketMessage);
     this.socket.on('error', this.handleSocketError);
     address = utils.buildAddress(this._host, this._port);
@@ -295,6 +320,36 @@ class QUICSocket extends EventTarget {
   public async send(msg: string | Uint8Array, offset: number, length: number): Promise<number>;
   @ready(new errors.ErrorQUICSocketNotRunning())
   public async send(...params: Array<any>): Promise<number> {
+
+    // Oh man we need to examine the parameters here now
+    // there are 2 case where  this occurs
+
+    // if we are an ipv6 socket, can we send data to a mapped ipv4? I"m not sure
+    // wen eed to check!
+
+    // if (this._type === 'ipv4&ipv6') {
+    //   if (
+    //     params.length === 3 && typeof params[2] === 'string'
+    //   ) {
+    //     const host = params[2];
+    //     if (utils.isIPv4(host)) {
+    //       // We must map it to ipv6 address
+    //     }
+    //     // Check if we are dual stack and IPv4
+    //   }
+    // }
+
+    // We do this on QUICClient and QUICServer instead
+    // Becuase I think the addresses should be changed at the higher level
+
+
+    // We could throw an error here before
+    // because WE KNOW
+    // what happens...
+    // if you rely on the non-mapped address
+    // Let's see
+
+
     return this.socketSend(...params);
   }
 
