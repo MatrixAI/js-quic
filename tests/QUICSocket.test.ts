@@ -313,7 +313,7 @@ describe(QUICSocket.name, () => {
     await expect(ipv4SocketMessageP).resolves.toEqual([
       msg,
       {
-        address: '127.0.0.1', // Note that this is not a IPv4 mapped IPv6 address
+        address: '127.0.0.1', // Note that this is not an IPv4 mapped IPv6 address
         family: 'IPv4',
         port: socket.port,
         size: msg.byteLength
