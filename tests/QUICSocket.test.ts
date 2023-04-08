@@ -285,7 +285,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('dual stack to ipv4', async () => {
+  test.only('dual stack to ipv4 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -321,7 +321,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('dual stack to ipv6', async () => {
+  test.only('dual stack to ipv6 succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -348,7 +348,7 @@ describe(QUICSocket.name, () => {
     await socket.stop();
   });
 
-  test.only('dual stack to dual stack', async () => {
+  test.only('dual stack to dual stack succeeds', async () => {
     const socket = new QUICSocket({
       crypto,
       logger
