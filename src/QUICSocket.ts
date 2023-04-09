@@ -9,7 +9,6 @@ import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running, destroyed } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
-import { Validator } from 'ip-num';
 import { quiche, Type } from './native';
 import * as events from './events';
 import * as utils from './utils';
@@ -23,11 +22,6 @@ import * as errors from './errors';
 interface QUICSocket extends StartStop {}
 @StartStop()
 class QUICSocket extends EventTarget {
-
-  // we need a quick way to know whether this socket
-  // is a dual stack socket or not
-  // and also whether it is ipv4 or ipv6
-
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
   protected socket: dgram.Socket;
@@ -263,7 +257,14 @@ class QUICSocket extends EventTarget {
       // EINVAL due to using IPv4 address where udp6 is specified.
       // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
       // or doesn't resolve to IPv4 if udp4 is specified.
-      throw e;
+      throw new errors.ErrorQUICSocketInvalidBindAddress(
+        (host !== host_)
+        ? `Could not bind to resolved ${host} -> ${host_}`
+        : `Could not bind to ${host}`,
+        {
+          cause: e
+        }
+      );
     }
     this.socket.removeListener('error', rejectErrorP);
     const socketAddress = this.socket.address();
@@ -273,7 +274,7 @@ class QUICSocket extends EventTarget {
     // Dual stack only exists for `::` and `!ipv6Only`
     if (host_ === '::' && !ipv6Only) {
       this._type = 'ipv4&ipv6';
-    } else if (udpType === 'udp4') {
+    } else if (udpType === 'udp4' || utils.isIPv4MappedIPv6(host_)) {
       this._type = 'ipv4';
     } else if (udpType === 'udp6') {
       this._type = 'ipv6';
@@ -321,24 +322,25 @@ class QUICSocket extends EventTarget {
       host,
       this.resolveHostname
     );
-    if (udpType === 'udp4' && this._type !== 'ipv4') {
-      // This prevents EINVAL
+    if (this._type === 'ipv4' && (udpType !== 'udp4' && !utils.isIPv4MappedIPv6(host_))) {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
-        'Cannot send to an IPv4 address on a non-IPv4 QUICSocket',
+        `Cannot send to ${host_} on an IPv4 QUICSocket`,
       );
-    } else if (udpType === 'udp6' && this._type === 'ipv4') {
-      // This prevents EINVAL
+    } else if (this._type === 'ipv6' && (udpType !== 'udp6' || utils.isIPv4MappedIPv6(host_))) {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
-        'Cannot send to an IPv6 address on an IPv4 QUICSocket',
+        `Cannot send to ${host_} on an IPv6 QUICSocket`,
+      );
+    } else if (this._type === 'ipv4&ipv6' && (udpType !== 'udp6')) {
+      throw new errors.ErrorQUICSocketInvalidSendAddress(
+        `Cannot send to ${host_} on a dual stack QUICSocket`,
       );
     } else if (
-      udpType === 'udp6'
-      && this._type !== 'ipv4&ipv6'
-      && utils.isIPv4MappedIPv6(host_)
+      this._type === 'ipv4' &&
+      utils.isIPv4MappedIPv6(this._host) &&
+      !utils.isIPv4MappedIPv6(host_)
     ) {
-      // This prevents ENETUNREACH
       throw new errors.ErrorQUICSocketInvalidSendAddress(
-        'Cannot send to an IPv4 mapped IPv6 address on a non-dual-stack QUICSocket',
+        `Cannot send to ${host} an IPv4 mapped IPv6 QUICSocket`,
       );
     }
     params[index] = host_;
