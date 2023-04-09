@@ -39,62 +39,41 @@ describe(QUICClient.name, () => {
   afterEach(async () => {
   });
   test('', async () => {
-
     const server = new QUICServer({
       crypto,
       logger: logger.getChild(QUICServer.name)
     });
-
-    // THIS SHOULD BE LISTENING on ALL IPV4 and ALL IPV6
     await server.start({
       host: '::' as Host,
       port: 0 as Port
     });
 
-    console.log('SERVER LOCAL HOST', server.host);
-    console.log('SERVER LOCAL PORT', server.port);
+    console.log('SERVER PORT', server.port);
 
     server.addEventListener(
       'connection',
       (e: events.QUICServerConnectionEvent) => {
         const conn = e.detail;
-
-        // Why is this not being done?
         console.log('I GOT A CONNECTION');
-
         // conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
         //   const stream = e.detail;
         // }, { once: true });
-
       },
       { once: true }
     );
 
 
-    // Prior to this we have to run a server!!
-    // Here we want to create a client
-    // which is 1 specific QUICConnection
-    // This means we need to host a localhost too
-    // Note that HOST must be IP, we don't expect to resolve the hostnames yet
-
-    // We can expect an error here if it fails
-
-    // OK I THINK I UNDERSTAND
-    // you cannot use :: as the wildcard for localHost on the client side
-    // because that doesn't really make sense
-
-    // Imagine you were sharing a socket between server and client
-    // as in the case of P2P
-    // then the server is using a dual stack socket
-    // it's type is udp6
-    // Then how can we then connect to IPv4 addresses?
-
     let client;
     try {
+      // We have a dual stack server
+      // we can actually connect  either way
+      // But if we use `::` that doesn't make sense
       client = await QUICClient.createQUICClient({
         // host: server.host,
-        host: '::ffff:127.0.0.1' as Host,
+        // host: '::ffff:127.0.0.1' as Host,
+        host: '::1' as Host,
         port: server.port,
+        // This is a dual stack client
         localHost: '::' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name)
@@ -110,18 +89,9 @@ describe(QUICClient.name, () => {
     // technically the client side does not need to present anything
     // Since we have disabled it
     // We are connected
-    // console.log('WE ARE CONNECTED');
-    // console.log('CLIENT LOCAL HOST', client.host);
-    // console.log('CLIENT LOCAL PORT', client.port);
-
-    // You might want to make sure that if an error occurs
-    // you probably want to destroy it
-    // but what would that entail?
-    // Automatic destruction?
-    // Or better yet... it would already be closed or destroyed?
-    // Yea there's an automatic destroy event upon an error
-    // Also once we have the connection what do we do with this?
-    // We would need to expose this to allow the ability to create new streams and shit
+    console.log('WE ARE CONNECTED');
+    console.log('CLIENT LOCAL HOST', client.host);
+    console.log('CLIENT LOCAL PORT', client.port);
 
     // we should have a generic type here
     // cause the QUICClient propagates the error event
@@ -129,7 +99,7 @@ describe(QUICClient.name, () => {
     client.addEventListener(
       'error',
       (e: events.QUICSocketErrorEvent) => {
-        // console.log('I GOT AN ERROR!?');
+        console.log('I GOT AN ERROR!?');
       },
       { once: true }
     );
@@ -137,7 +107,7 @@ describe(QUICClient.name, () => {
     client.addEventListener(
       'destroy',
       (e: events.QUICClientDestroyEvent) => {
-        // console.log('CLIENT got destroyed');
+        console.log('CLIENT got destroyed');
       },
       { once: true }
     );

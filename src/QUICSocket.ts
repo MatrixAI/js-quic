@@ -340,7 +340,7 @@ class QUICSocket extends EventTarget {
       !utils.isIPv4MappedIPv6(host_)
     ) {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
-        `Cannot send to ${host} an IPv4 mapped IPv6 QUICSocket`,
+        `Cannot send to ${host_} an IPv4 mapped IPv6 QUICSocket`,
       );
     }
     params[index] = host_;

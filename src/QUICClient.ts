@@ -45,13 +45,13 @@ class QUICClient extends EventTarget {
    * Creates a QUIC Client
    * @param options
    * @param options.host - target host, if wildcard, it is resolved to its localhost `0.0.0.0` becomes `127.0.0.1` and `::` becomes `::1`
+   * @param options.port - defaults to 0
+   * @param options.localHost
+   * @param options.localPort
    */
   public static async createQUICClient({
     host,
     port,
-    // The value of this can be `::`
-    // But this implies "dual stack" client
-    // If you are sharing a UDP socket between client and server
     localHost = '::' as Host,
     localPort = 0 as Port,
     crypto,
@@ -59,13 +59,8 @@ class QUICClient extends EventTarget {
     resolveHostname = utils.resolveHostname,
     logger = new Logger(`${this.name}`),
   }: {
-    // Remote host/port
     host: Host | Hostname,
     port: Port,
-
-    // If you want to use a local host/prot
-    // Starting a quic server is just purely host and port
-    // this is also the local host and port
     localHost?: Host | Hostname,
     localPort?: Port,
     crypto: {
@@ -76,6 +71,45 @@ class QUICClient extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
+
+    // Ok we can now
+    // know a few things
+    // if we take a socket
+    // we have to reconcile the host/port
+    // OR
+    // because the server's host/port might be changed a bit
+    // alternatively we convert to the "accepted" form here
+
+    // And if the socket doesn't exist
+    // and we only have localHost and localPort
+    // we can reconcile it
+
+    // OR we provide a sort of incompatibility here
+    // so it's important for the end user to do the conversion
+    // themselves
+    // so if they end up dual a stack of `::`
+
+    // and they want to connect to it
+    // we resolve that to `::1` sort of thing - that's ipv6 by the way
+
+    // ::0 also becomes ::1
+    // 0.0.0.0 also becomes 127.0.0.1
+
+
+    // but auto conversion can cause issues
+    // it might be better to be explicit and push this up
+    // as we won't know what exactly we need to use here
+
+    // We have InvalidBindAddress and InvalidSendAddress
+    // Now we have
+
+    // QUICClientInvalidLocalHost
+
+    // QUICClientInvalidRemoteHost
+
+
+
+
 
 
     let isSocketShared: boolean;
@@ -105,30 +139,13 @@ class QUICClient extends EventTarget {
     );
     config.enableEarlyData();
     let address = utils.buildAddress(host, port);
-    // Resolve the host via DNS
+    logger.info(`Create ${this.name} to ${address}`);
     let [host_] = await utils.resolveHost(host, resolveHostname);
     // If the target host is in fact an zero IP, it cannot be used
     // as a target host, so we need to resolve it to a non-zero IP
-    // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: is
+    // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
-
-    // let host_ = host as Host;
-
-
-
-    // At thes same time
-    // the localHost is NOT allowed to be a zero IP
-    // but also we will resolve it too
-    // if it is the case
-    // but we also need to resolve that host name
-
-    console.log('TARGET HOST', host_);
-
-
-    logger.info(`Create ${this.name} to ${address}`);
-
-    let connection: QUICConnection;
     if (socket == null) {
       socket = new QUICSocket({
         crypto,
@@ -136,56 +153,57 @@ class QUICClient extends EventTarget {
         logger: logger.getChild(QUICSocket.name)
       });
       isSocketShared = false;
-
-      // // The `localHost` is not allowed to be a zero IP
-      // let [localHost_] = await utils.resolveHost(localHost, resolveHostname);
-      // // So what actually happens if this was actually `::` or `0.0.0.0`?
-      // localHost_ = utils.resolvesZeroIP(localHost_);
-      // console.log('CLIENT LOCAL HOST RESOLVED', localHost_);
-
-
-      // If `localHost` is `::`, that should mean this is dual stack (which udp6) packet
-      // But the `host` is 127.0.0.1... so it wants to send a udp4 packet
-      // Maybe that's the problem here?
-
-      // A dual stack bound socket cannot send IPv4 packets
-      // because it is bound to :: and it has to use udp6 packets
-      // That's the issue here
-
       await socket.start({
         host: localHost,
         port: localPort,
-        // type: 'udp4'
-      });
-      connection = await QUICConnection.connectQUICConnection({
-        scid,
-        socket,
-        remoteInfo: {
-          host: host_,
-          port
-        },
-        config,
-        logger: logger.getChild(`${QUICConnection.name} ${scid}`)
       });
     } else {
       if (!socket[running]) {
         throw new errors.ErrorQUICClientSocketNotRunning();
       }
       isSocketShared = true;
-      connection = await QUICConnection.connectQUICConnection({
-        scid,
-        socket,
-        remoteInfo: {
-          host: host_,
-          port
-        },
-        config,
-        logger: logger.getChild(`${QUICConnection.name} ${scid}`)
-      });
     }
-
-    console.log('CLIENT HOST', socket.host);
-    console.log('CLIENT PORT', socket.port);
+    // Check that the target `host` is compatible with the bound socket host
+    if (
+      socket.type === 'ipv4' &&
+      (!utils.isIPv4(host_) && !utils.isIPv4MappedIPv6(host_))
+    ) {
+      throw new errors.ErrorQUICClientInvalidHost(
+        `Cannot connect to ${host_} on an IPv4 QUICClient`,
+      );
+    } else if (
+      socket.type === 'ipv6' &&
+      (!utils.isIPv6(host_) || utils.isIPv4MappedIPv6(host_))
+    ) {
+      throw new errors.ErrorQUICClientInvalidHost(
+        `Cannot connect to ${host_} on an IPv6 QUICClient`,
+      );
+    } else if (
+      socket.type === 'ipv4&ipv6' &&
+      !utils.isIPv6(host_)
+    ) {
+      throw new errors.ErrorQUICClientInvalidHost(
+        `Cannot send to ${host_} on a dual stack QUICClient`,
+      );
+    } else if (
+      socket.type === 'ipv4' &&
+      utils.isIPv4MappedIPv6(socket.host) &&
+      !utils.isIPv4MappedIPv6(host_)
+    ) {
+      throw new errors.ErrorQUICClientInvalidHost(
+        `Cannot connect to ${host_} an IPv4 mapped IPv6 QUICClient`,
+      );
+    }
+    const connection = await QUICConnection.connectQUICConnection({
+      scid,
+      socket,
+      remoteInfo: {
+        host: host_,
+        port
+      },
+      config,
+      logger: logger.getChild(`${QUICConnection.name} ${scid}`)
+    });
 
     const {
       p: errorP,
@@ -204,8 +222,11 @@ class QUICClient extends EventTarget {
 
     // This will wait to be established, while also rejecting on error
     await Promise.race([connection.establishedP, errorP]);
+
     // Remove the temporary connection error handler
     connection.removeEventListener('error', handleConnectionError);
+
+    // Now we create the client
 
     const client = new QUICClient({
       crypto,
