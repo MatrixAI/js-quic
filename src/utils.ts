@@ -13,16 +13,16 @@ import * as errors from './errors';
 /**
  * Is it an IPv4 address?
  */
-function isIPv4(host: string) {
+function isIPv4(host: string): host is Host {
   const [isIPv4] = Validator.isValidIPv4String(host);
   return isIPv4;
 }
 
 /**
  * Is it an IPv6 address?
- * This supports IPv4 mapped IPv6 addresses
+ * This considers IPv4 mapped IPv6 addresses to also be IPv6 addresses.
  */
-function isIPv6(host: string) {
+function isIPv6(host: string): host is Host {
   const [isIPv6] = Validator.isValidIPv6String(host);
   if (isIPv6) return true;
   // Test if the host is an IPv4 mapped IPv6 address.
@@ -31,14 +31,60 @@ function isIPv6(host: string) {
   return isIPv4MappedIPv6(host);
 }
 
-function isIPv4MappedIPv6(host: string) {
+/**
+ * There are 2 kinds of IPv4 mapped IPv6 addresses.
+ * 1. ::ffff:127.0.0.1 - dotted decimal version
+ * 2. ::ffff:7f00:1 - hex version
+ * Both are accepted by Node's dgram module.
+ */
+function isIPv4MappedIPv6(host: string): host is Host {
   if (host.startsWith('::ffff:')) {
-    const ipv4 = host.slice('::ffff:'.length);
-    if (isIPv4(ipv4)) {
+    try {
+      // The `ip-num` package understands `::ffff:7f00:1`
+      IPv6.fromString(host);
       return true;
+    } catch {
+      // But it does not understand `::ffff:127.0.0.1`
+      const ipv4 = host.slice('::ffff:'.length);
+      if (isIPv4(ipv4)) {
+        return true;
+      }
     }
   }
   return false;
+}
+
+/**
+ * Takes an IPv4 address and returns the IPv4 mapped IPv6 address.
+ * This produces the dotted decimal variant.
+ */
+function toIPv4MappedIPv6(host: string): Host {
+  if (!isIPv4(host)) {
+    throw new TypeError('Invalid IPv4 address');
+  }
+  return '::ffff:' + host as Host;
+}
+
+/**
+ * Extracts the IPv4 portion out of the IPv4 mapped IPv6 address.
+ * Can handle both the dotted decimal and hex variants.
+ * 1. ::ffff:7f00:1
+ * 2. ::ffff:127.0.0.1
+ * Always returns the dotted decimal variant.
+ */
+function fromIPv4MappedIPv6(host: string): Host {
+  const ipv4 = host.slice('::ffff:'.length);
+  if (isIPv4(ipv4)) {
+    return ipv4 as Host;
+  }
+  const matches = ipv4.match(/^([0-9a-fA-F]{1,4}):([0-9a-fA-F]{1,4})$/);
+  if (matches == null) {
+    throw new TypeError('Invalid IPv4 mapped IPv6 address');
+  }
+  const ipv4Hex = matches[1].padStart(4, '0') + matches[2].padStart(4, '0');
+  const ipv4Hexes = ipv4Hex.match(/.{1,2}/g)!;
+  const ipv4Decs = ipv4Hexes.map((h) => parseInt(h, 16));
+  return ipv4Decs.join('.') as Host;
 }
 
 /**
@@ -160,17 +206,30 @@ function buildAddress(host: string, port: number = 0): string {
 }
 
 function isHostWildcard(host: Host): boolean {
-  return host === '0.0.0.0' || host === '::';
+  return (
+    host === '0.0.0.0' ||
+    host === '::' ||
+    host === '::0' ||
+    host === '::ffff:0.0.0.0' ||
+    host === '::ffff:0:0'
+  );
 }
 
 /**
  * Zero IPs should be resolved to localhost when used as the target
- * This is usually done automatically, but utp-native doesn't do this
  */
 function resolvesZeroIP(host: Host): Host {
   const zeroIPv4 = new IPv4('0.0.0.0');
+  // This also covers `::0`
   const zeroIPv6 = new IPv6('::');
-  if (isIPv4(host) && new IPv4(host).isEquals(zeroIPv4)) {
+  if (isIPv4MappedIPv6(host)) {
+    const ipv4 = fromIPv4MappedIPv6(host);
+    if (new IPv4(ipv4).isEquals(zeroIPv4)) {
+      return toIPv4MappedIPv6('127.0.0.1');
+    } else {
+      return host;
+    }
+  } else if (isIPv4(host) && new IPv4(host).isEquals(zeroIPv4)) {
     return '127.0.0.1' as Host;
   } else if (isIPv6(host) && new IPv6(host).isEquals(zeroIPv6)) {
     return '::1' as Host;
@@ -195,6 +254,8 @@ export {
   isIPv4,
   isIPv6,
   isIPv4MappedIPv6,
+  toIPv4MappedIPv6,
+  fromIPv4MappedIPv6,
   resolveHostname,
   resolveHost,
   promisify,

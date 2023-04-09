@@ -477,7 +477,7 @@ describe(QUICSocket.name, () => {
     ]);
     await socket.stop();
   });
-  describe('ipv4 mapped ipv6', () => {
+  describe('ipv4 mapped ipv6 - dotted decimal variant', () => {
     const socket = new QUICSocket({
       crypto,
       logger
@@ -514,6 +514,76 @@ describe(QUICSocket.name, () => {
     });
     test('to ipv4 mapped ipv6 succeeds', async () => {
       await socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength
+        }
+      ]);
+      await socket.send(msg, ipv4SocketPort, '::ffff:7f00:1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength
+        }
+      ]);
+    });
+  });
+  describe('ipv4 mapped ipv6 - hex variant', () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger
+    });
+    const msg = Buffer.from('Hello World');
+    beforeAll(async () => {
+      await socket.start({
+        host: '::ffff:7f00:1' as Host
+      });
+    });
+    afterAll(async () => {
+      await socket.stop();
+    });
+    test('type will be `ipv4`', async () => {
+      expect(socket.type).toBe('ipv4');
+      // Node dgram will resolve to dotted decimal variant
+      expect(socket.host).toBe('::ffff:127.0.0.1');
+    });
+    test('to ipv4 fails', async () => {
+      await expect(
+        socket.send(
+          msg,
+          ipv4SocketPort,
+          '127.0.0.1',
+        )
+      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+    });
+    test('to ipv6 fails', async () => {
+      await expect(
+        socket.send(
+          msg,
+          ipv6SocketPort,
+          '::1',
+        )
+      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+    });
+    test('to ipv4 mapped ipv6 succeeds', async () => {
+      await socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength
+        }
+      ]);
+      await socket.send(msg, ipv4SocketPort, '::ffff:7f00:1');
       await expect(ipv4SocketMessageP).resolves.toEqual([
         msg,
         {
