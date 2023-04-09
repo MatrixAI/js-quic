@@ -38,10 +38,10 @@ class QUICServerStopEvent extends Event {
 }
 
 class QUICServerErrorEvent extends Event {
-  public detail: Error;
+  public detail: QUICSocketErrorEvent | Error;
   constructor(
     options: EventInit & {
-      detail: Error
+      detail: QUICSocketErrorEvent | Error
     }
   ) {
     super('error', options);
@@ -113,6 +113,18 @@ class QUICClientDestroyEvent extends Event {
   }
 }
 
+class QUICClientErrorEvent extends Event {
+  public detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
+  constructor(
+    options: EventInit & {
+      detail: QUICSocketErrorEvent | QUICConnectionErrorEvent
+    }
+  ) {
+    super('error', options);
+    this.detail = options.detail;
+  }
+}
+
 export {
   QUICSocketStopEvent,
   QUICSocketErrorEvent,
@@ -124,4 +136,5 @@ export {
   QUICConnectionErrorEvent,
   QUICStreamDestroyEvent,
   QUICClientDestroyEvent,
+  QUICClientErrorEvent,
 };

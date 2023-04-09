@@ -56,8 +56,6 @@ class QUICSocket extends EventTarget {
    */
   protected handleSocketMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
 
-    console.log('WE GOT A PACKET', rinfo);
-
 
     // The data buffer may have multiple coalesced QUIC packets.
     // This header is parsed from the first packet.

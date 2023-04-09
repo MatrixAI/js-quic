@@ -112,9 +112,6 @@ class QUICConnection extends EventTarget {
       },
       config
     );
-
-    console.log('CLIENT SIDE CONNECTION IS BEING CONNECTED');
-
     const connection = new this({
       type: 'client',
       conn,

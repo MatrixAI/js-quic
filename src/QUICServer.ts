@@ -46,7 +46,11 @@ class QUICServer extends EventTarget {
    * Otherwise this will propagate such errors to the server
    */
   protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(e);
+    this.dispatchEvent(
+      new events.QUICServerErrorEvent({
+        detail: e
+      })
+    );
   };
 
   public constructor({

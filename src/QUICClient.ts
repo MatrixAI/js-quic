@@ -1,8 +1,6 @@
 import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
-import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import { Validator } from 'ip-num';
 import {
   CreateDestroy,
   ready,
@@ -71,50 +69,10 @@ class QUICClient extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
-
-    // Ok we can now
-    // know a few things
-    // if we take a socket
-    // we have to reconcile the host/port
-    // OR
-    // because the server's host/port might be changed a bit
-    // alternatively we convert to the "accepted" form here
-
-    // And if the socket doesn't exist
-    // and we only have localHost and localPort
-    // we can reconcile it
-
-    // OR we provide a sort of incompatibility here
-    // so it's important for the end user to do the conversion
-    // themselves
-    // so if they end up dual a stack of `::`
-
-    // and they want to connect to it
-    // we resolve that to `::1` sort of thing - that's ipv6 by the way
-
-    // ::0 also becomes ::1
-    // 0.0.0.0 also becomes 127.0.0.1
-
-
-    // but auto conversion can cause issues
-    // it might be better to be explicit and push this up
-    // as we won't know what exactly we need to use here
-
-    // We have InvalidBindAddress and InvalidSendAddress
-    // Now we have
-
-    // QUICClientInvalidLocalHost
-
-    // QUICClientInvalidRemoteHost
-
-
-
-
-
-
     let isSocketShared: boolean;
-    const scid = new QUICConnectionId(quiche.MAX_CONN_ID_LEN);
-    await crypto.ops.randomBytes(scid);
+    const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+    await crypto.ops.randomBytes(scidBuffer);
+    const scid = new QUICConnectionId(scidBuffer);
     const config = new quiche.Config();
     // TODO: disable this (because we still need to run with TLS)
     config.verifyPeer(false);
@@ -248,7 +206,11 @@ class QUICClient extends EventTarget {
    * Otherwise this will propagate such errors to the server
    */
   protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(e);
+    this.dispatchEvent(
+      new events.QUICClientErrorEvent({
+        detail: e
+      })
+    );
   };
 
   /**
@@ -257,7 +219,11 @@ class QUICClient extends EventTarget {
    * one to one with QUICConnection
    */
   protected handleQUICConnectionError = (e: events.QUICConnectionErrorEvent) => {
-    this.dispatchEvent(e);
+    this.dispatchEvent(
+      new events.QUICClientErrorEvent({
+        detail: e
+      })
+    );
   };
 
   public constructor({

@@ -1,21 +1,12 @@
 import type { Crypto, Host, Hostname, Port } from '@/types';
+import { webcrypto } from 'crypto';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
+import QUICConnection from '@/QUICConnection';
 import * as events from '@/events';
+import * as utils from '@/utils';
 import * as testsUtils from './utils';
-
-// No need for the the quickcheck yet
-// we are testing basic behaviour here
-// but we may need some testing structure
-// const data = new ArrayBuffer(32);
-// await crypto.ops.randomBytes(data);
-// console.log(data)
-// const signature = await crypto.ops.sign(crypto.key, data);
-// console.log(signature);
-// const verified = await crypto.ops.verify(crypto.key, data, signature);
-// console.log(verified);
-// It's time to run a server to test against
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
@@ -26,6 +17,73 @@ describe(QUICClient.name, () => {
     key: ArrayBuffer;
     ops: Crypto;
   };
+
+  // let clientErrorEventP;
+  // let rejectClientErrorEventP;
+
+  // let serverErrorEventP;
+  // let rejectServerErrorEventP;
+
+  // let serverStopEventP;
+  // let resolveServerStopEventP;
+
+  // let clientDestroyEventP;
+  // let resolveClientDestroyEventP;
+
+  // let connectionEventP;
+  // let resolveConnectionEventP;
+
+  // let streamEventP;
+  // let resolveStreamEventP;
+
+
+  // const handleServerErrorEvent = (e: events.QUICServerErrorEvent) => {
+  //   rejectServerErrorEventP(e);
+  //   // const { p, rejectP } = utils.promise<events.QUICServerErrorEvent>();
+  //   // serverErrorEventP = p;
+  //   // rejectServerErrorEventP = rejectP;
+  // };
+
+  // const handleClientErrorEvent = (e: events.QUICClientErrorEvent) => {
+  //   rejectClientErrorEventP(e);
+  //   // const { p, rejectP } = utils.promise<events.QUICClientErrorEvent>();
+  //   // clientErrorEventP = p;
+  //   // rejectClientErrorEventP = rejectP;
+  // };
+
+  // const handleServerStopEvent = (e: events.QUICServerStopEvent) => {
+  //   resolveServerStopEventP(e);
+  //   const { p, resolveP } = utils.promise<events.QUICServerStopEvent>();
+  //   serverStopEventP = p;
+  //   resolveServerStopEventP = resolveP;
+  // };
+
+  // const handleClientDestroyEvent = (e: events.QUICClientDestroyEvent) => {
+  //   resolveClientDestroyEventP(e);
+  //   const { p, resolveP } = utils.promise<events.QUICClientDestroyEvent>();
+  //   clientDestroyEventP = p;
+  //   resolveClientDestroyEventP = resolveP;
+  // };
+
+  // const handleConnectionEventP = (e: events.QUICServerConnectionEvent) => {
+  //   resolveConnectionEventP(e);
+  //   const { p, resolveP } = utils.promise<events.QUICServerConnectionEvent>();
+  //   connectionEventP = p;
+  //   resolveConnectionEventP = resolveP;
+  // };
+
+  // const handleStreamEventP = (e: events.QUICConnectionStreamEvent) => {
+  //   resolveStreamEventP(e);
+  //   const { p, resolveP } = utils.promise<events.QUICConnectionStreamEvent>();
+  //   streamEventP = p;
+  //   resolveStreamEventP = resolveP;
+  // };
+
+
+
+
+  // We need to test the stream making
+
   beforeEach(async () => {
     crypto = {
       key: await testsUtils.generateKey(),
@@ -38,91 +96,205 @@ describe(QUICClient.name, () => {
   });
   afterEach(async () => {
   });
-  test('', async () => {
-    const server = new QUICServer({
-      crypto,
-      logger: logger.getChild(QUICServer.name)
+
+  // Are we describing a dual stack client!?
+  describe('dual stack client', () => {
+    let connectionEventP;
+    let resolveConnectionEventP;
+    let handleConnectionEventP;
+    beforeEach(async () => {
+      const {
+        p,
+        resolveP
+      } = utils.promise<events.QUICServerConnectionEvent>();
+      connectionEventP = p;
+      resolveConnectionEventP = resolveP;
+      handleConnectionEventP = (e: events.QUICServerConnectionEvent) => {
+        resolveConnectionEventP(e);
+      };
     });
-    await server.start({
-      host: '::' as Host,
-      port: 0 as Port
-    });
-
-    console.log('SERVER PORT', server.port);
-
-    server.addEventListener(
-      'connection',
-      (e: events.QUICServerConnectionEvent) => {
-        const conn = e.detail;
-        console.log('I GOT A CONNECTION');
-        // conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
-        //   const stream = e.detail;
-        // }, { once: true });
-      },
-      { once: true }
-    );
-
-
-    let client;
-    try {
-      // We have a dual stack server
-      // we can actually connect  either way
-      // But if we use `::` that doesn't make sense
-      client = await QUICClient.createQUICClient({
-        // host: server.host,
-        // host: '::ffff:127.0.0.1' as Host,
-        host: '::1' as Host,
+    test('to ipv4 server succeeds', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name)
+      });
+      server.addEventListener('connection', handleConnectionEventP);
+      await server.start({
+        host: '127.0.0.1' as Host,
+        port: 0 as Port
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
-        // This is a dual stack client
         localHost: '::' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name)
       });
-    } catch (e) {
-      console.log(e);
-      throw e;
-    }
-
-    // The connection should be created
-    // Note that we aren't telling what to do with TLS?
-    // Ah yes, right now the TLS is still hardcoded on the SERVER SIDE
-    // technically the client side does not need to present anything
-    // Since we have disabled it
-    // We are connected
-    console.log('WE ARE CONNECTED');
-    console.log('CLIENT LOCAL HOST', client.host);
-    console.log('CLIENT LOCAL PORT', client.port);
-
-    // we should have a generic type here
-    // cause the QUICClient propagates the error event
-    // We may want to "rewrap" it so it's more clearer
-    client.addEventListener(
-      'error',
-      (e: events.QUICSocketErrorEvent) => {
-        console.log('I GOT AN ERROR!?');
-      },
-      { once: true }
-    );
-
-    client.addEventListener(
-      'destroy',
-      (e: events.QUICClientDestroyEvent) => {
-        console.log('CLIENT got destroyed');
-      },
-      { once: true }
-    );
-
-    await testsUtils.sleep(1000);
-
-    // console.log('THE CONNECTION', client.connection);
-    // console.log('LOCAL HOST', client.connection.localHost);
-    // console.log('LOCAL PORT', client.connection.localPort);
-    // console.log('REMOTE HOST', client.connection.remoteHost);
-    // console.log('REMOTE PORT', client.connection.remotePort);
-
-    // Destruction is failing because the connection hasn't been closed
-    await client.destroy();
-    await server.stop();
+      const conn = (await connectionEventP).detail;
+      expect(conn.localHost).toBe('127.0.0.1');
+      expect(conn.localPort).toBe(server.port);
+      expect(conn.remoteHost).toBe('127.0.0.1');
+      expect(conn.remotePort).toBe(client.port);
+      await client.destroy();
+      await server.stop();
+    });
+    test('to ipv6 server succeeds', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name)
+      });
+      server.addEventListener('connection', handleConnectionEventP);
+      await server.start({
+        host: '::1' as Host,
+        port: 0 as Port
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name)
+      });
+      const conn = (await connectionEventP).detail;
+      expect(conn.localHost).toBe('::1');
+      expect(conn.localPort).toBe(server.port);
+      expect(conn.remoteHost).toBe('::1');
+      expect(conn.remotePort).toBe(client.port);
+      await client.destroy();
+      await server.stop();
+    });
+    test('to dual stack server succeeds', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name)
+      });
+      server.addEventListener('connection', handleConnectionEventP);
+      await server.start({
+        host: '::' as Host,
+        port: 0 as Port
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::' as Host, // Will resolve to ::1
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name)
+      });
+      const conn = (await connectionEventP).detail;
+      expect(conn.localHost).toBe('::');
+      expect(conn.localPort).toBe(server.port);
+      expect(conn.remoteHost).toBe('::1');
+      expect(conn.remotePort).toBe(client.port);
+      await client.destroy();
+      await server.stop();
+    });
   });
+
+
+  // test('dual stack to dual stack', async () => {
+
+  //   const {
+  //     p: clientErrorEventP,
+  //     rejectP: rejectClientErrorEventP
+  //   } = utils.promise<events.QUICClientErrorEvent>();
+
+  //   const {
+  //     p: serverErrorEventP,
+  //     rejectP: rejectServerErrorEventP
+  //   } = utils.promise<events.QUICServerErrorEvent>();
+
+  //   const {
+  //     p: serverStopEventP,
+  //     resolveP: resolveServerStopEventP
+  //   } = utils.promise<events.QUICServerStopEvent>();
+
+  //   const {
+  //     p: clientDestroyEventP,
+  //     resolveP: resolveClientDestroyEventP
+  //   } = utils.promise<events.QUICClientDestroyEvent>();
+
+  //   const {
+  //     p: connectionEventP,
+  //     resolveP: resolveConnectionEventP
+  //   } = utils.promise<events.QUICServerConnectionEvent>();
+
+  //   const {
+  //     p: streamEventP,
+  //     resolveP: resolveStreamEventP
+  //   } = utils.promise<events.QUICConnectionStreamEvent>();
+
+  //   const server = new QUICServer({
+  //     crypto,
+  //     logger: logger.getChild(QUICServer.name)
+  //   });
+  //   server.addEventListener('error', handleServerErrorEvent);
+  //   server.addEventListener('stop', handleServerStopEvent);
+
+  //   // Every time I have a promise
+  //   // I can attempt to await 4 promises
+  //   // Then the idea is that this will resolve 4 times
+  //   // Once for each time?
+  //   // If you add once
+  //   // Do you also
+
+  //   // Fundamentally there could be multiple of these
+  //   // This is not something I can put outside
+
+  //   server.addEventListener(
+  //     'connection',
+  //     (e: events.QUICServerConnectionEvent) => {
+  //       resolveConnectionEventP(e);
+
+  //       // const conn = e.detail;
+  //       // conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
+  //       //   resolveStreamEventP(e);
+  //       // }, { once: true });
+  //     },
+  //     { once: true }
+  //   );
+
+  //   // Dual stack server
+  //   await server.start({
+  //     host: '::' as Host,
+  //     port: 0 as Port
+  //   });
+  //   // Dual stack client
+  //   const client = await QUICClient.createQUICClient({
+  //     // host: server.host,
+  //     // host: '::ffff:127.0.0.1' as Host,
+  //     host: '::1' as Host,
+  //     port: server.port,
+  //     localHost: '::' as Host,
+  //     crypto,
+  //     logger: logger.getChild(QUICClient.name)
+  //   });
+  //   client.addEventListener('error', handleClientErrorEvent);
+  //   client.addEventListener('destroy', handleClientDestroyEvent);
+
+
+
+  //   // await testsUtils.sleep(1000);
+
+  //   await expect(connectionEventP).resolves.toBeInstanceOf(events.QUICServerConnectionEvent);
+  //   await client.destroy();
+  //   await expect(clientDestroyEventP).resolves.toBeInstanceOf(events.QUICClientDestroyEvent);
+  //   await server.stop();
+  //   await expect(serverStopEventP).resolves.toBeInstanceOf(events.QUICServerStopEvent);
+
+
+  //   // No errors occurred
+  //   await expect(Promise.race([clientErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
+  //   await expect(Promise.race([serverErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
+  // });
+  // test.only('', async () => {
+
+  //   // const p = Promise.reject(new Error('Not implemented'));
+  //   const { p, rejectP } = utils.promise();
+  //   rejectP(new Error('oh no'));
+
+  //   await expect(Promise.race([p, Promise.resolve()])).resolves.toBe(undefined);
+
+
+  // });
   // We need to test shared socket later
 });
