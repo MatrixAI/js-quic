@@ -1,4 +1,5 @@
 use std::io;
+use std::fs::File;
 use std::net::{
   SocketAddr,
   ToSocketAddrs,
@@ -282,6 +283,15 @@ impl Connection {
     // eprintln!("New connection with scid {:?}", scid);
 
     return Ok(Connection(connection));
+  }
+
+  #[napi]
+  pub fn set_keylog(&mut self, path: String) -> napi::Result<()> {
+    let file = File::create(path).or_else(
+      |err| Err(napi::Error::from_reason(err.to_string()))
+    )?;
+    self.0.set_keylog(Box::new(file));
+    return Ok(());
   }
 
   #[napi]

@@ -15,6 +15,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
+import fs from 'fs';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -210,6 +211,13 @@ class QUICConnection extends EventTarget {
     this.resolveEstablishedP = resolveEstablishedP;
     this.rejectEstablishedP = rejectEstablishedP;
 
+  }
+
+  // Immediately call this after construction
+  // if you want to pass the key log to something
+  // note that you must close the file descriptor afterwards
+  public setKeylog(path) {
+    this.conn.setKeylog(path);
   }
 
   public get remoteHost() {

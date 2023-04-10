@@ -173,6 +173,7 @@ export class Connection {
    */
   static connect(serverName: string | undefined | null, scid: Uint8Array, localHost: HostPort, remoteHost: HostPort, config: Config): Connection
   static accept(scid: Uint8Array, odcid: Uint8Array | undefined | null, localHost: HostPort, remoteHost: HostPort, config: Config): Connection
+  setKeylog(path: string): void
   setSession(session: Uint8Array): void
   recv(data: Uint8Array, recvInfo: RecvInfo): number
   /**

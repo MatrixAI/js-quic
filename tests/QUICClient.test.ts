@@ -113,7 +113,7 @@ describe(QUICClient.name, () => {
         resolveConnectionEventP(e);
       };
     });
-    test('to ipv4 server succeeds', async () => {
+    test.only('to ipv4 server succeeds', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name)

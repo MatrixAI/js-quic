@@ -76,6 +76,10 @@ class QUICClient extends EventTarget {
     const config = new quiche.Config();
     // TODO: disable this (because we still need to run with TLS)
     config.verifyPeer(false);
+
+    // Here we go...
+    // finally we actually can LOG KEYS!!!!
+    config.logKeys();
     config.grease(true);
     config.setMaxIdleTimeout(5000);
     config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
@@ -162,6 +166,16 @@ class QUICClient extends EventTarget {
       config,
       logger: logger.getChild(`${QUICConnection.name} ${scid}`)
     });
+
+    // This could be a file you know, but who closes the file?
+    // I think it would make sense to do during creation, and then shutting down
+    // plus is this only for 1 specific connection?
+
+    // Immediately set the key log...
+    // Right afterwards
+    connection.setKeylog('./keylog');
+    // Note that this all should happen during construction
+    // That's probably the right thing to do
 
     const {
       p: errorP,

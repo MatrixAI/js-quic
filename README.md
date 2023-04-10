@@ -361,6 +361,18 @@ step certificate create \
   --san ::1 \
   --not-after 31536000s
 
+step certificate create \
+  localhost localhost.crt localhost.key \
+  --kty RSA \
+  --profile self-signed \
+  --subtle \
+  --no-password \
+  --insecure \
+  --force \
+  --san 127.0.0.1 \
+  --san ::1 \
+  --not-after 31536000s
+
 cargo run --bin quiche-client -- 'http://127.0.0.1:55555'
 
 # Run without verifying TLS cause the certs are self-signed
