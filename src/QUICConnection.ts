@@ -312,6 +312,8 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+    console.log('RECV CALLED');
+
     try {
       if (this.conn.isClosed()) {
         if (this.resolveCloseP != null) this.resolveCloseP();
@@ -394,6 +396,8 @@ class QUICConnection extends EventTarget {
           this.conn.isDraining()
         )
       ) {
+
+        console.log('CALLING DESTROY 2');
         await this.destroy();
       }
     }
@@ -418,10 +422,12 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async send(): Promise<void> {
+
+    console.log('SEND CALLED');
+
     try {
       if (this.conn.isClosed()) {
 
-        // console.log('I AM RESOLVING THE CLOSE');
 
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
@@ -465,6 +471,7 @@ class QUICConnection extends EventTarget {
         try {
 
           // console.log('ATTEMPTING SEND', sendBuffer, 0, sendLength, sendInfo.to.port, sendInfo.to.host);
+          console.log('SEND UDP PACKET');
 
           await this.socket.send(
             sendBuffer,
@@ -487,6 +494,9 @@ class QUICConnection extends EventTarget {
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
+
+        console.log('CALLING DESTROY');
+
         await this.destroy();
       } else if (
         this[status] === 'destroying' &&
@@ -572,6 +582,13 @@ class QUICConnection extends EventTarget {
     // During construction, this ends up being null
     const time = this.conn.timeout();
 
+
+    // I think...
+    // if we have a null timeout here
+    // AND we are also closed or is draining
+    // then we can emit a timeout error
+
+
     // On the receive
     // this is called again
     // the result is 5000 ms
@@ -621,19 +638,25 @@ class QUICConnection extends EventTarget {
           // console.log('resumed', this.conn.isResumed());
 
           // Trigger a send, this will also set the timeout again at the end
+
+          console.log('TIMEOUT TRIGGER SEND');
+
           await this.send();
         },
         time
       );
     } else {
-
       // console.log('Clearing the timeout');
-
       clearTimeout(this.timer);
       delete this.timer;
+      if (this.conn.isClosed() || this.conn.isDraining()) {
+        this.dispatchEvent(
+          new events.QUICConnectionErrorEvent({
+            detail: new errors.ErrorQUICConnectionTimeout()
+          })
+        );
+      }
     }
-
-    // console.groupEnd();
   }
 }
 

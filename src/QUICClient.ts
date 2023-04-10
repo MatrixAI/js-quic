@@ -88,6 +88,16 @@ class QUICClient extends EventTarget {
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
+    const {
+      p: errorP,
+      rejectP: rejectErrorP
+    } = utils.promise();
+    const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+      rejectErrorP(e.detail);
+    };
+    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
+      rejectErrorP(e.detail);
+    };
     let isSocketShared: boolean;
     if (socket == null) {
       socket = new QUICSocket({
@@ -95,6 +105,11 @@ class QUICClient extends EventTarget {
         resolveHostname,
         logger: logger.getChild(QUICSocket.name)
       });
+      socket.addEventListener(
+        'error',
+        handleQUICSocketError,
+        { once: true }
+      );
       isSocketShared = false;
       await socket.start({
         host: localHost,
@@ -147,24 +162,27 @@ class QUICClient extends EventTarget {
       config: quicConfig,
       logger: logger.getChild(`${QUICConnection.name} ${scid}`)
     });
-    const {
-      p: errorP,
-      rejectP: rejectErrorP
-    } = utils.promise();
-    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
-      rejectErrorP(e.detail);
-    };
     connection.addEventListener(
       'error',
       handleConnectionError,
       { once: true }
     );
+    console.log('CLIENT TRIGGER SEND');
     // This will not raise an error
     await connection.send();
-
     // This will wait to be established, while also rejecting on error
-    await Promise.race([connection.establishedP, errorP]);
+    try {
+      await Promise.race([connection.establishedP, errorP]);
+    } catch (e) {
+      if (!isSocketShared) {
+        // Stop our own socket
+        await socket.stop();
+      }
+      throw e;
+    }
 
+    // Remove the temporary socket error handler
+    socket.removeEventListener('error', handleQUICSocketError);
     // Remove the temporary connection error handler
     connection.removeEventListener('error', handleConnectionError);
 

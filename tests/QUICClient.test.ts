@@ -113,7 +113,7 @@ describe(QUICClient.name, () => {
         resolveConnectionEventP(e);
       };
     });
-    test.only('to ipv4 server succeeds', async () => {
+    test('to ipv4 server succeeds', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
@@ -203,6 +203,31 @@ describe(QUICClient.name, () => {
       await client.destroy();
       await server.stop();
     });
+  });
+
+
+  test.only('', async () => {
+    // I want to test that if there's no server what happens
+    // Does it keep "dialing"
+    // until it times out? Idle connection timeo ut
+    // or something else happens
+    // Because then on server side we can hole punch back
+
+    const client = await QUICClient.createQUICClient({
+      host: '127.0.0.1' as Host,
+      port: 55555 as Port,
+      localHost: '127.0.0.1' as Host,
+      crypto,
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        logKeys: './tmp/keylog.log',
+        maxIdleTimeout: 5000,
+      }
+    });
+
+    // Because it is never established
+    // It's basically awaiting forever
+
   });
 
 
