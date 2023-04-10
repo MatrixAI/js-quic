@@ -1,5 +1,6 @@
 import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
+import type { QUICConfig } from './config';
 import Logger from '@matrixai/logger';
 import {
   CreateDestroy,
@@ -11,6 +12,7 @@ import { Quiche, quiche, Type } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
 import * as events from './events';
+import { clientDefault } from './config';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
 import QUICConnectionMap from './QUICConnectionMap';
@@ -56,6 +58,7 @@ class QUICClient extends EventTarget {
     socket,
     resolveHostname = utils.resolveHostname,
     logger = new Logger(`${this.name}`),
+    config = {},
   }: {
     host: Host | Hostname,
     port: Port,
@@ -68,34 +71,15 @@ class QUICClient extends EventTarget {
     socket?: QUICSocket;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
+    config?: Partial<QUICConfig>;
   }) {
-    let isSocketShared: boolean;
+    const quicConfig = {
+      ...clientDefault,
+      ...config
+    };
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
-    const config = new quiche.Config();
-    // TODO: disable this (because we still need to run with TLS)
-    config.verifyPeer(false);
-    config.grease(true);
-    config.setMaxIdleTimeout(5000);
-    config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setInitialMaxData(10000000);
-    config.setInitialMaxStreamDataBidiLocal(1000000);
-    config.setInitialMaxStreamDataBidiRemote(1000000);
-    config.setInitialMaxStreamsBidi(100);
-    config.setInitialMaxStreamsUni(100);
-    config.setDisableActiveMigration(true);
-    config.setApplicationProtos(
-      [
-        'hq-interop',
-        'hq-29',
-        'hq-28',
-        'hq-27',
-        'http/0.9'
-      ]
-    );
-    config.enableEarlyData();
     let address = utils.buildAddress(host, port);
     logger.info(`Create ${this.name} to ${address}`);
     let [host_] = await utils.resolveHost(host, resolveHostname);
@@ -104,12 +88,28 @@ class QUICClient extends EventTarget {
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
+    const {
+      p: errorP,
+      rejectP: rejectErrorP
+    } = utils.promise();
+    const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+      rejectErrorP(e.detail);
+    };
+    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
+      rejectErrorP(e.detail);
+    };
+    let isSocketShared: boolean;
     if (socket == null) {
       socket = new QUICSocket({
         crypto,
         resolveHostname,
         logger: logger.getChild(QUICSocket.name)
       });
+      socket.addEventListener(
+        'error',
+        handleQUICSocketError,
+        { once: true }
+      );
       isSocketShared = false;
       await socket.start({
         host: localHost,
@@ -159,28 +159,30 @@ class QUICClient extends EventTarget {
         host: host_,
         port
       },
-      config,
+      config: quicConfig,
       logger: logger.getChild(`${QUICConnection.name} ${scid}`)
     });
-
-    const {
-      p: errorP,
-      rejectP: rejectErrorP
-    } = utils.promise();
-    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
-      rejectErrorP(e.detail);
-    };
     connection.addEventListener(
       'error',
       handleConnectionError,
       { once: true }
     );
+    console.log('CLIENT TRIGGER SEND');
     // This will not raise an error
     await connection.send();
-
     // This will wait to be established, while also rejecting on error
-    await Promise.race([connection.establishedP, errorP]);
+    try {
+      await Promise.race([connection.establishedP, errorP]);
+    } catch (e) {
+      if (!isSocketShared) {
+        // Stop our own socket
+        await socket.stop();
+      }
+      throw e;
+    }
 
+    // Remove the temporary socket error handler
+    socket.removeEventListener('error', handleQUICSocketError);
     // Remove the temporary connection error handler
     connection.removeEventListener('error', handleConnectionError);
 

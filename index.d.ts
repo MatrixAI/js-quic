@@ -132,6 +132,7 @@ export function retry(scid: Uint8Array, dcid: Uint8Array, newScid: Uint8Array, t
 export function versionIsSupported(version: number): boolean
 export class Config {
   constructor()
+  static withBoringSslCtx(certPem?: Uint8Array | undefined | null, keyPem?: Uint8Array | undefined | null): Config
   loadCertChainFromPemFile(file: string): void
   loadPrivKeyFromPemFile(file: string): void
   loadVerifyLocationsFromFile(file: string): void
@@ -173,6 +174,7 @@ export class Connection {
    */
   static connect(serverName: string | undefined | null, scid: Uint8Array, localHost: HostPort, remoteHost: HostPort, config: Config): Connection
   static accept(scid: Uint8Array, odcid: Uint8Array | undefined | null, localHost: HostPort, remoteHost: HostPort, config: Config): Connection
+  setKeylog(path: string): void
   setSession(session: Uint8Array): void
   recv(data: Uint8Array, recvInfo: RecvInfo): number
   /**

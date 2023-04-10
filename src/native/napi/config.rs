@@ -1,6 +1,6 @@
+// use core::panicking::panic;
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
-// use boring::ssl::SslContext;
 
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
@@ -48,49 +48,62 @@ impl Config {
 
   #[napi(factory)]
   pub fn with_boring_ssl_ctx(
-    version: i64,
-    certPEM: Uint8Array,
-    keyPEM: Uint8Array,
+    cert_pem: Option<Uint8Array>,
+    key_pem: Option<Uint8Array>,
   ) -> Result<Self> {
-
-    let x509 = boring::x509::X509::from_pem(
-      &certPEM.into_vec()
-    ).or_else(
-      |err| Err(Error::from_reason(err.to_string()))
-    )?;
-
-
-    let ssl_ctx_builder = boring::ssl::SslContext::builder(
+    let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
-
     ssl_ctx_builder.set_verify(
       boring::ssl::SslVerifyMode::PEER
     );
-
-    ssl_ctx_builder.set_certificate(
-      &x509
-    );
-
-    let ssl_ctx = ssl_ctx_builder.build();
-
-
-
+    // Processing and adding the cert chain
+    if let Some(cert_pem) = cert_pem {
+      let x509_cet_chain = boring::x509::X509::stack_from_pem(
+        &cert_pem.to_vec()
+      ).or_else(
+        |err| Err(Error::from_reason(err.to_string()))
+      )?;
+      for (i, cert) in x509_cet_chain.iter().enumerate() {
+        if i == 1 {
+          ssl_ctx_builder.set_certificate(
+            cert,
+          ).or_else(
+            |err| Err(Error::from_reason(err.to_string()))
+          )?;
+        } else {
+          ssl_ctx_builder.add_extra_chain_cert(
+            cert.clone(),
+          ).or_else(
+            |err| Err(Error::from_reason(err.to_string()))
+          )?;
+        }
+      }
+    }
+    // Processing and adding the private key
+    if let Some(key_pem) = key_pem {
+      println!("Had key pem");
+      let private_key = boring::pkey::PKey::private_key_from_pem(&key_pem)
+        .or_else(
+        |err| Err(Error::from_reason(err.to_string()))
+      )?;
+      println!("{:?}", private_key);
+      ssl_ctx_builder.set_private_key(&private_key)
+        .or_else(
+          |err| Err(Error::from_reason(err.to_string()))
+        )?;
+    }
+    let ssl_ctx= ssl_ctx_builder.build();
     let config = quiche::Config::with_boring_ssl_ctx(
-      version as u32,
-
+      quiche::PROTOCOL_VERSION,
+      ssl_ctx,
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
     return Ok(Config(config));
   }
-
-  // with_boring_ssl_ctx
-  // Requires create feature boringssl-boring-create
-  // This allows you tp oass the ssl context in memory
-  // this is factory method though
 
   #[napi]
   pub fn load_cert_chain_from_pem_file(&mut self, file: String) -> Result<()> {

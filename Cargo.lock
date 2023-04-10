@@ -369,7 +369,9 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "991d80b9e559fcbfee21c1a943b46586eca4b830d74e5f3e99a7ab7ea3819b16"
 dependencies = [
+ "boring",
  "cmake",
+ "foreign-types-shared",
  "lazy_static",
  "libc",
  "libm",

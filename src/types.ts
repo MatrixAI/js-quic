@@ -89,6 +89,10 @@ type StreamReasonToCode = (type: 'recv' | 'send', reason?: any) => number | Prom
  */
 type StreamCodeToReason = (type: 'recv' | 'send', code: number) => any | PromiseLike<any>;
 
+type QUICConfig = {
+  logKeys?: string;
+};
+
 export type {
   Opaque,
   Callback,

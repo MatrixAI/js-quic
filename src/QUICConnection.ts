@@ -1,6 +1,11 @@
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
+
+// This is specialized type
+import type { QUICConfig } from './config';
+
+
 import type { Host, ConnectionId, Port, StreamId, RemoteInfo } from './types';
 import type { Config, Connection, SendInfo, ConnectionErrorCode } from './native/types';
 import {
@@ -15,6 +20,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
+import { buildQuicheConfig } from './config';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -32,7 +38,6 @@ class QUICConnection extends EventTarget {
 
   public readonly connectionId: QUICConnectionId;
   public readonly type: 'client' | 'server';
-
 
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
@@ -95,10 +100,11 @@ class QUICConnection extends EventTarget {
     scid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
-    config: Config;
+    config: QUICConfig;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
     const conn = quiche.Connection.connect(
       null,
       scid,
@@ -110,8 +116,12 @@ class QUICConnection extends EventTarget {
         host: remoteInfo.host,
         port: remoteInfo.port,
       },
-      config
+      quicheConfig
     );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
     const connection = new this({
       type: 'client',
       conn,
@@ -140,10 +150,11 @@ class QUICConnection extends EventTarget {
     dcid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
-    config: Config;
+    config: QUICConfig;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
     const conn = quiche.Connection.accept(
       scid,
       dcid,
@@ -155,8 +166,12 @@ class QUICConnection extends EventTarget {
         host: remoteInfo.host,
         port: remoteInfo.port,
       },
-      config
+      quicheConfig
     );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
     const connection = new this({
       type: 'server',
       conn,
@@ -210,6 +225,13 @@ class QUICConnection extends EventTarget {
     this.resolveEstablishedP = resolveEstablishedP;
     this.rejectEstablishedP = rejectEstablishedP;
 
+  }
+
+  // Immediately call this after construction
+  // if you want to pass the key log to something
+  // note that you must close the file descriptor afterwards
+  public setKeylog(path) {
+    this.conn.setKeylog(path);
   }
 
   public get remoteHost() {
@@ -290,6 +312,8 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+    console.log('RECV CALLED');
+
     try {
       if (this.conn.isClosed()) {
         if (this.resolveCloseP != null) this.resolveCloseP();
@@ -372,6 +396,8 @@ class QUICConnection extends EventTarget {
           this.conn.isDraining()
         )
       ) {
+
+        console.log('CALLING DESTROY 2');
         await this.destroy();
       }
     }
@@ -396,10 +422,12 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async send(): Promise<void> {
+
+    console.log('SEND CALLED');
+
     try {
       if (this.conn.isClosed()) {
 
-        // console.log('I AM RESOLVING THE CLOSE');
 
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
@@ -443,6 +471,7 @@ class QUICConnection extends EventTarget {
         try {
 
           // console.log('ATTEMPTING SEND', sendBuffer, 0, sendLength, sendInfo.to.port, sendInfo.to.host);
+          console.log('SEND UDP PACKET');
 
           await this.socket.send(
             sendBuffer,
@@ -465,6 +494,9 @@ class QUICConnection extends EventTarget {
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
+
+        console.log('CALLING DESTROY');
+
         await this.destroy();
       } else if (
         this[status] === 'destroying' &&
@@ -550,6 +582,13 @@ class QUICConnection extends EventTarget {
     // During construction, this ends up being null
     const time = this.conn.timeout();
 
+
+    // I think...
+    // if we have a null timeout here
+    // AND we are also closed or is draining
+    // then we can emit a timeout error
+
+
     // On the receive
     // this is called again
     // the result is 5000 ms
@@ -599,19 +638,25 @@ class QUICConnection extends EventTarget {
           // console.log('resumed', this.conn.isResumed());
 
           // Trigger a send, this will also set the timeout again at the end
+
+          console.log('TIMEOUT TRIGGER SEND');
+
           await this.send();
         },
         time
       );
     } else {
-
       // console.log('Clearing the timeout');
-
       clearTimeout(this.timer);
       delete this.timer;
+      if (this.conn.isClosed() || this.conn.isDraining()) {
+        this.dispatchEvent(
+          new events.QUICConnectionErrorEvent({
+            detail: new errors.ErrorQUICConnectionTimeout()
+          })
+        );
+      }
     }
-
-    // console.groupEnd();
   }
 }
 

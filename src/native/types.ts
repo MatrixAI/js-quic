@@ -39,76 +39,81 @@ interface Config {
 
 interface ConfigConstructor {
   new(): Config;
+  withBoringSslCtx(
+    cert_pem: Uint8Array | null,
+    key_pem: Uint8Array | null,
+  ): Config;
 };
 
 interface Connection {
-  setSession(session: Uint8Array): void
-  recv(data: Uint8Array, recvInfo: RecvInfo): number
-  send(data: Uint8Array): [number, SendInfo]
-  sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null]
-  sendQuantum(): number
-  sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number
-  streamRecv(streamId: number, data: Uint8Array): [number, boolean]
-  streamSend(streamId: number, data: Uint8Array, fin: boolean): number
-  streamPriority(streamId: number, urgency: number, incremental: boolean): void
-  streamShutdown(streamId: number, direction: Shutdown, err: number): void
-  streamCapacity(streamId: number): number
-  streamReadable(streamId: number): boolean
-  streamWritable(streamId: number, len: number): boolean
-  streamFinished(streamId: number): boolean
-  peerStreamsLeftBidi(): number
-  peerStreamsLeftUni(): number
-  readable(): StreamIter
-  writable(): StreamIter
-  maxSendUdpPayloadSize(): number
-  dgramRecv(data: Uint8Array): number
-  dgramRecvVec(): Uint8Array | null
-  dgramRecvPeek(data: Uint8Array, len: number): number
-  dgramRecvFrontLen(): number | null
-  dgramRecvQueueLen(): number
-  dgramRecvQueueByteSize(): number
-  dgramSendQueueLen(): number
-  dgramSendQueueByteSize(): number
-  isDgramSendQueueFull(): boolean
-  isDgramRecvQueueFull(): boolean
-  dgramSend(data: Uint8Array): void
-  dgramSendVec(data: Uint8Array): void
-  dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void
-  dgramMaxWritableLen(): number | null
-  timeout(): number | null
-  onTimeout(): void
-  probePath(localHost: HostPort, peerHost: HostPort): number
-  migrateSource(localHost: HostPort): number
-  migrate(localHost: HostPort, peerHost: HostPort): number
-  newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number
-  activeSourceCids(): number
-  maxActiveSourceCids(): number
-  sourceCidsLeft(): number
-  retireDestinationCid(dcidSeq: number): void
+  setKeylog(path: string): void;
+  setSession(session: Uint8Array): void;
+  recv(data: Uint8Array, recvInfo: RecvInfo): number;
+  send(data: Uint8Array): [number, SendInfo];
+  sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null];
+  sendQuantum(): number;
+  sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number;
+  streamRecv(streamId: number, data: Uint8Array): [number, boolean];
+  streamSend(streamId: number, data: Uint8Array, fin: boolean): number;
+  streamPriority(streamId: number, urgency: number, incremental: boolean): void;
+  streamShutdown(streamId: number, direction: Shutdown, err: number): void;
+  streamCapacity(streamId: number): number;
+  streamReadable(streamId: number): boolean;
+  streamWritable(streamId: number, len: number): boolean;
+  streamFinished(streamId: number): boolean;
+  peerStreamsLeftBidi(): number;
+  peerStreamsLeftUni(): number;
+  readable(): StreamIter;
+  writable(): StreamIter;
+  maxSendUdpPayloadSize(): number;
+  dgramRecv(data: Uint8Array): number;
+  dgramRecvVec(): Uint8Array | null;
+  dgramRecvPeek(data: Uint8Array, len: number): number;
+  dgramRecvFrontLen(): number | null;
+  dgramRecvQueueLen(): number;
+  dgramRecvQueueByteSize(): number;
+  dgramSendQueueLen(): number;
+  dgramSendQueueByteSize(): number;
+  isDgramSendQueueFull(): boolean;
+  isDgramRecvQueueFull(): boolean;
+  dgramSend(data: Uint8Array): void;
+  dgramSendVec(data: Uint8Array): void;
+  dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void;
+  dgramMaxWritableLen(): number | null;
+  timeout(): number | null;
+  onTimeout(): void;
+  probePath(localHost: HostPort, peerHost: HostPort): number;
+  migrateSource(localHost: HostPort): number;
+  migrate(localHost: HostPort, peerHost: HostPort): number;
+  newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number;
+  activeSourceCids(): number;
+  maxActiveSourceCids(): number;
+  sourceCidsLeft(): number;
+  retireDestinationCid(dcidSeq: number): void;
   pathEventNext(): PathEvent;
-  retiredScidNext(): Uint8Array | null
-  availableDcids(): number
-  pathsIter(from: HostPort): HostIter
-  close(app: boolean, err: number, reason: Uint8Array): void
-  traceId(): string
-  applicationProto(): Uint8Array
-  serverName(): string | null
-  peerCertChain(): Array<Uint8Array> | null
-  session(): Uint8Array | null
-  sourceId(): Uint8Array
-  destinationId(): Uint8Array
-  isEstablished(): boolean
-  isResumed(): boolean
-  isInEarlyData(): boolean
-  isReadable(): boolean
-  isPathValidated(from: HostPort, to: HostPort): boolean
-  isDraining(): boolean
-  isClosed(): boolean
-  isTimedOut(): boolean
-  peerError(): ConnectionError | null
-  localError(): ConnectionError | null
-  stats(): Stats
-  pathStats(): Array<PathStats>
+  retiredScidNext(): Uint8Array | null;
+  availableDcids(): number;
+  pathsIter(from: HostPort): HostIter;
+  close(app: boolean, err: number, reason: Uint8Array): void;
+  traceId(): string;
+  applicationProto(): Uint8Array;
+  serverName(): string | null;
+  peerCertChain(): Array<Uint8Array> | null;
+  session(): Uint8Array | null;
+  sourceId(): Uint8Array;
+  destinationId(): Uint8Array;
+  isEstablished(): boolean;
+  isResumed(): boolean;
+  isInEarlyData(): boolean;
+  isReadable(): boolean;
+  isPathValidated(from: HostPort, to: HostPort): boolean;
+  isDraining(): boolean;
+  isClosed(): boolean;
+  isTimedOut(): boolean;
+  peerError(): ConnectionError | null;
+  localError(): ConnectionError | null;
+  stats(): Stats;
+  pathStats(): Array<PathStats>;
 };
 
 interface ConnectionConstructor {
