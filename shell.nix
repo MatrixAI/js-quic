@@ -11,6 +11,8 @@ mkShell {
     rustc
     cargo
     cmake
+    # Rust bindgen hook (necessary to build boring)
+    rustPlatform.bindgenHook
   ];
   # Don't set rpath for native addons
   NIX_DONT_SET_RPATH = true;
