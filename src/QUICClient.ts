@@ -1,5 +1,6 @@
 import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
 import type { Header, Config, Connection } from './native/types';
+import type { QUICConfig } from './config';
 import Logger from '@matrixai/logger';
 import {
   CreateDestroy,
@@ -11,6 +12,7 @@ import { Quiche, quiche, Type } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
 import * as events from './events';
+import { clientDefault } from './config';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
 import QUICConnectionMap from './QUICConnectionMap';
@@ -56,6 +58,7 @@ class QUICClient extends EventTarget {
     socket,
     resolveHostname = utils.resolveHostname,
     logger = new Logger(`${this.name}`),
+    config = {},
   }: {
     host: Host | Hostname,
     port: Port,
@@ -68,38 +71,15 @@ class QUICClient extends EventTarget {
     socket?: QUICSocket;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
+    config?: Partial<QUICConfig>;
   }) {
-    let isSocketShared: boolean;
+    const quicConfig = {
+      ...clientDefault,
+      ...config
+    };
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
-    const config = new quiche.Config();
-    // TODO: disable this (because we still need to run with TLS)
-    config.verifyPeer(false);
-
-    // Here we go...
-    // finally we actually can LOG KEYS!!!!
-    config.logKeys();
-    config.grease(true);
-    config.setMaxIdleTimeout(5000);
-    config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setInitialMaxData(10000000);
-    config.setInitialMaxStreamDataBidiLocal(1000000);
-    config.setInitialMaxStreamDataBidiRemote(1000000);
-    config.setInitialMaxStreamsBidi(100);
-    config.setInitialMaxStreamsUni(100);
-    config.setDisableActiveMigration(true);
-    config.setApplicationProtos(
-      [
-        'hq-interop',
-        'hq-29',
-        'hq-28',
-        'hq-27',
-        'http/0.9'
-      ]
-    );
-    config.enableEarlyData();
     let address = utils.buildAddress(host, port);
     logger.info(`Create ${this.name} to ${address}`);
     let [host_] = await utils.resolveHost(host, resolveHostname);
@@ -108,6 +88,7 @@ class QUICClient extends EventTarget {
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
+    let isSocketShared: boolean;
     if (socket == null) {
       socket = new QUICSocket({
         crypto,
@@ -163,20 +144,9 @@ class QUICClient extends EventTarget {
         host: host_,
         port
       },
-      config,
+      config: quicConfig,
       logger: logger.getChild(`${QUICConnection.name} ${scid}`)
     });
-
-    // This could be a file you know, but who closes the file?
-    // I think it would make sense to do during creation, and then shutting down
-    // plus is this only for 1 specific connection?
-
-    // Immediately set the key log...
-    // Right afterwards
-    connection.setKeylog('./keylog');
-    // Note that this all should happen during construction
-    // That's probably the right thing to do
-
     const {
       p: errorP,
       rejectP: rejectErrorP

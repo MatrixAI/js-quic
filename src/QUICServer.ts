@@ -1,12 +1,14 @@
 import type { ConnectionId, Crypto, Host, Hostname, Port, RemoteInfo } from './types';
 import type { Header, Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
+import type { QUICConfig } from './config';
 import QUICConnectionId from './QUICConnectionId';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
+import { serverDefault } from './config';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -33,7 +35,7 @@ class QUICServer extends EventTarget {
     key: ArrayBuffer;
     ops: Crypto;
   };
-  protected config: Config;
+  protected config: QUICConfig;
   protected socket: QUICSocket;
 
   protected connectionMap: QUICConnectionMap;
@@ -56,6 +58,7 @@ class QUICServer extends EventTarget {
   public constructor({
     crypto,
     socket,
+    config,
     resolveHostname = utils.resolveHostname,
     logger,
   }: {
@@ -64,10 +67,21 @@ class QUICServer extends EventTarget {
       ops: Crypto;
     },
     socket?: QUICSocket;
+    // This actually requires TLS
+    // You have to specify these some how
+    // We can force it
+    config: Partial<QUICConfig> & Pick<
+      QUICConfig,
+      'certChainFromPemFile' | 'privKeyFromPemFile'
+    >;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
+    const quicConfig = {
+      ...serverDefault,
+      ...config,
+    };
     this.logger = logger ?? new Logger(this.constructor.name);
     this.crypto = crypto;
     if (socket == null) {
@@ -85,39 +99,7 @@ class QUICServer extends EventTarget {
     this.socket.registerServer(this);
     // Shares the socket connection map as well
     this.connectionMap = this.socket.connectionMap;
-
-    const config = new quiche.Config();
-    // TODO: Change this to TLSConfig
-    // Private key PEM
-    // Cert Chain PEM
-    config.loadCertChainFromPemFile(
-      './tmp/localhost.crt'
-    );
-    config.loadPrivKeyFromPemFile(
-      './tmp/localhost.key'
-    );
-    config.verifyPeer(false);
-    config.grease(true);
-    config.setMaxIdleTimeout(6000);
-    config.setMaxRecvUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setMaxSendUdpPayloadSize(quiche.MAX_DATAGRAM_SIZE);
-    config.setInitialMaxData(10000000);
-    config.setInitialMaxStreamDataBidiLocal(1000000);
-    config.setInitialMaxStreamDataBidiRemote(1000000);
-    config.setInitialMaxStreamsBidi(100);
-    config.setInitialMaxStreamsUni(100);
-    config.setDisableActiveMigration(true);
-    config.setApplicationProtos(
-      [
-        'hq-interop',
-        'hq-29',
-        'hq-28',
-        'hq-27',
-        'http/0.9'
-      ]
-    );
-    config.enableEarlyData();
-    this.config = config;
+    this.config = quicConfig;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())

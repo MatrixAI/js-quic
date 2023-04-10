@@ -116,19 +116,26 @@ describe(QUICClient.name, () => {
     test.only('to ipv4 server succeeds', async () => {
       const server = new QUICServer({
         crypto,
-        logger: logger.getChild(QUICServer.name)
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          certChainFromPemFile: './tmp/localhost.crt',
+          privKeyFromPemFile: './tmp/localhost.key',
+        }
       });
       server.addEventListener('connection', handleConnectionEventP);
       await server.start({
         host: '127.0.0.1' as Host,
-        port: 0 as Port
+        port: 55555 as Port
       });
       const client = await QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
-        logger: logger.getChild(QUICClient.name)
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          logKeys: './tmp/keylog.log',
+        }
       });
       const conn = (await connectionEventP).detail;
       expect(conn.localHost).toBe('127.0.0.1');
@@ -141,7 +148,11 @@ describe(QUICClient.name, () => {
     test('to ipv6 server succeeds', async () => {
       const server = new QUICServer({
         crypto,
-        logger: logger.getChild(QUICServer.name)
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          certChainFromPemFile: './tmp/localhost.crt',
+          privKeyFromPemFile: './tmp/localhost.key',
+        }
       });
       server.addEventListener('connection', handleConnectionEventP);
       await server.start({
@@ -166,7 +177,11 @@ describe(QUICClient.name, () => {
     test('to dual stack server succeeds', async () => {
       const server = new QUICServer({
         crypto,
-        logger: logger.getChild(QUICServer.name)
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          certChainFromPemFile: './tmp/localhost.crt',
+          privKeyFromPemFile: './tmp/localhost.key',
+        }
       });
       server.addEventListener('connection', handleConnectionEventP);
       await server.start({

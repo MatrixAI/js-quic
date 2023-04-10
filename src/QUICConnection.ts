@@ -1,6 +1,11 @@
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
+
+// This is specialized type
+import type { QUICConfig } from './config';
+
+
 import type { Host, ConnectionId, Port, StreamId, RemoteInfo } from './types';
 import type { Config, Connection, SendInfo, ConnectionErrorCode } from './native/types';
 import {
@@ -15,7 +20,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
-import fs from 'fs';
+import { buildQuicheConfig } from './config';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -33,7 +38,6 @@ class QUICConnection extends EventTarget {
 
   public readonly connectionId: QUICConnectionId;
   public readonly type: 'client' | 'server';
-
 
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
@@ -96,10 +100,11 @@ class QUICConnection extends EventTarget {
     scid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
-    config: Config;
+    config: QUICConfig;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
     const conn = quiche.Connection.connect(
       null,
       scid,
@@ -111,8 +116,12 @@ class QUICConnection extends EventTarget {
         host: remoteInfo.host,
         port: remoteInfo.port,
       },
-      config
+      quicheConfig
     );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
     const connection = new this({
       type: 'client',
       conn,
@@ -141,10 +150,11 @@ class QUICConnection extends EventTarget {
     dcid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
-    config: Config;
+    config: QUICConfig;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
     const conn = quiche.Connection.accept(
       scid,
       dcid,
@@ -156,8 +166,12 @@ class QUICConnection extends EventTarget {
         host: remoteInfo.host,
         port: remoteInfo.port,
       },
-      config
+      quicheConfig
     );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
     const connection = new this({
       type: 'server',
       conn,
