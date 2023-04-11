@@ -17,6 +17,7 @@ mkShell {
   # Don't set rpath for native addons
   NIX_DONT_SET_RPATH = true;
   NIX_NO_SELF_RPATH = true;
+  RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
   shellHook = ''
     echo "Entering $(npm pkg get name)"
     set -o allexport
