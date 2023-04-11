@@ -1,3 +1,5 @@
+extern crate core;
+
 use napi_derive::napi;
 
 mod constants;

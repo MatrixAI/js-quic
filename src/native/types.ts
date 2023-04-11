@@ -39,6 +39,10 @@ interface Config {
 
 interface ConfigConstructor {
   new(): Config;
+  withBoringSslCtx(
+    cert_pem: Uint8Array | null,
+    key_pem: Uint8Array | null,
+  ): Config;
 };
 
 interface Connection {

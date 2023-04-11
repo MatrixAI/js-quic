@@ -2,8 +2,8 @@ import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
 
 type QUICConfig = {
-  certChainFromPemFile: string | undefined;
-  privKeyFromPemFile: string | undefined;
+  certChainPem: string | null | undefined;
+  privKeyPem: string | null | undefined;
   verifyPeer: boolean;
   logKeys: string | undefined;
   grease: boolean;
@@ -21,8 +21,8 @@ type QUICConfig = {
 };
 
 const clientDefault: QUICConfig = {
-  certChainFromPemFile: undefined,
-  privKeyFromPemFile: undefined,
+  certChainPem: null,
+  privKeyPem: null,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -46,8 +46,8 @@ const clientDefault: QUICConfig = {
 };
 
 const serverDefault: QUICConfig = {
-  certChainFromPemFile: undefined,
-  privKeyFromPemFile: undefined,
+  certChainPem: null,
+  privKeyPem: null,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -71,13 +71,10 @@ const serverDefault: QUICConfig = {
 };
 
 function buildQuicheConfig(config: QUICConfig): QuicheConfig {
-  const quicheConfig = new quiche.Config();
-  if (config.certChainFromPemFile != null) {
-    quicheConfig.loadCertChainFromPemFile(config.certChainFromPemFile);
-  }
-  if (config.privKeyFromPemFile != null) {
-    quicheConfig.loadPrivKeyFromPemFile(config.privKeyFromPemFile);
-  }
+  const quicheConfig: QuicheConfig = quiche.Config.withBoringSslCtx(
+    config.certChainPem != null ? Buffer.from(config.certChainPem) : null,
+    config.privKeyPem != null ? Buffer.from(config.privKeyPem) : null,
+  )
   if (config.logKeys != null) {
     quicheConfig.logKeys();
   }

@@ -72,7 +72,7 @@ class QUICServer extends EventTarget {
     // We can force it
     config: Partial<QUICConfig> & Pick<
       QUICConfig,
-      'certChainFromPemFile' | 'privKeyFromPemFile'
+      'certChainPem' | 'privKeyPem'
     >;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;

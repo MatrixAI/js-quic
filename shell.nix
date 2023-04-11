@@ -13,6 +13,7 @@ mkShell {
     cmake
     # Rust bindgen hook (necessary to build boring)
     rustPlatform.bindgenHook
+    jetbrains.webstorm
   ];
   # Don't set rpath for native addons
   NIX_DONT_SET_RPATH = true;
