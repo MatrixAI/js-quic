@@ -8,6 +8,7 @@ import * as events from '@/events';
 import * as utils from '@/utils';
 import * as testsUtils from './utils';
 import * as tls from 'tls';
+import * as errors from '@/errors';
 
 
 const certChain = `
@@ -178,9 +179,6 @@ describe(QUICClient.name, () => {
         localHost: '::' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name),
-        config: {
-          logKeys: './tmp/keylog.log',
-        }
       });
       const conn = (await connectionEventP).detail;
       expect(conn.localHost).toBe('127.0.0.1');
@@ -249,33 +247,22 @@ describe(QUICClient.name, () => {
   });
 
 
-  test('', async () => {
-    // I want to test that if there's no server what happens
-    // Does it keep "dialing"
-    // until it times out? Idle connection timeo ut
-    // or something else happens
-    // Because then on server side we can hole punch back
-
-    const client = await QUICClient.createQUICClient({
+  test('connection should time out', async () => {
+    // QUICClient repeatedly dials until the connection times out
+    await expect(QUICClient.createQUICClient({
       host: '127.0.0.1' as Host,
       port: 55555 as Port,
       localHost: '127.0.0.1' as Host,
       crypto,
       logger: logger.getChild(QUICClient.name),
       config: {
-        logKeys: './tmp/keylog.log',
-        maxIdleTimeout: 5000,
+        maxIdleTimeout: 1000,
       }
-    });
-
-    // Because it is never established
-    // It's basically awaiting forever
-
+    })).rejects.toThrow(errors.ErrorQUICConnectionTimeout);
   });
 
 
   test('dual stack to dual stack', async () => {
-
     const {
       p: clientErrorEventP,
       rejectP: rejectClientErrorEventP
@@ -372,13 +359,5 @@ describe(QUICClient.name, () => {
     await expect(Promise.race([clientErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
     await expect(Promise.race([serverErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
   });
-  // test.only('', async () => {
-  //
-  //   // const p = Promise.reject(new Error('Not implemented'));
-  //   const { p, rejectP } = utils.promise();
-  //   rejectP(new Error('oh no'));
-  //
-  //   await expect(Promise.race([p, Promise.resolve()])).resolves.toBe(undefined);
-  // });
   // We need to test shared socket later
 });
