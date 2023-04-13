@@ -67,7 +67,7 @@ impl Config {
         |err| Err(Error::from_reason(err.to_string()))
       )?;
       for (i, cert) in x509_cet_chain.iter().enumerate() {
-        if i == 1 {
+        if i == 0 {
           ssl_ctx_builder.set_certificate(
             cert,
           ).or_else(
