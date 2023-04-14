@@ -1,9 +1,16 @@
 import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
 
+type TlsConfig = {
+  certChainPem: string | null;
+  privKeyPem: string | null;
+} | {
+  certChainFromPemFile: string | null;
+  privKeyFromPemFile: string | null;
+}
+
 type QUICConfig = {
-  certChainPem: string | null | undefined;
-  privKeyPem: string | null | undefined;
+  tlsConfig: TlsConfig | undefined;
   verifyPeer: boolean;
   logKeys: string | undefined;
   grease: boolean;
@@ -21,8 +28,7 @@ type QUICConfig = {
 };
 
 const clientDefault: QUICConfig = {
-  certChainPem: null,
-  privKeyPem: null,
+  tlsConfig: undefined,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -46,8 +52,7 @@ const clientDefault: QUICConfig = {
 };
 
 const serverDefault: QUICConfig = {
-  certChainPem: null,
-  privKeyPem: null,
+  tlsConfig: undefined,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -71,16 +76,29 @@ const serverDefault: QUICConfig = {
 };
 
 function buildQuicheConfig(config: QUICConfig): QuicheConfig {
-  const quicheConfig: QuicheConfig = quiche.Config.withBoringSslCtx(
-    config.certChainPem != null ? Buffer.from(config.certChainPem) : null,
-    config.privKeyPem != null ? Buffer.from(config.privKeyPem) : null,
-  )
+  let quicheConfig: QuicheConfig;
+  if (config.tlsConfig != null && 'certChainPem' in config.tlsConfig) {
+    quicheConfig = quiche.Config.withBoringSslCtx(
+      config.tlsConfig.certChainPem != null ? Buffer.from(config.tlsConfig.certChainPem) : null,
+      config.tlsConfig.privKeyPem != null ? Buffer.from(config.tlsConfig.privKeyPem) : null,
+    )
+  } else {
+    quicheConfig = new quiche.Config();
+    if (config.tlsConfig?.certChainFromPemFile != null) {
+      quicheConfig.loadCertChainFromPemFile(config.tlsConfig.certChainFromPemFile);
+    }
+    if (config.tlsConfig?.privKeyFromPemFile != null) {
+      quicheConfig.loadPrivKeyFromPemFile(config.tlsConfig.privKeyFromPemFile);
+    }
+  }
   if (config.logKeys != null) {
     quicheConfig.logKeys();
   }
   if (config.enableEarlyData) {
     quicheConfig.enableEarlyData();
   }
+
+  quicheConfig.verifyPeer(config.verifyPeer);
   quicheConfig.grease(config.grease);
   quicheConfig.setMaxIdleTimeout(config.maxIdleTimeout);
   quicheConfig.setMaxRecvUdpPayloadSize(config.maxRecvUdpPayloadSize);

@@ -312,7 +312,7 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
-    console.log('RECV CALLED');
+    this.logger.debug('RECV CALLED');
 
     try {
       if (this.conn.isClosed()) {
@@ -336,7 +336,7 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
-        // console.log('Did a recv', data.byteLength);
+        this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
       } catch (e) {
         // Depending on the exception, the `this.conn.recv`
@@ -382,7 +382,7 @@ class QUICConnection extends EventTarget {
       }
     } finally {
 
-      // console.log('RECV FINALLY');
+      this.logger.debug('RECV FINALLY');
 
       // Set the timeout
       this.setTimeout();
@@ -397,7 +397,7 @@ class QUICConnection extends EventTarget {
         )
       ) {
 
-        console.log('CALLING DESTROY 2');
+        this.logger.debug('CALLING DESTROY 2');
         await this.destroy();
       }
     }
@@ -423,7 +423,7 @@ class QUICConnection extends EventTarget {
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async send(): Promise<void> {
 
-    console.log('SEND CALLED');
+    this.logger.debug('SEND CALLED');
 
     try {
       if (this.conn.isClosed()) {
@@ -439,11 +439,12 @@ class QUICConnection extends EventTarget {
       let sendInfo: SendInfo;
       while (true) {
         try {
-          // console.log('Did a send');
+          this.logger.debug('Did a send');
           [sendLength, sendInfo] = this.conn.send(sendBuffer);
         } catch (e) {
+          this.logger.debug(`SEND FAILED WITH ${e.message}`);
           if (e.message === 'Done') {
-            // console.log('SEND IS DONE');
+            this.logger.debug('SEND IS DONE');
             return;
           }
           try {
@@ -470,8 +471,7 @@ class QUICConnection extends EventTarget {
         }
         try {
 
-          // console.log('ATTEMPTING SEND', sendBuffer, 0, sendLength, sendInfo.to.port, sendInfo.to.host);
-          console.log('SEND UDP PACKET');
+          this.logger.debug(`ATTEMPTING SEND ${sendLength} bytes to ${sendInfo.to.port}:${sendInfo.to.host}`);
 
           await this.socket.send(
             sendBuffer,
@@ -481,13 +481,14 @@ class QUICConnection extends EventTarget {
             sendInfo.to.host
           );
         } catch (e) {
+          console.error(e);
           this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
           return;
         }
       }
     } finally {
 
-      // console.log('SEND FINALLY');
+      this.logger.debug('SEND FINALLY');
 
       this.setTimeout();
       if (
@@ -495,7 +496,7 @@ class QUICConnection extends EventTarget {
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
 
-        console.log('CALLING DESTROY');
+        this.logger.debug('CALLING DESTROY');
 
         await this.destroy();
       } else if (
@@ -598,55 +599,55 @@ class QUICConnection extends EventTarget {
     // the time given becomes 1 second
     // Why did it reduce to 1000 ms?
 
-    // console.log('Time given:', time);
+    // this.logger.debug('Time given:', time);
 
-    // console.log('IS DRAINING', this.conn.isDraining());
+    // this.logger.debug('IS DRAINING', this.conn.isDraining());
 
     // Do note there is a change in one of our methods
     // I think I remember, we still need to change over to that
     // To enusre that exceptions mean `Done`
-    // console.log('PATH STATS', this.conn.pathStats());
+    // this.logger.debug('PATH STATS', this.conn.pathStats());
 
     if (time != null) {
-      // console.log('Resetting the timeout');
+      // this.logger.debug('Resetting the timeout');
 
       clearTimeout(this.timer);
       this.timer = setTimeout(
         async () => {
 
-          // console.log('TIMEOUT HANDLER CALLED');
-          // console.log('draining', this.conn.isDraining());
-          // console.log('closed', this.conn.isClosed());
-          // console.log('timed out', this.conn.isTimedOut());
-          // console.log('established', this.conn.isEstablished());
-          // console.log('in early data', this.conn.isInEarlyData());
-          // console.log('resumed', this.conn.isResumed());
+          // this.logger.debug('TIMEOUT HANDLER CALLED');
+          // this.logger.debug('draining', this.conn.isDraining());
+          // this.logger.debug('closed', this.conn.isClosed());
+          // this.logger.debug('timed out', this.conn.isTimedOut());
+          // this.logger.debug('established', this.conn.isEstablished());
+          // this.logger.debug('in early data', this.conn.isInEarlyData());
+          // this.logger.debug('resumed', this.conn.isResumed());
 
           // This would only run if the `recv` and `send` is not called
           // Otherwise this handler would be cleared each time and be reset
           this.conn.onTimeout();
 
-          // console.log('AFTER ON TIMEOUT');
+          // this.logger.debug('AFTER ON TIMEOUT');
           // DRAINING IS FALSE
-          // console.log('draining', this.conn.isDraining());
+          // this.logger.debug('draining', this.conn.isDraining());
           // CLOSED IS TRUE
-          // console.log('closed', this.conn.isClosed());
+          // this.logger.debug('closed', this.conn.isClosed());
           // TIMEDOUT IS TRUE
-          // console.log('timed out', this.conn.isTimedOut());
-          // console.log('established', this.conn.isEstablished());
-          // console.log('in early data', this.conn.isInEarlyData());
-          // console.log('resumed', this.conn.isResumed());
+          // this.logger.debug('timed out', this.conn.isTimedOut());
+          // this.logger.debug('established', this.conn.isEstablished());
+          // this.logger.debug('in early data', this.conn.isInEarlyData());
+          // this.logger.debug('resumed', this.conn.isResumed());
 
           // Trigger a send, this will also set the timeout again at the end
 
-          console.log('TIMEOUT TRIGGER SEND');
+          this.logger.debug('TIMEOUT TRIGGER SEND');
 
           await this.send();
         },
         time
       );
     } else {
-      // console.log('Clearing the timeout');
+      this.logger.debug('Clearing the timeout');
       clearTimeout(this.timer);
       delete this.timer;
       if (this.conn.isClosed() || this.conn.isDraining()) {

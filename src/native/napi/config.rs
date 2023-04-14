@@ -56,17 +56,17 @@ impl Config {
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
-    ssl_ctx_builder.set_verify(
-      boring::ssl::SslVerifyMode::PEER
-    );
+    // ssl_ctx_builder.set_verify(
+    //   boring::ssl::SslVerifyMode::NONE
+    // );
     // Processing and adding the cert chain
     if let Some(cert_pem) = cert_pem {
-      let x509_cet_chain = boring::x509::X509::stack_from_pem(
+      let x509_cert_chain = boring::x509::X509::stack_from_pem(
         &cert_pem.to_vec()
       ).or_else(
         |err| Err(Error::from_reason(err.to_string()))
       )?;
-      for (i, cert) in x509_cet_chain.iter().enumerate() {
+      for (i, cert) in x509_cert_chain.iter().enumerate() {
         if i == 0 {
           ssl_ctx_builder.set_certificate(
             cert,
@@ -84,12 +84,10 @@ impl Config {
     }
     // Processing and adding the private key
     if let Some(key_pem) = key_pem {
-      println!("Had key pem");
       let private_key = boring::pkey::PKey::private_key_from_pem(&key_pem)
         .or_else(
         |err| Err(Error::from_reason(err.to_string()))
       )?;
-      println!("{:?}", private_key);
       ssl_ctx_builder.set_private_key(&private_key)
         .or_else(
           |err| Err(Error::from_reason(err.to_string()))

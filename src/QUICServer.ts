@@ -72,7 +72,7 @@ class QUICServer extends EventTarget {
     // We can force it
     config: Partial<QUICConfig> & Pick<
       QUICConfig,
-      'certChainPem' | 'privKeyPem'
+      'tlsConfig'
     >;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
@@ -261,14 +261,14 @@ class QUICServer extends EventTarget {
     }
     // Here we shall re-use the originally-derived DCID as the SCID
     scid = new QUICConnectionId(header.dcid);
-    this.logger.debug(`Accepting new connection from QUIC packet`);
+    this.logger.debug(`Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`);
     const connection = await QUICConnection.acceptQUICConnection({
       scid,
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
       config: this.config,
-      logger: this.logger.getChild(`${QUICConnection.name} ${scid}`)
+      logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString().slice(32)}`)
     });
 
     this.dispatchEvent(new events.QUICServerConnectionEvent({ detail: connection }));

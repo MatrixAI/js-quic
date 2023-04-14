@@ -256,10 +256,10 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // or through an exception here where the stream reports an error
         // Since we don't call this method unless it is readable
         // This should never be reported... (this branch should be dead code)
-        console.log('Stream reported: done');
+        this.logger.debug('Stream reported: done');
         return;
       } else {
-        console.log('Stream reported: error');
+        this.logger.debug('Stream reported: error');
         const match = e.message.match(/StreamReset\((.+)\)/);
         if (match != null) {
           // If it is `StreamReset(u64)` error, then the peer has closed
@@ -284,8 +284,8 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     }
     // If fin is true, then that means, the stream is CLOSED
     if (fin) {
-      console.log('Stream reported: fin');
       // This will render `stream.cancel` a noop
+      this.logger.debug('Stream reported: fin');
       this.readableController.close();
       await this.closeRecv();
       return;
