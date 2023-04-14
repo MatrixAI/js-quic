@@ -160,14 +160,14 @@ class QUICClient extends EventTarget {
         port
       },
       config: quicConfig,
-      logger: logger.getChild(`${QUICConnection.name} ${scid}`)
+      logger: logger.getChild(`${QUICConnection.name} ${scid.toString().slice(32)}`)
     });
     connection.addEventListener(
       'error',
       handleConnectionError,
       { once: true }
     );
-    console.log('CLIENT TRIGGER SEND');
+    logger.debug('CLIENT TRIGGER SEND');
     // This will not raise an error
     await connection.send();
     // This will wait to be established, while also rejecting on error

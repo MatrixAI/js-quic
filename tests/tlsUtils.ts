@@ -252,7 +252,6 @@ async function createTLSConfigWithChain(
   const certChain: Array<X509Certificate> = [];
   for (const keyPair of keyPairs) {
     const certId = generateCertId();
-    console.log(certId, keyPair.privateKey.toString())
     const newCert = await generateCertificate({
       certId,
       duration: 31536000,
@@ -266,11 +265,9 @@ async function createTLSConfigWithChain(
   }
   let certChainPEM = '';
   for (const certificate of certChain) {
-    console.log(certificate.serialNumber)
     certChainPEM += certToPEM(certificate);
   }
 
-  console.log(previousKeyPair!.privateKey.toString());
   return {
     privKeyPem: privateKeyToPEM(previousKeyPair!.privateKey),
     certChainPem: certChainPEM,
