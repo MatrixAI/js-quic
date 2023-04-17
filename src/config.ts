@@ -1,7 +1,7 @@
 import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
 
-type TlsConfig = {
+export type TlsConfig = {
   certChainPem: string | null;
   privKeyPem: string | null;
 } | {

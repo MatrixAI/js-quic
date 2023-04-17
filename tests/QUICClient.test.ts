@@ -11,6 +11,7 @@ import * as tls from 'tls';
 import * as errors from '@/errors';
 import { fc } from '@fast-check/jest';
 import * as tlsUtils from './tlsUtils';
+import * as certFixtures from './fixtures/certFixtures';
 
 
 const privKeyPem = `
@@ -65,11 +66,8 @@ jti9iwz2QT6q1s+PjS/gbflIO3j4FP4XOEQGtWm9iqPbVhoUIB9PBED3
 -----END CERTIFICATE-----
 `
 
-// const tlsArb = fc.constant({
-//   certChainFromPemFile: './tmp/localhost.crt',
-//   privKeyFromPemFile: './tmp/localhost.key',
-// });
-const tlsArb = tlsUtils.tlsConfigArb(tlsUtils.keyPairsArb(1));
+const tlsArb = fc.constant(certFixtures.tlsConfigFileRSA1);
+// const tlsArb = tlsUtils.tlsConfigArb(tlsUtils.keyPairsArb(1));
 // const tlsArb = fc.constant({
 //   certChainPem,
 //   privKeyPem,
@@ -207,8 +205,6 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
   });
-
-
   test('times out when there is no server', async () => {
     // QUICClient repeatedly dials until the connection timesout
     await expect(QUICClient.createQUICClient({
@@ -222,7 +218,85 @@ describe(QUICClient.name, () => {
       }
     })).rejects.toThrow(errors.ErrorQUICConnectionTimeout);
   });
-
+  describe('TLS rotation', () => {
+    let connectionEventP;
+    let resolveConnectionEventP;
+    let handleConnectionEventP;
+    beforeEach(async () => {
+      const {
+        p,
+        resolveP
+      } = utils.promise<events.QUICServerConnectionEvent>();
+      connectionEventP = p;
+      resolveConnectionEventP = resolveP;
+      handleConnectionEventP = (e: events.QUICServerConnectionEvent) => {
+        resolveConnectionEventP(e);
+      };
+    });
+    test.todo('existing connections still function');
+    test('existing connections config is unchanged and still function', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig: certFixtures.tlsConfigFileRSA1
+        }
+      });
+      server.addEventListener('connection', handleConnectionEventP);
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client1 = await QUICClient.createQUICClient({
+        host: '::ffff:127.0.0.1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+      });
+      const peerCertChainInitial = client1.connection.conn.peerCertChain()
+      server.setTLSConfig(certFixtures.tlsConfigFileRSA2)
+      // The existing connection's certs should be unchanged
+      const peerCertChainNew = client1.connection.conn.peerCertChain()
+      expect(peerCertChainNew![0].toString()).toStrictEqual(peerCertChainInitial![0].toString());
+      await client1.destroy();
+      await server.stop();
+    });
+    test('new connections use new config', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig: certFixtures.tlsConfigFileRSA1
+        }
+      });
+      server.addEventListener('connection', handleConnectionEventP);
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client1 = await QUICClient.createQUICClient({
+        host: '::ffff:127.0.0.1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+      });
+      const peerCertChainInitial = client1.connection.conn.peerCertChain()
+      server.setTLSConfig(certFixtures.tlsConfigFileRSA2)
+      // Starting a new connection has a different peerCertChain
+      const client2 = await QUICClient.createQUICClient({
+        host: '::ffff:127.0.0.1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+      });
+      const peerCertChainNew = client2.connection.conn.peerCertChain()
+      expect(peerCertChainNew![0].toString()).not.toStrictEqual(peerCertChainInitial![0].toString());
+      await client1.destroy();
+      await client2.destroy();
+      await server.stop();
+    });
+  })
 
   // test('dual stack to dual stack', async () => {
 
