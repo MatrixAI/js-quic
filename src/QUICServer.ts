@@ -1,7 +1,7 @@
 import type { ConnectionId, Crypto, Host, Hostname, Port, RemoteInfo } from './types';
 import type { Header, Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig } from './config';
+import type { QUICConfig, TlsConfig } from "./config";
 import QUICConnectionId from './QUICConnectionId';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -70,10 +70,7 @@ class QUICServer extends EventTarget {
     // This actually requires TLS
     // You have to specify these some how
     // We can force it
-    config: Partial<QUICConfig> & Pick<
-      QUICConfig,
-      'tlsConfig'
-    >;
+    config: Partial<QUICConfig> & {TlsConfig?: TlsConfig};
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
@@ -281,6 +278,16 @@ class QUICServer extends EventTarget {
 
     return connection;
   }
+
+  /**
+   * This updates the `tlsConfig` used when new connections are established.
+   * It will not affect existing connections, they will keep using the old `tlsconfig`
+   * @param tlsConfig
+   */
+  public setTLSConfig(tlsConfig: TlsConfig): void {
+    // tlsConfig is an object, spread to copy and avoid object mutation
+    this.config.tlsConfig = { ...tlsConfig };
+  };
 
   /**
    * Creates a retry token.
