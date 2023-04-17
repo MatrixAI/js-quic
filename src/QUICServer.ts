@@ -280,13 +280,15 @@ class QUICServer extends EventTarget {
   }
 
   /**
-   * This updates the `tlsConfig` used when new connections are established.
-   * It will not affect existing connections, they will keep using the old `tlsconfig`
-   * @param tlsConfig
+   * This updates the `QUICConfig` used when new connections are established.
+   * Only the parameters that are provided are updated.
+   * It will not affect existing connections, they will keep using the old `QUICConfig`
    */
-  public setTLSConfig(tlsConfig: TlsConfig): void {
-    // tlsConfig is an object, spread to copy and avoid object mutation
-    this.config.tlsConfig = { ...tlsConfig };
+  public updateConfig(config: Partial<QUICConfig>): void {
+    this.config = {
+      ...this.config,
+      ...config,
+    };
   };
 
   /**

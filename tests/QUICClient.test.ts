@@ -254,7 +254,9 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
       });
       const peerCertChainInitial = client1.connection.conn.peerCertChain()
-      server.setTLSConfig(certFixtures.tlsConfigFileRSA2)
+      server.updateConfig({
+        tlsConfig: certFixtures.tlsConfigFileRSA2
+      })
       // The existing connection's certs should be unchanged
       const peerCertChainNew = client1.connection.conn.peerCertChain()
       expect(peerCertChainNew![0].toString()).toStrictEqual(peerCertChainInitial![0].toString());
@@ -281,7 +283,9 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
       });
       const peerCertChainInitial = client1.connection.conn.peerCertChain()
-      server.setTLSConfig(certFixtures.tlsConfigFileRSA2)
+      server.updateConfig({
+        tlsConfig: certFixtures.tlsConfigFileRSA2
+      })
       // Starting a new connection has a different peerCertChain
       const client2 = await QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
