@@ -251,7 +251,7 @@ class QUICConnection extends EventTarget {
   }
 
   /**
-   * This provides the ability to destroy with a specific error
+   * This provides the ability to destroy with a specific error. This will wait for the connection to fully drain.
    */
   public async destroy(
     {
@@ -289,7 +289,7 @@ class QUICConnection extends EventTarget {
       }
     }
     // If it is not closed, it could still be draining
-    if (!this.conn.isClosed()) {
+    if (this.conn.isDraining()) {
       // The `recv`, `send`, `timeout`, and `on_timeout` should continue to be called
       const { p: closeP, resolveP: resolveCloseP } = utils.promise();
       this.resolveCloseP = resolveCloseP;
@@ -300,6 +300,11 @@ class QUICConnection extends EventTarget {
     }
     this.connectionMap.delete(this.connectionId);
     this.dispatchEvent(new events.QUICConnectionDestroyEvent());
+    // Clean up timeout
+    if (this.timer != null) {
+      clearTimeout(this.timer);
+      delete this.timer;
+    }
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
@@ -339,6 +344,9 @@ class QUICConnection extends EventTarget {
         this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
       } catch (e) {
+        this.logger.error(e.toString());
+        // console.error(e);
+        // console.log(this.conn.isClosed());
         // Depending on the exception, the `this.conn.recv`
         // may have automatically started closing the connection
         this.dispatchEvent(
@@ -427,13 +435,12 @@ class QUICConnection extends EventTarget {
 
     try {
       if (this.conn.isClosed()) {
-
-
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
-      } else if (this.conn.isDraining()) {
-        return;
       }
+      // else if (this.conn.isDraining()) {
+      //   return;
+      // }
       const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
       let sendLength: number;
       let sendInfo: SendInfo;
@@ -481,7 +488,7 @@ class QUICConnection extends EventTarget {
             sendInfo.to.host
           );
         } catch (e) {
-          console.error(e);
+          this.logger.error(e.toString())
           this.dispatchEvent(new events.QUICConnectionErrorEvent({ detail: e }));
           return;
         }
@@ -491,11 +498,12 @@ class QUICConnection extends EventTarget {
       this.logger.debug('SEND FINALLY');
 
       this.setTimeout();
+      this.logger.debug(`connection is closed?: ${this.conn.isClosed()}`)
+      this.logger.debug(`connection is draining?: ${this.conn.isDraining()}`)
       if (
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
-
         this.logger.debug('CALLING DESTROY');
 
         await this.destroy();
