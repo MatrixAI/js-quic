@@ -91,7 +91,7 @@ class QUICClient extends EventTarget {
     const {
       p: errorP,
       rejectP: rejectErrorP
-    } = utils.promise();
+    } = utils.promise<never>();
     const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
       rejectErrorP(e.detail);
     };
@@ -174,10 +174,24 @@ class QUICClient extends EventTarget {
     try {
       await Promise.race([connection.establishedP, errorP]);
     } catch (e) {
+      logger.error(e.toString());
+      // console.error(e);
+      logger.debug(`Is shared?: ${isSocketShared}`);
+      // Waiting for connection to destroy
+      const destroyedProm = utils.promise<void>();
+      connection.addEventListener('destroy', ()=> {
+          destroyedProm.resolveP();
+        },
+        {
+          once: true,
+        },
+      )
+      await destroyedProm.p;
       if (!isSocketShared) {
         // Stop our own socket
         await socket.stop();
       }
+      // Wrapping error to contain both stack traces
       throw e;
     }
 

@@ -15,6 +15,7 @@ export type TlsConfig = {
 
 type QUICConfig = {
   tlsConfig: TlsConfig | undefined;
+  verifyFromPemFile: string | undefined;
   supportedPrivateKeyAlgos: string | undefined;
   verifyPeer: boolean;
   logKeys: string | undefined;
@@ -34,9 +35,10 @@ type QUICConfig = {
 
 const clientDefault: QUICConfig = {
   tlsConfig: undefined,
+  verifyFromPemFile: undefined,
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
-  verifyPeer: false,
+  verifyPeer: true,
   grease: true,
   maxIdleTimeout: 5000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
@@ -59,6 +61,7 @@ const clientDefault: QUICConfig = {
 
 const serverDefault: QUICConfig = {
   tlsConfig: undefined,
+  verifyFromPemFile: undefined,
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: false,
@@ -101,6 +104,9 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     if (config.tlsConfig?.privKeyFromPemFile != null) {
       quicheConfig.loadPrivKeyFromPemFile(config.tlsConfig.privKeyFromPemFile);
     }
+  }
+  if (config.verifyFromPemFile != null) {
+    quicheConfig.loadVerifyLocationsFromFile(config.verifyFromPemFile);
   }
   if (config.logKeys != null) {
     quicheConfig.logKeys();
