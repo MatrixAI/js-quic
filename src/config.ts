@@ -1,6 +1,10 @@
 import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
 
+// All the algos chrome supports + ed25519
+const supportedPrivateKeyAlgosDefault =
+  "ed25519:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:RSA-PSS+SHA256:RSA-PSS+SHA384:RSA-PSS+SHA512";
+
 export type TlsConfig = {
   certChainPem: string | null;
   privKeyPem: string | null;
@@ -11,6 +15,7 @@ export type TlsConfig = {
 
 type QUICConfig = {
   tlsConfig: TlsConfig | undefined;
+  supportedPrivateKeyAlgos: string | undefined;
   verifyPeer: boolean;
   logKeys: string | undefined;
   grease: boolean;
@@ -29,6 +34,7 @@ type QUICConfig = {
 
 const clientDefault: QUICConfig = {
   tlsConfig: undefined,
+  supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -53,6 +59,7 @@ const clientDefault: QUICConfig = {
 
 const serverDefault: QUICConfig = {
   tlsConfig: undefined,
+  supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: false,
   grease: true,
@@ -76,14 +83,18 @@ const serverDefault: QUICConfig = {
 };
 
 function buildQuicheConfig(config: QUICConfig): QuicheConfig {
-  let quicheConfig: QuicheConfig;
+  let certChainPem: Buffer | null = null;
+  let privKeyPem: Buffer | null = null;
   if (config.tlsConfig != null && 'certChainPem' in config.tlsConfig) {
-    quicheConfig = quiche.Config.withBoringSslCtx(
-      config.tlsConfig.certChainPem != null ? Buffer.from(config.tlsConfig.certChainPem) : null,
-      config.tlsConfig.privKeyPem != null ? Buffer.from(config.tlsConfig.privKeyPem) : null,
-    )
-  } else {
-    quicheConfig = new quiche.Config();
+    if (config.tlsConfig.certChainPem != null) certChainPem = Buffer.from(config.tlsConfig.certChainPem)
+    if (config.tlsConfig.privKeyPem != null) privKeyPem = Buffer.from(config.tlsConfig.privKeyPem)
+  }
+  let quicheConfig: QuicheConfig = quiche.Config.withBoringSslCtx(
+    certChainPem,
+    privKeyPem,
+    config.supportedPrivateKeyAlgos ?? null,
+  );
+  if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {
       quicheConfig.loadCertChainFromPemFile(config.tlsConfig.certChainFromPemFile);
     }

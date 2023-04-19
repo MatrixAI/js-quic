@@ -132,7 +132,7 @@ export function retry(scid: Uint8Array, dcid: Uint8Array, newScid: Uint8Array, t
 export function versionIsSupported(version: number): boolean
 export class Config {
   constructor()
-  static withBoringSslCtx(certPem?: Uint8Array | undefined | null, keyPem?: Uint8Array | undefined | null): Config
+  static withBoringSslCtx(certPem?: Uint8Array | undefined | null, keyPem?: Uint8Array | undefined | null, supportedKeyAlgos?: string | undefined | null): Config
   loadCertChainFromPemFile(file: string): void
   loadPrivKeyFromPemFile(file: string): void
   loadVerifyLocationsFromFile(file: string): void

@@ -50,15 +50,13 @@ impl Config {
   pub fn with_boring_ssl_ctx(
     cert_pem: Option<Uint8Array>,
     key_pem: Option<Uint8Array>,
+    supported_key_algos: Option<String>,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
-    // ssl_ctx_builder.set_verify(
-    //   boring::ssl::SslVerifyMode::NONE
-    // );
     // Processing and adding the cert chain
     if let Some(cert_pem) = cert_pem {
       let x509_cert_chain = boring::x509::X509::stack_from_pem(
@@ -89,6 +87,13 @@ impl Config {
         |err| Err(Error::from_reason(err.to_string()))
       )?;
       ssl_ctx_builder.set_private_key(&private_key)
+        .or_else(
+          |err| Err(Error::from_reason(err.to_string()))
+        )?;
+    }
+    // Adding supported private key algorithms
+    if let Some(supported_key_algos) = supported_key_algos {
+      ssl_ctx_builder.set_sigalgs_list(&supported_key_algos)
         .or_else(
           |err| Err(Error::from_reason(err.to_string()))
         )?;
