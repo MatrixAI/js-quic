@@ -1,77 +1,19 @@
-import type { Crypto, Host, Hostname, Port } from '@/types';
-import { webcrypto } from 'crypto';
+import type { Crypto, Host, Port } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
-import QUICConnection from '@/QUICConnection';
 import * as events from '@/events';
 import * as utils from '@/utils';
 import * as testsUtils from './utils';
-import * as tls from 'tls';
 import * as errors from '@/errors';
 import { fc } from '@fast-check/jest';
 import * as tlsUtils from './tlsUtils';
 import * as certFixtures from './fixtures/certFixtures';
 
-
-const privKeyPem = `
------BEGIN RSA PRIVATE KEY-----
-MIIEogIBAAKCAQEAovJl4noV+8myMOOhG+/1kpsAvmGaiz3o3+gnAINpFiUvANWU
-LUhoyyeQAzCom2yOl6WEH1574Hz6jsnwB3BFDj1wcBtbjMlwYpqfkJYsRQGIrOGD
-VGI3PSpcBWGOdfPnREAQrp5cL1TKRSuFtyjZR2lZY4DxUAr6JEmC2aOObv7gcr1W
-nhdO9PnY9aXhF2aVXsThkp8izP2ET9C7OmpMdajnVVbTW4PFU5YLnKFZFY5CmnaR
-08QWFByxGVKDkt5c3sPvBnI0Dfc1LvfCKFJZ4CtJs7+i+O2Y2ticLwur678wvXO9
-OGN6CIIC2A9c4H8I8qpE+N/frYfTg/E7/j0dbQIDAQABAoIBAB99SpU21LLA6q+p
-/cOBXurDC6S/Bfessik7GvZtbsx5yRiXLbiGisHf1mPXbm4Cz5ecw+iwAK6EWINp
-oPo/BwlWdDkmAE43y4Eysm1lqA552mjWd+PByz0Fx5y+mqJOzT2SR+cG8XewIhq1
-63RW745uXHjvPTMju+1xS1k101u9lL0VCo5cfPpS12fLYiVtR721CayWydfABuc9
-Xbj38G6lw5QGipjS+r7t588dKa9APMffKZPB3q0g65TZrOd0hjvZMQMvPe5aY3SP
-UpLD3GhmO/0Khsl31WkZSDPkogPBq6BqvJZa/qrSQHIh9pUX6FFOTCw3ANWQutMH
-681LRsECgYEAz5pLp5BrMfg/ToPMaLKcpYiY//UhI+ZjUJ8aL51D8Jl4DOAUN1ge
-tpBKDRm0ayLOdFeok9S8CQItrAvkFyHBiRK6R1CgyXqSCdBRPsqdN74+K0DsEloU
-nNdXejGGijSSezBcvNYVlJC+7yKLgpC2wK36oLFEPHdNJPIC3wZBtFECgYEAyO8L
-/6KfVOaUJCc02vUAU8Ap6bVA5xlXD4sxI5w6FCwcHCzlAoHGsjA2aWsnxi43z41p
-pRR9IySUEPZxmh76Tzs9+Dthshkjrrx8CuTIky37BIzFDioqH2Ncj5+DCAly3IU4
-NjCMQOp+Yx5u9UZfkdcJj31+JUCBn1BdW22Z3F0CgYB9ftdW/t1eAqQ6UUAC1l4N
-Tuq2Z7dV3VKSDOumdtn4Gr3QgrCV2CYQ1F5/VteSoCLPf6H/Y20bwP5c7389YIF+
-3BxROfNIeFjJp+1FGPQ7Gzy3pvJOEbg+K4rM6h1bdHZME6sr1/qJqYpSQr60+cgP
-59wGwcHvD2tJ9yY3LbAQUQKBgDefZPTpMa4w/kVbzRfnxqVohrG5iTPwIdedsoan
-ErTO2SE7lFGzVyuwiP95uFL2LGD6Rop6N4Ho+EwRzLTbanNQdQEofwzsRKJ0buod
-FyEXE2vZBBu9tFdoDBF+GKm6498DyeHGYqz9vOr3W8PuLTqUCoN8O9VYHAncF1vd
-5T/JAoGAeWb5iqhDhkrZDSi5GreFh2zVlDanZJqQn4UpUhotO4gtKDzMqM/rxV95
-RZ7zsFD22yY06cXePpMOfw4qAUDZuwoZgVH5MLW3IWJPkg++nG6GfTBaHmYmXK/M
-uPSJlPjTsCL+dUX+7VbrfntypnVALhtX3bZo3rsQQmUci/NjDhU=
------END RSA PRIVATE KEY-----
-`
-
-const certChainPem = `
------BEGIN CERTIFICATE-----
-MIIDJjCCAg6gAwIBAgIRAImdTwINUpu7qX/uYWmVT44wDQYJKoZIhvcNAQELBQAw
-FDESMBAGA1UEAxMJbG9jYWxob3N0MB4XDTIzMDQxMDA1MDk1OVoXDTI0MDQwOTA1
-MDk1OVowFDESMBAGA1UEAxMJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEFAAOC
-AQ8AMIIBCgKCAQEAovJl4noV+8myMOOhG+/1kpsAvmGaiz3o3+gnAINpFiUvANWU
-LUhoyyeQAzCom2yOl6WEH1574Hz6jsnwB3BFDj1wcBtbjMlwYpqfkJYsRQGIrOGD
-VGI3PSpcBWGOdfPnREAQrp5cL1TKRSuFtyjZR2lZY4DxUAr6JEmC2aOObv7gcr1W
-nhdO9PnY9aXhF2aVXsThkp8izP2ET9C7OmpMdajnVVbTW4PFU5YLnKFZFY5CmnaR
-08QWFByxGVKDkt5c3sPvBnI0Dfc1LvfCKFJZ4CtJs7+i+O2Y2ticLwur678wvXO9
-OGN6CIIC2A9c4H8I8qpE+N/frYfTg/E7/j0dbQIDAQABo3MwcTAOBgNVHQ8BAf8E
-BAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMB0GA1UdDgQWBBR0
-zbkYQmSgopJsbuNKOQV9qjYu7TAhBgNVHREEGjAYhwR/AAABhxAAAAAAAAAAAAAA
-AAAAAAABMA0GCSqGSIb3DQEBCwUAA4IBAQAWLolrv0NuKqhZndYLPCT3C013Qo6y
-QeQPbyZbJgHhRZd2feP8sEQ1U4f48OKL5ejWEKOaUvH/sVI9Jume4ve2xOxqz+ST
-csZqUqinnUT/12jwGOys2IIEPBnlMxBFon54G336+LGgl9CX+rXKeJZgIbmZpcCa
-J948KRJwJ4E4UgnNIY/e4J5nCpScA0b5GlmcvpoV5yBoIf6vvnrWeyyl4rotPx9Q
-jm/r7v5BQrwMjbcrLCA9Nob5tSMEHDjlvt4cNzOnMWdsjB735QaMsA8qZX8m2NpX
-jti9iwz2QT6q1s+PjS/gbflIO3j4FP4XOEQGtWm9iqPbVhoUIB9PBED3
------END CERTIFICATE-----
-`
-
-const tlsArb = fc.constant(certFixtures.tlsConfigFileRSA1);
-// const tlsArb = tlsUtils.tlsConfigArb(tlsUtils.keyPairsArb(1));
-// const tlsArb = fc.constant({
-//   certChainPem,
-//   privKeyPem,
-// });
+const tlsArb = fc.oneof(
+  certFixtures.tlsConfigExampleArb,
+  tlsUtils.tlsConfigArb(),
+);
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
     new StreamHandler(formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`),

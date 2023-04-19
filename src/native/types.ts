@@ -40,8 +40,9 @@ interface Config {
 interface ConfigConstructor {
   new(): Config;
   withBoringSslCtx(
-    cert_pem: Uint8Array | null,
-    key_pem: Uint8Array | null,
+    certPem: Uint8Array | null,
+    keyPem: Uint8Array | null,
+    supportedKeyAlgos: String | null,
   ): Config;
 };
 

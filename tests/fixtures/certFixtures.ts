@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { fc } from '@fast-check/jest';
 
 function fixturePath(name: string) {
   return {
@@ -71,6 +72,33 @@ const tlsConfigMemECDSA2 = {
   privKeyPem: fs.readFileSync(tlsConfigFileECDSA2.privKeyFromPemFile).toString(),
 };
 
+const tlsConfigRSAExampleArb = fc.oneof(
+  fc.constant(tlsConfigFileRSA1),
+  fc.constant(tlsConfigFileRSA2),
+  fc.constant(tlsConfigMemRSA1),
+  fc.constant(tlsConfigMemRSA2),
+)
+
+const tlsConfigECDSAExampleArb = fc.oneof(
+  fc.constant(tlsConfigFileECDSA1),
+  fc.constant(tlsConfigFileECDSA2),
+  fc.constant(tlsConfigMemECDSA1),
+  fc.constant(tlsConfigMemECDSA2),
+)
+
+const tlsConfigOKPExampleArb = fc.oneof(
+  fc.constant(tlsConfigFileOKP1),
+  fc.constant(tlsConfigFileOKP2),
+  fc.constant(tlsConfigMemOKP1),
+  fc.constant(tlsConfigMemOKP2),
+)
+
+const tlsConfigExampleArb = fc.oneof(
+  tlsConfigRSAExampleArb,
+  tlsConfigECDSAExampleArb,
+  tlsConfigOKPExampleArb,
+)
+
 
 export {
   tlsConfigFileRSA1,
@@ -85,4 +113,8 @@ export {
   tlsConfigMemOKP2,
   tlsConfigMemECDSA1,
   tlsConfigMemECDSA2,
+  tlsConfigRSAExampleArb,
+  tlsConfigECDSAExampleArb,
+  tlsConfigOKPExampleArb,
+  tlsConfigExampleArb,
 }
