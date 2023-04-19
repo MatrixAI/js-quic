@@ -43,6 +43,7 @@ interface ConfigConstructor {
     certPem: Uint8Array | null,
     keyPem: Uint8Array | null,
     supportedKeyAlgos: String | null,
+    ca_cert_pem: Uint8Array | null,
   ): Config;
 };
 
