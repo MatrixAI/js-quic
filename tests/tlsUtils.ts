@@ -275,7 +275,7 @@ async function createTLSConfigWithChain(
   let caPem: string | null = null;
   for (const certificate of certChain) {
     const pem = certToPEM(certificate)
-    if (caPem == null) caPem = pem;
+    caPem = pem;
     certChainPEM += pem;
   }
 

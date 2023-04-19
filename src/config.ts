@@ -15,6 +15,7 @@ export type TlsConfig = {
 
 type QUICConfig = {
   tlsConfig: TlsConfig | undefined;
+  verifyPem: string | undefined;
   verifyFromPemFile: string | undefined;
   supportedPrivateKeyAlgos: string | undefined;
   verifyPeer: boolean;
@@ -35,6 +36,7 @@ type QUICConfig = {
 
 const clientDefault: QUICConfig = {
   tlsConfig: undefined,
+  verifyPem: undefined,
   verifyFromPemFile: undefined,
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
@@ -61,6 +63,7 @@ const clientDefault: QUICConfig = {
 
 const serverDefault: QUICConfig = {
   tlsConfig: undefined,
+  verifyPem: undefined,
   verifyFromPemFile: undefined,
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
@@ -96,6 +99,7 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     certChainPem,
     privKeyPem,
     config.supportedPrivateKeyAlgos ?? null,
+    config.verifyPem != null ? Buffer.from(config.verifyPem) : null,
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {

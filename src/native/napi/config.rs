@@ -51,6 +51,7 @@ impl Config {
     cert_pem: Option<Uint8Array>,
     key_pem: Option<Uint8Array>,
     supported_key_algos: Option<String>,
+    ca_cert_pem: Option<Uint8Array>,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
@@ -94,6 +95,29 @@ impl Config {
     // Adding supported private key algorithms
     if let Some(supported_key_algos) = supported_key_algos {
       ssl_ctx_builder.set_sigalgs_list(&supported_key_algos)
+        .or_else(
+          |err| Err(Error::from_reason(err.to_string()))
+        )?;
+    }
+    // Processing CA certificate
+    if let Some(ca_cert_pem) = ca_cert_pem {
+      let x509_certs = boring::x509::X509::stack_from_pem(
+        &ca_cert_pem.to_vec()
+      ).or_else(
+        |err| Err(Error::from_reason(err.to_string()))
+      )?;
+      let mut x509_store_builder = boring::x509::store::X509StoreBuilder::new()
+        .or_else(
+          |err| Err(Error::from_reason(err.to_string()))
+        )?;
+      for x509 in x509_certs.into_iter() {
+        x509_store_builder.add_cert(x509)
+          .or_else(
+            |err| Err(Error::from_reason(err.to_string()))
+          )?;
+      }
+      let x509_store = x509_store_builder.build();
+      ssl_ctx_builder.set_verify_cert_store(x509_store)
         .or_else(
           |err| Err(Error::from_reason(err.to_string()))
         )?;

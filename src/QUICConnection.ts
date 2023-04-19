@@ -265,6 +265,8 @@ class QUICConnection extends EventTarget {
     } = {}
   ) {
     this.logger.info(`Destroy ${this.constructor.name}`);
+    console.log(this.conn.localError())
+    console.log(this.conn.peerError())
     for (const stream of this.streamMap.values())  {
       await stream.destroy();
     }

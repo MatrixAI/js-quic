@@ -6,7 +6,7 @@ import * as events from '@/events';
 import * as utils from '@/utils';
 import * as testsUtils from './utils';
 import * as errors from '@/errors';
-import { fc } from '@fast-check/jest';
+import { fc, testProp } from '@fast-check/jest';
 import * as certFixtures from './fixtures/certFixtures';
 import { promise } from "@/utils";
 import * as tlsUtils from './tlsUtils';
@@ -269,35 +269,46 @@ describe(QUICClient.name, () => {
     });
   })
   describe('graceful tls handshake', () => {
-    const tlsArb = fc.oneof(
-      fc.record({
-        ca: fc.constant(certFixtures.tlsConfigFileRSACa),
-        tlsConfig1: certFixtures.tlsConfigRSAExampleArb,
-        tlsConfig2: certFixtures.tlsConfigRSAExampleArb,
-      }),
-      fc.record({
-        ca: fc.constant(certFixtures.tlsConfigFileOKPCa),
-        tlsConfig1: certFixtures.tlsConfigOKPExampleArb,
-        tlsConfig2: certFixtures.tlsConfigOKPExampleArb,
-      }),
-      fc.record({
-        ca: fc.constant(certFixtures.tlsConfigFileECDSACa),
-        tlsConfig1: certFixtures.tlsConfigECDSAExampleArb,
-        tlsConfig2: certFixtures.tlsConfigECDSAExampleArb,
-      }),
-    );
-    const {
-      ca,
-      tlsConfig1,
-      tlsConfig2,
-    } = fc.sample(tlsArb, 1)[0]
+    // select a random sample from of certs
+    const tlsConfigWithCaArb =
+      fc.oneof(
+        fc.record({
+          ca: fc.constant(certFixtures.tlsConfigMemRSACa),
+          tlsConfig: certFixtures.tlsConfigRSAExampleArb,
+        }),
+        fc.record({
+          ca: fc.constant(certFixtures.tlsConfigMemOKPCa),
+          tlsConfig: certFixtures.tlsConfigOKPExampleArb,
+        }),
+        fc.record({
+          ca: fc.constant(certFixtures.tlsConfigMemECDSACa),
+          tlsConfig: certFixtures.tlsConfigECDSAExampleArb,
+        }),
+        tlsUtils.tlsConfigArb().map(async (configProm) => {
+          const config = await configProm;
+          return {
+            tlsConfig: {
+              certChainPem: config.certChainPem,
+              privKeyPem: config.privKeyPem,
+            },
+            ca: {
+              certChainPem: config.caPem,
+              privKeyPem: '',
+            }
+          };
+        }),
+      ).noShrink();
 
-    test('server verification succeeds', async () => {
+    testProp(
+      'server verification succeeds',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs = await tlsConfigsProm;
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: tlsConfig1,
+          tlsConfig: tlsConfigs.tlsConfig,
           verifyPeer: false,
         }
       });
@@ -315,164 +326,200 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyFromPemFile: ca.certChainFromPemFile,
+          verifyPem: tlsConfigs.ca.certChainPem,
         }
       });
       await handleConnectionEventProm.p
       await client.destroy();
       await server.stop();
-    })
+    },
+      {numRuns: 10},
+      )
     // Fixme: client verification works regardless of certs
-    test('client verification succeeds', async () => {
-      const server = new QUICServer({
-        crypto,
-        logger: logger.getChild(QUICServer.name),
-        config: {
-          tlsConfig: tlsConfig1,
-          verifyFromPemFile: ca.certChainFromPemFile,
-          verifyPeer: true,
-        }
-      });
-      const handleConnectionEventProm = promise<any>()
-      server.addEventListener('connection', handleConnectionEventProm.resolveP);
-      await server.start({
-        host: '127.0.0.1' as Host,
-      });
-      // Connection should succeed
-      const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: server.port,
-        localHost: '::' as Host,
-        crypto,
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          tlsConfig: tlsConfig2,
-          verifyPeer: false,
-        }
-      });
-      await handleConnectionEventProm.p
-      await client.destroy();
-      await server.stop();
-    })
-    test('client and server verification succeeds', async () => {
-      const server = new QUICServer({
-        crypto,
-        logger: logger.getChild(QUICServer.name),
-        config: {
-          tlsConfig: tlsConfig1,
-          verifyFromPemFile: ca.certChainFromPemFile,
-          verifyPeer: true,
-        }
-      });
-      const handleConnectionEventProm = promise<any>()
-      server.addEventListener('connection', handleConnectionEventProm.resolveP);
-      await server.start({
-        host: '127.0.0.1' as Host,
-      });
-      // Connection should succeed
-      const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: server.port,
-        localHost: '::' as Host,
-        crypto,
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          tlsConfig: tlsConfig2,
-          verifyFromPemFile: ca.certChainFromPemFile,
-          verifyPeer: true,
-        }
-      });
-      await handleConnectionEventProm.p
-      await client.destroy();
-      await server.stop();
-    })
-    test('graceful failure verifying server', async () => {
-      const server = new QUICServer({
-        crypto,
-        logger: logger.getChild(QUICServer.name),
-        config: {
-          tlsConfig: tlsConfig1,
-          verifyPeer: false,
-        }
-      });
-      const handleConnectionEventProm = promise<any>()
-      server.addEventListener('connection', handleConnectionEventProm.resolveP);
-      await server.start({
-        host: '127.0.0.1' as Host,
-      });
-      // Connection should succeed
-      await expect(QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: server.port,
-        localHost: '::' as Host,
-        crypto,
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          verifyPeer: true,
-        }
-      })).toReject();
-      await handleConnectionEventProm.p
-      await server.stop();
-    })
+    testProp(
+      'client verification succeeds',
+      [tlsConfigWithCaArb, tlsConfigWithCaArb],
+      async (tlsConfigProm1, tlsConfigProm2) => {
+        const tlsConfigs1 = await tlsConfigProm1;
+        const tlsConfigs2 = await tlsConfigProm2;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs1.tlsConfig,
+            verifyPem: tlsConfigs2.ca.certChainPem,
+            verifyPeer: true,
+          }
+        });
+        const handleConnectionEventProm = promise<any>()
+        server.addEventListener('connection', handleConnectionEventProm.resolveP);
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        const client = await QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            tlsConfig: tlsConfigs2.tlsConfig,
+            verifyPeer: false,
+          }
+        });
+        await handleConnectionEventProm.p
+        await client.destroy();
+        await server.stop();
+      },
+      {numRuns: 10},
+      );
+    testProp(
+      'client and server verification succeeds',
+      [tlsConfigWithCaArb, tlsConfigWithCaArb],
+      async (tlsConfigProm1, tlsConfigProm2) => {
+        const tlsConfigs1 = await tlsConfigProm1;
+        const tlsConfigs2 = await tlsConfigProm2;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs1.tlsConfig,
+            verifyPem: tlsConfigs2.ca.certChainPem,
+            verifyPeer: true,
+          }
+        });
+        const handleConnectionEventProm = promise<any>()
+        server.addEventListener('connection', handleConnectionEventProm.resolveP);
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        const client = await QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            tlsConfig: tlsConfigs2.tlsConfig,
+            verifyPem: tlsConfigs1.ca.certChainPem,
+            verifyPeer: true,
+          }
+        });
+        await handleConnectionEventProm.p
+        await client.destroy();
+        await server.stop();
+      },
+      {numRuns: 10},
+      )
+    testProp(
+      'graceful failure verifying server',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs1 = await tlsConfigsProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs1.tlsConfig,
+            verifyPeer: false,
+          }
+        });
+        const handleConnectionEventProm = promise<any>()
+        server.addEventListener('connection', handleConnectionEventProm.resolveP);
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        await expect(QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: true,
+          }
+        })).toReject();
+        await handleConnectionEventProm.p
+        await server.stop();
+      },
+      {numRuns: 10},
+      )
     // Fixme: client verification works regardless of certs
-    test('graceful failure verifying client', async () => {
-      const server = new QUICServer({
-        crypto,
-        logger: logger.getChild(QUICServer.name),
-        config: {
-          tlsConfig: tlsConfig1,
-          verifyPeer: true,
-        }
-      });
-      const handleConnectionEventProm = promise<any>()
-      server.addEventListener('connection', handleConnectionEventProm.resolveP);
-      await server.start({
-        host: '127.0.0.1' as Host,
-      });
-      // Connection should succeed
-      await expect(QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: server.port,
-        localHost: '::' as Host,
-        crypto,
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          tlsConfig: tlsConfig2,
-          verifyPeer: false,
-        }
-      })).toReject();
-      await handleConnectionEventProm.p
-      await server.stop();
-    })
-    test('graceful failure verifying client and server', async () => {
-      const server = new QUICServer({
-        crypto,
-        logger: logger.getChild(QUICServer.name),
-        config: {
-          tlsConfig: tlsConfig1,
-          verifyPeer: true,
-        }
-      });
-      const handleConnectionEventProm = promise<any>()
-      server.addEventListener('connection', handleConnectionEventProm.resolveP);
-      await server.start({
-        host: '127.0.0.1' as Host,
-      });
-      // Connection should succeed
-      await expect(QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: server.port,
-        localHost: '::' as Host,
-        crypto,
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          tlsConfig: tlsConfig2,
-          verifyPeer: true,
-        }
-      })).toReject();
-      await handleConnectionEventProm.p
-      await server.stop();
-    })
+    testProp(
+      'graceful failure verifying client',
+      [tlsConfigWithCaArb, tlsConfigWithCaArb],
+      async (tlsConfigProm1, tlsConfigProm2) => {
+        const tlsConfigs1 = await tlsConfigProm1;
+        const tlsConfigs2 = await tlsConfigProm2;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs1.tlsConfig,
+            verifyPeer: true,
+          }
+        });
+        const handleConnectionEventProm = promise<any>()
+        server.addEventListener('connection', handleConnectionEventProm.resolveP);
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        await expect(QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            tlsConfig: tlsConfigs2.tlsConfig,
+            verifyPeer: false,
+          }
+        })).toReject();
+        await handleConnectionEventProm.p
+        await server.stop();
+      },
+      {numRuns: 10},
+      )
+    testProp(
+      'graceful failure verifying client and server',
+      [tlsConfigWithCaArb, tlsConfigWithCaArb],
+      async (tlsConfigProm1, tlsConfigProm2) => {
+        const tlsConfigs1 = await tlsConfigProm1;
+        const tlsConfigs2 = await tlsConfigProm2;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs1.tlsConfig,
+            verifyPeer: true,
+          }
+        });
+        const handleConnectionEventProm = promise<any>()
+        server.addEventListener('connection', handleConnectionEventProm.resolveP);
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        await expect(QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            tlsConfig: tlsConfigs2.tlsConfig,
+            verifyPeer: true,
+          }
+        })).toReject();
+        await handleConnectionEventProm.p
+        await server.stop();
+      },
+        {numRuns: 10},
+      )
   })
 
   // test('dual stack to dual stack', async () => {
