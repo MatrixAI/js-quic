@@ -143,7 +143,9 @@ async function generateCertificate({
   issuerAttrsExtra?: Array<{ [key: string]: Array<string> }>;
   now?: Date;
 }): Promise<X509Certificate> {
-  const subjectPublicKey = subjectKeyPair.publicKey;
+  const certIdNum = parseInt(certId)
+  const iss = certIdNum == 0 ? certIdNum : certIdNum - 1;
+  const sub = certIdNum;
   const subjectPublicCryptoKey = await importPublicKey(
     subjectKeyPair.publicKey,
   );
@@ -179,14 +181,14 @@ async function generateCertificate({
   // Because the OID is what is encoded into ASN.1
   const subjectAttrs = [
     {
-      CN: ['SubjectID'],
+      CN: [`${sub}`],
     },
     // Filter out conflicting CN attributes
     ...subjectAttrsExtra.filter((attr) => !('CN' in attr)),
   ];
   const issuerAttrs = [
     {
-      CN: ['IssuerId'],
+      CN: [`${iss}`],
     },
     // Filter out conflicting CN attributes
     ...issuerAttrsExtra.filter((attr) => !('CN' in attr)),
@@ -203,7 +205,11 @@ async function generateCertificate({
     publicKey: subjectPublicCryptoKey,
     signingKey: subjectPrivateCryptoKey,
     extensions: [
-      new x509.BasicConstraintsExtension(true),
+      new x509.BasicConstraintsExtension(
+        true,
+        undefined,
+        true,
+        ),
       new x509.KeyUsagesExtension(
         x509.KeyUsageFlags.keyCertSign |
         x509.KeyUsageFlags.cRLSign |
@@ -212,6 +218,7 @@ async function generateCertificate({
         x509.KeyUsageFlags.keyAgreement |
         x509.KeyUsageFlags.keyEncipherment |
         x509.KeyUsageFlags.dataEncipherment,
+        true,
       ),
       new x509.ExtendedKeyUsageExtension([
         extendedKeyUsageFlags.serverAuth,
@@ -239,9 +246,10 @@ async function createTLSConfigWithChain(
 ): Promise<{
   certChainPem: string;
   privKeyPem: string;
+  caPem: string;
 }> {
   if (keyPairs.length === 0) throw Error('Must have at least 1 keypair');
-  let num = 0;
+  let num = -1;
   const defaultNumGen = () => {
     num+=1;
     return `${num}`;
@@ -264,13 +272,17 @@ async function createTLSConfigWithChain(
     previousKeyPair = keyPair;
   }
   let certChainPEM = '';
+  let caPem: string | null = null;
   for (const certificate of certChain) {
-    certChainPEM += certToPEM(certificate);
+    const pem = certToPEM(certificate)
+    if (caPem == null) caPem = pem;
+    certChainPEM += pem;
   }
 
   return {
     privKeyPem: privateKeyToPEM(previousKeyPair!.privateKey),
     certChainPem: certChainPEM,
+    caPem: caPem!,
   };
 }
 
