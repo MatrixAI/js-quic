@@ -10,13 +10,21 @@ function fixturePath(name: string) {
 }
 
 // Certificate fixtures
+const tlsConfigFileRSACa = fixturePath('rsaCA');
 const tlsConfigFileRSA1 = fixturePath('rsa1');
 const tlsConfigFileRSA2 = fixturePath('rsa2');
+const tlsConfigFileOKPCa = fixturePath('okpCA');
 const tlsConfigFileOKP1 = fixturePath('okp1');
 const tlsConfigFileOKP2 = fixturePath('okp2');
+const tlsConfigFileECDSACa = fixturePath('ecdsaCA');
 const tlsConfigFileECDSA1 = fixturePath('ecdsa1');
 const tlsConfigFileECDSA2 = fixturePath('ecdsa2');
 
+
+const tlsConfigMemRSACa = {
+  certChainPem: fs.readFileSync(tlsConfigFileRSACa.certChainFromPemFile).toString(),
+  privKeyPem: fs.readFileSync(tlsConfigFileRSACa.privKeyFromPemFile).toString(),
+};
 
 /**
  * This is a RSA key signed cert generated using step-cli
@@ -36,6 +44,11 @@ const tlsConfigMemRSA2 = {
   privKeyPem: fs.readFileSync(tlsConfigFileRSA2.privKeyFromPemFile).toString(),
 };
 
+const tlsConfigMemOKPCa = {
+  certChainPem: fs.readFileSync(tlsConfigFileOKPCa.certChainFromPemFile).toString(),
+  privKeyPem: fs.readFileSync(tlsConfigFileOKPCa.privKeyFromPemFile).toString(),
+};
+
 /**
  * This is a Ed25519 (OKP) key signed cert generated using step-cli
  * This is example 1
@@ -52,6 +65,11 @@ const tlsConfigMemOKP1 = {
 const tlsConfigMemOKP2 = {
   certChainPem: fs.readFileSync(tlsConfigFileOKP2.certChainFromPemFile).toString(),
   privKeyPem: fs.readFileSync(tlsConfigFileOKP2.privKeyFromPemFile).toString(),
+};
+
+const tlsConfigMemECDSACa = {
+  certChainPem: fs.readFileSync(tlsConfigFileECDSACa.certChainFromPemFile).toString(),
+  privKeyPem: fs.readFileSync(tlsConfigFileECDSACa.privKeyFromPemFile).toString(),
 };
 
 /**
@@ -101,16 +119,22 @@ const tlsConfigExampleArb = fc.oneof(
 
 
 export {
+  tlsConfigFileRSACa,
   tlsConfigFileRSA1,
   tlsConfigFileRSA2,
+  tlsConfigFileOKPCa,
   tlsConfigFileOKP1,
   tlsConfigFileOKP2,
+  tlsConfigFileECDSACa,
   tlsConfigFileECDSA1,
   tlsConfigFileECDSA2,
+  tlsConfigMemRSACa,
   tlsConfigMemRSA1,
   tlsConfigMemRSA2,
+  tlsConfigMemOKPCa,
   tlsConfigMemOKP1,
   tlsConfigMemOKP2,
+  tlsConfigMemECDSACa,
   tlsConfigMemECDSA1,
   tlsConfigMemECDSA2,
   tlsConfigRSAExampleArb,
