@@ -269,12 +269,35 @@ describe(QUICClient.name, () => {
     });
   })
   describe('graceful tls handshake', () => {
+    const tlsArb = fc.oneof(
+      fc.record({
+        ca: fc.constant(certFixtures.tlsConfigFileRSACa),
+        tlsConfig1: certFixtures.tlsConfigRSAExampleArb,
+        tlsConfig2: certFixtures.tlsConfigRSAExampleArb,
+      }),
+      fc.record({
+        ca: fc.constant(certFixtures.tlsConfigFileOKPCa),
+        tlsConfig1: certFixtures.tlsConfigOKPExampleArb,
+        tlsConfig2: certFixtures.tlsConfigOKPExampleArb,
+      }),
+      fc.record({
+        ca: fc.constant(certFixtures.tlsConfigFileECDSACa),
+        tlsConfig1: certFixtures.tlsConfigECDSAExampleArb,
+        tlsConfig2: certFixtures.tlsConfigECDSAExampleArb,
+      }),
+    );
+    const {
+      ca,
+      tlsConfig1,
+      tlsConfig2,
+    } = fc.sample(tlsArb, 1)[0]
+
     test('server verification succeeds', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
           verifyPeer: false,
         }
       });
@@ -292,21 +315,22 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA1.certChainFromPemFile,
+          verifyFromPemFile: ca.certChainFromPemFile,
         }
       });
       await handleConnectionEventProm.p
       await client.destroy();
       await server.stop();
     })
+    // Fixme: client verification works regardless of certs
     test('client verification succeeds', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
+          verifyFromPemFile: ca.certChainFromPemFile,
           verifyPeer: true,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA2.certChainFromPemFile,
         }
       });
       const handleConnectionEventProm = promise<any>()
@@ -322,8 +346,8 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICClient.name),
         config: {
+          tlsConfig: tlsConfig2,
           verifyPeer: false,
-          tlsConfig: certFixtures.tlsConfigFileRSA2,
         }
       });
       await handleConnectionEventProm.p
@@ -335,9 +359,9 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
+          verifyFromPemFile: ca.certChainFromPemFile,
           verifyPeer: true,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA2.certChainFromPemFile,
         }
       });
       const handleConnectionEventProm = promise<any>()
@@ -353,10 +377,9 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICClient.name),
         config: {
+          tlsConfig: tlsConfig2,
+          verifyFromPemFile: ca.certChainFromPemFile,
           verifyPeer: true,
-          tlsConfig: certFixtures.tlsConfigFileRSA2,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA1.certChainFromPemFile,
-
         }
       });
       await handleConnectionEventProm.p
@@ -368,7 +391,7 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
           verifyPeer: false,
         }
       });
@@ -391,12 +414,13 @@ describe(QUICClient.name, () => {
       await handleConnectionEventProm.p
       await server.stop();
     })
+    // Fixme: client verification works regardless of certs
     test('graceful failure verifying client', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
           verifyPeer: true,
         }
       });
@@ -413,21 +437,20 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICClient.name),
         config: {
+          tlsConfig: tlsConfig2,
           verifyPeer: false,
-          tlsConfig: certFixtures.tlsConfigFileRSA2,
         }
       })).toReject();
       await handleConnectionEventProm.p
       await server.stop();
     })
-    test('graceful failure verifying client amd server', async () => {
+    test('graceful failure verifying client and server', async () => {
       const server = new QUICServer({
         crypto,
         logger: logger.getChild(QUICServer.name),
         config: {
-          tlsConfig: certFixtures.tlsConfigFileRSA1,
+          tlsConfig: tlsConfig1,
           verifyPeer: true,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA2.certChainFromPemFile,
         }
       });
       const handleConnectionEventProm = promise<any>()
@@ -443,9 +466,8 @@ describe(QUICClient.name, () => {
         crypto,
         logger: logger.getChild(QUICClient.name),
         config: {
+          tlsConfig: tlsConfig2,
           verifyPeer: true,
-          tlsConfig: certFixtures.tlsConfigFileRSA2,
-          verifyFromPemFile: certFixtures.tlsConfigFileRSA1.certChainFromPemFile,
         }
       })).toReject();
       await handleConnectionEventProm.p
