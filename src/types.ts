@@ -1,5 +1,3 @@
-import type dgram from 'dgram';
-import type QUICConnection from './QUICConnection';
 import type QUICStream from './QUICStream';
 
 /**
@@ -35,18 +33,13 @@ type ConnectionIdString = Opaque<'ConnectionIdString', string>;
  * Remember ever Node Buffer is an ArrayBuffer
  */
 type Crypto = {
-  sign(
-    key: ArrayBuffer,
-    data: ArrayBuffer,
-  ): Promise<ArrayBuffer>;
+  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
   verify(
     key: ArrayBuffer,
     data: ArrayBuffer,
     sig: ArrayBuffer,
   ): Promise<boolean>;
-  randomBytes(
-    data: ArrayBuffer,
-  ): Promise<void>;
+  randomBytes(data: ArrayBuffer): Promise<void>;
 };
 
 type StreamId = Opaque<'StreamId', number>;
@@ -82,16 +75,18 @@ type RemoteInfo = {
  * Maps reason (most likely an exception) to a stream code.
  * Use `0` to indicate unknown/default reason.
  */
-type StreamReasonToCode = (type: 'recv' | 'send', reason?: any) => number | PromiseLike<number>;
+type StreamReasonToCode = (
+  type: 'recv' | 'send',
+  reason?: any,
+) => number | PromiseLike<number>;
 
 /**
  * Maps code to a reason. 0 usually indicates unknown/default reason.
  */
-type StreamCodeToReason = (type: 'recv' | 'send', code: number) => any | PromiseLike<any>;
-
-type QUICConfig = {
-  logKeys?: string;
-};
+type StreamCodeToReason = (
+  type: 'recv' | 'send',
+  code: number,
+) => any | PromiseLike<any>;
 
 export type {
   Opaque,

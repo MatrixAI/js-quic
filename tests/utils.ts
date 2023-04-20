@@ -35,16 +35,12 @@ async function sign(key: ArrayBuffer, data: ArrayBuffer) {
     key,
     {
       name: 'HMAC',
-      hash: 'SHA-256'
+      hash: 'SHA-256',
     },
     true,
-    ['sign', 'verify']
+    ['sign', 'verify'],
   );
-  return webcrypto.subtle.sign(
-    'HMAC',
-    cryptoKey,
-    data
-  );
+  return webcrypto.subtle.sign('HMAC', cryptoKey, data);
 }
 
 /**
@@ -59,27 +55,16 @@ async function verify(key: ArrayBuffer, data: ArrayBuffer, sig: ArrayBuffer) {
     key,
     {
       name: 'HMAC',
-      hash: 'SHA-256'
+      hash: 'SHA-256',
     },
     true,
-    ['sign', 'verify']
+    ['sign', 'verify'],
   );
-  return webcrypto.subtle.verify(
-    'HMAC',
-    cryptoKey,
-    sig,
-    data
-  );
+  return webcrypto.subtle.verify('HMAC', cryptoKey, sig, data);
 }
 
 async function randomBytes(data: ArrayBuffer) {
   webcrypto.getRandomValues(new Uint8Array(data));
 }
 
-export {
-  sleep,
-  generateKey,
-  sign,
-  verify,
-  randomBytes
-};
+export { sleep, generateKey, sign, verify, randomBytes };

@@ -26,25 +26,20 @@ async function main(argv = process.argv): Promise<number> {
     ops: {
       sign: async (_key: ArrayBuffer, data: ArrayBuffer) => {
         // Use `cryptoKey` due to webcrypto requirements
-        return webcrypto.subtle.sign(
-          'HMAC',
-          cryptoKey,
-          data
-        );
+        return webcrypto.subtle.sign('HMAC', cryptoKey, data);
       },
-      verify: async (_key: ArrayBuffer, data: ArrayBuffer, sig: ArrayBuffer) => {
+      verify: async (
+        _key: ArrayBuffer,
+        data: ArrayBuffer,
+        sig: ArrayBuffer,
+      ) => {
         // Use `cryptoKey` due to webcrypto requirements
-        return webcrypto.subtle.verify(
-          'HMAC',
-          cryptoKey,
-          sig,
-          data
-        );
+        return webcrypto.subtle.verify('HMAC', cryptoKey, sig, data);
       },
       randomBytes: async (data: ArrayBuffer) => {
         webcrypto.getRandomValues(new Uint8Array(data));
       },
-    }
+    },
   };
 
   const logger = new Logger();
@@ -56,7 +51,7 @@ async function main(argv = process.argv): Promise<number> {
 
   await server.start({
     host: '127.0.0.1' as Host,
-    port: 55555 as Port
+    port: 55555 as Port,
   });
 
   const handleSignal = async () => {
@@ -72,7 +67,7 @@ async function main(argv = process.argv): Promise<number> {
   const handleStream = async (e: events.QUICConnectionStreamEvent) => {
     const stream = e.detail;
 
-    console.log('Got Stream', stream.streamId);
+    logger.debug(`Got Stream ${stream.streamId}`);
 
     // Once we have the stream
     // We need to interact with the stream and read out the data
@@ -81,7 +76,11 @@ async function main(argv = process.argv): Promise<number> {
     // It only reads once this auto releases the internal reader
     for await (const read of stream.readable) {
       const readBuffer = Buffer.from(read);
-      console.log('STREAM READ: ', readBuffer, JSON.stringify(readBuffer.toString('utf-8')));
+      logger.debug(
+        `STREAM READ: ${readBuffer} ${JSON.stringify(
+          readBuffer.toString('utf-8'),
+        )}`,
+      );
     }
     // If the `fin` was received, the stream would be cancelled
     // Then this is unnecessary, but it's still good practice.
@@ -97,18 +96,26 @@ async function main(argv = process.argv): Promise<number> {
 
   const handleConnection = (e: events.QUICServerConnectionEvent) => {
     const conn = e.detail;
-    console.log('Got Connection', conn.connectionId.toString());
+    logger.debug(`Got Connection ${conn.connectionId.toString()}`);
 
     conn.addEventListener('stream', handleStream);
-    conn.addEventListener('destroy', () => {
-      conn.removeEventListener('stream', handleStream);
-    }, { once: true });
+    conn.addEventListener(
+      'destroy',
+      () => {
+        conn.removeEventListener('stream', handleStream);
+      },
+      { once: true },
+    );
   };
 
   server.addEventListener('connection', handleConnection);
-  server.addEventListener('stop', () => {
-    server.removeEventListener('connection', handleConnection);
-  }, { once: true});
+  server.addEventListener(
+    'stop',
+    () => {
+      server.removeEventListener('connection', handleConnection);
+    },
+    { once: true },
+  );
 
   process.exitCode = 0;
   return process.exitCode;

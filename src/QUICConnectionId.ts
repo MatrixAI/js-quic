@@ -19,7 +19,11 @@ class QUICConnectionId extends Uint8Array {
   public constructor();
   public constructor(length: number);
   public constructor(array: ArrayLike<number> | ArrayBufferLike);
-  public constructor(buffer: ArrayBufferLike, byteOffset?: number, length?: number);
+  public constructor(
+    buffer: ArrayBufferLike,
+    byteOffset?: number,
+    length?: number,
+  );
   public constructor(...args: Array<any>) {
     // @ts-ignore: spreading into Uint8Array constructor
     super(...args);

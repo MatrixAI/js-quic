@@ -1,5 +1,5 @@
-import type QUICConnection from "./QUICConnection";
-import type QUICStream from "./QUICStream";
+import type QUICConnection from './QUICConnection';
+import type QUICStream from './QUICStream';
 
 class QUICSocketStopEvent extends Event {
   constructor(options?: EventInit) {
@@ -11,8 +11,8 @@ class QUICSocketErrorEvent extends Event {
   public detail: Error;
   constructor(
     options: EventInit & {
-      detail: Error
-    }
+      detail: Error;
+    },
   ) {
     super('error', options);
     this.detail = options.detail;
@@ -23,8 +23,8 @@ class QUICServerConnectionEvent extends Event {
   public detail: QUICConnection;
   constructor(
     options: EventInit & {
-      detail: QUICConnection
-    }
+      detail: QUICConnection;
+    },
   ) {
     super('connection', options);
     this.detail = options.detail;
@@ -41,8 +41,8 @@ class QUICServerErrorEvent extends Event {
   public detail: QUICSocketErrorEvent | Error;
   constructor(
     options: EventInit & {
-      detail: QUICSocketErrorEvent | Error
-    }
+      detail: QUICSocketErrorEvent | Error;
+    },
   ) {
     super('error', options);
     this.detail = options.detail;
@@ -63,8 +63,8 @@ class QUICConnectionStreamEvent extends Event {
   public detail: QUICStream;
   constructor(
     options: EventInit & {
-      detail: QUICStream
-    }
+      detail: QUICStream;
+    },
   ) {
     super('stream', options);
     this.detail = options.detail;
@@ -81,8 +81,8 @@ class QUICConnectionErrorEvent extends Event {
   public detail: Error;
   constructor(
     options: EventInit & {
-      detail: Error
-    }
+      detail: Error;
+    },
   ) {
     super('error', options);
     this.detail = options.detail;
@@ -117,8 +117,8 @@ class QUICClientErrorEvent extends Event {
   public detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
   constructor(
     options: EventInit & {
-      detail: QUICSocketErrorEvent | QUICConnectionErrorEvent
-    }
+      detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
+    },
   ) {
     super('error', options);
     this.detail = options.detail;

@@ -1,11 +1,11 @@
-import type { ConnectionId, Crypto, Host, Hostname, Port, RemoteInfo } from './types';
-import type { Header, Config } from './native/types';
+import type { Crypto, Host, Hostname, Port, RemoteInfo } from './types';
+import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig, TlsConfig } from "./config";
-import QUICConnectionId from './QUICConnectionId';
+import type { QUICConfig, TlsConfig } from './config';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
+import QUICConnectionId from './QUICConnectionId';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
 import { serverDefault } from './config';
@@ -13,7 +13,6 @@ import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
-
 
 /**
  * You must provide a error handler `addEventListener('error')`.
@@ -27,7 +26,6 @@ import QUICSocket from './QUICSocket';
 interface QUICServer extends StartStop {}
 @StartStop()
 class QUICServer extends EventTarget {
-
   public readonly isSocketShared: boolean;
 
   protected logger: Logger;
@@ -50,8 +48,8 @@ class QUICServer extends EventTarget {
   protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
     this.dispatchEvent(
       new events.QUICServerErrorEvent({
-        detail: e
-      })
+        detail: e,
+      }),
     );
   };
 
@@ -65,12 +63,12 @@ class QUICServer extends EventTarget {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
-    },
+    };
     socket?: QUICSocket;
     // This actually requires TLS
     // You have to specify these some how
     // We can force it
-    config: Partial<QUICConfig> & {TlsConfig?: TlsConfig};
+    config: Partial<QUICConfig> & { TlsConfig?: TlsConfig };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
@@ -85,7 +83,7 @@ class QUICServer extends EventTarget {
       this.socket = new QUICSocket({
         crypto,
         resolveHostname,
-        logger: this.logger.getChild(QUICSocket.name)
+        logger: this.logger.getChild(QUICSocket.name),
       });
       this.isSocketShared = false;
     } else {
@@ -117,20 +115,17 @@ class QUICServer extends EventTarget {
    */
   public async start({
     host = '::' as Host,
-    port = 0 as Port
+    port = 0 as Port,
   }: {
-    host?: Host | Hostname,
-    port?: Port,
+    host?: Host | Hostname;
+    port?: Port;
   } = {}) {
     let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
       await this.socket.start({ host, port });
-      this.socket.addEventListener(
-        'error',
-        this.handleQUICSocketError
-      );
+      this.socket.addEventListener('error', this.handleQUICSocketError);
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
       // If the socket is shared, it must already be started
@@ -156,10 +151,7 @@ class QUICServer extends EventTarget {
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
       await this.socket.stop();
-      this.socket.removeEventListener(
-        'error',
-        this.handleQUICSocketError
-      );
+      this.socket.removeEventListener('error', this.handleQUICSocketError);
     }
     this.dispatchEvent(new events.QUICServerStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
@@ -179,12 +171,14 @@ class QUICServer extends EventTarget {
     }
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
-      this.logger.debug(`QUIC packet version is not supported, performing version negotiation`);
+      this.logger.debug(
+        `QUIC packet version is not supported, performing version negotiation`,
+      );
       const versionDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const versionDatagramLength = quiche.negotiateVersion(
         header.scid,
         header.dcid,
-        versionDatagram
+        versionDatagram,
       );
       this.logger.debug(`Send VersionNegotiation packet to ${peerAddress}`);
       try {
@@ -208,20 +202,15 @@ class QUICServer extends EventTarget {
     const token = header.token!;
     // Stateless Retry
     if (token.byteLength === 0) {
-      const token = await this.mintToken(
-        dcid,
-        remoteInfo.host
-      );
-      const retryDatagram = Buffer.allocUnsafe(
-        quiche.MAX_DATAGRAM_SIZE
-      );
+      const token = await this.mintToken(dcid, remoteInfo.host);
+      const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         header.scid, // Client initial packet source ID
         header.dcid, // Client initial packet destination ID
         scid, // Server's new source ID that is derived
         token,
         header.version,
-        retryDatagram
+        retryDatagram,
       );
       this.logger.debug(`Send Retry packet to ${peerAddress}`);
       try {
@@ -243,32 +232,42 @@ class QUICServer extends EventTarget {
     // While the DCID embedded in the token is the original DCID that the client first created.
     const dcidOriginal = await this.validateToken(
       Buffer.from(token),
-      remoteInfo.host
+      remoteInfo.host,
     );
     if (dcidOriginal == null) {
-      this.logger.debug(`QUIC packet token failed validation due to missing DCID`);
+      this.logger.debug(
+        `QUIC packet token failed validation due to missing DCID`,
+      );
       return;
     }
     // Check that the newly-derived DCID (passed in as the SCID) is the same
     // length as the packet DCID.
     // This ensures that the derivation process hasn't changed.
     if (scid.byteLength !== header.dcid.byteLength) {
-      this.logger.debug(`QUIC packet token failed validation due to mismatched length`);
+      this.logger.debug(
+        `QUIC packet token failed validation due to mismatched length`,
+      );
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
     scid = new QUICConnectionId(header.dcid);
-    this.logger.debug(`Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`);
+    this.logger.debug(
+      `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
+    );
     const connection = await QUICConnection.acceptQUICConnection({
       scid,
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
       config: this.config,
-      logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString().slice(32)}`)
+      logger: this.logger.getChild(
+        `${QUICConnection.name} ${scid.toString().slice(32)}`,
+      ),
     });
 
-    this.dispatchEvent(new events.QUICServerConnectionEvent({ detail: connection }));
+    this.dispatchEvent(
+      new events.QUICServerConnectionEvent({ detail: connection }),
+    );
 
     // A new conn ID means a new connection
     // the old connection gets removed
@@ -289,7 +288,7 @@ class QUICServer extends EventTarget {
       ...this.config,
       ...config,
     };
-  };
+  }
 
   /**
    * Creates a retry token.
@@ -298,16 +297,13 @@ class QUICServer extends EventTarget {
    */
   protected async mintToken(
     dcid: QUICConnectionId,
-    peerHost: Host
+    peerHost: Host,
   ): Promise<Buffer> {
     const msgData = { dcid: dcid.toString(), host: peerHost };
     const msgJSON = JSON.stringify(msgData);
     const msgBuffer = Buffer.from(msgJSON);
     const msgSig = Buffer.from(
-      await this.crypto.ops.sign(
-        this.crypto.key,
-        msgBuffer
-      )
+      await this.crypto.ops.sign(this.crypto.key, msgBuffer),
     );
     const tokenData = {
       msg: msgBuffer.toString('base64url'),
@@ -327,7 +323,7 @@ class QUICServer extends EventTarget {
    */
   protected async validateToken(
     tokenBuffer: Buffer,
-    peerHost: Host
+    peerHost: Host,
   ): Promise<QUICConnectionId | undefined> {
     let tokenData;
     try {
@@ -346,26 +342,19 @@ class QUICServer extends EventTarget {
     }
     const msgBuffer = Buffer.from(tokenData.msg, 'base64url');
     const msgSig = Buffer.from(tokenData.sig, 'base64url');
-    if (!await this.crypto.ops.verify(
-      this.crypto.key,
-      msgBuffer,
-      msgSig
-    )) {
+    if (!(await this.crypto.ops.verify(this.crypto.key, msgBuffer, msgSig))) {
       return;
     }
     let msgData;
     try {
-      msgData = JSON.parse(msgBuffer.toString())
+      msgData = JSON.parse(msgBuffer.toString());
     } catch {
       return;
     }
     if (typeof msgData !== 'object' || msgData == null) {
       return;
     }
-    if (
-      typeof msgData.dcid !== 'string' ||
-      typeof msgData.host !== 'string'
-    ) {
+    if (typeof msgData.dcid !== 'string' || typeof msgData.host !== 'string') {
       return;
     }
     if (msgData.host !== peerHost) {
@@ -373,7 +362,6 @@ class QUICServer extends EventTarget {
     }
     return QUICConnectionId.fromString(msgData.dcid);
   }
-
 }
 
 export default QUICServer;

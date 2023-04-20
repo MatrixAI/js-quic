@@ -3,15 +3,17 @@ import { quiche } from './native';
 
 // All the algos chrome supports + ed25519
 const supportedPrivateKeyAlgosDefault =
-  "ed25519:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:RSA-PSS+SHA256:RSA-PSS+SHA384:RSA-PSS+SHA512";
+  'ed25519:RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA256:ECDSA+SHA384:ECDSA+SHA512:RSA-PSS+SHA256:RSA-PSS+SHA384:RSA-PSS+SHA512';
 
-export type TlsConfig = {
-  certChainPem: string | null;
-  privKeyPem: string | null;
-} | {
-  certChainFromPemFile: string | null;
-  privKeyFromPemFile: string | null;
-}
+export type TlsConfig =
+  | {
+      certChainPem: string | null;
+      privKeyPem: string | null;
+    }
+  | {
+      certChainFromPemFile: string | null;
+      privKeyFromPemFile: string | null;
+    };
 
 type QUICConfig = {
   tlsConfig: TlsConfig | undefined;
@@ -51,13 +53,7 @@ const clientDefault: QUICConfig = {
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
   disableActiveMigration: true,
-  applicationProtos: [
-    'hq-interop',
-    'hq-29',
-    'hq-28',
-    'hq-27',
-    'http/0.9'
-  ],
+  applicationProtos: ['hq-interop', 'hq-29', 'hq-28', 'hq-27', 'http/0.9'],
   enableEarlyData: true,
 };
 
@@ -78,13 +74,7 @@ const serverDefault: QUICConfig = {
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
   disableActiveMigration: true,
-  applicationProtos: [
-    'hq-interop',
-    'hq-29',
-    'hq-28',
-    'hq-27',
-    'http/0.9'
-  ],
+  applicationProtos: ['hq-interop', 'hq-29', 'hq-28', 'hq-27', 'http/0.9'],
   enableEarlyData: true,
 };
 
@@ -92,10 +82,14 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   let certChainPem: Buffer | null = null;
   let privKeyPem: Buffer | null = null;
   if (config.tlsConfig != null && 'certChainPem' in config.tlsConfig) {
-    if (config.tlsConfig.certChainPem != null) certChainPem = Buffer.from(config.tlsConfig.certChainPem)
-    if (config.tlsConfig.privKeyPem != null) privKeyPem = Buffer.from(config.tlsConfig.privKeyPem)
+    if (config.tlsConfig.certChainPem != null) {
+      certChainPem = Buffer.from(config.tlsConfig.certChainPem);
+    }
+    if (config.tlsConfig.privKeyPem != null) {
+      privKeyPem = Buffer.from(config.tlsConfig.privKeyPem);
+    }
   }
-  let quicheConfig: QuicheConfig = quiche.Config.withBoringSslCtx(
+  const quicheConfig: QuicheConfig = quiche.Config.withBoringSslCtx(
     certChainPem,
     privKeyPem,
     config.supportedPrivateKeyAlgos ?? null,
@@ -103,7 +97,9 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {
-      quicheConfig.loadCertChainFromPemFile(config.tlsConfig.certChainFromPemFile);
+      quicheConfig.loadCertChainFromPemFile(
+        config.tlsConfig.certChainFromPemFile,
+      );
     }
     if (config.tlsConfig?.privKeyFromPemFile != null) {
       quicheConfig.loadPrivKeyFromPemFile(config.tlsConfig.privKeyFromPemFile);
@@ -125,8 +121,12 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   quicheConfig.setMaxRecvUdpPayloadSize(config.maxRecvUdpPayloadSize);
   quicheConfig.setMaxSendUdpPayloadSize(config.maxSendUdpPayloadSize);
   quicheConfig.setInitialMaxData(config.initialMaxData);
-  quicheConfig.setInitialMaxStreamDataBidiLocal(config.initialMaxStreamDataBidiLocal);
-  quicheConfig.setInitialMaxStreamDataBidiRemote(config.initialMaxStreamDataBidiRemote);
+  quicheConfig.setInitialMaxStreamDataBidiLocal(
+    config.initialMaxStreamDataBidiLocal,
+  );
+  quicheConfig.setInitialMaxStreamDataBidiRemote(
+    config.initialMaxStreamDataBidiRemote,
+  );
   quicheConfig.setInitialMaxStreamsBidi(config.initialMaxStreamsBidi);
   quicheConfig.setInitialMaxStreamsUni(config.initialMaxStreamsUni);
   quicheConfig.setDisableActiveMigration(config.disableActiveMigration);
@@ -134,12 +134,6 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   return quicheConfig;
 }
 
-export {
-  clientDefault,
-  serverDefault,
-  buildQuicheConfig,
-};
+export { clientDefault, serverDefault, buildQuicheConfig };
 
-export type {
-  QUICConfig,
-};
+export type { QUICConfig };

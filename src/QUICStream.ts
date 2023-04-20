@@ -3,15 +3,15 @@ import type {
   QUICStreamMap,
   StreamId,
   StreamReasonToCode,
-  StreamCodeToReason
+  StreamCodeToReason,
 } from './types';
 import type { Connection } from './native/types';
+import { ReadableStream, WritableStream } from 'stream/web';
 import Logger from '@matrixai/logger';
-import { ReadableStream, WritableStream, } from 'stream/web';
 import {
   CreateDestroy,
   ready,
-  status
+  status,
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import * as events from './events';
@@ -28,8 +28,10 @@ import * as errors from './errors';
  */
 interface QUICStream extends CreateDestroy {}
 @CreateDestroy()
-class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array, Uint8Array> {
-
+class QUICStream
+  extends EventTarget
+  implements ReadableWritablePair<Uint8Array, Uint8Array>
+{
   public streamId: StreamId;
   public readable: ReadableStream<Uint8Array>;
   public writable: WritableStream<Uint8Array>;
@@ -60,7 +62,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     connection,
     reasonToCode = () => 0,
     codeToReason = (code) => new Error(code.toString()),
-    logger = new Logger(`${this.name} ${streamId}`)
+    logger = new Logger(`${this.name} ${streamId}`),
   }: {
     streamId: StreamId;
     connection: QUICConnection;
@@ -74,28 +76,26 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       connection,
       reasonToCode,
       codeToReason,
-      logger
+      logger,
     });
     connection.streamMap.set(stream.streamId, stream);
     logger.info(`Created ${this.name}`);
     return stream;
   }
 
-  public constructor(
-    {
-      streamId,
-      connection,
-      reasonToCode,
-      codeToReason,
-      logger,
-    }: {
-      streamId: StreamId;
-      connection: QUICConnection;
-      reasonToCode: StreamReasonToCode;
-      codeToReason: StreamCodeToReason;
-      logger: Logger;
-    }
-  ) {
+  public constructor({
+    streamId,
+    connection,
+    reasonToCode,
+    codeToReason,
+    logger,
+  }: {
+    streamId: StreamId;
+    connection: QUICConnection;
+    reasonToCode: StreamReasonToCode;
+    codeToReason: StreamCodeToReason;
+    logger: Logger;
+  }) {
     super();
     this.logger = logger;
     this.streamId = streamId;
@@ -109,7 +109,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
 
     this.readable = new ReadableStream({
       type: 'bytes',
-      // autoAllocateChunkSize: 1024,
+      // AutoAllocateChunkSize: 1024,
       start: (controller) => {
         this.readableController = controller;
       },
@@ -119,7 +119,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       },
       cancel: async (reason) => {
         await this.closeRecv(true, reason);
-      }
+      },
     });
 
     this.writable = new WritableStream({
@@ -146,7 +146,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
         // The receiver can discard any data it already received on that stream
         // We don't have "unidirectional" streams so that's not important...
         await this.closeSend(true, reason);
-      }
+      },
     });
   }
 
@@ -168,13 +168,11 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    * 1. Top-down control flow - means explicit destruction from QUICConnection
    * 2. Bottom-up control flow - means stream events from users of this stream
    */
-  public async destroy(
-    {
-      force = false
-    }: {
-      force?: boolean
-    } = {}
-  ) {
+  public async destroy({
+    force = false,
+  }: {
+    force?: boolean;
+  } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
 
     // If the streams are locked, this means they are in-use
@@ -218,7 +216,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    * External push is converted to internal pull
    * Internal system decides when to unblock
    */
-  @ready(new errors.ErrorQUICStreamDestroyed)
+  @ready(new errors.ErrorQUICStreamDestroyed())
   public read(): void {
     if (this._recvPaused) {
       // Do nothing if we are paused
@@ -231,7 +229,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    * Internal push is converted to an external pull
    * External system decides when to unblock
    */
-  @ready(new errors.ErrorQUICStreamDestroyed)
+  @ready(new errors.ErrorQUICStreamDestroyed())
   public write(): void {
     if (this.resolveWritableP != null) {
       this.resolveWritableP();
@@ -242,10 +240,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     const buf = Buffer.alloc(1024);
     let recvLength: number, fin: boolean;
     try {
-      [recvLength, fin] = this.conn.streamRecv(
-        this.streamId,
-        buf
-      );
+      [recvLength, fin] = this.conn.streamRecv(this.streamId, buf);
     } catch (e) {
       if (e.message === 'Done') {
         // When it is reported to be `Done`, it just means that there is no data to read
@@ -306,11 +301,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
     // should retry the operation once the stream is reported as writable again.
     let sentLength: number;
     try {
-      sentLength = this.conn.streamSend(
-        this.streamId,
-        chunk,
-        fin
-      );
+      sentLength = this.conn.streamSend(this.streamId, chunk, fin);
     } catch (e) {
       // If the Done is returned
       // then no data was sent
@@ -353,7 +344,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       // If the `sentLength` is -1, then it will be raised to `0`
       return await this.streamSend(
         chunk.subarray(Math.max(sentLength, 0)),
-        fin
+        fin,
       );
     }
   }
@@ -365,25 +356,17 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    */
   protected async closeRecv(
     isError: boolean = false,
-    reason?: any
+    reason?: any,
   ): Promise<void> {
     this.logger.info(`Close Recv`);
     if (isError) {
       // This will send a `STOP_SENDING` frame with the code
       // When the other peer sends, they will get a `StreamStopped(u64)` exception
       const code = await this.reasonToCode('recv', reason);
-      this.conn.streamShutdown(
-        this.streamId,
-        quiche.Shutdown.Read,
-        code
-      );
+      this.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
     }
     this._recvClosed = true;
-    if (
-      this[status] !== 'destroying' &&
-      this._recvClosed &&
-      this._sendClosed
-    ) {
+    if (this[status] !== 'destroying' && this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
       await this.destroy();
@@ -398,7 +381,7 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
    */
   protected async closeSend(
     isError: boolean = false,
-    reason?: any
+    reason?: any,
   ): Promise<void> {
     this.logger.info(`Close Send`);
     // If the QUIC stream is already closed
@@ -407,19 +390,11 @@ class QUICStream extends EventTarget implements ReadableWritablePair<Uint8Array,
       // This will send a `RESET_STREAM` frame with the code
       // When the other peer receives, they will get a `StreamReset(u64)` exception
       const code = await this.reasonToCode('send', reason);
-      this.conn.streamShutdown(
-        this.streamId,
-        quiche.Shutdown.Write,
-        code
-      );
+      this.conn.streamShutdown(this.streamId, quiche.Shutdown.Write, code);
     }
     // Indicate that the sending side is closed
     this._sendClosed = true;
-    if (
-      this[status] !== 'destroying' &&
-      this._recvClosed &&
-      this._sendClosed
-    ) {
+    if (this[status] !== 'destroying' && this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
       await this.destroy();
