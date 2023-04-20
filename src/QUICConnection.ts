@@ -259,8 +259,8 @@ class QUICConnection extends EventTarget {
     this.logger.info(`Destroy ${this.constructor.name}`);
     const localError = this.conn.localError();
     const peerError = this.conn.peerError();
-    if (localError != null) this.logger.error(localError);
-    if (peerError != null) this.logger.error(peerError);
+    if (localError != null) this.logger.error(JSON.stringify(localError));
+    if (peerError != null) this.logger.error(JSON.stringify(peerError));
     for (const stream of this.streamMap.values()) {
       await stream.destroy();
     }
@@ -333,7 +333,7 @@ class QUICConnection extends EventTarget {
         this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
       } catch (e) {
-        this.logger.error(e.toString());
+        this.logger.error(e.message);
         // Console.error(e);
         // console.log(this.conn.isClosed());
         // Depending on the exception, the `this.conn.recv`
@@ -478,7 +478,7 @@ class QUICConnection extends EventTarget {
             sendInfo.to.host,
           );
         } catch (e) {
-          this.logger.error(e.toString());
+          this.logger.error(e.message);
           this.dispatchEvent(
             new events.QUICConnectionErrorEvent({ detail: e }),
           );
