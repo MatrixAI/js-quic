@@ -137,9 +137,9 @@ class QUICSocket extends EventTarget {
     // send, recv, timeout
     // That's it.
     // Each send/recv/timeout may result in a destruction
-
     if (!conn[destroyed]) {
-      await conn.send();
+      // Ignore any errors, concurrent with destruction
+      await conn.send().catch((e) => this.logger.error(e.message));
     }
   };
 

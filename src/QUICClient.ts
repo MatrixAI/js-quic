@@ -4,7 +4,7 @@ import type { QUICConfig } from './config';
 import type QUICConnectionMap from './QUICConnectionMap';
 import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
-import { running } from '@matrixai/async-init';
+import { destroyed, running } from '@matrixai/async-init';
 import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -162,22 +162,23 @@ class QUICClient extends EventTarget {
       // Console.error(e);
       logger.debug(`Is shared?: ${isSocketShared}`);
       // Waiting for connection to destroy
-      const destroyedProm = utils.promise<void>();
-      connection.addEventListener(
-        'destroy',
-        () => {
-          destroyedProm.resolveP();
-        },
-        {
-          once: true,
-        },
-      );
-      await destroyedProm.p;
+      if (connection[destroyed] === false) {
+        const destroyedProm = utils.promise<void>();
+        connection.addEventListener(
+          'destroy',
+          () => {
+            destroyedProm.resolveP();
+          },
+          {
+            once: true,
+          },
+        );
+        await destroyedProm.p;
+      }
       if (!isSocketShared) {
         // Stop our own socket
         await socket.stop();
       }
-      // Wrapping error to contain both stack traces
       throw e;
     }
 
