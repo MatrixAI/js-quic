@@ -1,9 +1,9 @@
+import type { X509Certificate } from '@peculiar/x509';
 import * as x509 from '@peculiar/x509';
 import * as asn1 from '@peculiar/asn1-schema';
 import * as asn1X509 from '@peculiar/asn1-x509';
 import * as asn1Pkcs8 from '@peculiar/asn1-pkcs8';
 import { fc } from '@fast-check/jest';
-import { X509Certificate } from '@peculiar/x509';
 import { Crypto } from '@peculiar/webcrypto';
 import sodium from 'sodium-native';
 
@@ -102,7 +102,7 @@ function privateKeyToPEM(privateKey: Buffer): string {
 }
 
 function certToPEM(cert: X509Certificate): string {
-  return (cert.toString('pem') + '\n');
+  return cert.toString('pem') + '\n';
 }
 
 const extendedKeyUsageFlags = {
@@ -143,8 +143,8 @@ async function generateCertificate({
   issuerAttrsExtra?: Array<{ [key: string]: Array<string> }>;
   now?: Date;
 }): Promise<X509Certificate> {
-  const certIdNum = parseInt(certId)
-  const iss = certIdNum == 0 ? certIdNum : certIdNum - 1;
+  const certIdNum = parseInt(certId);
+  const iss = certIdNum === 0 ? certIdNum : certIdNum - 1;
   const sub = certIdNum;
   const subjectPublicCryptoKey = await importPublicKey(
     subjectKeyPair.publicKey,
@@ -205,19 +205,15 @@ async function generateCertificate({
     publicKey: subjectPublicCryptoKey,
     signingKey: subjectPrivateCryptoKey,
     extensions: [
-      new x509.BasicConstraintsExtension(
-        true,
-        undefined,
-        true,
-        ),
+      new x509.BasicConstraintsExtension(true, undefined, true),
       new x509.KeyUsagesExtension(
         x509.KeyUsageFlags.keyCertSign |
-        x509.KeyUsageFlags.cRLSign |
-        x509.KeyUsageFlags.digitalSignature |
-        x509.KeyUsageFlags.nonRepudiation |
-        x509.KeyUsageFlags.keyAgreement |
-        x509.KeyUsageFlags.keyEncipherment |
-        x509.KeyUsageFlags.dataEncipherment,
+          x509.KeyUsageFlags.cRLSign |
+          x509.KeyUsageFlags.digitalSignature |
+          x509.KeyUsageFlags.nonRepudiation |
+          x509.KeyUsageFlags.keyAgreement |
+          x509.KeyUsageFlags.keyEncipherment |
+          x509.KeyUsageFlags.dataEncipherment,
         true,
       ),
       new x509.ExtendedKeyUsageExtension([
@@ -238,7 +234,7 @@ async function generateCertificate({
 type KeyPair = {
   privateKey: Buffer;
   publicKey: Buffer;
-}
+};
 
 async function createTLSConfigWithChain(
   keyPairs: Array<KeyPair>,
@@ -251,9 +247,9 @@ async function createTLSConfigWithChain(
   if (keyPairs.length === 0) throw Error('Must have at least 1 keypair');
   let num = -1;
   const defaultNumGen = () => {
-    num+=1;
+    num += 1;
     return `${num}`;
-  }
+  };
   generateCertId = generateCertId ?? defaultNumGen;
   let previousCert: X509Certificate | null = null;
   let previousKeyPair: KeyPair | null = null;
@@ -274,7 +270,7 @@ async function createTLSConfigWithChain(
   let certChainPEM = '';
   let caPem: string | null = null;
   for (const certificate of certChain) {
-    const pem = certToPEM(certificate)
+    const pem = certToPEM(certificate);
     caPem = pem;
     certChainPEM += pem;
   }
@@ -301,32 +297,37 @@ function publicKeyFromPrivateKeyEd25519(privateKey: Buffer): Buffer {
   return publicKey;
 }
 
-const privateKeyArb = fc.uint8Array({
-  minLength: 32,
-  maxLength: 32,
-}).map(v => Buffer.from(v))
+const privateKeyArb = fc
+  .uint8Array({
+    minLength: 32,
+    maxLength: 32,
+  })
+  .map((v) => Buffer.from(v));
 
-const publicKeyArb = (
-  privateKey: fc.Arbitrary<Buffer> = privateKeyArb,
-) => privateKey.map(privateKey => publicKeyFromPrivateKeyEd25519(privateKey))
+const publicKeyArb = (privateKey: fc.Arbitrary<Buffer> = privateKeyArb) =>
+  privateKey.map((privateKey) => publicKeyFromPrivateKeyEd25519(privateKey));
 
 const keyPairArb = (
   privateKey: fc.Arbitrary<Buffer> = privateKeyArb,
-): fc.Arbitrary<KeyPair> => privateKey.chain( privateKey =>  fc.record({
-  privateKey: fc.constant(privateKey),
-  publicKey: publicKeyArb(fc.constant(privateKey)),
-}));
+): fc.Arbitrary<KeyPair> =>
+  privateKey.chain((privateKey) =>
+    fc.record({
+      privateKey: fc.constant(privateKey),
+      publicKey: publicKeyArb(fc.constant(privateKey)),
+    }),
+  );
 
-const keyPairsArb = (min: number = 1, max?: number) => fc.array(keyPairArb(), {
-  minLength: min,
-  maxLength: max ?? min,
-  size: 'xsmall',
-});
+const keyPairsArb = (min: number = 1, max?: number) =>
+  fc.array(keyPairArb(), {
+    minLength: min,
+    maxLength: max ?? min,
+    size: 'xsmall',
+  });
 
 const tlsConfigArb = (keyPairs: fc.Arbitrary<Array<KeyPair>> = keyPairsArb()) =>
-  keyPairs.map(async keyPairs => await createTLSConfigWithChain(keyPairs))
+  keyPairs
+    .map(async (keyPairs) => await createTLSConfigWithChain(keyPairs))
     .noShrink();
-
 
 export {
   generateCertificate,
@@ -335,4 +336,4 @@ export {
   keyPairArb,
   keyPairsArb,
   tlsConfigArb,
-}
+};

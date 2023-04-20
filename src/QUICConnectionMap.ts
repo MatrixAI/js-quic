@@ -1,4 +1,4 @@
-import type QUICConnection from "./QUICConnection";
+import type QUICConnection from './QUICConnection';
 import QUICConnectionId from './QUICConnectionId';
 
 class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
@@ -7,7 +7,7 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
   protected _clientConnections: Map<string, QUICConnection> = new Map();
 
   public constructor(
-    connections?: Iterable<readonly [QUICConnectionId, QUICConnection]>
+    connections?: Iterable<readonly [QUICConnectionId, QUICConnection]>,
   ) {
     if (connections != null) {
       for (const [connectionId, connection] of connections) {
@@ -39,13 +39,17 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
   }
 
   public has(connectionId: QUICConnectionId): boolean {
-    return this._serverConnections.has(connectionId.toString()) ||
-           this._clientConnections.has(connectionId.toString());
+    return (
+      this._serverConnections.has(connectionId.toString()) ||
+      this._clientConnections.has(connectionId.toString())
+    );
   }
 
   public get(connectionId: QUICConnectionId): QUICConnection | undefined {
-    return this._serverConnections.get(connectionId.toString()) ??
-           this._clientConnections.get(connectionId.toString());
+    return (
+      this._serverConnections.get(connectionId.toString()) ??
+      this._clientConnections.get(connectionId.toString())
+    );
   }
 
   public set(connectionId: QUICConnectionId, connection: QUICConnection): this {
@@ -58,8 +62,10 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
   }
 
   public delete(connectionId: QUICConnectionId): boolean {
-    return this._serverConnections.delete(connectionId.toString()) ||
-           this._clientConnections.delete(connectionId.toString());
+    return (
+      this._serverConnections.delete(connectionId.toString()) ||
+      this._clientConnections.delete(connectionId.toString())
+    );
   }
 
   public clear(): void {
@@ -71,9 +77,9 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
     callback: (
       value: QUICConnection,
       key: QUICConnectionId,
-      map: Map<QUICConnectionId, QUICConnection>
+      map: Map<QUICConnectionId, QUICConnection>,
     ) => void,
-    thisArg?: any
+    thisArg?: any,
   ): void {
     this._serverConnections.forEach((value, key) => {
       callback.bind(thisArg)(value, QUICConnectionId.fromString(key), this);
@@ -83,7 +89,9 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
     });
   }
 
-  public [Symbol.iterator](): IterableIterator<[QUICConnectionId, QUICConnection]> {
+  public [Symbol.iterator](): IterableIterator<
+    [QUICConnectionId, QUICConnection]
+  > {
     const serverIterator = this._serverConnections[Symbol.iterator]();
     const clientIterator = this._clientConnections[Symbol.iterator]();
     const iterator = {
@@ -93,7 +101,7 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
           const [key, value] = serverResult.value;
           return {
             done: false,
-            value: [QUICConnectionId.fromString(key), value]
+            value: [QUICConnectionId.fromString(key), value],
           };
         }
         const clientResult = clientIterator.next();
@@ -101,12 +109,12 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
           const [key, value] = clientResult.value;
           return {
             done: false,
-            value: [QUICConnectionId.fromString(key), value]
+            value: [QUICConnectionId.fromString(key), value],
           };
         }
         return { done: true, value: undefined };
       },
-      [Symbol.iterator]: () => iterator
+      [Symbol.iterator]: () => iterator,
     };
     return iterator;
   }
@@ -122,12 +130,12 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
         if (!result.done) {
           return {
             done: false,
-            value: result.value[0]
+            value: result.value[0],
           };
         }
         return { done: true, value: undefined };
       },
-      [Symbol.iterator]: () => iterator
+      [Symbol.iterator]: () => iterator,
     };
     return iterator;
   }
@@ -139,12 +147,12 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
         if (!result.done) {
           return {
             done: false,
-            value: result.value[1]
+            value: result.value[1],
           };
         }
         return { done: true, value: undefined };
       },
-      [Symbol.iterator]: () => iterator
+      [Symbol.iterator]: () => iterator,
     };
     return iterator;
   }

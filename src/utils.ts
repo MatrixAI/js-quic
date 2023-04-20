@@ -4,7 +4,7 @@ import type {
   ConnectionId,
   ConnectionIdString,
   Host,
-  Hostname
+  Hostname,
 } from './types';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
@@ -62,7 +62,7 @@ function toIPv4MappedIPv6(host: string): Host {
   if (!isIPv4(host)) {
     throw new TypeError('Invalid IPv4 address');
   }
-  return '::ffff:' + host as Host;
+  return ('::ffff:' + host) as Host;
 }
 
 /**
@@ -93,10 +93,11 @@ function fromIPv4MappedIPv6(host: string): Host {
  * This uses the OS's DNS resolution system.
  */
 async function resolveHostname(hostname: Hostname): Promise<Host> {
-  const result = await dns.promises.lookup(
-    hostname,
-    { family: 0, all: false, verbatim: true }
-  );
+  const result = await dns.promises.lookup(hostname, {
+    family: 0,
+    all: false,
+    verbatim: true,
+  });
   return result.address as Host;
 }
 
@@ -106,7 +107,7 @@ async function resolveHostname(hostname: Hostname): Promise<Host> {
  */
 async function resolveHost(
   host: Host | Hostname,
-  resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>
+  resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>,
 ): Promise<[Host, 'udp4' | 'udp6']> {
   if (isIPv4(host)) {
     return [host as Host, 'udp4'];

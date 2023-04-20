@@ -37,7 +37,8 @@ class ErrorQUICServerNotRunning<T> extends ErrorQUICServer<T> {
 }
 
 class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
-  static description = 'QUIC Server cannot start with an unstarted shared QUIC socket';
+  static description =
+    'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
 class ErrorQUICClient<T> extends ErrorQUIC<T> {
@@ -49,7 +50,8 @@ class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
 }
 
 class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICClient<T> {
-  static description = 'QUIC Client cannot be created with an unstarted shared QUIC socket';
+  static description =
+    'QUIC Client cannot be created with an unstarted shared QUIC socket';
 }
 
 class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
@@ -77,7 +79,8 @@ class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
 }
 
 class ErrorQUICStreamLocked<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream is locked and is not closed on readable or writable';
+  static description =
+    'QUIC Stream is locked and is not closed on readable or writable';
 }
 
 class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {

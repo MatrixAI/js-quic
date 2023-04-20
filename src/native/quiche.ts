@@ -3,9 +3,6 @@
  * This code was derived from the auto-generated binding and declaration
  * files provided by napi-rs.
  */
-import process from 'process';
-import fs from 'fs';
-import path from 'path';
 import type {
   ConnectionErrorCode,
   CongestionControlAlgorithm,
@@ -15,6 +12,9 @@ import type {
   ConnectionConstructor,
   HeaderConstructor,
 } from './types';
+import process from 'process';
+import fs from 'fs';
+import path from 'path';
 
 interface Quiche {
   MAX_CONN_ID_LEN: number;
@@ -29,7 +29,7 @@ interface Quiche {
   negotiateVersion(
     scid: Uint8Array,
     dcid: Uint8Array,
-    data: Uint8Array
+    data: Uint8Array,
   ): number;
   retry(
     scid: Uint8Array,
@@ -37,13 +37,13 @@ interface Quiche {
     newScid: Uint8Array,
     token: Uint8Array,
     version: number,
-    out: Uint8Array
+    out: Uint8Array,
   ): number;
   versionIsSupported(version: number): boolean;
   Config: ConfigConstructor;
   Connection: ConnectionConstructor;
   Header: HeaderConstructor;
-};
+}
 
 const projectRoot = path.join(__dirname, '../../');
 
@@ -58,29 +58,29 @@ switch (process.platform) {
     switch (process.arch) {
       case 'x64':
         nativeBinding = requireBinding('win32-x64-msvc');
-        break
+        break;
       case 'ia32':
         nativeBinding = requireBinding('win32-ia32-msvc');
-        break
+        break;
       case 'arm64':
         nativeBinding = requireBinding('win32-arm64-msvc');
-        break
+        break;
       default:
-        throw new Error(`Unsupported architecture on Windows: ${process.arch}`)
+        throw new Error(`Unsupported architecture on Windows: ${process.arch}`);
     }
-    break
+    break;
   case 'darwin':
     switch (process.arch) {
       case 'x64':
         nativeBinding = requireBinding('darwin-x64');
-        break
+        break;
       case 'arm64':
         nativeBinding = requireBinding('darwin-arm64');
-        break
+        break;
       default:
-        throw new Error(`Unsupported architecture on macOS: ${process.arch}`)
+        throw new Error(`Unsupported architecture on macOS: ${process.arch}`);
     }
-    break
+    break;
   case 'linux':
     switch (process.arch) {
       case 'x64':
@@ -89,40 +89,46 @@ switch (process.platform) {
         } else {
           nativeBinding = requireBinding('linux-x64-gnu');
         }
-        break
+        break;
       case 'arm64':
         if (isMusl()) {
           nativeBinding = requireBinding('linux-arm64-musl');
         } else {
           nativeBinding = requireBinding('linux-arm64-gnu');
         }
-        break
+        break;
       case 'arm':
         nativeBinding = requireBinding('linux-arm-gnueabihf');
-        break
+        break;
       default:
-        throw new Error(`Unsupported architecture on Linux: ${process.arch}`)
+        throw new Error(`Unsupported architecture on Linux: ${process.arch}`);
     }
-    break
+    break;
   default:
-    throw new Error(`Unsupported OS: ${process.platform}, architecture: ${process.arch}`)
+    throw new Error(
+      `Unsupported OS: ${process.platform}, architecture: ${process.arch}`,
+    );
 }
 
 function isMusl(): boolean {
-  const report = process.report?.getReport() as {
-    header: {
-      glibcVersionRuntime: string
-    }
-  } | undefined;
+  const report = process.report?.getReport() as
+    | {
+        header: {
+          glibcVersionRuntime: string;
+        };
+      }
+    | undefined;
   return typeof report?.header?.glibcVersionRuntime !== 'string';
 }
 
 function requireBinding(target: string) {
-  const localBinding = fs.existsSync(path.join(projectRoot, `quic.${target}.node`));
+  const localBinding = fs.existsSync(
+    path.join(projectRoot, `quic.${target}.node`),
+  );
   if (localBinding) {
     return require(path.join(projectRoot, `quic.${target}.node`));
   } else {
-    return require(`@matrixai/quic-${target}`)
+    return require(`@matrixai/quic-${target}`);
   }
 }
 

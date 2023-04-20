@@ -3,56 +3,64 @@ import type { Opaque } from '../types';
 type QuicheTimeInstant = Opaque<'QuicheTimeInstant', object>;
 
 interface Config {
-  loadCertChainFromPemFile(file: string): void
-  loadPrivKeyFromPemFile(file: string): void
-  loadVerifyLocationsFromFile(file: string): void
-  loadVerifyLocationsFromDirectory(dir: string): void
-  verifyPeer(verify: boolean): void
-  grease(grease: boolean): void
-  logKeys(): void
-  setTicketKey(key: Uint8Array): void
-  enableEarlyData(): void
-  setApplicationProtos(protosList: Array<string>): void
-  setApplicationProtosWireFormat(protos: Uint8Array): void
-  setMaxIdleTimeout(timeout: number): void
-  setMaxRecvUdpPayloadSize(size: number): void
-  setMaxSendUdpPayloadSize(size: number): void
-  setInitialMaxData(v: number): void
-  setInitialMaxStreamDataBidiLocal(v: number): void
-  setInitialMaxStreamDataBidiRemote(v: number): void
-  setInitialMaxStreamDataUni(v: number): void
-  setInitialMaxStreamsBidi(v: number): void
-  setInitialMaxStreamsUni(v: number): void
-  setAckDelayExponent(v: number): void
-  setMaxAckDelay(v: number): void
-  setActiveConnectionIdLimit(v: number): void
-  setDisableActiveMigration(v: boolean): void
-  setCcAlgorithmName(name: string): void
-  setCcAlgorithm(algo: CongestionControlAlgorithm): void
-  enableHystart(v: boolean): void
-  enablePacing(v: boolean): void
-  enableDgram(enabled: boolean, recvQueueLen: number, sendQueueLen: number): void
-  setMaxConnectionWindow(v: number): void
-  setStatelessResetToken(v?: bigint | undefined | null): void
-  setDisableDcidReuse(v: boolean): void
-};
+  loadCertChainFromPemFile(file: string): void;
+  loadPrivKeyFromPemFile(file: string): void;
+  loadVerifyLocationsFromFile(file: string): void;
+  loadVerifyLocationsFromDirectory(dir: string): void;
+  verifyPeer(verify: boolean): void;
+  grease(grease: boolean): void;
+  logKeys(): void;
+  setTicketKey(key: Uint8Array): void;
+  enableEarlyData(): void;
+  setApplicationProtos(protosList: Array<string>): void;
+  setApplicationProtosWireFormat(protos: Uint8Array): void;
+  setMaxIdleTimeout(timeout: number): void;
+  setMaxRecvUdpPayloadSize(size: number): void;
+  setMaxSendUdpPayloadSize(size: number): void;
+  setInitialMaxData(v: number): void;
+  setInitialMaxStreamDataBidiLocal(v: number): void;
+  setInitialMaxStreamDataBidiRemote(v: number): void;
+  setInitialMaxStreamDataUni(v: number): void;
+  setInitialMaxStreamsBidi(v: number): void;
+  setInitialMaxStreamsUni(v: number): void;
+  setAckDelayExponent(v: number): void;
+  setMaxAckDelay(v: number): void;
+  setActiveConnectionIdLimit(v: number): void;
+  setDisableActiveMigration(v: boolean): void;
+  setCcAlgorithmName(name: string): void;
+  setCcAlgorithm(algo: CongestionControlAlgorithm): void;
+  enableHystart(v: boolean): void;
+  enablePacing(v: boolean): void;
+  enableDgram(
+    enabled: boolean,
+    recvQueueLen: number,
+    sendQueueLen: number,
+  ): void;
+  setMaxConnectionWindow(v: number): void;
+  setStatelessResetToken(v?: bigint | undefined | null): void;
+  setDisableDcidReuse(v: boolean): void;
+}
 
 interface ConfigConstructor {
-  new(): Config;
+  new (): Config;
   withBoringSslCtx(
     certPem: Uint8Array | null,
     keyPem: Uint8Array | null,
-    supportedKeyAlgos: String | null,
+    supportedKeyAlgos: string | null,
     ca_cert_pem: Uint8Array | null,
   ): Config;
-};
+}
 
 interface Connection {
   setKeylog(path: string): void;
   setSession(session: Uint8Array): void;
   recv(data: Uint8Array, recvInfo: RecvInfo): number;
   send(data: Uint8Array): [number, SendInfo];
-  sendOnPath(data: Uint8Array, from?: HostPort | undefined | null, to?: HostPort | undefined | null): [number, SendInfo | null];
+  sendOnPath(
+    data: Uint8Array,
+    from?: HostPort | undefined | null,
+    to?: HostPort | undefined | null,
+  ): [number, SendInfo | null];
   sendQuantum(): number;
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number;
   streamRecv(streamId: number, data: Uint8Array): [number, boolean];
@@ -87,7 +95,11 @@ interface Connection {
   probePath(localHost: HostPort, peerHost: HostPort): number;
   migrateSource(localHost: HostPort): number;
   migrate(localHost: HostPort, peerHost: HostPort): number;
-  newSourceCid(scid: Uint8Array, resetToken: bigint, retireIfNeeded: boolean): number;
+  newSourceCid(
+    scid: Uint8Array,
+    resetToken: bigint,
+    retireIfNeeded: boolean,
+  ): number;
   activeSourceCids(): number;
   maxActiveSourceCids(): number;
   sourceCidsLeft(): number;
@@ -116,7 +128,7 @@ interface Connection {
   localError(): ConnectionError | null;
   stats(): Stats;
   pathStats(): Array<PathStats>;
-};
+}
 
 interface ConnectionConstructor {
   connect(
@@ -124,40 +136,40 @@ interface ConnectionConstructor {
     scid: Uint8Array,
     localHost: HostPort,
     remoteHost: HostPort,
-    config: Config
-  ): Connection
+    config: Config,
+  ): Connection;
   accept(
     scid: Uint8Array,
     odcid: Uint8Array | undefined | null,
     localHost: HostPort,
     remoteHost: HostPort,
-    config: Config
-  ): Connection
-};
+    config: Config,
+  ): Connection;
+}
 
 interface Header {
-  ty: Type
-  version: number
-  dcid: Uint8Array
-  scid: Uint8Array
-  token?: Uint8Array
-  versions?: Array<number>
-};
+  ty: Type;
+  version: number;
+  dcid: Uint8Array;
+  scid: Uint8Array;
+  token?: Uint8Array;
+  versions?: Array<number>;
+}
 
 interface HeaderConstructor {
-  fromSlice(data: Uint8Array, dcidLen: number): Header
-};
+  fromSlice(data: Uint8Array, dcidLen: number): Header;
+}
 
 enum CongestionControlAlgorithm {
   Reno = 0,
   CUBIC = 1,
-  BBR = 2
-};
+  BBR = 2,
+}
 
 enum Shutdown {
   Read = 0,
-  Write = 1
-};
+  Write = 1,
+}
 
 enum Type {
   Initial = 0,
@@ -165,7 +177,7 @@ enum Type {
   Handshake = 2,
   ZeroRTT = 3,
   VersionNegotiation = 4,
-  Short = 5
+  Short = 5,
 }
 
 enum ConnectionErrorCode {
@@ -185,7 +197,7 @@ enum ConnectionErrorCode {
   CryptoBufferExceeded = 13,
   KeyUpdateError = 14,
   AEADLimitReached = 15,
-  NoViablePath = 16
+  NoViablePath = 16,
 }
 
 type ConnectionError = {
@@ -235,51 +247,56 @@ type SendInfo = {
 
 type RecvInfo = {
   /** The remote address the packet was received from. */
-  from: HostPort
+  from: HostPort;
   /** The local address the packet was sent to. */
-  to: HostPort
+  to: HostPort;
 };
 
 type PathStats = {
-  localHost: HostPort
-  peerHost: HostPort
-  active: boolean
-  recv: number
-  sent: number
-  lost: number
-  retrans: number
-  rtt: number
-  cwnd: number
-  sentBytes: number
-  recvBytes: number
-  lostBytes: number
-  streamRetransBytes: number
-  pmtu: number
-  deliveryRate: number
+  localHost: HostPort;
+  peerHost: HostPort;
+  active: boolean;
+  recv: number;
+  sent: number;
+  lost: number;
+  retrans: number;
+  rtt: number;
+  cwnd: number;
+  sentBytes: number;
+  recvBytes: number;
+  lostBytes: number;
+  streamRetransBytes: number;
+  pmtu: number;
+  deliveryRate: number;
 };
 
-type PathEvent = {
-  type: 'New',
-  local: HostPort,
-  peer: HostPort,
-} | {
-  type: 'Validated',
-  local: HostPort,
-  peer: HostPort,
-} | {
-  type: 'Closed',
-  local: HostPort,
-  peer: HostPort,
-} | {
-  type: 'ReusedSourceConnectionId',
-  seq: number,
-  old: [HostPort, HostPort],
-  new: [HostPort, HostPort],
-} | {
-  type: 'PeerMigrated',
-  old: HostPort,
-  new: HostPort,
-};
+type PathEvent =
+  | {
+      type: 'New';
+      local: HostPort;
+      peer: HostPort;
+    }
+  | {
+      type: 'Validated';
+      local: HostPort;
+      peer: HostPort;
+    }
+  | {
+      type: 'Closed';
+      local: HostPort;
+      peer: HostPort;
+    }
+  | {
+      type: 'ReusedSourceConnectionId';
+      seq: number;
+      old: [HostPort, HostPort];
+      new: [HostPort, HostPort];
+    }
+  | {
+      type: 'PeerMigrated';
+      old: HostPort;
+      new: HostPort;
+    };
 
 type StreamIter = {
   [Symbol.iterator](): Iterator<number, void, void>;

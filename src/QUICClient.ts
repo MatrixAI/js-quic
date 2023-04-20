@@ -1,21 +1,17 @@
-import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
-import type { Header, Config, Connection } from './native/types';
+import type { Crypto, Host, Hostname, Port } from './types';
+import type { Config } from './native/types';
 import type { QUICConfig } from './config';
+import type QUICConnectionMap from './QUICConnectionMap';
 import Logger from '@matrixai/logger';
-import {
-  CreateDestroy,
-  ready,
-  status
-} from '@matrixai/async-init/dist/CreateDestroy';
+import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
 import { running } from '@matrixai/async-init';
-import { Quiche, quiche, Type } from './native';
+import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
 import * as events from './events';
 import { clientDefault } from './config';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
-import QUICConnectionMap from './QUICConnectionMap';
 import QUICConnectionId from './QUICConnectionId';
 
 /**
@@ -29,7 +25,6 @@ import QUICConnectionId from './QUICConnectionId';
 interface QUICClient extends CreateDestroy {}
 @CreateDestroy()
 class QUICClient extends EventTarget {
-
   public readonly isSocketShared: boolean;
   protected socket: QUICSocket;
   protected logger: Logger;
@@ -60,14 +55,14 @@ class QUICClient extends EventTarget {
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
-    host: Host | Hostname,
-    port: Port,
-    localHost?: Host | Hostname,
-    localPort?: Port,
+    host: Host | Hostname;
+    port: Port;
+    localHost?: Host | Hostname;
+    localPort?: Port;
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
-    },
+    };
     socket?: QUICSocket;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
@@ -75,7 +70,7 @@ class QUICClient extends EventTarget {
   }) {
     const quicConfig = {
       ...clientDefault,
-      ...config
+      ...config,
     };
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scidBuffer);
@@ -88,10 +83,7 @@ class QUICClient extends EventTarget {
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
-    const {
-      p: errorP,
-      rejectP: rejectErrorP
-    } = utils.promise<never>();
+    const { p: errorP, rejectP: rejectErrorP } = utils.promise<never>();
     const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
       rejectErrorP(e.detail);
     };
@@ -103,13 +95,9 @@ class QUICClient extends EventTarget {
       socket = new QUICSocket({
         crypto,
         resolveHostname,
-        logger: logger.getChild(QUICSocket.name)
+        logger: logger.getChild(QUICSocket.name),
       });
-      socket.addEventListener(
-        'error',
-        handleQUICSocketError,
-        { once: true }
-      );
+      socket.addEventListener('error', handleQUICSocketError, { once: true });
       isSocketShared = false;
       await socket.start({
         host: localHost,
@@ -124,7 +112,8 @@ class QUICClient extends EventTarget {
     // Check that the target `host` is compatible with the bound socket host
     if (
       socket.type === 'ipv4' &&
-      (!utils.isIPv4(host_) && !utils.isIPv4MappedIPv6(host_))
+      !utils.isIPv4(host_) &&
+      !utils.isIPv4MappedIPv6(host_)
     ) {
       throw new errors.ErrorQUICClientInvalidHost(
         `Cannot connect to ${host_} on an IPv4 QUICClient`,
@@ -136,10 +125,7 @@ class QUICClient extends EventTarget {
       throw new errors.ErrorQUICClientInvalidHost(
         `Cannot connect to ${host_} on an IPv6 QUICClient`,
       );
-    } else if (
-      socket.type === 'ipv4&ipv6' &&
-      !utils.isIPv6(host_)
-    ) {
+    } else if (socket.type === 'ipv4&ipv6' && !utils.isIPv6(host_)) {
       throw new errors.ErrorQUICClientInvalidHost(
         `Cannot send to ${host_} on a dual stack QUICClient`,
       );
@@ -157,16 +143,14 @@ class QUICClient extends EventTarget {
       socket,
       remoteInfo: {
         host: host_,
-        port
+        port,
       },
       config: quicConfig,
-      logger: logger.getChild(`${QUICConnection.name} ${scid.toString().slice(32)}`)
+      logger: logger.getChild(
+        `${QUICConnection.name} ${scid.toString().slice(32)}`,
+      ),
     });
-    connection.addEventListener(
-      'error',
-      handleConnectionError,
-      { once: true }
-    );
+    connection.addEventListener('error', handleConnectionError, { once: true });
     logger.debug('CLIENT TRIGGER SEND');
     // This will not raise an error
     await connection.send();
@@ -175,17 +159,19 @@ class QUICClient extends EventTarget {
       await Promise.race([connection.establishedP, errorP]);
     } catch (e) {
       logger.error(e.toString());
-      // console.error(e);
+      // Console.error(e);
       logger.debug(`Is shared?: ${isSocketShared}`);
       // Waiting for connection to destroy
       const destroyedProm = utils.promise<void>();
-      connection.addEventListener('destroy', ()=> {
+      connection.addEventListener(
+        'destroy',
+        () => {
           destroyedProm.resolveP();
         },
         {
           once: true,
         },
-      )
+      );
       await destroyedProm.p;
       if (!isSocketShared) {
         // Stop our own socket
@@ -207,7 +193,7 @@ class QUICClient extends EventTarget {
       socket,
       connection,
       isSocketShared,
-      logger
+      logger,
     });
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -224,8 +210,8 @@ class QUICClient extends EventTarget {
   protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
     this.dispatchEvent(
       new events.QUICClientErrorEvent({
-        detail: e
-      })
+        detail: e,
+      }),
     );
   };
 
@@ -234,11 +220,13 @@ class QUICClient extends EventTarget {
    * This is always used because QUICClient is
    * one to one with QUICConnection
    */
-  protected handleQUICConnectionError = (e: events.QUICConnectionErrorEvent) => {
+  protected handleQUICConnectionError = (
+    e: events.QUICConnectionErrorEvent,
+  ) => {
     this.dispatchEvent(
       new events.QUICClientErrorEvent({
-        detail: e
-      })
+        detail: e,
+      }),
     );
   };
 
@@ -266,16 +254,10 @@ class QUICClient extends EventTarget {
     // Registers itself to the socket
     this.socket.registerClient(this);
     if (!isSocketShared) {
-      this.socket.addEventListener(
-        'error',
-        this.handleQUICSocketError
-      );
+      this.socket.addEventListener('error', this.handleQUICSocketError);
     }
     this._connection = connection;
-    this._connection.addEventListener(
-      'error',
-      this.handleQUICConnectionError
-    );
+    this._connection.addEventListener('error', this.handleQUICConnectionError);
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
@@ -313,7 +295,6 @@ class QUICClient extends EventTarget {
   // Unlike the server
   // upon a connection failing/destroying
   // it should result in the CLIENT also being destroyed
-
 }
 
 export default QUICClient;

@@ -1,15 +1,15 @@
 import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { ConnectionId, ConnectionIdString, Crypto, Host, Hostname, Port } from './types';
-import type { Header, Config, Connection } from './native/types';
-import QUICConnectionMap from './QUICConnectionMap';
-import QUICConnectionId from './QUICConnectionId';
+import type { Crypto, Host, Hostname, Port } from './types';
+import type { Header } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running, destroyed } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
-import { quiche, Type } from './native';
+import QUICConnectionId from './QUICConnectionId';
+import QUICConnectionMap from './QUICConnectionMap';
+import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -28,7 +28,6 @@ class QUICSocket extends EventTarget {
   protected _host: Host;
   protected _port: Port;
   protected _type: 'ipv4' | 'ipv6' | 'ipv4&ipv6';
-
 
   protected logger: Logger;
   protected server?: QUICServer;
@@ -54,17 +53,15 @@ class QUICSocket extends EventTarget {
    * need to parse the first QUIC packet to determinine what connection to route
    * the data to.
    */
-  protected handleSocketMessage = async (data: Buffer, rinfo: dgram.RemoteInfo) => {
-
-
+  protected handleSocketMessage = async (
+    data: Buffer,
+    rinfo: dgram.RemoteInfo,
+  ) => {
     // The data buffer may have multiple coalesced QUIC packets.
     // This header is parsed from the first packet.
     let header: Header;
     try {
-      header = quiche.Header.fromSlice(
-        data,
-        quiche.MAX_CONN_ID_LEN
-      );
+      header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
     } catch (e) {
       // `InvalidPacket` means that this is not a QUIC packet.
       // If so, then we just ignore the packet.
@@ -89,10 +86,10 @@ class QUICSocket extends EventTarget {
     const scid = new QUICConnectionId(
       await this.crypto.ops.sign(
         this.crypto.key,
-        dcid // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
+        dcid, // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
       ),
       0,
-      quiche.MAX_CONN_ID_LEN
+      quiche.MAX_CONN_ID_LEN,
     );
 
     const remoteInfo = {
@@ -102,10 +99,7 @@ class QUICSocket extends EventTarget {
 
     // Now both must be checked
     let conn: QUICConnection;
-    if (
-      !this.connectionMap.has(dcid) &&
-      !this.connectionMap.has(scid)
-    ) {
+    if (!this.connectionMap.has(dcid) && !this.connectionMap.has(scid)) {
       // If a server is not registered
       // then this packet is useless, and we can discard it
       if (this.server == null) {
@@ -116,7 +110,7 @@ class QUICSocket extends EventTarget {
         remoteInfo,
         header,
         dcid,
-        scid
+        scid,
       );
       // If there's no connection yet
       // Then the server is in the middle of the version negotiation/stateless retry
@@ -131,13 +125,8 @@ class QUICSocket extends EventTarget {
       // The connection may be a client or server connection
       // When we register a client, we have to put the connection in our
       // connection map
-
     }
-    await conn.recv(
-      data,
-      remoteInfo
-    );
-    await conn.send();
+    await conn.recv(data, remoteInfo);
 
     // The `conn.recv` now may actually destroy the connection
     // In that sense, there's nothing to send
@@ -158,20 +147,18 @@ class QUICSocket extends EventTarget {
    * Handle error on the DGRAM socket
    */
   protected handleSocketError = (e: Error) => {
-    this.dispatchEvent(
-      new events.QUICSocketErrorEvent({ detail: e })
-    );
+    this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
   };
 
   public constructor({
     crypto,
     resolveHostname = utils.resolveHostname,
-    logger
+    logger,
   }: {
     crypto: {
       key: ArrayBuffer;
       ops: Crypto;
-    },
+    };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
@@ -223,9 +210,9 @@ class QUICSocket extends EventTarget {
     port = 0 as Port,
     ipv6Only = false,
   }: {
-    host?: Host | Hostname,
-    port?: Port,
-    ipv6Only?: boolean,
+    host?: Host | Hostname;
+    port?: Port;
+    ipv6Only?: boolean;
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
     this.logger.info(`Start ${this.constructor.name} on ${address}`);
@@ -233,7 +220,7 @@ class QUICSocket extends EventTarget {
     // If the host is an IPv4 mapped IPv6 address, then the type should be udp6.
     const [host_, udpType] = await utils.resolveHost(
       host,
-      this.resolveHostname
+      this.resolveHostname,
     );
     this.socket = dgram.createSocket({
       type: udpType,
@@ -243,7 +230,7 @@ class QUICSocket extends EventTarget {
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
     this.socketClose = utils.promisify(this.socket.close).bind(this.socket);
     this.socketSend = utils.promisify(this.socket.send).bind(this.socket);
-    const { p: errorP, rejectP: rejectErrorP, } = utils.promise();
+    const { p: errorP, rejectP: rejectErrorP } = utils.promise();
     this.socket.once('error', rejectErrorP);
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
@@ -257,12 +244,12 @@ class QUICSocket extends EventTarget {
       // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
       // or doesn't resolve to IPv4 if udp4 is specified.
       throw new errors.ErrorQUICSocketInvalidBindAddress(
-        (host !== host_)
-        ? `Could not bind to resolved ${host} -> ${host_}`
-        : `Could not bind to ${host}`,
+        host !== host_
+          ? `Could not bind to resolved ${host} -> ${host_}`
+          : `Could not bind to ${host}`,
         {
-          cause: e
-        }
+          cause: e,
+        },
       );
     }
     this.socket.removeListener('error', rejectErrorP);
@@ -304,8 +291,18 @@ class QUICSocket extends EventTarget {
    * The UDP socket here is connectionless.
    * The port and address are necessary.
    */
-  public async send(msg: string | Uint8Array | ReadonlyArray<any>, port: number, address: string): Promise<number>;
-  public async send(msg: string | Uint8Array, offset: number, length: number, port: number, address: string): Promise<number>;
+  public async send(
+    msg: string | Uint8Array | ReadonlyArray<any>,
+    port: number,
+    address: string,
+  ): Promise<number>;
+  public async send(
+    msg: string | Uint8Array,
+    offset: number,
+    length: number,
+    port: number,
+    address: string,
+  ): Promise<number>;
   @ready(new errors.ErrorQUICSocketNotRunning())
   public async send(...params: Array<any>): Promise<number> {
     let index: number;
@@ -314,22 +311,31 @@ class QUICSocket extends EventTarget {
     } else if (params.length === 5 && typeof params[4] === 'string') {
       index = 4;
     } else {
-      throw new TypeError('QUICSocket.send requires `port` and `address` parameters');
+      throw new TypeError(
+        'QUICSocket.send requires `port` and `address` parameters',
+      );
     }
     const host = params[index] as Host | Hostname;
     const [host_, udpType] = await utils.resolveHost(
       host,
-      this.resolveHostname
+      this.resolveHostname,
     );
-    if (this._type === 'ipv4' && (udpType !== 'udp4' && !utils.isIPv4MappedIPv6(host_))) {
+    if (
+      this._type === 'ipv4' &&
+      udpType !== 'udp4' &&
+      !utils.isIPv4MappedIPv6(host_)
+    ) {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
         `Cannot send to ${host_} on an IPv4 QUICSocket`,
       );
-    } else if (this._type === 'ipv6' && (udpType !== 'udp6' || utils.isIPv4MappedIPv6(host_))) {
+    } else if (
+      this._type === 'ipv6' &&
+      (udpType !== 'udp6' || utils.isIPv4MappedIPv6(host_))
+    ) {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
         `Cannot send to ${host_} on an IPv6 QUICSocket`,
       );
-    } else if (this._type === 'ipv4&ipv6' && (udpType !== 'udp6')) {
+    } else if (this._type === 'ipv4&ipv6' && udpType !== 'udp6') {
       throw new errors.ErrorQUICSocketInvalidSendAddress(
         `Cannot send to ${host_} on a dual stack QUICSocket`,
       );
@@ -351,17 +357,14 @@ class QUICSocket extends EventTarget {
    * This is a new client, but clients don't die by itself?
    */
   public registerClient(client: QUICClient) {
-
     // So what really this does?
     // Is this about creating a connection?
     // So we can add the connection to the map?
     // And if we are doing
     // QUICConnection.createQUICConnection
-
     // Then that means, we are really creating that connection in the async creator
     // That means the async creator needs to create teh `connection` and call it too
-
-
+    this.logger.error('registerClient IS NOT IMPLEMENTED!');
   }
 
   // But we already have a connection map
@@ -369,7 +372,6 @@ class QUICSocket extends EventTarget {
   // But client destruction is only way to destory connections
   // But if the client connection fails
   // we need to simultaneously destroy the client
-
 
   /**
    * Sets a single server to the socket
@@ -401,7 +403,6 @@ class QUICSocket extends EventTarget {
       delete this.server;
     }
   }
-
 }
 
 export default QUICSocket;
