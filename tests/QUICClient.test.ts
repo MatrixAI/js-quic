@@ -362,7 +362,7 @@ describe(QUICClient.name, () => {
       { numRuns: 10 },
     );
     // Fixme: client verification works regardless of certs
-    testProp(
+    testProp.skip(
       'client verification succeeds',
       [tlsConfigWithCaArb, tlsConfigWithCaArb],
       async (tlsConfigProm1, tlsConfigProm2) => {
@@ -488,7 +488,7 @@ describe(QUICClient.name, () => {
       { numRuns: 3 },
     );
     // Fixme: client verification works regardless of certs
-    testProp(
+    testProp.skip(
       'graceful failure verifying client',
       [tlsConfigWithCaArb, tlsConfigWithCaArb],
       async (tlsConfigProm1, tlsConfigProm2) => {

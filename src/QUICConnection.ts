@@ -348,7 +348,6 @@ class QUICConnection extends EventTarget {
         this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
       } catch (e) {
-        console.error(e);
         this.logger.error(e.message);
         // Depending on the exception, the `this.conn.recv`
         // may have automatically started closing the connection
