@@ -47,6 +47,8 @@ class QUICConnection extends EventTarget {
   public readonly establishedP: Promise<void>;
   protected resolveEstablishedP: () => void;
   protected rejectEstablishedP: (reason?: any) => void;
+  public readonly handshakeP: Promise<void>;
+  protected resolveHandshakeP: () => void;
 
   protected logger: Logger;
   protected socket: QUICSocket;
@@ -224,6 +226,9 @@ class QUICConnection extends EventTarget {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this.resolveCloseP = resolveClosedP;
     this.closedP = closedP;
+    const { p: handshakeP, resolveP: resolveHandshakeP } = utils.promise();
+    this.handshakeP = handshakeP;
+    this.resolveHandshakeP = resolveHandshakeP;
   }
 
   // Immediately call this after construction
@@ -262,6 +267,8 @@ class QUICConnection extends EventTarget {
     errorMessage?: string;
   } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
+    // Console.log(this.conn.localError())
+    // console.log(this.conn.peerError())
     for (const stream of this.streamMap.values()) {
       await stream.destroy();
     }
@@ -341,6 +348,7 @@ class QUICConnection extends EventTarget {
         this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
       } catch (e) {
+        console.error(e);
         this.logger.error(e.message);
         // Depending on the exception, the `this.conn.recv`
         // may have automatically started closing the connection
@@ -415,6 +423,9 @@ class QUICConnection extends EventTarget {
       }
     } finally {
       this.logger.debug('RECV FINALLY');
+      this.logger.debug(
+        ` ________ ED: ${this.conn.isInEarlyData()} TO: ${this.conn.isTimedOut()} EST: ${this.conn.isEstablished()}`,
+      );
 
       // Set the timeout
       this.checkTimeout();
@@ -534,6 +545,9 @@ class QUICConnection extends EventTarget {
       }
     } finally {
       this.logger.debug('SEND FINALLY');
+      this.logger.debug(
+        ` ________ ED: ${this.conn.isInEarlyData()} TO: ${this.conn.isTimedOut()} EST: ${this.conn.isEstablished()}`,
+      );
       this.checkTimeout();
       this.logger.debug(
         `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,

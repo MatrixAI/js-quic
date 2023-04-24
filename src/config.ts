@@ -94,6 +94,7 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     privKeyPem,
     config.supportedPrivateKeyAlgos ?? null,
     config.verifyPem != null ? Buffer.from(config.verifyPem) : null,
+    config.verifyPeer,
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {
@@ -114,8 +115,6 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   if (config.enableEarlyData) {
     quicheConfig.enableEarlyData();
   }
-
-  quicheConfig.verifyPeer(config.verifyPeer);
   quicheConfig.grease(config.grease);
   quicheConfig.setMaxIdleTimeout(config.maxIdleTimeout);
   quicheConfig.setMaxRecvUdpPayloadSize(config.maxRecvUdpPayloadSize);

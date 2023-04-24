@@ -397,7 +397,6 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
-        await handleConnectionEventProm.p;
         await client.destroy();
         await server.stop();
       },
