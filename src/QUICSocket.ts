@@ -139,7 +139,9 @@ class QUICSocket extends EventTarget {
     // Each send/recv/timeout may result in a destruction
     if (!conn[destroyed]) {
       // Ignore any errors, concurrent with destruction
-      await conn.send().catch((e) => this.logger.error(e.message));
+      await conn.send().catch((e) => {
+        this.logger.error(`not destroyed send ${e.message}`);
+      });
     }
   };
 

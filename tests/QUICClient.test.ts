@@ -7,42 +7,7 @@ import QUICServer from '@/QUICServer';
 import * as errors from '@/errors';
 import { promise } from '@/utils';
 import * as testsUtils from './utils';
-import * as certFixtures from './fixtures/certFixtures';
-import * as tlsUtils from './tlsUtils';
-
-const tlsConfigWithCaArb = fc
-  .oneof(
-    fc.record({
-      type: fc.constant('RSA'),
-      ca: fc.constant(certFixtures.tlsConfigMemRSACa),
-      tlsConfig: certFixtures.tlsConfigRSAExampleArb,
-    }),
-    fc.record({
-      type: fc.constant('OKP'),
-      ca: fc.constant(certFixtures.tlsConfigMemOKPCa),
-      tlsConfig: certFixtures.tlsConfigOKPExampleArb,
-    }),
-    fc.record({
-      type: fc.constant('ECDSA'),
-      ca: fc.constant(certFixtures.tlsConfigMemECDSACa),
-      tlsConfig: certFixtures.tlsConfigECDSAExampleArb,
-    }),
-    tlsUtils.tlsConfigArb().map(async (configProm) => {
-      const config = await configProm;
-      return {
-        type: fc.constant('GEN-OKP'),
-        tlsConfig: {
-          certChainPem: config.certChainPem,
-          privKeyPem: config.privKeyPem,
-        },
-        ca: {
-          certChainPem: config.caPem,
-          privKeyPem: '',
-        },
-      };
-    }),
-  )
-  .noShrink();
+import { tlsConfigWithCaArb } from './tlsUtils';
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [

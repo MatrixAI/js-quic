@@ -2,6 +2,7 @@ import type { Crypto, Host, Hostname, Port, RemoteInfo } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type { QUICConfig, TlsConfig } from './config';
+import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
@@ -35,7 +36,8 @@ class QUICServer extends EventTarget {
   };
   protected config: QUICConfig;
   protected socket: QUICSocket;
-
+  protected reasonToCode: StreamReasonToCode | undefined;
+  protected codeToReason: StreamCodeToReason | undefined;
   protected connectionMap: QUICConnectionMap;
 
   /**
@@ -58,6 +60,8 @@ class QUICServer extends EventTarget {
     socket,
     config,
     resolveHostname = utils.resolveHostname,
+    reasonToCode,
+    codeToReason,
     logger,
   }: {
     crypto: {
@@ -70,6 +74,8 @@ class QUICServer extends EventTarget {
     // We can force it
     config: Partial<QUICConfig> & { TlsConfig?: TlsConfig };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
     logger?: Logger;
   }) {
     super();
@@ -95,6 +101,8 @@ class QUICServer extends EventTarget {
     // Shares the socket connection map as well
     this.connectionMap = this.socket.connectionMap;
     this.config = quicConfig;
+    this.reasonToCode = reasonToCode;
+    this.codeToReason = codeToReason;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -141,12 +149,18 @@ class QUICServer extends EventTarget {
   /**
    * Stops the QUICServer
    */
-  public async stop() {
+  public async stop({
+    force = false,
+  }: {
+    force?: boolean;
+  } = {}) {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
+    const destroyProms: Array<Promise<void>> = [];
     for (const connection of this.connectionMap.serverConnections.values()) {
-      await connection.destroy();
+      destroyProms.push(connection.destroy({ force }));
     }
+    await Promise.all(destroyProms);
     this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
@@ -260,8 +274,12 @@ class QUICServer extends EventTarget {
       socket: this.socket,
       remoteInfo,
       config: this.config,
+      reasonToCode: this.reasonToCode,
+      codeToReason: this.codeToReason,
       logger: this.logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}`,
+        `${QUICConnection.name} ${scid.toString().slice(32)}-${Math.floor(
+          Math.random() * 100,
+        )}`,
       ),
     });
 

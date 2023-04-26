@@ -91,6 +91,10 @@ class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream force close';
 }
 
+class ErrorQUICStreamUnexpectedClose<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream closed early with no reason given';
+}
+
 class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
   static description = 'This should never happen';
 }
@@ -118,5 +122,6 @@ export {
   ErrorQUICStreamDestroyed,
   ErrorQUICStreamLocked,
   ErrorQUICStreamClose,
+  ErrorQUICStreamUnexpectedClose,
   ErrorQUICUndefinedBehaviour,
 };

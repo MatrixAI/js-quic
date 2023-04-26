@@ -6,6 +6,7 @@ import * as asn1Pkcs8 from '@peculiar/asn1-pkcs8';
 import { fc } from '@fast-check/jest';
 import { Crypto } from '@peculiar/webcrypto';
 import sodium from 'sodium-native';
+import * as certFixtures from './fixtures/certFixtures';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -329,6 +330,40 @@ const tlsConfigArb = (keyPairs: fc.Arbitrary<Array<KeyPair>> = keyPairsArb()) =>
     .map(async (keyPairs) => await createTLSConfigWithChain(keyPairs))
     .noShrink();
 
+const tlsConfigWithCaArb = fc
+  .oneof(
+    fc.record({
+      type: fc.constant('RSA'),
+      ca: fc.constant(certFixtures.tlsConfigMemRSACa),
+      tlsConfig: certFixtures.tlsConfigRSAExampleArb,
+    }),
+    fc.record({
+      type: fc.constant('OKP'),
+      ca: fc.constant(certFixtures.tlsConfigMemOKPCa),
+      tlsConfig: certFixtures.tlsConfigOKPExampleArb,
+    }),
+    fc.record({
+      type: fc.constant('ECDSA'),
+      ca: fc.constant(certFixtures.tlsConfigMemECDSACa),
+      tlsConfig: certFixtures.tlsConfigECDSAExampleArb,
+    }),
+    tlsConfigArb().map(async (configProm) => {
+      const config = await configProm;
+      return {
+        type: fc.constant('GEN-OKP'),
+        tlsConfig: {
+          certChainPem: config.certChainPem,
+          privKeyPem: config.privKeyPem,
+        },
+        ca: {
+          certChainPem: config.caPem,
+          privKeyPem: '',
+        },
+      };
+    }),
+  )
+  .noShrink();
+
 export {
   generateCertificate,
   privateKeyArb,
@@ -336,4 +371,5 @@ export {
   keyPairArb,
   keyPairsArb,
   tlsConfigArb,
+  tlsConfigWithCaArb,
 };

@@ -2,6 +2,7 @@ import type { Crypto, Host, Hostname, Port } from './types';
 import type { Config } from './native/types';
 import type { QUICConfig } from './config';
 import type QUICConnectionMap from './QUICConnectionMap';
+import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
 import { destroyed, running } from '@matrixai/async-init';
@@ -52,6 +53,8 @@ class QUICClient extends EventTarget {
     crypto,
     socket,
     resolveHostname = utils.resolveHostname,
+    reasonToCode,
+    codeToReason,
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
@@ -65,6 +68,8 @@ class QUICClient extends EventTarget {
     };
     socket?: QUICSocket;
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
     logger?: Logger;
     config?: Partial<QUICConfig>;
   }) {
@@ -146,8 +151,12 @@ class QUICClient extends EventTarget {
         port,
       },
       config: quicConfig,
+      reasonToCode,
+      codeToReason,
       logger: logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}`,
+        `${QUICConnection.name} ${scid.toString().slice(32)}-${Math.floor(
+          Math.random() * 100,
+        )}`,
       ),
     });
     connection.addEventListener('error', handleConnectionError, { once: true });
@@ -279,12 +288,16 @@ class QUICClient extends EventTarget {
     return this._connection;
   }
 
-  public async destroy() {
+  public async destroy({
+    force = false,
+  }: {
+    force?: boolean;
+  } = {}) {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
 
     // We may want to allow one to specialise this
-    await this._connection.destroy();
+    await this._connection.destroy({ force });
     if (!this.isSocketShared) {
       await this.socket.stop();
       this.socket.removeEventListener('error', this.handleQUICSocketError);

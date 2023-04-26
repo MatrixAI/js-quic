@@ -3,8 +3,9 @@ import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
 // This is specialized type
 import type { QUICConfig } from './config';
-import type { Host, Port, StreamId, RemoteInfo } from './types';
-import type { Connection, SendInfo, ConnectionErrorCode } from './native/types';
+import type { Host, Port, RemoteInfo, StreamId } from './types';
+import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
+import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import {
   CreateDestroy,
   ready,
@@ -13,12 +14,13 @@ import {
 import Logger from '@matrixai/logger';
 import { Lock } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
+import { buildQuicheConfig } from './config';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
-import { buildQuicheConfig } from './config';
+import { promise } from './utils';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -39,6 +41,9 @@ class QUICConnection extends EventTarget {
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
   public streamMap: Map<StreamId, QUICStream> = new Map();
+  protected reasonToCode: StreamReasonToCode;
+  protected codeToReason: StreamCodeToReason;
+  protected destroyingMap: Map<StreamId, QUICStream> = new Map();
 
   // This basically allows one to await this promise
   // once resolved, always resolved...
@@ -94,12 +99,17 @@ class QUICConnection extends EventTarget {
     socket,
     remoteInfo,
     config,
+    reasonToCode = () => 0,
+    codeToReason = (type, code) =>
+      new Error(`${type.toString()} ${code.toString()}`),
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
     config: QUICConfig;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
@@ -127,6 +137,8 @@ class QUICConnection extends EventTarget {
       connectionId: scid,
       socket,
       remoteInfo,
+      reasonToCode,
+      codeToReason,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -143,6 +155,9 @@ class QUICConnection extends EventTarget {
     socket,
     remoteInfo,
     config,
+    reasonToCode = () => 0,
+    codeToReason = (type, code) =>
+      new Error(`${type.toString()} ${code.toString()}`),
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -150,6 +165,8 @@ class QUICConnection extends EventTarget {
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
     config: QUICConfig;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
@@ -177,6 +194,8 @@ class QUICConnection extends EventTarget {
       connectionId: scid,
       socket,
       remoteInfo,
+      reasonToCode,
+      codeToReason,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -190,6 +209,8 @@ class QUICConnection extends EventTarget {
     connectionId,
     socket,
     remoteInfo,
+    reasonToCode,
+    codeToReason,
     logger,
   }: {
     type: 'client' | 'server';
@@ -197,6 +218,8 @@ class QUICConnection extends EventTarget {
     connectionId: QUICConnectionId;
     socket: QUICSocket;
     remoteInfo: RemoteInfo;
+    reasonToCode: StreamReasonToCode;
+    codeToReason: StreamCodeToReason;
     logger: Logger;
   }) {
     super();
@@ -208,6 +231,8 @@ class QUICConnection extends EventTarget {
     this.socket = socket;
     this._remoteHost = remoteInfo.host;
     this._remotePort = remoteInfo.port;
+    this.reasonToCode = reasonToCode;
+    this.codeToReason = codeToReason;
     // Sets the timeout on the first
     this.checkTimeout();
 
@@ -233,7 +258,7 @@ class QUICConnection extends EventTarget {
 
   // Immediately call this after construction
   // if you want to pass the key log to something
-  // note that you must close the file descriptor afterwards
+  // note that you must close the file descriptor afterward
   public setKeylog(path) {
     this.conn.setKeylog(path);
   }
@@ -261,17 +286,28 @@ class QUICConnection extends EventTarget {
     appError = false,
     errorCode = quiche.ConnectionErrorCode.NoError,
     errorMessage = '',
+    force = false,
   }: {
     appError?: boolean;
     errorCode?: ConnectionErrorCode;
     errorMessage?: string;
+    force?: boolean;
   } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    // Console.log(this.conn.localError())
-    // console.log(this.conn.peerError())
+    // Handle destruction concurrently
+    const destroyProms: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
-      await stream.destroy();
+      if (force) {
+        destroyProms.push(stream.destroy());
+      } else {
+        const destroyProm = promise();
+        stream.addEventListener('destroy', () => destroyProm.resolveP(), {
+          once: true,
+        });
+        destroyProms.push(destroyProm.p);
+      }
     }
+    await Promise.all(destroyProms);
     try {
       // If this is already closed, then `Done` will be thrown
       // Otherwise it can send `CONNECTION_CLOSE` frame
@@ -322,7 +358,7 @@ class QUICConnection extends EventTarget {
    * UDP -> Connection -> Stream
    * This pushes data to the streams.
    * When the connection is draining, we can still receive data.
-   * However no streams are allowed to read or write.
+   * However, no streams are allowed to read or write.
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
@@ -345,10 +381,10 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
-        this.logger.debug(`Did a recv ${data.byteLength}`);
         this.conn.recv(data, recvInfo);
+        this.logger.debug(`RECEIVED ${data.byteLength} of data`);
       } catch (e) {
-        this.logger.error(e.message);
+        this.logger.error(`recv error ${e.message}`);
         // Depending on the exception, the `this.conn.recv`
         // may have automatically started closing the connection
         if (e.message === 'TlsFail') {
@@ -381,7 +417,6 @@ class QUICConnection extends EventTarget {
         this.resolveEstablishedP();
       }
       if (this.conn.isClosed()) {
-        this.logger.debug('recv CLOSED!!!!!');
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
       }
@@ -396,7 +431,14 @@ class QUICConnection extends EventTarget {
             quicStream = await QUICStream.createQUICStream({
               streamId,
               connection: this,
-              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
+              destroyingMap: this.destroyingMap,
+              codeToReason: this.codeToReason,
+              reasonToCode: this.reasonToCode,
+              logger: this.logger.getChild(
+                `${QUICStream.name} ${streamId}-${Math.floor(
+                  Math.random() * 100,
+                )}`,
+              ),
             });
             this.dispatchEvent(
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
@@ -411,13 +453,28 @@ class QUICConnection extends EventTarget {
             quicStream = await QUICStream.createQUICStream({
               streamId,
               connection: this,
-              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
+              codeToReason: this.codeToReason,
+              reasonToCode: this.reasonToCode,
+              destroyingMap: this.destroyingMap,
+              logger: this.logger.getChild(
+                `${QUICStream.name} ${streamId}-${Math.floor(
+                  Math.random() * 100,
+                )}`,
+              ),
             });
             this.dispatchEvent(
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
             );
           }
           quicStream.write();
+        }
+        // Checking shortlist if streams have finished.
+        for (const [streamId, stream] of this.destroyingMap) {
+          if (stream.isFinished()) {
+            // If it has finished, it will trigger its own clean up.
+            // Remove the stream from the shortlist.
+            this.destroyingMap.delete(streamId);
+          }
         }
       }
     } finally {
@@ -534,8 +591,9 @@ class QUICConnection extends EventTarget {
             sendInfo.to.port,
             sendInfo.to.host,
           );
+          this.logger.info(`SENT ${sendLength} of data`);
         } catch (e) {
-          this.logger.error(e.message);
+          this.logger.error(`send error ${e.message}`);
           this.dispatchEvent(
             new events.QUICConnectionErrorEvent({ detail: e }),
           );
@@ -544,18 +602,11 @@ class QUICConnection extends EventTarget {
       }
     } finally {
       this.logger.debug('SEND FINALLY');
-      this.logger.debug(
-        ` ________ ED: ${this.conn.isInEarlyData()} TO: ${this.conn.isTimedOut()} EST: ${this.conn.isEstablished()}`,
-      );
       this.checkTimeout();
-      this.logger.debug(
-        `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,
-      );
       if (
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
-        this.logger.debug('CALLING DESTROY');
         // Ignore errors and run in background
         void this.destroy().catch(() => {});
       } else if (
@@ -605,24 +656,13 @@ class QUICConnection extends EventTarget {
       const quicStream = await QUICStream.createQUICStream({
         streamId: streamId!,
         connection: this,
-        logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
+        codeToReason: this.codeToReason,
+        reasonToCode: this.reasonToCode,
+        destroyingMap: this.destroyingMap,
+        logger: this.logger.getChild(
+          `${QUICStream.name} ${streamId!}-${Math.floor(Math.random() * 100)}`,
+        ),
       });
-      const writer = quicStream.writable.getWriter();
-
-      try {
-        // This will now wait until the 0-length buffer is actually sent
-        await writer.write(new Uint8Array(0));
-        writer.releaseLock();
-      } catch (e) {
-        // You must release the lock even before you run destroy
-        writer.releaseLock();
-        // If the write failed, it will only close the sending side
-        // But in this case, it means we actually failed to open the stream entirely
-        // In which case we destroy the stream
-        // Do we need to release the writer?
-        await quicStream.destroy();
-        throw e;
-      }
       // Ok the stream is opened and working
       if (this.type === 'client' && streamType === 'bidi') {
         this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
@@ -647,9 +687,7 @@ class QUICConnection extends EventTarget {
     this.logger.debug(
       `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,
     );
-    this.logger.debug('timeout SEND');
     if (this[destroyed] === false) await this.send();
-    this.logger.debug('timeout SENDAFTER');
     if (
       this[status] !== 'destroying' &&
       (this.conn.isClosed() || this.conn.isDraining())
