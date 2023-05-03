@@ -69,6 +69,7 @@ class QUICStream
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
+    maxReadableStreamBytes = 1_000_000, // About 1KB
     logger = new Logger(`${this.name} ${streamId}`),
   }: {
     streamId: StreamId;
@@ -76,6 +77,7 @@ class QUICStream
     destroyingMap: Map<StreamId, QUICStream>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
+    maxReadableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
@@ -92,6 +94,7 @@ class QUICStream
       reasonToCode,
       codeToReason,
       destroyingMap,
+      maxReadableStreamBytes,
       logger,
     });
     connection.streamMap.set(stream.streamId, stream);
@@ -105,6 +108,7 @@ class QUICStream
     reasonToCode,
     codeToReason,
     destroyingMap,
+    maxReadableStreamBytes,
     logger,
   }: {
     streamId: StreamId;
@@ -112,6 +116,7 @@ class QUICStream
     reasonToCode: StreamReasonToCode;
     codeToReason: StreamCodeToReason;
     destroyingMap: Map<StreamId, QUICStream>;
+    maxReadableStreamBytes: number;
     logger: Logger;
   }) {
     super();
@@ -123,8 +128,6 @@ class QUICStream
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this.destroyingMap = destroyingMap;
-
-    // Try the BYOB later, it seems more performant
 
     this.readable = new ReadableStream(
       {
@@ -142,7 +145,8 @@ class QUICStream
         },
       },
       {
-        highWaterMark: 20,
+        highWaterMark: maxReadableStreamBytes,
+        size: (chunk) => chunk?.byteLength ?? 0,
       },
     );
 

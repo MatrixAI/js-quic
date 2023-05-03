@@ -55,6 +55,7 @@ class QUICClient extends EventTarget {
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
+    maxReadableStreamBytes,
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
@@ -70,6 +71,7 @@ class QUICClient extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
+    maxReadableStreamBytes?: number;
     logger?: Logger;
     config?: Partial<QUICConfig>;
   }) {
@@ -153,10 +155,9 @@ class QUICClient extends EventTarget {
       config: quicConfig,
       reasonToCode,
       codeToReason,
+      maxReadableStreamBytes,
       logger: logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}-${Math.floor(
-          Math.random() * 100,
-        )}`,
+        `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),
     });
     connection.addEventListener('error', handleConnectionError, { once: true });

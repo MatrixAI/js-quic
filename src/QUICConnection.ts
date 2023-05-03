@@ -43,6 +43,7 @@ class QUICConnection extends EventTarget {
   public streamMap: Map<StreamId, QUICStream> = new Map();
   protected reasonToCode: StreamReasonToCode;
   protected codeToReason: StreamCodeToReason;
+  protected maxReadableStreamBytes: number | undefined;
   protected destroyingMap: Map<StreamId, QUICStream> = new Map();
 
   // This basically allows one to await this promise
@@ -102,6 +103,7 @@ class QUICConnection extends EventTarget {
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
+    maxReadableStreamBytes,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -110,6 +112,7 @@ class QUICConnection extends EventTarget {
     config: QUICConfig;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
+    maxReadableStreamBytes?: number;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
@@ -139,6 +142,7 @@ class QUICConnection extends EventTarget {
       remoteInfo,
       reasonToCode,
       codeToReason,
+      maxReadableStreamBytes,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -158,6 +162,7 @@ class QUICConnection extends EventTarget {
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
+    maxReadableStreamBytes,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -167,6 +172,7 @@ class QUICConnection extends EventTarget {
     config: QUICConfig;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
+    maxReadableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
@@ -196,6 +202,7 @@ class QUICConnection extends EventTarget {
       remoteInfo,
       reasonToCode,
       codeToReason,
+      maxReadableStreamBytes,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -211,6 +218,7 @@ class QUICConnection extends EventTarget {
     remoteInfo,
     reasonToCode,
     codeToReason,
+    maxReadableStreamBytes,
     logger,
   }: {
     type: 'client' | 'server';
@@ -220,6 +228,7 @@ class QUICConnection extends EventTarget {
     remoteInfo: RemoteInfo;
     reasonToCode: StreamReasonToCode;
     codeToReason: StreamCodeToReason;
+    maxReadableStreamBytes: number | undefined;
     logger: Logger;
   }) {
     super();
@@ -233,6 +242,7 @@ class QUICConnection extends EventTarget {
     this._remotePort = remoteInfo.port;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
+    this.maxReadableStreamBytes = maxReadableStreamBytes;
     // Sets the timeout on the first
     this.checkTimeout();
 
@@ -434,11 +444,8 @@ class QUICConnection extends EventTarget {
               destroyingMap: this.destroyingMap,
               codeToReason: this.codeToReason,
               reasonToCode: this.reasonToCode,
-              logger: this.logger.getChild(
-                `${QUICStream.name} ${streamId}-${Math.floor(
-                  Math.random() * 100,
-                )}`,
-              ),
+              maxReadableStreamBytes: this.maxReadableStreamBytes,
+              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
             });
             this.dispatchEvent(
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
@@ -456,11 +463,8 @@ class QUICConnection extends EventTarget {
               codeToReason: this.codeToReason,
               reasonToCode: this.reasonToCode,
               destroyingMap: this.destroyingMap,
-              logger: this.logger.getChild(
-                `${QUICStream.name} ${streamId}-${Math.floor(
-                  Math.random() * 100,
-                )}`,
-              ),
+              maxReadableStreamBytes: this.maxReadableStreamBytes,
+              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
             });
             this.dispatchEvent(
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
@@ -659,9 +663,8 @@ class QUICConnection extends EventTarget {
         codeToReason: this.codeToReason,
         reasonToCode: this.reasonToCode,
         destroyingMap: this.destroyingMap,
-        logger: this.logger.getChild(
-          `${QUICStream.name} ${streamId!}-${Math.floor(Math.random() * 100)}`,
-        ),
+        maxReadableStreamBytes: this.maxReadableStreamBytes,
+        logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
       });
       // Ok the stream is opened and working
       if (this.type === 'client' && streamType === 'bidi') {
