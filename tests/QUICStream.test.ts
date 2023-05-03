@@ -48,7 +48,6 @@ describe(QUICStream.name, () => {
           config: {
             tlsConfig: tlsConfig.tlsConfig,
             verifyPeer: false,
-            logKeys: './tmp/key.log',
           },
         });
         server.addEventListener(
@@ -215,7 +214,6 @@ describe(QUICStream.name, () => {
           config: {
             tlsConfig: tlsConfig.tlsConfig,
             verifyPeer: false,
-            logKeys: './tmp/key.log',
           },
         });
         server.addEventListener(
@@ -311,7 +309,6 @@ describe(QUICStream.name, () => {
           config: {
             tlsConfig: tlsConfig.tlsConfig,
             verifyPeer: false,
-            logKeys: './tmp/key.log',
           },
         });
         server.addEventListener(
@@ -415,7 +412,6 @@ describe(QUICStream.name, () => {
           config: {
             tlsConfig: tlsConfig.tlsConfig,
             verifyPeer: false,
-            logKeys: './tmp/key.log',
           },
         });
         server.addEventListener(

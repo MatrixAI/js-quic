@@ -69,7 +69,8 @@ class QUICStream
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
-    maxReadableStreamBytes = 1_000_000, // About 1KB
+    maxReadableStreamBytes = 100_000, // About 100KB
+    maxWritableStreamBytes = 100_000, // About 100KB
     logger = new Logger(`${this.name} ${streamId}`),
   }: {
     streamId: StreamId;
@@ -78,6 +79,7 @@ class QUICStream
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
+    maxWritableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
@@ -95,6 +97,7 @@ class QUICStream
       codeToReason,
       destroyingMap,
       maxReadableStreamBytes,
+      maxWritableStreamBytes,
       logger,
     });
     connection.streamMap.set(stream.streamId, stream);
@@ -109,6 +112,7 @@ class QUICStream
     codeToReason,
     destroyingMap,
     maxReadableStreamBytes,
+    maxWritableStreamBytes,
     logger,
   }: {
     streamId: StreamId;
@@ -117,6 +121,7 @@ class QUICStream
     codeToReason: StreamCodeToReason;
     destroyingMap: Map<StreamId, QUICStream>;
     maxReadableStreamBytes: number;
+    maxWritableStreamBytes: number;
     logger: Logger;
   }) {
     super();
@@ -146,40 +151,44 @@ class QUICStream
       },
       {
         highWaterMark: maxReadableStreamBytes,
-        size: (chunk) => chunk?.byteLength ?? 0,
       },
     );
 
-    this.writable = new WritableStream({
-      start: (controller) => {
-        this.writableController = controller;
+    this.writable = new WritableStream(
+      {
+        start: (controller) => {
+          this.writableController = controller;
+        },
+        write: async (chunk: Uint8Array) => {
+          await this.streamSend(chunk);
+        },
+        close: async () => {
+          // This gracefully closes, by sending a message at the end
+          // If there wasn't an error, we will send an empty frame
+          // with the `fin` set to true
+          // If this itself results in an error, we can continue
+          // But continue to do the below
+          this.logger.debug('sending fin frame');
+          await this.streamSend(new Uint8Array(0), true).catch((e) => {
+            // Ignore send error if stream is already closed
+            if (e.message !== 'send') throw e;
+          });
+          await this.closeSend();
+        },
+        abort: async (reason?: any) => {
+          // Abort can be called even if there are writes are queued up
+          // The chunks are meant to be thrown away
+          // We could tell it to shutdown
+          // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
+          // The receiver can discard any data it already received on that stream
+          // We don't have "unidirectional" streams so that's not important...
+          await this.closeSend(true, reason);
+        },
       },
-      write: async (chunk: Uint8Array) => {
-        await this.streamSend(chunk);
+      {
+        highWaterMark: maxWritableStreamBytes,
       },
-      close: async () => {
-        // This gracefully closes, by sending a message at the end
-        // If there wasn't an error, we will send an empty frame
-        // with the `fin` set to true
-        // If this itself results in an error, we can continue
-        // But continue to do the below
-        this.logger.debug('sending fin frame');
-        await this.streamSend(new Uint8Array(0), true).catch((e) => {
-          // Ignore send error if stream is already closed
-          if (e.message !== 'send') throw e;
-        });
-        await this.closeSend();
-      },
-      abort: async (reason?: any) => {
-        // Abort can be called even if there are writes are queued up
-        // The chunks are meant to be thrown away
-        // We could tell it to shutdown
-        // This sends a `RESET_STREAM` frame, this abruptly terminates the sending part of a stream
-        // The receiver can discard any data it already received on that stream
-        // We don't have "unidirectional" streams so that's not important...
-        await this.closeSend(true, reason);
-      },
-    });
+    );
   }
 
   public get sendClosed(): boolean {
