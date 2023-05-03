@@ -53,7 +53,7 @@ const clientDefault: QUICConfig = {
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
   disableActiveMigration: true,
-  applicationProtos: ['hq-interop', 'hq-29', 'hq-28', 'hq-27', 'http/0.9'],
+  applicationProtos: ['http/0.9'],
   enableEarlyData: true,
 };
 
@@ -74,7 +74,7 @@ const serverDefault: QUICConfig = {
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
   disableActiveMigration: true,
-  applicationProtos: ['hq-interop', 'hq-29', 'hq-28', 'hq-27', 'http/0.9'],
+  applicationProtos: ['http/0.9'],
   enableEarlyData: true,
 };
 
