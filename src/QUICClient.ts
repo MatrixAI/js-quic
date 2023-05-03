@@ -56,6 +56,7 @@ class QUICClient extends EventTarget {
     reasonToCode,
     codeToReason,
     maxReadableStreamBytes,
+    maxWritableStreamBytes,
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
@@ -72,6 +73,7 @@ class QUICClient extends EventTarget {
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
+    maxWritableStreamBytes?: number;
     logger?: Logger;
     config?: Partial<QUICConfig>;
   }) {
@@ -156,6 +158,7 @@ class QUICClient extends EventTarget {
       reasonToCode,
       codeToReason,
       maxReadableStreamBytes,
+      maxWritableStreamBytes,
       logger: logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),

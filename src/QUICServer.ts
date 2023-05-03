@@ -39,6 +39,7 @@ class QUICServer extends EventTarget {
   protected reasonToCode: StreamReasonToCode | undefined;
   protected codeToReason: StreamCodeToReason | undefined;
   protected maxReadableStreamBytes?: number | undefined;
+  protected maxWritableStreamBytes?: number | undefined;
   protected connectionMap: QUICConnectionMap;
 
   /**
@@ -64,6 +65,7 @@ class QUICServer extends EventTarget {
     reasonToCode,
     codeToReason,
     maxReadableStreamBytes,
+    maxWritableStreamBytes,
     logger,
   }: {
     crypto: {
@@ -79,6 +81,7 @@ class QUICServer extends EventTarget {
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
+    maxWritableStreamBytes?: number;
     logger?: Logger;
   }) {
     super();
@@ -107,6 +110,7 @@ class QUICServer extends EventTarget {
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this.maxReadableStreamBytes = maxReadableStreamBytes;
+    this.maxWritableStreamBytes = maxWritableStreamBytes;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -281,6 +285,7 @@ class QUICServer extends EventTarget {
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,
       maxReadableStreamBytes: this.maxReadableStreamBytes,
+      maxWritableStreamBytes: this.maxWritableStreamBytes,
       logger: this.logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),
