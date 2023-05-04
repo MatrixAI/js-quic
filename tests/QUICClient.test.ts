@@ -1,6 +1,5 @@
 import type { Crypto, Host, Port } from '@/types';
 import type * as events from '@/events';
-import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
 import QUICClient from '@/QUICClient';
@@ -232,6 +231,7 @@ describe(QUICClient.name, () => {
       },
       { numRuns: 10 },
     );
+    // FIXME: randomly fails, likely due to test data selecting same cert
     testProp(
       'new connections use new config',
       [tlsConfigWithCaArb, tlsConfigWithCaArb],
@@ -598,8 +598,6 @@ describe(QUICClient.name, () => {
         await server.start({
           host: '127.0.0.1' as Host,
         });
-        // @ts-ignore: kidnap protected property
-        const socket = server.socket;
         // The server can send packets
         // Should send 4 packets in 2 seconds
         const clientProm = sleep(1000)
@@ -617,7 +615,7 @@ describe(QUICClient.name, () => {
             });
             await client.destroy({ force: true });
           })
-          .catch((e) => console.error(e));
+          .catch(() => {});
         const result = await server.initHolePunch(
           {
             host: '127.0.0.1' as Host,
@@ -673,6 +671,417 @@ describe(QUICClient.name, () => {
         expect(result).toBeTrue();
         await client.destroy({ force: true });
         await server.stop();
+      },
+      { numRuns: 1 },
+    );
+  });
+  describe('handles random packets', () => {
+    testProp(
+      'client handles random noise from server',
+      [
+        tlsConfigWithCaArb,
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+      ],
+      async (tlsConfigProm, data, messages) => {
+        const tlsConfig = await tlsConfigProm;
+        const socket = new QUICSocket({
+          crypto,
+          logger: logger.getChild('socket'),
+        });
+        await socket.start({
+          host: '127.0.0.1' as Host,
+        });
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+          socket,
+        });
+        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        server.addEventListener(
+          'connection',
+          (e: events.QUICServerConnectionEvent) =>
+            connectionEventProm.resolveP(e),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        const client = await QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        });
+        const conn = (await connectionEventProm.p).detail;
+        // Do the test
+        const serverStreamProms: Array<Promise<void>> = [];
+        conn.addEventListener(
+          'stream',
+          (streamEvent: events.QUICConnectionStreamEvent) => {
+            const stream = streamEvent.detail;
+            const streamProm = stream.readable.pipeTo(stream.writable);
+            serverStreamProms.push(streamProm);
+          },
+        );
+        // Sending random data to client from the perspective of the server
+        let running = true;
+        const randomDataProm = (async () => {
+          let count = 0;
+          while (running) {
+            await socket.send(
+              data[count % data.length],
+              client.port,
+              '127.0.0.1',
+            );
+            await sleep(5);
+            count += 1;
+          }
+        })();
+        // We want to check that things function fine between bad data
+        const randomActivityProm = (async () => {
+          const stream = await client.connection.streamNew();
+          await Promise.all([
+            (async () => {
+              // Write data
+              const writer = stream.writable.getWriter();
+              for (const message of messages) {
+                await writer.write(message);
+                await sleep(7);
+              }
+              await writer.close();
+            })(),
+            (async () => {
+              // Consume readable
+              for await (const _ of stream.readable) {
+                // Do nothing
+              }
+            })(),
+          ]);
+          running = false;
+        })();
+        // Wait for running activity to finish, should complete without error
+        await Promise.all([
+          randomActivityProm,
+          serverStreamProms,
+          randomDataProm,
+        ]);
+        await client.destroy({ force: true });
+        await server.stop();
+        await socket.stop();
+      },
+      { numRuns: 1 },
+    );
+    testProp(
+      'client handles random noise from external',
+      [
+        tlsConfigWithCaArb,
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+      ],
+      async (tlsConfigProm, data, messages) => {
+        const tlsConfig = await tlsConfigProm;
+        const socket = new QUICSocket({
+          crypto,
+          logger: logger.getChild('socket'),
+        });
+        await socket.start({
+          host: '127.0.0.1' as Host,
+        });
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        server.addEventListener(
+          'connection',
+          (e: events.QUICServerConnectionEvent) =>
+            connectionEventProm.resolveP(e),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        const client = await QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        });
+        const conn = (await connectionEventProm.p).detail;
+        // Do the test
+        const serverStreamProms: Array<Promise<void>> = [];
+        conn.addEventListener(
+          'stream',
+          (streamEvent: events.QUICConnectionStreamEvent) => {
+            const stream = streamEvent.detail;
+            const streamProm = stream.readable.pipeTo(stream.writable);
+            serverStreamProms.push(streamProm);
+          },
+        );
+        // Sending random data to client from the perspective of the server
+        let running = true;
+        const randomDataProm = (async () => {
+          let count = 0;
+          while (running) {
+            await socket.send(
+              data[count % data.length],
+              client.port,
+              '127.0.0.1',
+            );
+            await sleep(5);
+            count += 1;
+          }
+        })();
+        // We want to check that things function fine between bad data
+        const randomActivityProm = (async () => {
+          const stream = await client.connection.streamNew();
+          await Promise.all([
+            (async () => {
+              // Write data
+              const writer = stream.writable.getWriter();
+              for (const message of messages) {
+                await writer.write(message);
+                await sleep(7);
+              }
+              await writer.close();
+            })(),
+            (async () => {
+              // Consume readable
+              for await (const _ of stream.readable) {
+                // Do nothing
+              }
+            })(),
+          ]);
+          running = false;
+        })();
+        // Wait for running activity to finish, should complete without error
+        await Promise.all([
+          randomActivityProm,
+          serverStreamProms,
+          randomDataProm,
+        ]);
+        await client.destroy({ force: true });
+        await server.stop();
+        await socket.stop();
+      },
+      { numRuns: 1 },
+    );
+    testProp(
+      'server handles random noise from client',
+      [
+        tlsConfigWithCaArb,
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+      ],
+      async (tlsConfigProm, data, messages) => {
+        const tlsConfig = await tlsConfigProm;
+        const socket = new QUICSocket({
+          crypto,
+          logger: logger.getChild('socket'),
+        });
+        await socket.start({
+          host: '127.0.0.1' as Host,
+        });
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        server.addEventListener(
+          'connection',
+          (e: events.QUICServerConnectionEvent) =>
+            connectionEventProm.resolveP(e),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        const client = await QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          socket,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        });
+        const conn = (await connectionEventProm.p).detail;
+        // Do the test
+        const serverStreamProms: Array<Promise<void>> = [];
+        conn.addEventListener(
+          'stream',
+          (streamEvent: events.QUICConnectionStreamEvent) => {
+            const stream = streamEvent.detail;
+            const streamProm = stream.readable.pipeTo(stream.writable);
+            serverStreamProms.push(streamProm);
+          },
+        );
+        // Sending random data to client from the perspective of the server
+        let running = true;
+        const randomDataProm = (async () => {
+          let count = 0;
+          while (running) {
+            await socket.send(
+              data[count % data.length],
+              server.port,
+              '127.0.0.1',
+            );
+            await sleep(5);
+            count += 1;
+          }
+        })();
+        // We want to check that things function fine between bad data
+        const randomActivityProm = (async () => {
+          const stream = await client.connection.streamNew();
+          await Promise.all([
+            (async () => {
+              // Write data
+              const writer = stream.writable.getWriter();
+              for (const message of messages) {
+                await writer.write(message);
+                await sleep(7);
+              }
+              await writer.close();
+            })(),
+            (async () => {
+              // Consume readable
+              for await (const _ of stream.readable) {
+                // Do nothing
+              }
+            })(),
+          ]);
+          running = false;
+        })();
+        // Wait for running activity to finish, should complete without error
+        await Promise.all([
+          randomActivityProm,
+          serverStreamProms,
+          randomDataProm,
+        ]);
+        await client.destroy({ force: true });
+        await server.stop();
+        await socket.stop();
+      },
+      { numRuns: 1 },
+    );
+    testProp(
+      'server handles random noise from external',
+      [
+        tlsConfigWithCaArb,
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+        fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
+      ],
+      async (tlsConfigProm, data, messages) => {
+        const tlsConfig = await tlsConfigProm;
+        const socket = new QUICSocket({
+          crypto,
+          logger: logger.getChild('socket'),
+        });
+        await socket.start({
+          host: '127.0.0.1' as Host,
+        });
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        server.addEventListener(
+          'connection',
+          (e: events.QUICServerConnectionEvent) =>
+            connectionEventProm.resolveP(e),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        const client = await QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          localHost: '127.0.0.1' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        });
+        const conn = (await connectionEventProm.p).detail;
+        // Do the test
+        const serverStreamProms: Array<Promise<void>> = [];
+        conn.addEventListener(
+          'stream',
+          (streamEvent: events.QUICConnectionStreamEvent) => {
+            const stream = streamEvent.detail;
+            const streamProm = stream.readable.pipeTo(stream.writable);
+            serverStreamProms.push(streamProm);
+          },
+        );
+        // Sending random data to client from the perspective of the server
+        let running = true;
+        const randomDataProm = (async () => {
+          let count = 0;
+          while (running) {
+            await socket.send(
+              data[count % data.length],
+              server.port,
+              '127.0.0.1',
+            );
+            await sleep(5);
+            count += 1;
+          }
+        })();
+        // We want to check that things function fine between bad data
+        const randomActivityProm = (async () => {
+          const stream = await client.connection.streamNew();
+          await Promise.all([
+            (async () => {
+              // Write data
+              const writer = stream.writable.getWriter();
+              for (const message of messages) {
+                await writer.write(message);
+                await sleep(7);
+              }
+              await writer.close();
+            })(),
+            (async () => {
+              // Consume readable
+              for await (const _ of stream.readable) {
+                // Do nothing
+              }
+            })(),
+          ]);
+          running = false;
+        })();
+        // Wait for running activity to finish, should complete without error
+        await Promise.all([
+          randomActivityProm,
+          serverStreamProms,
+          randomDataProm,
+        ]);
+        await client.destroy({ force: true });
+        await server.stop();
+        await socket.stop();
       },
       { numRuns: 1 },
     );
