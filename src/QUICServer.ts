@@ -371,7 +371,13 @@ class QUICServer extends EventTarget {
     this.addEventListener('connection', handleEstablished);
     try {
       while (!established && !timedOut) {
-        await this.socket.send('hello!', remoteInfo.port, remoteInfo.host);
+        const message = new ArrayBuffer(32);
+        await this.crypto.ops.randomBytes(message);
+        await this.socket.send(
+          Buffer.from(message),
+          remoteInfo.port,
+          remoteInfo.host,
+        );
         sleepProm = promise<void>();
         delayTimer = setTimeout(() => sleepProm!.resolveP(), delay);
         delay *= 2;

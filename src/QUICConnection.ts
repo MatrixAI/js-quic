@@ -347,9 +347,6 @@ class QUICConnection extends EventTarget {
     }
     // Sending if
     await this.send();
-    this.logger.debug(
-      `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,
-    );
     // If it is not closed, it could still be draining
     this.logger.debug('Waiting for closeP');
     await this.closedP;
@@ -494,18 +491,11 @@ class QUICConnection extends EventTarget {
       }
     } finally {
       this.logger.debug('RECV FINALLY');
-      this.logger.debug(
-        ` ________ ED: ${this.conn.isInEarlyData()} TO: ${this.conn.isTimedOut()} EST: ${this.conn.isEstablished()}`,
-      );
-
       // Set the timeout
       this.checkTimeout();
       // If this call wasn't executed in the midst of a destroy
       // and yet the connection is closed or is draining, then
       // we need to destroy this connection
-      this.logger.debug(
-        `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,
-      );
       if (
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
@@ -699,9 +689,6 @@ class QUICConnection extends EventTarget {
     this.deadline = Infinity;
     // Doing timeout actions
     this.conn.onTimeout();
-    this.logger.debug(
-      `state are draining: ${this.conn.isDraining()}, closed: ${this.conn.isClosed()}`,
-    );
     if (this[destroyed] === false) await this.send();
     if (
       this[status] !== 'destroying' &&
@@ -728,23 +715,21 @@ class QUICConnection extends EventTarget {
     this.logger.debug('timeout checking timeout');
     // During construction, this ends up being null
     const time = this.conn.timeout();
-    this.logger.debug(`timeout time ${time}`);
     if (time == null) {
       // Clear timeout
-      this.logger.debug('timeout clearing timeout');
+      if (this.timer != null) this.logger.debug('timeout clearing timeout');
       clearTimeout(this.timer);
       delete this.timer;
       this.deadline = Infinity;
     } else {
       const newDeadline = Date.now() + time;
       if (this.timer != null) {
-        this.logger.debug('timeout already running');
         if (time === 0) {
-          this.logger.debug('timeout instant timeout');
+          this.logger.debug('timeout triggering instant timeout');
           // Skip timer and call onTimeout
           setImmediate(this.onTimeout);
         } else if (newDeadline < this.deadline) {
-          this.logger.debug(`timeout updating timer`);
+          this.logger.debug(`timeout updating timer with ${time} delay`);
           clearTimeout(this.timer);
           delete this.timer;
           this.deadline = newDeadline;
@@ -752,12 +737,12 @@ class QUICConnection extends EventTarget {
         }
       } else {
         if (time === 0) {
-          this.logger.debug('timeout instant timeout');
+          this.logger.debug('timeout triggering instant timeout');
           // Skip timer and call onTimeout
           setImmediate(this.onTimeout);
           return;
         }
-        this.logger.debug('timeout creating timer');
+        this.logger.debug(`timeout creating timer with ${time} delay`);
         this.deadline = newDeadline;
         this.timer = setTimeout(this.onTimeout, time);
       }
