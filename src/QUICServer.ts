@@ -1,8 +1,16 @@
-import type { Crypto, Host, Hostname, Port, RemoteInfo } from './types';
+import type {
+  Crypto,
+  Host,
+  Hostname,
+  Port,
+  PromiseDeconstructed,
+  RemoteInfo,
+} from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type { QUICConfig, TlsConfig } from './config';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
+import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
@@ -14,6 +22,7 @@ import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
+import { promise } from './utils';
 
 /**
  * You must provide a error handler `addEventListener('error')`.
@@ -314,6 +323,67 @@ class QUICServer extends EventTarget {
       ...this.config,
       ...config,
     };
+  }
+
+  /**
+   * This initiates sending UDP packets to a target client to open up a port in the NAT for the client to connect
+   * through. This will return early if the connection already exists or was established while polling.
+   */
+  public async initHolePunch(
+    remoteInfo: RemoteInfo,
+    timeout: number = 5000,
+  ): Promise<boolean> {
+    // Checking existing connections
+    for (const [, connection] of this.connectionMap.serverConnections) {
+      if (
+        remoteInfo.host === connection.remoteHost &&
+        remoteInfo.port === connection.remotePort
+      ) {
+        // Connection exists, return early
+        return true;
+      }
+    }
+    // We need to send a random data packet to the target until the process times out or a connection is established
+    let timedOut = false;
+    const timedOutProm = promise<void>();
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      timedOutProm.resolveP();
+    }, timeout);
+    let delay = 250;
+    let delayTimer: NodeJS.Timer | undefined;
+    let sleepProm: PromiseDeconstructed<void> | undefined;
+    let established = false;
+    const establishedProm = promise<void>();
+    // Setting up established event checking
+    const handleEstablished = (event: QUICServerConnectionEvent) => {
+      const connection = event.detail;
+      if (
+        remoteInfo.host === connection.remoteHost &&
+        remoteInfo.port === connection.remotePort
+      ) {
+        // Clean up and resolve
+        this.removeEventListener('connection', handleEstablished);
+        established = true;
+        establishedProm.resolveP();
+      }
+    };
+    this.addEventListener('connection', handleEstablished);
+    try {
+      while (!established && !timedOut) {
+        await this.socket.send('hello!', remoteInfo.port, remoteInfo.host);
+        sleepProm = promise<void>();
+        delayTimer = setTimeout(() => sleepProm!.resolveP(), delay);
+        delay *= 2;
+        await Promise.race([sleepProm.p, establishedProm.p, timedOutProm.p]);
+      }
+      return established;
+    } finally {
+      clearTimeout(timeoutTimer);
+      if (delayTimer != null) clearTimeout(delayTimer);
+      sleepProm?.resolveP();
+      this.removeEventListener('connection', handleEstablished);
+    }
   }
 
   /**

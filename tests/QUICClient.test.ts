@@ -1,13 +1,16 @@
 import type { Crypto, Host, Port } from '@/types';
 import type * as events from '@/events';
+import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
 import * as errors from '@/errors';
 import { promise } from '@/utils';
+import QUICSocket from '@/QUICSocket';
 import * as testsUtils from './utils';
 import { tlsConfigWithCaArb } from './tlsUtils';
+import { sleep } from './utils';
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
@@ -544,96 +547,134 @@ describe(QUICClient.name, () => {
       { numRuns: 3 },
     );
   });
-  // Test('dual stack to dual stack', async () => {
-  //
-  //   const {
-  //     p: clientErrorEventP,
-  //     rejectP: rejectClientErrorEventP
-  //   } = utils.promise<events.QUICClientErrorEvent>();
-  //
-  //   const {
-  //     p: serverErrorEventP,
-  //     rejectP: rejectServerErrorEventP
-  //   } = utils.promise<events.QUICServerErrorEvent>();
-  //
-  //   const {
-  //     p: serverStopEventP,
-  //     resolveP: resolveServerStopEventP
-  //   } = utils.promise<events.QUICServerStopEvent>();
-  //
-  //   const {
-  //     p: clientDestroyEventP,
-  //     resolveP: resolveClientDestroyEventP
-  //   } = utils.promise<events.QUICClientDestroyEvent>();
-  //
-  //   const {
-  //     p: connectionEventP,
-  //     resolveP: resolveConnectionEventP
-  //   } = utils.promise<events.QUICServerConnectionEvent>();
-  //
-  //   const {
-  //     p: streamEventP,
-  //     resolveP: resolveStreamEventP
-  //   } = utils.promise<events.QUICConnectionStreamEvent>();
-  //
-  //   const server = new QUICServer({
-  //     crypto,
-  //     logger: logger.getChild(QUICServer.name)
-  //   });
-  //   server.addEventListener('error', handleServerErrorEvent);
-  //   server.addEventListener('stop', handleServerStopEvent);
-  //
-  //   // Every time I have a promise
-  //   // I can attempt to await 4 promises
-  //   // Then the idea is that this will resolve 4 times
-  //   // Once for each time?
-  //   // If you add once
-  //   // Do you also
-  //
-  //   // Fundamentally there could be multiple of these
-  //   // This is not something I can put outside
-  //
-  //   server.addEventListener(
-  //     'connection',
-  //     (e: events.QUICServerConnectionEvent) => {
-  //       resolveConnectionEventP(e);
-  //
-  //       // const conn = e.detail;
-  //       // conn.addEventListener('stream', (e: events.QUICConnectionStreamEvent) => {
-  //       //   resolveStreamEventP(e);
-  //       // }, { once: true });
-  //     },
-  //     { once: true }
-  //   );
-  //
-  //   // Dual stack server
-  //   await server.start({
-  //     host: '::' as Host,
-  //     port: 0 as Port
-  //   });
-  //   // Dual stack client
-  //   const client = await QUICClient.createQUICClient({
-  //     // host: server.host,
-  //     // host: '::ffff:127.0.0.1' as Host,
-  //     host: '::1' as Host,
-  //     port: server.port,
-  //     localHost: '::' as Host,
-  //     crypto,
-  //     logger: logger.getChild(QUICClient.name)
-  //   });
-  //   client.addEventListener('error', handleClientErrorEvent);
-  //   client.addEventListener('destroy', handleClientDestroyEvent);
-  //
-  //   // await testsUtils.sleep(1000);
-  //
-  //   await expect(connectionEventP).resolves.toBeInstanceOf(events.QUICServerConnectionEvent);
-  //   await client.destroy();
-  //   await expect(clientDestroyEventP).resolves.toBeInstanceOf(events.QUICClientDestroyEvent);
-  //   await server.stop();
-  //   await expect(serverStopEventP).resolves.toBeInstanceOf(events.QUICServerStopEvent);
-  //
-  //   // No errors occurred
-  //   await expect(Promise.race([clientErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
-  //   await expect(Promise.race([serverErrorEventP, Promise.resolve()])).resolves.toBe(undefined);
-  // });
+  describe('UDP nat punching', () => {
+    testProp(
+      'server can send init packets',
+      [tlsConfigWithCaArb],
+      async (tlsConfigProm) => {
+        const tlsConfig = await tlsConfigProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // @ts-ignore: kidnap protected property
+        const socket = server.socket;
+        const mockedSend = jest.spyOn(socket, 'send');
+        // The server can send packets
+        // Should send 4 packets in 2 seconds
+        const result = await server.initHolePunch(
+          {
+            host: '127.0.0.1' as Host,
+            port: 55555 as Port,
+          },
+          2000,
+        );
+        expect(mockedSend).toHaveBeenCalledTimes(4);
+        expect(result).toBeFalse();
+        await server.stop();
+      },
+      { numRuns: 1 },
+    );
+    testProp(
+      'init ends when connection establishes',
+      [tlsConfigWithCaArb],
+      async (tlsConfigProm) => {
+        const tlsConfig = await tlsConfigProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // @ts-ignore: kidnap protected property
+        const socket = server.socket;
+        // The server can send packets
+        // Should send 4 packets in 2 seconds
+        const clientProm = sleep(1000)
+          .then(async () => {
+            const client = await QUICClient.createQUICClient({
+              host: '::ffff:127.0.0.1' as Host,
+              port: server.port,
+              localHost: '::' as Host,
+              localPort: 55556 as Port,
+              crypto,
+              logger: logger.getChild(QUICClient.name),
+              config: {
+                verifyPeer: false,
+              },
+            });
+            await client.destroy({ force: true });
+          })
+          .catch((e) => console.error(e));
+        const result = await server.initHolePunch(
+          {
+            host: '127.0.0.1' as Host,
+            port: 55556 as Port,
+          },
+          2000,
+        );
+        await clientProm;
+        expect(result).toBeTrue();
+        await server.stop();
+      },
+      { numRuns: 1 },
+    );
+    testProp(
+      'init returns with existing connections',
+      [tlsConfigWithCaArb],
+      async (tlsConfigProm) => {
+        const tlsConfig = await tlsConfigProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfig.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        const client = await QUICClient.createQUICClient({
+          host: '::ffff:127.0.0.1' as Host,
+          port: server.port,
+          localHost: '::' as Host,
+          localPort: 55556 as Port,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        });
+        const result = await Promise.race([
+          server.initHolePunch(
+            {
+              host: '127.0.0.1' as Host,
+              port: 55556 as Port,
+            },
+            2000,
+          ),
+          sleep(10).then(() => {
+            throw Error('timed out');
+          }),
+        ]);
+        expect(result).toBeTrue();
+        await client.destroy({ force: true });
+        await server.stop();
+      },
+      { numRuns: 1 },
+    );
+  });
 });
