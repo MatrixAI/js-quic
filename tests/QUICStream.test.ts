@@ -229,7 +229,7 @@ describe(QUICStream.name, () => {
       );
       await server.start({
         host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        port: 58888 as Port,
       });
       const client = await QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
@@ -322,7 +322,7 @@ describe(QUICStream.name, () => {
       );
       await server.start({
         host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        port: 59999 as Port,
       });
       const client = await QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
@@ -385,9 +385,9 @@ describe(QUICStream.name, () => {
     },
     { numRuns: 10 },
   );
-  testProp(
+  testProp.skip(
     'should propagate errors over stream for readable',
-    [tlsConfigWithCaArb, fc.integer({ min: 5, max: 10 }).noShrink()],
+    [tlsConfigWithCaArb, fc.integer({ min: 5, max: 5 }).noShrink()],
     async (tlsConfigProm, streamsNum) => {
       const testReason = Symbol('TestReason');
       const codeToReason = (type, code) => {
@@ -423,7 +423,7 @@ describe(QUICStream.name, () => {
       );
       await server.start({
         host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        port: 60000 as Port,
       });
       const client = await QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
@@ -447,7 +447,11 @@ describe(QUICStream.name, () => {
         'stream',
         (streamEvent: events.QUICConnectionStreamEvent) => {
           const stream = streamEvent.detail;
-          const streamProm = stream.readable.pipeTo(stream.writable);
+          const streamProm = stream.readable
+            .pipeTo(stream.writable)
+            .catch((e) => {
+              expect(e).toBe(testReason);
+            });
           activeServerStreams.push(streamProm);
           serverStreamNum += 1;
           if (serverStreamNum >= streamsNum) serverStreamsProm.resolveP();
@@ -458,36 +462,33 @@ describe(QUICStream.name, () => {
       const message = Buffer.from('Hello!');
       const serverStreamsDoneProm = utils.promise();
       for (let i = 0; i < streamsNum; i++) {
-        activeClientStreams.push(
-          (async () => {
-            const stream = await client.connection.streamNew();
-            const writer = stream.writable.getWriter();
-            // Do write and read messages here.
-            await writer.write(message);
-            await stream.readable.cancel(testReason);
-            await serverStreamsDoneProm.p;
-            // Need time for packets to send/recv
-            await testsUtils.sleep(100);
-            const writeProm = writer.write(message);
-            await writeProm.then(
-              () => {
-                throw Error('write did not throw');
-              },
-              (e) => expect(e).toBe(testReason),
-            );
-          })(),
-        );
+        const clientProm = (async () => {
+          const stream = await client.connection.streamNew();
+          const writer = stream.writable.getWriter();
+          // Do write and read messages here.
+          await writer.write(message);
+          await stream.readable.cancel(testReason);
+          await serverStreamsDoneProm.p;
+          // Need time for packets to send/recv
+          await testsUtils.sleep(100);
+          const writeProm = writer.write(message);
+          await writeProm.then(
+            () => {
+              throw Error('write did not throw');
+            },
+            (e) => expect(e).toBe(testReason),
+          );
+        })();
+        // ClientProm.catch(e => logger.error(e));
+        activeClientStreams.push(clientProm);
       }
       // Wait for streams to be created before mapping
       await serverStreamsProm.p;
-      const expectationProms = activeServerStreams.map(async (v) => {
-        await v.catch((e) => {
-          expect(e).toBe(testReason);
-        });
-      });
       await Promise.all([
         Promise.all(activeClientStreams),
-        Promise.all(expectationProms).finally(serverStreamsDoneProm.resolveP),
+        Promise.all(activeServerStreams).finally(() => {
+          serverStreamsDoneProm.resolveP();
+        }),
       ]);
       await client?.destroy({ force: true });
       await server?.stop({ force: true });

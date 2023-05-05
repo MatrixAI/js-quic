@@ -97,7 +97,7 @@ describe(QUICSocket.name, () => {
     dualStackSocketClose = utils
       .promisify(dualStackSocket.close)
       .bind(dualStackSocket);
-    await ipv4SocketBind(55555, '127.0.0.1');
+    await ipv4SocketBind(57777, '127.0.0.1');
     await ipv6SocketBind(0, '::1');
     await dualStackSocketBind(0, '::');
     ipv4SocketPort = ipv4Socket.address().port;

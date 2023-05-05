@@ -10,7 +10,7 @@ import * as errors from '@/errors';
 import { promise } from '@/utils';
 import QUICSocket from '@/QUICSocket';
 import * as testsUtils from './utils';
-import { tlsConfigWithCaArb } from './tlsUtils';
+import { tlsConfigWithCaArb, tlsConfigWithCaGENOKPArb } from './tlsUtils';
 import { sleep } from './utils';
 import * as fixtures from './fixtures/certFixtures';
 
@@ -188,7 +188,7 @@ describe(QUICClient.name, () => {
     await expect(
       QUICClient.createQUICClient({
         host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        port: 56666 as Port,
         localHost: '127.0.0.1' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name),
@@ -251,10 +251,9 @@ describe(QUICClient.name, () => {
       },
       { numRuns: 10 },
     );
-    // FIXME: randomly fails, likely due to test data selecting same cert
     testProp(
       'new connections use new config',
-      [tlsConfigWithCaArb, tlsConfigWithCaArb],
+      [tlsConfigWithCaGENOKPArb, tlsConfigWithCaGENOKPArb],
       async (tlsConfigProm1, tlsConfigProm2) => {
         const tlsConfig1 = await tlsConfigProm1;
         const tlsConfig2 = await tlsConfigProm2;
@@ -599,7 +598,7 @@ describe(QUICClient.name, () => {
       const result = await server.initHolePunch(
         {
           host: '127.0.0.1' as Host,
-          port: 55555 as Port,
+          port: 52222 as Port,
         },
         2000,
       );
@@ -1385,7 +1384,7 @@ describe(QUICClient.name, () => {
     test('Keep alive does not prevent connection timeout', async () => {
       const clientProm = QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1' as Host,
-        port: 55555 as Port,
+        port: 54444 as Port,
         localHost: '::' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name),

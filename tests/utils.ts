@@ -1,6 +1,7 @@
 import type QUICSocket from '@/QUICSocket';
 import type QUICClient from '@/QUICClient';
 import type QUICServer from '@/QUICServer';
+import type QUICStream from '@/QUICStream';
 import { webcrypto } from 'crypto';
 
 async function sleep(ms: number): Promise<void> {
@@ -81,4 +82,66 @@ function extractSocket(
   sockets.add(thing.socket);
 }
 
-export { sleep, generateKey, sign, verify, randomBytes, extractSocket };
+type Messages = Array<Uint8Array>;
+
+type StreamData = {
+  messages: Messages;
+  startDelay: number;
+  endDelay: number;
+  delays: Array<number>;
+};
+
+/**
+ * This is used to have a stream run concurrently in the background.
+ * Will resolve once stream has completed.
+ * This will send the data provided with delays provided.
+ * Will consume stream with provided delays between reads.
+ */
+const handleStreamProm = async (stream: QUICStream, streamData: StreamData) => {
+  const messages = streamData.messages;
+  const delays = streamData.delays;
+  const writeProm = (async () => {
+    // Write data
+    let count = 0;
+    const writer = stream.writable.getWriter();
+    for (const message of messages) {
+      await writer.write(message);
+      await sleep(delays[count % delays.length]);
+      count += 1;
+    }
+    await sleep(streamData.endDelay);
+    await writer.close();
+  })();
+  const readProm = (async () => {
+    // Consume readable
+    let count = 0;
+    for await (const _ of stream.readable) {
+      // Do nothing with delay,
+      await sleep(delays[count % delays.length]);
+      count += 1;
+    }
+  })();
+  try {
+    await Promise.all([writeProm, readProm]);
+  } finally {
+    await stream.destroy().catch(() => {});
+    // @ts-ignore: kidnap logger
+    const streamLogger = stream.logger;
+    streamLogger.info(
+      `stream result ${JSON.stringify(
+        await Promise.allSettled([readProm, writeProm]),
+      )}`,
+    );
+  }
+};
+
+export type { Messages, StreamData };
+export {
+  sleep,
+  generateKey,
+  sign,
+  verify,
+  randomBytes,
+  extractSocket,
+  handleStreamProm,
+};
