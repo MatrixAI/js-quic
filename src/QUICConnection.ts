@@ -46,7 +46,6 @@ class QUICConnection extends EventTarget {
   protected codeToReason: StreamCodeToReason;
   protected maxReadableStreamBytes: number | undefined;
   protected maxWritableStreamBytes: number | undefined;
-  protected destroyingMap: Map<StreamId, QUICStream> = new Map();
 
   // This basically allows one to await this promise
   // once resolved, always resolved...
@@ -421,7 +420,7 @@ class QUICConnection extends EventTarget {
       };
       try {
         this.conn.recv(data, recvInfo);
-        this.logger.debug(`RECEIVED ${data.byteLength} of data`);
+        this.logger.info(`RECEIVED ${data.byteLength} of data`);
       } catch (e) {
         this.logger.error(`recv error ${e.message}`);
         // Depending on the exception, the `this.conn.recv`
@@ -460,10 +459,8 @@ class QUICConnection extends EventTarget {
         if (this.resolveCloseP != null) this.resolveCloseP();
         return;
       }
-      if (
-        !this.conn.isDraining() &&
-        (this.conn.isInEarlyData() || this.conn.isEstablished())
-      ) {
+      if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
+        const readIds: Array<number> = [];
         for (const streamId of this.conn.readable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
           if (quicStream == null) {
@@ -471,7 +468,6 @@ class QUICConnection extends EventTarget {
             quicStream = await QUICStream.createQUICStream({
               streamId,
               connection: this,
-              destroyingMap: this.destroyingMap,
               codeToReason: this.codeToReason,
               reasonToCode: this.reasonToCode,
               maxReadableStreamBytes: this.maxReadableStreamBytes,
@@ -482,9 +478,14 @@ class QUICConnection extends EventTarget {
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
             );
           }
+          readIds.push(quicStream.streamId);
           quicStream.read();
           quicStream.dispatchEvent(new events.QUICStreamReadableEvent());
         }
+        if (readIds.length > 0) {
+          this.logger.info(`processed reads for ${readIds}`);
+        }
+        const writeIds: Array<number> = [];
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
           if (quicStream == null) {
@@ -494,7 +495,6 @@ class QUICConnection extends EventTarget {
               connection: this,
               codeToReason: this.codeToReason,
               reasonToCode: this.reasonToCode,
-              destroyingMap: this.destroyingMap,
               maxReadableStreamBytes: this.maxReadableStreamBytes,
               logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
             });
@@ -503,18 +503,15 @@ class QUICConnection extends EventTarget {
             );
           }
           quicStream.dispatchEvent(new events.QUICStreamWritableEvent());
+          writeIds.push(quicStream.streamId);
           quicStream.write();
         }
-        // Checking shortlist if streams have finished.
-        for (const [streamId, stream] of this.destroyingMap) {
-          if (stream.isFinished()) {
-            // If it has finished, it will trigger its own clean up.
-            // Remove the stream from the shortlist.
-            this.destroyingMap.delete(streamId);
-          }
+        if (writeIds.length > 0) {
+          this.logger.info(`processed writes for ${writeIds}`);
         }
       }
     } finally {
+      this.garbageCollectStreams('recv');
       this.logger.debug('RECV FINALLY');
       // Set the timeout
       this.checkTimeout();
@@ -527,7 +524,7 @@ class QUICConnection extends EventTarget {
       ) {
         this.logger.debug('CALLING DESTROY 2');
         // Destroy in the background, we still need to process packets
-        void this.destroy();
+        void this.destroy().catch(() => {});
       }
     }
   }
@@ -558,6 +555,7 @@ class QUICConnection extends EventTarget {
     } else if (this.conn.isDraining()) {
       return;
     }
+    let numSent = 0;
     try {
       const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
       let sendLength: number;
@@ -630,8 +628,10 @@ class QUICConnection extends EventTarget {
           return;
         }
         this.dispatchEvent(new events.QUICConnectionSendEvent());
+        numSent += 1;
       }
     } finally {
+      if (numSent > 0) this.garbageCollectStreams('send');
       this.logger.debug('SEND FINALLY');
       this.checkTimeout();
       if (
@@ -689,7 +689,6 @@ class QUICConnection extends EventTarget {
         connection: this,
         codeToReason: this.codeToReason,
         reasonToCode: this.reasonToCode,
-        destroyingMap: this.destroyingMap,
         maxReadableStreamBytes: this.maxReadableStreamBytes,
         maxWritableStreamBytes: this.maxWritableStreamBytes,
         logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
@@ -743,7 +742,7 @@ class QUICConnection extends EventTarget {
     ) {
       this.logger.debug('CALLING DESTROY 3');
       // Destroy in the background, we still need to process packets
-      void this.destroy();
+      void this.destroy().catch(() => {});
     }
     this.checkTimeout();
   };
@@ -795,6 +794,19 @@ class QUICConnection extends EventTarget {
       }
     }
   };
+
+  protected garbageCollectStreams(where: string) {
+    const nums: Array<number> = [];
+    // Only check if packets were sent
+    for (const [streamId, quicStream] of this.streamMap) {
+      // Stream sending can finish after a packet is sent
+      nums.push(streamId);
+      quicStream.read();
+    }
+    if (nums.length > 0) {
+      this.logger.info(`checking read finally ${where} for ${nums}`);
+    }
+  }
 }
 
 export default QUICConnection;

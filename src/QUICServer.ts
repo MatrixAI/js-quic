@@ -290,6 +290,7 @@ class QUICServer extends EventTarget {
     this.logger.debug(
       `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
     );
+    const clientConnRef = Buffer.from(header.scid).toString('hex').slice(32);
     const connection = await QUICConnection.acceptQUICConnection({
       scid,
       dcid: dcidOriginal,
@@ -301,7 +302,7 @@ class QUICServer extends EventTarget {
       maxReadableStreamBytes: this.maxReadableStreamBytes,
       maxWritableStreamBytes: this.maxWritableStreamBytes,
       logger: this.logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}`,
+        `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),
     });
     connection.setKeepAlive(this.keepaliveIntervalTime);
