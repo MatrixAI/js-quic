@@ -4,6 +4,7 @@ import type {
   StreamId,
   StreamReasonToCode,
   StreamCodeToReason,
+  ConnectionMetadata,
 } from './types';
 import type { Connection } from './native/types';
 import { ReadableStream, WritableStream } from 'stream/web';
@@ -204,6 +205,21 @@ class QUICStream
   }
 
   /**
+   * Connection information including hosts, ports and cert data.
+   */
+  public get remoteInfo(): ConnectionMetadata {
+    return this.connection.remoteInfo;
+  }
+
+  /**
+   * Duplicating `remoteInfo` functionality.
+   * This strictly exists to work with agnostic RPC stream interface.
+   */
+  public get meta(): ConnectionMetadata {
+    return this.connection.remoteInfo;
+  }
+
+  /**
    * This method can be arrived top-down or bottom-up:
    *
    * 1. Top-down control flow - means explicit destruction from QUICConnection
@@ -234,6 +250,21 @@ class QUICStream
     // We need to wait for the connection to finish before fully destroying
     this.dispatchEvent(new events.QUICStreamDestroyEvent());
     this.logger.info(`Destroyed ${this.constructor.name}`);
+  }
+
+  /**
+   * Used to cancel the streams. This function is synchronous but triggers some asynchronous events.
+   */
+  public cancel(reason?: any): void {
+    reason = reason ?? new errors.ErrorQUICStreamCancel();
+    if (!this._recvClosed) {
+      this.readableController.error(reason);
+      void this.closeRecv(true, reason);
+    }
+    if (!this._sendClosed) {
+      this.writableController.error(reason);
+      void this.closeSend(true, reason);
+    }
   }
 
   /**

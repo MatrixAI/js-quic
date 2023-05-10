@@ -330,37 +330,45 @@ const tlsConfigArb = (keyPairs: fc.Arbitrary<Array<KeyPair>> = keyPairsArb()) =>
     .map(async (keyPairs) => await createTLSConfigWithChain(keyPairs))
     .noShrink();
 
+const tlsConfigWithCaRSAArb = fc.record({
+  type: fc.constant('RSA'),
+  ca: fc.constant(certFixtures.tlsConfigMemRSACa),
+  tlsConfig: certFixtures.tlsConfigRSAExampleArb,
+});
+
+const tlsConfigWithCaOKPArb = fc.record({
+  type: fc.constant('OKP'),
+  ca: fc.constant(certFixtures.tlsConfigMemOKPCa),
+  tlsConfig: certFixtures.tlsConfigOKPExampleArb,
+});
+
+const tlsConfigWithCaECDSAArb = fc.record({
+  type: fc.constant('ECDSA'),
+  ca: fc.constant(certFixtures.tlsConfigMemECDSACa),
+  tlsConfig: certFixtures.tlsConfigECDSAExampleArb,
+});
+
+const tlsConfigWithCaGENOKPArb = tlsConfigArb().map(async (configProm) => {
+  const config = await configProm;
+  return {
+    type: fc.constant('GEN-OKP'),
+    tlsConfig: {
+      certChainPem: config.certChainPem,
+      privKeyPem: config.privKeyPem,
+    },
+    ca: {
+      certChainPem: config.caPem,
+      privKeyPem: '',
+    },
+  };
+});
+
 const tlsConfigWithCaArb = fc
   .oneof(
-    fc.record({
-      type: fc.constant('RSA'),
-      ca: fc.constant(certFixtures.tlsConfigMemRSACa),
-      tlsConfig: certFixtures.tlsConfigRSAExampleArb,
-    }),
-    fc.record({
-      type: fc.constant('OKP'),
-      ca: fc.constant(certFixtures.tlsConfigMemOKPCa),
-      tlsConfig: certFixtures.tlsConfigOKPExampleArb,
-    }),
-    fc.record({
-      type: fc.constant('ECDSA'),
-      ca: fc.constant(certFixtures.tlsConfigMemECDSACa),
-      tlsConfig: certFixtures.tlsConfigECDSAExampleArb,
-    }),
-    tlsConfigArb().map(async (configProm) => {
-      const config = await configProm;
-      return {
-        type: fc.constant('GEN-OKP'),
-        tlsConfig: {
-          certChainPem: config.certChainPem,
-          privKeyPem: config.privKeyPem,
-        },
-        ca: {
-          certChainPem: config.caPem,
-          privKeyPem: '',
-        },
-      };
-    }),
+    tlsConfigWithCaRSAArb,
+    tlsConfigWithCaOKPArb,
+    tlsConfigWithCaECDSAArb,
+    tlsConfigWithCaGENOKPArb,
   )
   .noShrink();
 
@@ -372,4 +380,8 @@ export {
   keyPairsArb,
   tlsConfigArb,
   tlsConfigWithCaArb,
+  tlsConfigWithCaRSAArb,
+  tlsConfigWithCaOKPArb,
+  tlsConfigWithCaECDSAArb,
+  tlsConfigWithCaGENOKPArb,
 };
