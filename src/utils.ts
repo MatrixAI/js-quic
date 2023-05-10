@@ -54,15 +54,50 @@ function isIPv4MappedIPv6(host: string): host is Host {
   return false;
 }
 
+function isIPv4MappedIPv6Hex(host: string): host is Host {
+  if (host.startsWith('::ffff:')) {
+    try {
+      // The `ip-num` package understands `::ffff:7f00:1`
+      IPv6.fromString(host);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function isIPv4MappedIPv6Dec(host: string): host is Host {
+  if (host.startsWith('::ffff:')) {
+    // But it does not understand `::ffff:127.0.0.1`
+    const ipv4 = host.slice('::ffff:'.length);
+    if (isIPv4(ipv4)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Takes an IPv4 address and returns the IPv4 mapped IPv6 address.
  * This produces the dotted decimal variant.
  */
-function toIPv4MappedIPv6(host: string): Host {
+function toIPv4MappedIPv6Dec(host: string): Host {
   if (!isIPv4(host)) {
     throw new TypeError('Invalid IPv4 address');
   }
   return ('::ffff:' + host) as Host;
+}
+
+/**
+ * Takes an IPv4 address and returns the IPv4 mapped IPv6 address.
+ * This produces the dotted Hexidecimal variant.
+ */
+function toIPv4MappedIPv6Hex(host: string): Host {
+  if (!isIPv4(host)) {
+    throw new TypeError('Invalid IPv4 address');
+  }
+  return IPv4.fromString(host).toIPv4MappedIPv6().toString() as Host;
 }
 
 /**
@@ -85,6 +120,20 @@ function fromIPv4MappedIPv6(host: string): Host {
   const ipv4Hexes = ipv4Hex.match(/.{1,2}/g)!;
   const ipv4Decs = ipv4Hexes.map((h) => parseInt(h, 16));
   return ipv4Decs.join('.') as Host;
+}
+
+/**
+ * This converts all `IPv4` formats to the `IPv4` decimal format.
+ * `IPv4` decimal and `IPv6` hex formatted IPs are left unchanged.
+ */
+function toCanonicalIp(host: string) {
+  if (isIPv4MappedIPv6(host)) {
+    return fromIPv4MappedIPv6(host);
+  }
+  if (isIPv4(host) || isIPv6(host)) {
+    return host;
+  }
+  throw new TypeError('Invalid IP address');
 }
 
 /**
@@ -226,7 +275,7 @@ function resolvesZeroIP(host: Host): Host {
   if (isIPv4MappedIPv6(host)) {
     const ipv4 = fromIPv4MappedIPv6(host);
     if (new IPv4(ipv4).isEquals(zeroIPv4)) {
-      return toIPv4MappedIPv6('127.0.0.1');
+      return toIPv4MappedIPv6Dec('127.0.0.1');
     } else {
       return host;
     }
@@ -273,8 +322,12 @@ export {
   isIPv4,
   isIPv6,
   isIPv4MappedIPv6,
-  toIPv4MappedIPv6,
+  isIPv4MappedIPv6Hex,
+  isIPv4MappedIPv6Dec,
+  toIPv4MappedIPv6Dec,
+  toIPv4MappedIPv6Hex,
   fromIPv4MappedIPv6,
+  toCanonicalIp,
   resolveHostname,
   resolveHost,
   promisify,
