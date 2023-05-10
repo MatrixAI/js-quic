@@ -129,6 +129,7 @@ interface Connection {
   localError(): ConnectionError | null;
   stats(): Stats;
   pathStats(): Array<PathStats>;
+  sendAckEliciting(): void;
 }
 
 interface ConnectionConstructor {

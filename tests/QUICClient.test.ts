@@ -1,7 +1,9 @@
 import type { Crypto, Host, Port } from '@/types';
 import type * as events from '@/events';
+import type QUICConnection from '@/QUICConnection';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
+import { destroyed } from '@matrixai/async-init';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
 import * as errors from '@/errors';
@@ -10,18 +12,22 @@ import QUICSocket from '@/QUICSocket';
 import * as testsUtils from './utils';
 import { tlsConfigWithCaArb } from './tlsUtils';
 import { sleep } from './utils';
+import * as fixtures from './fixtures/certFixtures';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
+  const host = '127.0.0.1' as Host;
   // This has to be setup asynchronously due to key generation
   let crypto: {
     key: ArrayBuffer;
     ops: Crypto;
   };
+  let clientSocket: QUICSocket;
+  let serverSocket: QUICSocket;
 
   // We need to test the stream making
   beforeEach(async () => {
@@ -33,6 +39,18 @@ describe(QUICClient.name, () => {
         randomBytes: testsUtils.randomBytes,
       },
     };
+    clientSocket = new QUICSocket({ crypto, logger });
+    serverSocket = new QUICSocket({ crypto, logger });
+    await clientSocket.start({
+      host: '127.0.0.1' as Host,
+    });
+    await serverSocket.start({
+      host: '127.0.0.1' as Host,
+    });
+  });
+  afterEach(async () => {
+    await clientSocket.stop(true);
+    await serverSocket.stop(true);
   });
   // Are we describing a dual stack client!?
   describe('dual stack client', () => {
@@ -1085,5 +1103,303 @@ describe(QUICClient.name, () => {
       },
       { numRuns: 1 },
     );
+  });
+  describe('keepalive', () => {
+    const tlsConfig = fixtures.tlsConfigMemRSA1;
+    test('connection can time out on client', async () => {
+      const connectionEventProm = promise<QUICConnection>();
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig,
+          verifyPeer: false,
+          maxIdleTimeout: 1000,
+        },
+        socket: serverSocket,
+      });
+      server.addEventListener(
+        'connection',
+        (e: events.QUICServerConnectionEvent) =>
+          connectionEventProm.resolveP(e.detail),
+      );
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+        },
+        socket: clientSocket,
+      });
+      // Setting no keepalive should cause the connection to time out
+      // It has cleaned up due to timeout
+      const clientConnection = client.connection;
+      const clientTimeoutProm = promise<void>();
+      clientConnection.addEventListener(
+        'error',
+        (event: events.QUICConnectionErrorEvent) => {
+          if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+            clientTimeoutProm.resolveP();
+          }
+        },
+      );
+      await clientTimeoutProm.p;
+      const serverConnection = await connectionEventProm.p;
+      await sleep(100);
+      // Server and client has cleaned up
+      expect(clientConnection[destroyed]).toBeTrue();
+      expect(serverConnection[destroyed]).toBeTrue();
+
+      await client.destroy();
+      await server.stop();
+    });
+    test('connection can time out on server', async () => {
+      const connectionEventProm = promise<QUICConnection>();
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig,
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+        },
+        socket: serverSocket,
+      });
+      server.addEventListener(
+        'connection',
+        (e: events.QUICServerConnectionEvent) =>
+          connectionEventProm.resolveP(e.detail),
+      );
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 1000,
+        },
+        socket: clientSocket,
+      });
+      // Setting no keepalive should cause the connection to time out
+      // It has cleaned up due to timeout
+      const clientConnection = client.connection;
+      const serverConnection = await connectionEventProm.p;
+      const serverTimeoutProm = promise<void>();
+      serverConnection.addEventListener(
+        'error',
+        (event: events.QUICConnectionErrorEvent) => {
+          if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+            serverTimeoutProm.resolveP();
+          }
+        },
+      );
+      await serverTimeoutProm.p;
+      await sleep(100);
+      // Server and client has cleaned up
+      expect(clientConnection[destroyed]).toBeTrue();
+      expect(serverConnection[destroyed]).toBeTrue();
+
+      await client.destroy();
+      await server.stop();
+    });
+    test('keep alive prevents timeout on client', async () => {
+      const connectionEventProm = promise<QUICConnection>();
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig,
+          verifyPeer: false,
+          maxIdleTimeout: 20000,
+          logKeys: './tmp/key1.log',
+        },
+        socket: serverSocket,
+      });
+      server.addEventListener(
+        'connection',
+        (e: events.QUICServerConnectionEvent) =>
+          connectionEventProm.resolveP(e.detail),
+      );
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+        },
+        socket: clientSocket,
+        keepaliveIntervalTime: 50,
+      });
+      // Setting no keepalive should cause the connection to time out
+      // It has cleaned up due to timeout
+      const clientConnection = client.connection;
+      const clientTimeoutProm = promise<void>();
+      clientConnection.addEventListener(
+        'error',
+        (event: events.QUICConnectionErrorEvent) => {
+          if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+            clientTimeoutProm.resolveP();
+          }
+        },
+      );
+      await connectionEventProm.p;
+      // Connection would timeout after 100ms if keep alive didn't work
+      await Promise.race([
+        sleep(300),
+        clientTimeoutProm.p.then(() => {
+          throw Error('Connection timed out');
+        }),
+      ]);
+      await client.destroy();
+      await server.stop();
+    });
+    test('keep alive prevents timeout on server', async () => {
+      const connectionEventProm = promise<QUICConnection>();
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig,
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+          logKeys: './tmp/key1.log',
+        },
+        socket: serverSocket,
+        keepaliveIntervalTime: 50,
+      });
+      server.addEventListener(
+        'connection',
+        (e: events.QUICServerConnectionEvent) =>
+          connectionEventProm.resolveP(e.detail),
+      );
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 20000,
+        },
+        socket: clientSocket,
+      });
+      // Setting no keepalive should cause the connection to time out
+      // It has cleaned up due to timeout
+      const serverConnection = await connectionEventProm.p;
+      const serverTimeoutProm = promise<void>();
+      serverConnection.addEventListener(
+        'error',
+        (event: events.QUICConnectionErrorEvent) => {
+          if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+            serverTimeoutProm.resolveP();
+          }
+        },
+      );
+      // Connection would time out after 100ms if keep alive didn't work
+      await Promise.race([
+        sleep(300),
+        serverTimeoutProm.p.then(() => {
+          throw Error('Connection timed out');
+        }),
+      ]);
+      await client.destroy();
+      await server.stop();
+    });
+    test('client keep alive prevents timeout on server', async () => {
+      const connectionEventProm = promise<QUICConnection>();
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig,
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+          logKeys: './tmp/key1.log',
+        },
+        socket: serverSocket,
+      });
+      server.addEventListener(
+        'connection',
+        (e: events.QUICServerConnectionEvent) =>
+          connectionEventProm.resolveP(e.detail),
+      );
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: host,
+        port: server.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 20000,
+        },
+        socket: clientSocket,
+        keepaliveIntervalTime: 50,
+      });
+      // Setting no keepalive should cause the connection to time out
+      // It has cleaned up due to timeout
+      const serverConnection = await connectionEventProm.p;
+      const serverTimeoutProm = promise<void>();
+      serverConnection.addEventListener(
+        'error',
+        (event: events.QUICConnectionErrorEvent) => {
+          if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+            serverTimeoutProm.resolveP();
+          }
+        },
+      );
+      // Connection would time out after 100ms if keep alive didn't work
+      await Promise.race([
+        sleep(300),
+        serverTimeoutProm.p.then(() => {
+          throw Error('Connection timed out');
+        }),
+      ]);
+      await client.destroy();
+      await server.stop();
+    });
+    test('Keep alive does not prevent connection timeout', async () => {
+      const clientProm = QUICClient.createQUICClient({
+        host: host,
+        port: serverSocket.port,
+        localHost: '::' as Host,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+          maxIdleTimeout: 100,
+        },
+        socket: clientSocket,
+        keepaliveIntervalTime: 50,
+      });
+      await expect(clientProm).rejects.toThrow(
+        errors.ErrorQUICConnectionTimeout,
+      );
+    });
   });
 });

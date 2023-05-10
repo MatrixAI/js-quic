@@ -269,6 +269,7 @@ export class Connection {
    * https://stackoverflow.com/q/50343130/582917
    */
   pathStats(): Array<PathStats>
+  sendAckEliciting(): void
 }
 export class StreamIter {
   [Symbol.iterator](): Iterator<number, void, void>
