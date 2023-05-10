@@ -251,6 +251,24 @@ function never(): never {
   throw new errors.ErrorQUICUndefinedBehaviour();
 }
 
+function certificateDERToPEM(der: Uint8Array): string {
+  const data = Buffer.from(der);
+  const contents =
+    data
+      .toString('base64')
+      .replace(/(.{64})/g, '$1\n')
+      .trimEnd() + '\n';
+  return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
+}
+
+function certificatePEMsToCertChainPem(pems: Array<string>): string {
+  let certChainPEM = '';
+  for (const pem of pems) {
+    certChainPEM += pem;
+  }
+  return certChainPEM;
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -268,4 +286,6 @@ export {
   encodeConnectionId,
   decodeConnectionId,
   never,
+  certificateDERToPEM,
+  certificatePEMsToCertChainPem,
 };

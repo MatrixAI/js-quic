@@ -6,6 +6,7 @@ import type { QUICConfig } from './config';
 import type { Host, Port, RemoteInfo, StreamId } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
+import type { ConnectionMetadata } from './types';
 import {
   CreateDestroy,
   ready,
@@ -297,6 +298,21 @@ class QUICConnection extends EventTarget {
 
   public get localPort() {
     return this.socket.port;
+  }
+
+  public get remoteInfo(): ConnectionMetadata {
+    const derCerts = this.conn.peerCertChain();
+    const remoteCertificates =
+      derCerts != null
+        ? derCerts.map((der) => utils.certificateDERToPEM(der))
+        : null;
+    return {
+      remoteCertificates,
+      localHost: this.localHost,
+      localPort: this.localPort,
+      remoteHost: this.remoteHost,
+      remotePort: this.remotePort,
+    };
   }
 
   /**

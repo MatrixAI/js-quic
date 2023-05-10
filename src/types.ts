@@ -88,6 +88,14 @@ type StreamCodeToReason = (
   code: number,
 ) => any | PromiseLike<any>;
 
+type ConnectionMetadata = {
+  remoteCertificates: Array<string> | null;
+  localHost: Host;
+  localPort: Port;
+  remoteHost: Host;
+  remotePort: Port;
+};
+
 export type {
   Opaque,
   Callback,
@@ -104,4 +112,5 @@ export type {
   RemoteInfo,
   StreamReasonToCode,
   StreamCodeToReason,
+  ConnectionMetadata,
 };
