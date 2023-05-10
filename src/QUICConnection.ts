@@ -61,6 +61,7 @@ class QUICConnection extends EventTarget {
   protected logger: Logger;
   protected socket: QUICSocket;
   protected timer?: ReturnType<typeof setTimeout>;
+  protected keepAliveInterval?: ReturnType<typeof setInterval>;
   public readonly closedP: Promise<void>;
   protected resolveCloseP?: () => void;
 
@@ -330,6 +331,11 @@ class QUICConnection extends EventTarget {
     force?: boolean;
   } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
+    // Clean up keep alive
+    if (this.keepAliveInterval != null) {
+      clearTimeout(this.keepAliveInterval);
+      delete this.keepAliveInterval;
+    }
     // Handle destruction concurrently
     const destroyProms: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
@@ -692,6 +698,27 @@ class QUICConnection extends EventTarget {
       }
       return quicStream;
     });
+  }
+
+  /**
+   * Used to update or disable the keep alive interval.
+   * Calling this will reset the delay before the next keep alive.
+   */
+  @ready(new errors.ErrorQUICConnectionDestroyed())
+  public setKeepAlive(intervalDelay?: number) {
+    // Clearing timeout prior to update
+    if (this.keepAliveInterval != null) {
+      clearTimeout(this.keepAliveInterval);
+      delete this.keepAliveInterval;
+    }
+    // Setting up keep alive interval
+    if (intervalDelay != null) {
+      this.keepAliveInterval = setInterval(async () => {
+        // Trigger an ping frame and send
+        this.conn.sendAckEliciting();
+        await this.send();
+      }, intervalDelay);
+    }
   }
 
   // Timeout handling, these methods handle time keeping for quiche.

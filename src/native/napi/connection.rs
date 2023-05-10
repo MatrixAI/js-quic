@@ -1068,4 +1068,11 @@ impl Connection {
       |s| s.into()
     ).collect();
   }
+
+  #[napi]
+  pub fn send_ack_eliciting(&mut self) -> napi::Result<()> {
+    return self.0.send_ack_eliciting().or_else(
+      |err| Err(Error::from_reason(err.to_string()))
+    );
+  }
 }

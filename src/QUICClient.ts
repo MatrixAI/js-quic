@@ -57,6 +57,7 @@ class QUICClient extends EventTarget {
     codeToReason,
     maxReadableStreamBytes,
     maxWritableStreamBytes,
+    keepaliveIntervalTime,
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
@@ -74,6 +75,7 @@ class QUICClient extends EventTarget {
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
     maxWritableStreamBytes?: number;
+    keepaliveIntervalTime?: number;
     logger?: Logger;
     config?: Partial<QUICConfig>;
   }) {
@@ -199,9 +201,9 @@ class QUICClient extends EventTarget {
     socket.removeEventListener('error', handleQUICSocketError);
     // Remove the temporary connection error handler
     connection.removeEventListener('error', handleConnectionError);
-
+    // Setting up keep alive
+    connection.setKeepAlive(keepaliveIntervalTime);
     // Now we create the client
-
     const client = new QUICClient({
       crypto,
       socket,
