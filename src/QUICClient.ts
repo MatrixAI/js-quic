@@ -266,7 +266,6 @@ class QUICClient extends EventTarget {
     this.socket = socket;
     this.isSocketShared = isSocketShared;
     // Registers itself to the socket
-    this.socket.registerClient(this);
     if (!isSocketShared) {
       this.socket.addEventListener('error', this.handleQUICSocketError);
     }

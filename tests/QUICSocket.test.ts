@@ -1,9 +1,11 @@
-import type { Crypto, Host, Hostname, Port } from '@/types';
+import type { Crypto, Host } from '@/types';
+import type QUICConnection from '@/QUICConnection';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
 import QUICSocket from '@/QUICSocket';
 import * as utils from '@/utils';
 import * as errors from '@/errors';
+import QUICConnectionId from '@/QUICConnectionId';
 import * as testsUtils from './utils';
 
 describe(QUICSocket.name, () => {
@@ -19,7 +21,7 @@ describe(QUICSocket.name, () => {
   let ipv6Socket: dgram.Socket;
   let dualStackSocket: dgram.Socket;
   let ipv4SocketBind: (port: number, host: string) => Promise<void>;
-  let ipv4SocketSend: (...params: Array<any>) => Promise<number>;
+  let _ipv4SocketSend: (...params: Array<any>) => Promise<number>;
   let ipv4SocketClose: () => Promise<void>;
   let ipv4SocketPort: number;
   // Handle IPv4 messages
@@ -32,7 +34,7 @@ describe(QUICSocket.name, () => {
     ipv4SocketMessageResolveP = resolveP;
   };
   let ipv6SocketBind: (port: number, host: string) => Promise<void>;
-  let ipv6SocketSend: (...params: Array<any>) => Promise<number>;
+  let _ipv6SocketSend: (...params: Array<any>) => Promise<number>;
   let ipv6SocketClose: () => Promise<void>;
   let ipv6SocketPort: number;
   // Handle IPv6 messages
@@ -45,7 +47,7 @@ describe(QUICSocket.name, () => {
     ipv6SocketMessageResolveP = resolveP;
   };
   let dualStackSocketBind: (port: number, host: string) => Promise<void>;
-  let dualStackSocketSend: (...params: Array<any>) => Promise<number>;
+  let _dualStackSocketSend: (...params: Array<any>) => Promise<number>;
   let dualStackSocketClose: () => Promise<void>;
   let dualStackSocketPort: number;
   // Handle dual stack messages
@@ -81,15 +83,15 @@ describe(QUICSocket.name, () => {
       ipv6Only: false,
     });
     ipv4SocketBind = utils.promisify(ipv4Socket.bind).bind(ipv4Socket);
-    ipv4SocketSend = utils.promisify(ipv4Socket.send).bind(ipv4Socket);
+    _ipv4SocketSend = utils.promisify(ipv4Socket.send).bind(ipv4Socket);
     ipv4SocketClose = utils.promisify(ipv4Socket.close).bind(ipv4Socket);
     ipv6SocketBind = utils.promisify(ipv6Socket.bind).bind(ipv6Socket);
-    ipv6SocketSend = utils.promisify(ipv6Socket.send).bind(ipv6Socket);
+    _ipv6SocketSend = utils.promisify(ipv6Socket.send).bind(ipv6Socket);
     ipv6SocketClose = utils.promisify(ipv6Socket.close).bind(ipv6Socket);
     dualStackSocketBind = utils
       .promisify(dualStackSocket.bind)
       .bind(dualStackSocket);
-    dualStackSocketSend = utils
+    _dualStackSocketSend = utils
       .promisify(dualStackSocket.send)
       .bind(dualStackSocket);
     dualStackSocketClose = utils
@@ -505,5 +507,41 @@ describe(QUICSocket.name, () => {
         },
       ]);
     });
+  });
+  test('socket should throw if stopped with active connections', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger,
+    });
+    await socket.start({
+      host: '127.0.0.1' as Host,
+    });
+    const connectionId = QUICConnectionId.fromBuffer(
+      Buffer.from('SomeRandomId'),
+    );
+    socket.connectionMap.set(connectionId, {
+      type: 'client',
+    } as QUICConnection);
+    await expect(socket.stop()).rejects.toThrow(
+      errors.ErrorQUICSocketConnectionsActive,
+    );
+    socket.connectionMap.delete(connectionId);
+    await expect(socket.stop()).toResolve();
+  });
+  test('socket should stop when forced with active connections', async () => {
+    const socket = new QUICSocket({
+      crypto,
+      logger,
+    });
+    await socket.start({
+      host: '127.0.0.1' as Host,
+    });
+    const connectionId = QUICConnectionId.fromBuffer(
+      Buffer.from('SomeRandomId'),
+    );
+    socket.connectionMap.set(connectionId, {
+      type: 'client',
+    } as QUICConnection);
+    await expect(socket.stop(true)).toResolve();
   });
 });

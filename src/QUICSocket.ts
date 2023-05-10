@@ -1,4 +1,3 @@
-import type QUICClient from './QUICClient';
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
 import type { Crypto, Host, Hostname, Port } from './types';
@@ -50,12 +49,12 @@ class QUICSocket extends EventTarget {
    * If it is non-QUIC, we can discard the data.
    * If there are multiple coalesced QUIC packets, it is expected that
    * all packets are intended for the same connection. This means we only
-   * need to parse the first QUIC packet to determinine what connection to route
+   * need to parse the first QUIC packet to determining what connection to route
    * the data to.
    */
   protected handleSocketMessage = async (
     data: Buffer,
-    rinfo: dgram.RemoteInfo,
+    remoteInfo: dgram.RemoteInfo,
   ) => {
     // The data buffer may have multiple coalesced QUIC packets.
     // This header is parsed from the first packet.
@@ -92,9 +91,9 @@ class QUICSocket extends EventTarget {
       quiche.MAX_CONN_ID_LEN,
     );
 
-    const remoteInfo = {
-      host: rinfo.address as Host,
-      port: rinfo.port as Port,
+    const remoteInfo_ = {
+      host: remoteInfo.address as Host,
+      port: remoteInfo.port as Port,
     };
 
     // Now both must be checked
@@ -107,7 +106,7 @@ class QUICSocket extends EventTarget {
       }
       const conn_ = await this.server.connectionNew(
         data,
-        remoteInfo,
+        remoteInfo_,
         header,
         dcid,
         scid,
@@ -126,7 +125,7 @@ class QUICSocket extends EventTarget {
       // When we register a client, we have to put the connection in our
       // connection map
     }
-    await conn.recv(data, remoteInfo);
+    await conn.recv(data, remoteInfo_);
 
     // The `conn.recv` now may actually destroy the connection
     // In that sense, there's nothing to send
@@ -273,10 +272,16 @@ class QUICSocket extends EventTarget {
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
-  public async stop(): Promise<void> {
+  /**
+   * Will stop the socket.
+   * An `ErrorQUICSocketConnectionsActive` will be thrown if there are active connections.
+   * If force is true, it will skip checking connections and stop the socket.
+   * @param force - Will force the socket to end even if there are active connections, used for cleaning up after tests.
+   */
+  public async stop(force = false): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
-    if (this.connectionMap.size > 0) {
+    if (!force && this.connectionMap.size > 0) {
       throw new errors.ErrorQUICSocketConnectionsActive(
         `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
       );
@@ -355,27 +360,6 @@ class QUICSocket extends EventTarget {
   }
 
   /**
-   * Registers a client to the socket
-   * This is a new client, but clients don't die by itself?
-   */
-  public registerClient(client: QUICClient) {
-    // So what really this does?
-    // Is this about creating a connection?
-    // So we can add the connection to the map?
-    // And if we are doing
-    // QUICConnection.createQUICConnection
-    // Then that means, we are really creating that connection in the async creator
-    // That means the async creator needs to create teh `connection` and call it too
-    this.logger.error('registerClient IS NOT IMPLEMENTED!');
-  }
-
-  // But we already have a connection map
-  // well yea, we are checking liveness of connections
-  // But client destruction is only way to destory connections
-  // But if the client connection fails
-  // we need to simultaneously destroy the client
-
-  /**
    * Sets a single server to the socket
    * You can only have 1 server for the socket
    * The socket message handling can dispatch new connections to the new server
@@ -388,7 +372,7 @@ class QUICSocket extends EventTarget {
    * Just go straight to calling a thing
    * We can call this.server.handleConnection()
    * Why `handleConnection` because technically it's built on top of the handleMessage
-   * Thatbecomes the key idea there
+   * That becomes the key idea there
    * handleNewConnection
    * And all sorts of other stuff!
    * Or whatever it needs to be
