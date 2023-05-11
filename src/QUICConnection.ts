@@ -451,6 +451,7 @@ class QUICConnection extends EventTarget {
         }
         return;
       }
+      this.dispatchEvent(new events.QUICConnectionRecvEvent());
       // Here we can resolve our promises!
       if (this.conn.isEstablished()) {
         this.resolveEstablishedP();
@@ -482,6 +483,7 @@ class QUICConnection extends EventTarget {
             );
           }
           quicStream.read();
+          quicStream.dispatchEvent(new events.QUICStreamReadableEvent());
         }
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
           let quicStream = this.streamMap.get(streamId);
@@ -500,6 +502,7 @@ class QUICConnection extends EventTarget {
               new events.QUICConnectionStreamEvent({ detail: quicStream }),
             );
           }
+          quicStream.dispatchEvent(new events.QUICStreamWritableEvent());
           quicStream.write();
         }
         // Checking shortlist if streams have finished.
@@ -626,6 +629,7 @@ class QUICConnection extends EventTarget {
           );
           return;
         }
+        this.dispatchEvent(new events.QUICConnectionSendEvent());
       }
     } finally {
       this.logger.debug('SEND FINALLY');

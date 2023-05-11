@@ -71,6 +71,18 @@ class QUICConnectionStreamEvent extends Event {
   }
 }
 
+class QUICConnectionSendEvent extends Event {
+  constructor(options?: EventInit) {
+    super('send', options);
+  }
+}
+
+class QUICConnectionRecvEvent extends Event {
+  constructor(options?: EventInit) {
+    super('recv', options);
+  }
+}
+
 class QUICConnectionDestroyEvent extends Event {
   constructor(options?: EventInit) {
     super('destroy', options);
@@ -89,18 +101,17 @@ class QUICConnectionErrorEvent extends Event {
   }
 }
 
-// TODO: use these or remove them
-// class QUICStreamReadableEvent extends Event {
-//   constructor(options?: EventInit) {
-//     super('readable', options);
-//   }
-// }
-//
-// class QUICStreamWritableEvent extends Event {
-//   constructor(options?: EventInit) {
-//     super('writable', options);
-//   }
-// }
+class QUICStreamReadableEvent extends Event {
+  constructor(options?: EventInit) {
+    super('readable', options);
+  }
+}
+
+class QUICStreamWritableEvent extends Event {
+  constructor(options?: EventInit) {
+    super('writable', options);
+  }
+}
 
 class QUICStreamDestroyEvent extends Event {
   constructor(options?: EventInit) {
@@ -133,8 +144,12 @@ export {
   QUICServerStopEvent,
   QUICServerErrorEvent,
   QUICConnectionStreamEvent,
+  QUICConnectionSendEvent,
+  QUICConnectionRecvEvent,
   QUICConnectionDestroyEvent,
   QUICConnectionErrorEvent,
+  QUICStreamReadableEvent,
+  QUICStreamWritableEvent,
   QUICStreamDestroyEvent,
   QUICClientDestroyEvent,
   QUICClientErrorEvent,
