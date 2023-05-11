@@ -1,3 +1,6 @@
+import type QUICSocket from '@/QUICSocket';
+import type QUICClient from '@/QUICClient';
+import type QUICServer from '@/QUICServer';
 import { webcrypto } from 'crypto';
 
 async function sleep(ms: number): Promise<void> {
@@ -67,4 +70,15 @@ async function randomBytes(data: ArrayBuffer) {
   webcrypto.getRandomValues(new Uint8Array(data));
 }
 
-export { sleep, generateKey, sign, verify, randomBytes };
+/**
+ * Use this on every client or server. It is essential for cleaning them up.
+ */
+function extractSocket(
+  thing: QUICClient | QUICServer,
+  sockets: Set<QUICSocket>,
+) {
+  // @ts-ignore: kidnap protected property
+  sockets.add(thing.socket);
+}
+
+export { sleep, generateKey, sign, verify, randomBytes, extractSocket };
