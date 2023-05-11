@@ -57,7 +57,7 @@ class QUICStream
 
   /**
    * For `reasonToCode`, return 0 means "unknown reason"
-   * It is the catch all for codes.
+   * It is the catch-all for codes.
    * So it is the default reason.
    *
    * It may receive any reason for cancellation.
