@@ -5,24 +5,25 @@ import type {
   Port,
   PromiseDeconstructed,
   RemoteInfo,
+  StreamCodeToReason,
+  StreamReasonToCode,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type { QUICConfig, TlsConfig } from './config';
-import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
-import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
+import { ready, StartStop } from '@matrixai/async-init/dist/StartStop';
+import * as events from './events';
+import { serverDefault } from './config';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
-import { serverDefault } from './config';
-import * as events from './events';
 import * as utils from './utils';
+import { promise } from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
-import { promise } from './utils';
 
 /**
  * You must provide a error handler `addEventListener('error')`.
@@ -417,8 +418,7 @@ class QUICServer extends EventTarget {
       sig: msgSig.toString('base64url'),
     };
     const tokenJSON = JSON.stringify(tokenData);
-    const tokenBuffer = Buffer.from(tokenJSON);
-    return tokenBuffer;
+    return Buffer.from(tokenJSON);
   }
 
   /**

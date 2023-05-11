@@ -15,19 +15,17 @@ import { sleep } from './utils';
 import * as fixtures from './fixtures/certFixtures';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
-  const host = '127.0.0.1' as Host;
   // This has to be setup asynchronously due to key generation
   let crypto: {
     key: ArrayBuffer;
     ops: Crypto;
   };
-  let clientSocket: QUICSocket;
-  let serverSocket: QUICSocket;
+  let sockets: Set<QUICSocket>;
 
   // We need to test the stream making
   beforeEach(async () => {
@@ -39,18 +37,14 @@ describe(QUICClient.name, () => {
         randomBytes: testsUtils.randomBytes,
       },
     };
-    clientSocket = new QUICSocket({ crypto, logger });
-    serverSocket = new QUICSocket({ crypto, logger });
-    await clientSocket.start({
-      host: '127.0.0.1' as Host,
-    });
-    await serverSocket.start({
-      host: '127.0.0.1' as Host,
-    });
+    sockets = new Set();
   });
   afterEach(async () => {
-    await clientSocket.stop(true);
-    await serverSocket.stop(true);
+    const stopProms: Array<Promise<void>> = [];
+    for (const socket of sockets) {
+      stopProms.push(socket.stop(true));
+    }
+    await Promise.allSettled(stopProms);
   });
   // Are we describing a dual stack client!?
   describe('dual stack client', () => {
@@ -68,6 +62,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         server.addEventListener(
           'connection',
           (e: events.QUICServerConnectionEvent) =>
@@ -86,6 +81,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         expect(conn.localHost).toBe('127.0.0.1');
         expect(conn.localPort).toBe(server.port);
@@ -110,6 +106,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         server.addEventListener(
           'connection',
           (e: events.QUICServerConnectionEvent) =>
@@ -129,6 +126,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         expect(conn.localHost).toBe('::1');
         expect(conn.localPort).toBe(server.port);
@@ -153,6 +151,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         server.addEventListener(
           'connection',
           (e: events.QUICServerConnectionEvent) =>
@@ -172,6 +171,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         expect(conn.localHost).toBe('::');
         expect(conn.localPort).toBe(server.port);
@@ -221,6 +221,7 @@ describe(QUICClient.name, () => {
             tlsConfig: tlsConfig1.tlsConfig,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         await server.start({
           host: '127.0.0.1' as Host,
         });
@@ -235,6 +236,7 @@ describe(QUICClient.name, () => {
             verifyPem: tlsConfig1.ca.certChainPem,
           },
         });
+        testsUtils.extractSocket(client1, sockets);
         const peerCertChainInitial = client1.connection.conn.peerCertChain();
         server.updateConfig({
           tlsConfig: tlsConfig2.tlsConfig,
@@ -267,6 +269,7 @@ describe(QUICClient.name, () => {
             tlsConfig: tlsConfig1.tlsConfig,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         await server.start({
           host: '127.0.0.1' as Host,
         });
@@ -280,6 +283,7 @@ describe(QUICClient.name, () => {
             verifyPem: tlsConfig1.ca.certChainPem,
           },
         });
+        testsUtils.extractSocket(client1, sockets);
         const peerCertChainInitial = client1.connection.conn.peerCertChain();
         server.updateConfig({
           tlsConfig: tlsConfig2.tlsConfig,
@@ -296,6 +300,7 @@ describe(QUICClient.name, () => {
             verifyPem: tlsConfig2.ca.certChainPem,
           },
         });
+        testsUtils.extractSocket(client2, sockets);
         const peerCertChainNew = client2.connection.conn.peerCertChain();
         expect(peerCertChainNew![0].toString()).not.toStrictEqual(
           peerCertChainInitial![0].toString(),
@@ -321,6 +326,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
         server.addEventListener(
           'connection',
@@ -341,6 +347,7 @@ describe(QUICClient.name, () => {
             verifyPem: tlsConfigs.ca.certChainPem,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         await handleConnectionEventProm.p;
         await client.destroy();
         await server.stop();
@@ -403,6 +410,7 @@ describe(QUICClient.name, () => {
             verifyPeer: true,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
         server.addEventListener(
           'connection',
@@ -424,6 +432,7 @@ describe(QUICClient.name, () => {
             verifyPeer: true,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         await handleConnectionEventProm.p;
         await client.destroy();
         await server.stop();
@@ -443,6 +452,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
         server.addEventListener(
           'connection',
@@ -488,6 +498,7 @@ describe(QUICClient.name, () => {
             verifyPeer: true,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
         server.addEventListener(
           'connection',
@@ -533,6 +544,7 @@ describe(QUICClient.name, () => {
             verifyPeer: true,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
         server.addEventListener(
           'connection',
@@ -566,143 +578,128 @@ describe(QUICClient.name, () => {
     );
   });
   describe('UDP nat punching', () => {
-    testProp(
-      'server can send init packets',
-      [tlsConfigWithCaArb],
-      async (tlsConfigProm) => {
-        const tlsConfig = await tlsConfigProm;
-        const server = new QUICServer({
-          crypto,
-          logger: logger.getChild(QUICServer.name),
-          config: {
-            tlsConfig: tlsConfig.tlsConfig,
-            verifyPeer: false,
-          },
-        });
-        await server.start({
+    test('server can send init packets', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig: fixtures.tlsConfigMemRSA1,
+          verifyPeer: false,
+        },
+      });
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      testsUtils.extractSocket(server, sockets);
+      // @ts-ignore: kidnap protected property
+      const socket = server.socket;
+      const mockedSend = jest.spyOn(socket, 'send');
+      // The server can send packets
+      // Should send 4 packets in 2 seconds
+      const result = await server.initHolePunch(
+        {
           host: '127.0.0.1' as Host,
-        });
-        // @ts-ignore: kidnap protected property
-        const socket = server.socket;
-        const mockedSend = jest.spyOn(socket, 'send');
-        // The server can send packets
-        // Should send 4 packets in 2 seconds
-        const result = await server.initHolePunch(
-          {
-            host: '127.0.0.1' as Host,
-            port: 55555 as Port,
-          },
-          2000,
-        );
-        expect(mockedSend).toHaveBeenCalledTimes(4);
-        expect(result).toBeFalse();
-        await server.stop();
-      },
-      { numRuns: 1 },
-    );
-    testProp(
-      'init ends when connection establishes',
-      [tlsConfigWithCaArb],
-      async (tlsConfigProm) => {
-        const tlsConfig = await tlsConfigProm;
-        const server = new QUICServer({
-          crypto,
-          logger: logger.getChild(QUICServer.name),
-          config: {
-            tlsConfig: tlsConfig.tlsConfig,
-            verifyPeer: false,
-          },
-        });
-        await server.start({
+          port: 55555 as Port,
+        },
+        2000,
+      );
+      expect(mockedSend).toHaveBeenCalledTimes(4);
+      expect(result).toBeFalse();
+      await server.stop();
+    });
+    test('init ends when connection establishes', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig: fixtures.tlsConfigMemRSA1,
+          verifyPeer: false,
+        },
+      });
+      testsUtils.extractSocket(server, sockets);
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      // The server can send packets
+      // Should send 4 packets in 2 seconds
+      const clientProm = sleep(1000)
+        .then(async () => {
+          const client = await QUICClient.createQUICClient({
+            host: '::ffff:127.0.0.1' as Host,
+            port: server.port,
+            localHost: '::' as Host,
+            localPort: 55556 as Port,
+            crypto,
+            logger: logger.getChild(QUICClient.name),
+            config: {
+              verifyPeer: false,
+            },
+          });
+          testsUtils.extractSocket(client, sockets);
+          await client.destroy({ force: true });
+        })
+        .catch(() => {});
+      const result = await server.initHolePunch(
+        {
           host: '127.0.0.1' as Host,
-        });
-        // The server can send packets
-        // Should send 4 packets in 2 seconds
-        const clientProm = sleep(1000)
-          .then(async () => {
-            const client = await QUICClient.createQUICClient({
-              host: '::ffff:127.0.0.1' as Host,
-              port: server.port,
-              localHost: '::' as Host,
-              localPort: 55556 as Port,
-              crypto,
-              logger: logger.getChild(QUICClient.name),
-              config: {
-                verifyPeer: false,
-              },
-            });
-            await client.destroy({ force: true });
-          })
-          .catch(() => {});
-        const result = await server.initHolePunch(
+          port: 55556 as Port,
+        },
+        2000,
+      );
+      await clientProm;
+      expect(result).toBeTrue();
+      await server.stop();
+    });
+    test('init returns with existing connections', async () => {
+      const server = new QUICServer({
+        crypto,
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          tlsConfig: fixtures.tlsConfigMemRSA1,
+          verifyPeer: false,
+        },
+      });
+      testsUtils.extractSocket(server, sockets);
+      await server.start({
+        host: '127.0.0.1' as Host,
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::ffff:127.0.0.1' as Host,
+        port: server.port,
+        localHost: '::' as Host,
+        localPort: 55556 as Port,
+        crypto,
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+        },
+      });
+      testsUtils.extractSocket(client, sockets);
+      const result = await Promise.race([
+        server.initHolePunch(
           {
             host: '127.0.0.1' as Host,
             port: 55556 as Port,
           },
           2000,
-        );
-        await clientProm;
-        expect(result).toBeTrue();
-        await server.stop();
-      },
-      { numRuns: 1 },
-    );
-    testProp(
-      'init returns with existing connections',
-      [tlsConfigWithCaArb],
-      async (tlsConfigProm) => {
-        const tlsConfig = await tlsConfigProm;
-        const server = new QUICServer({
-          crypto,
-          logger: logger.getChild(QUICServer.name),
-          config: {
-            tlsConfig: tlsConfig.tlsConfig,
-            verifyPeer: false,
-          },
-        });
-        await server.start({
-          host: '127.0.0.1' as Host,
-        });
-        const client = await QUICClient.createQUICClient({
-          host: '::ffff:127.0.0.1' as Host,
-          port: server.port,
-          localHost: '::' as Host,
-          localPort: 55556 as Port,
-          crypto,
-          logger: logger.getChild(QUICClient.name),
-          config: {
-            verifyPeer: false,
-          },
-        });
-        const result = await Promise.race([
-          server.initHolePunch(
-            {
-              host: '127.0.0.1' as Host,
-              port: 55556 as Port,
-            },
-            2000,
-          ),
-          sleep(10).then(() => {
-            throw Error('timed out');
-          }),
-        ]);
-        expect(result).toBeTrue();
-        await client.destroy({ force: true });
-        await server.stop();
-      },
-      { numRuns: 1 },
-    );
+        ),
+        sleep(10).then(() => {
+          throw Error('timed out');
+        }),
+      ]);
+      expect(result).toBeTrue();
+      await client.destroy({ force: true });
+      await server.stop();
+    });
   });
   describe('handles random packets', () => {
     testProp(
       'client handles random noise from server',
       [
-        tlsConfigWithCaArb,
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
       ],
-      async (tlsConfigProm, data, messages) => {
-        const tlsConfig = await tlsConfigProm;
+      async (data, messages) => {
         const socket = new QUICSocket({
           crypto,
           logger: logger.getChild('socket'),
@@ -714,11 +711,12 @@ describe(QUICClient.name, () => {
           crypto,
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            tlsConfig: fixtures.tlsConfigMemRSA1,
             verifyPeer: false,
           },
           socket,
         });
+        testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.QUICServerConnectionEvent>();
         server.addEventListener(
           'connection',
@@ -738,6 +736,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
@@ -800,12 +799,10 @@ describe(QUICClient.name, () => {
     testProp(
       'client handles random noise from external',
       [
-        tlsConfigWithCaArb,
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
       ],
-      async (tlsConfigProm, data, messages) => {
-        const tlsConfig = await tlsConfigProm;
+      async (data, messages) => {
         const socket = new QUICSocket({
           crypto,
           logger: logger.getChild('socket'),
@@ -817,10 +814,11 @@ describe(QUICClient.name, () => {
           crypto,
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            tlsConfig: fixtures.tlsConfigMemRSA1,
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.QUICServerConnectionEvent>();
         server.addEventListener(
           'connection',
@@ -840,6 +838,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
@@ -902,12 +901,10 @@ describe(QUICClient.name, () => {
     testProp(
       'server handles random noise from client',
       [
-        tlsConfigWithCaArb,
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
       ],
-      async (tlsConfigProm, data, messages) => {
-        const tlsConfig = await tlsConfigProm;
+      async (data, messages) => {
         const socket = new QUICSocket({
           crypto,
           logger: logger.getChild('socket'),
@@ -919,10 +916,11 @@ describe(QUICClient.name, () => {
           crypto,
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            tlsConfig: fixtures.tlsConfigMemRSA1,
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.QUICServerConnectionEvent>();
         server.addEventListener(
           'connection',
@@ -942,6 +940,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
@@ -1004,12 +1003,10 @@ describe(QUICClient.name, () => {
     testProp(
       'server handles random noise from external',
       [
-        tlsConfigWithCaArb,
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
         fc.array(fc.uint8Array({ minLength: 1 }), { minLength: 5 }).noShrink(),
       ],
-      async (tlsConfigProm, data, messages) => {
-        const tlsConfig = await tlsConfigProm;
+      async (data, messages) => {
         const socket = new QUICSocket({
           crypto,
           logger: logger.getChild('socket'),
@@ -1021,10 +1018,11 @@ describe(QUICClient.name, () => {
           crypto,
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            tlsConfig: fixtures.tlsConfigMemRSA1,
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.QUICServerConnectionEvent>();
         server.addEventListener(
           'connection',
@@ -1044,6 +1042,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        testsUtils.extractSocket(client, sockets);
         const conn = (await connectionEventProm.p).detail;
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
@@ -1116,8 +1115,8 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 1000,
         },
-        socket: serverSocket,
       });
+      testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'connection',
         (e: events.QUICServerConnectionEvent) =>
@@ -1127,7 +1126,7 @@ describe(QUICClient.name, () => {
         host: '127.0.0.1' as Host,
       });
       const client = await QUICClient.createQUICClient({
-        host: host,
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
@@ -1136,8 +1135,8 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 100,
         },
-        socket: clientSocket,
       });
+      testsUtils.extractSocket(client, sockets);
       // Setting no keepalive should cause the connection to time out
       // It has cleaned up due to timeout
       const clientConnection = client.connection;
@@ -1170,8 +1169,8 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 100,
         },
-        socket: serverSocket,
       });
+      testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'connection',
         (e: events.QUICServerConnectionEvent) =>
@@ -1181,7 +1180,7 @@ describe(QUICClient.name, () => {
         host: '127.0.0.1' as Host,
       });
       const client = await QUICClient.createQUICClient({
-        host: host,
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
@@ -1190,8 +1189,8 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 1000,
         },
-        socket: clientSocket,
       });
+      testsUtils.extractSocket(client, sockets);
       // Setting no keepalive should cause the connection to time out
       // It has cleaned up due to timeout
       const clientConnection = client.connection;
@@ -1225,8 +1224,8 @@ describe(QUICClient.name, () => {
           maxIdleTimeout: 20000,
           logKeys: './tmp/key1.log',
         },
-        socket: serverSocket,
       });
+      testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'connection',
         (e: events.QUICServerConnectionEvent) =>
@@ -1236,7 +1235,7 @@ describe(QUICClient.name, () => {
         host: '127.0.0.1' as Host,
       });
       const client = await QUICClient.createQUICClient({
-        host: host,
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
@@ -1245,9 +1244,9 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 100,
         },
-        socket: clientSocket,
         keepaliveIntervalTime: 50,
       });
+      testsUtils.extractSocket(client, sockets);
       // Setting no keepalive should cause the connection to time out
       // It has cleaned up due to timeout
       const clientConnection = client.connection;
@@ -1282,9 +1281,9 @@ describe(QUICClient.name, () => {
           maxIdleTimeout: 100,
           logKeys: './tmp/key1.log',
         },
-        socket: serverSocket,
         keepaliveIntervalTime: 50,
       });
+      testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'connection',
         (e: events.QUICServerConnectionEvent) =>
@@ -1294,7 +1293,7 @@ describe(QUICClient.name, () => {
         host: '127.0.0.1' as Host,
       });
       const client = await QUICClient.createQUICClient({
-        host: host,
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
@@ -1303,8 +1302,8 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 20000,
         },
-        socket: clientSocket,
       });
+      testsUtils.extractSocket(client, sockets);
       // Setting no keepalive should cause the connection to time out
       // It has cleaned up due to timeout
       const serverConnection = await connectionEventProm.p;
@@ -1338,8 +1337,8 @@ describe(QUICClient.name, () => {
           maxIdleTimeout: 100,
           logKeys: './tmp/key1.log',
         },
-        socket: serverSocket,
       });
+      testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'connection',
         (e: events.QUICServerConnectionEvent) =>
@@ -1349,7 +1348,7 @@ describe(QUICClient.name, () => {
         host: '127.0.0.1' as Host,
       });
       const client = await QUICClient.createQUICClient({
-        host: host,
+        host: '::ffff:127.0.0.1' as Host,
         port: server.port,
         localHost: '::' as Host,
         crypto,
@@ -1358,9 +1357,9 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 20000,
         },
-        socket: clientSocket,
         keepaliveIntervalTime: 50,
       });
+      testsUtils.extractSocket(client, sockets);
       // Setting no keepalive should cause the connection to time out
       // It has cleaned up due to timeout
       const serverConnection = await connectionEventProm.p;
@@ -1385,8 +1384,8 @@ describe(QUICClient.name, () => {
     });
     test('Keep alive does not prevent connection timeout', async () => {
       const clientProm = QUICClient.createQUICClient({
-        host: host,
-        port: serverSocket.port,
+        host: '::ffff:127.0.0.1' as Host,
+        port: 55555 as Port,
         localHost: '::' as Host,
         crypto,
         logger: logger.getChild(QUICClient.name),
@@ -1394,7 +1393,6 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
           maxIdleTimeout: 100,
         },
-        socket: clientSocket,
         keepaliveIntervalTime: 50,
       });
       await expect(clientProm).rejects.toThrow(

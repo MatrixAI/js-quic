@@ -7,8 +7,8 @@ import { webcrypto } from 'crypto';
 import Logger from '@matrixai/logger';
 import QUICServer from '../QUICServer';
 
-async function main(argv = process.argv): Promise<number> {
-  argv = argv.slice(2); // Removing prepended file paths
+async function main(_argv = process.argv): Promise<number> {
+  _argv = _argv.slice(2); // Removing prepended file paths
 
   const cryptoKey = await webcrypto.subtle.generateKey(
     {
@@ -47,6 +47,7 @@ async function main(argv = process.argv): Promise<number> {
   const server = new QUICServer({
     crypto,
     logger: logger.getChild(QUICServer.name),
+    config: {},
   });
 
   await server.start({

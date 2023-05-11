@@ -89,17 +89,18 @@ class QUICConnectionErrorEvent extends Event {
   }
 }
 
-class QUICStreamReadableEvent extends Event {
-  constructor(options?: EventInit) {
-    super('readable', options);
-  }
-}
-
-class QUICStreamWritableEvent extends Event {
-  constructor(options?: EventInit) {
-    super('writable', options);
-  }
-}
+// TODO: use these or remove them
+// class QUICStreamReadableEvent extends Event {
+//   constructor(options?: EventInit) {
+//     super('readable', options);
+//   }
+// }
+//
+// class QUICStreamWritableEvent extends Event {
+//   constructor(options?: EventInit) {
+//     super('writable', options);
+//   }
+// }
 
 class QUICStreamDestroyEvent extends Event {
   constructor(options?: EventInit) {
