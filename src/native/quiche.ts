@@ -13,7 +13,6 @@ import type {
   HeaderConstructor,
 } from './types';
 import process from 'process';
-import fs from 'fs';
 import path from 'path';
 
 interface Quiche {
@@ -46,6 +45,37 @@ interface Quiche {
 }
 
 const projectRoot = path.join(__dirname, '../../');
+const prebuildPath = path.join(projectRoot, 'prebuild');
+
+/**
+ * Try require on all prebuild targets first, then
+ * try require on all npm targets second.
+ */
+function requireBinding(targets: Array<string>): Quiche {
+  const prebuildTargets = targets.map((target) => `quic-${target}.node`);
+  for (const prebuildTarget of prebuildTargets) {
+    const prebuildBindingPath = path.join(
+      prebuildPath,
+      prebuildTarget
+    );
+    try {
+      return require(prebuildBindingPath);
+    } catch (e) {
+      if (e.code !== 'MODULE_NOT_FOUND') throw e;
+    }
+  }
+  const npmTargets = targets.map((target) => `@matrixai/quic-${target}`);
+  for (const npmTarget of npmTargets) {
+    try {
+      return require(npmTarget);
+    } catch (e) {
+      if (e.code !== 'MODULE_NOT_FOUND') throw e;
+    }
+  }
+  throw new Error(
+    `Failed requiring possible native bindings: ${prebuildTargets.concat(npmTargets)}`
+  );
+}
 
 let nativeBinding: Quiche;
 
@@ -57,13 +87,13 @@ switch (process.platform) {
   case 'win32':
     switch (process.arch) {
       case 'x64':
-        nativeBinding = requireBinding('win32-x64-msvc');
+        nativeBinding = requireBinding(['win32-x64']);
         break;
       case 'ia32':
-        nativeBinding = requireBinding('win32-ia32-msvc');
+        nativeBinding = requireBinding(['win32-ia32']);
         break;
       case 'arm64':
-        nativeBinding = requireBinding('win32-arm64-msvc');
+        nativeBinding = requireBinding(['win32-arm64']);
         break;
       default:
         throw new Error(`Unsupported architecture on Windows: ${process.arch}`);
@@ -72,10 +102,10 @@ switch (process.platform) {
   case 'darwin':
     switch (process.arch) {
       case 'x64':
-        nativeBinding = requireBinding('darwin-x64');
+        nativeBinding = requireBinding(['darwin-x64', 'darwin-x64+arm64', 'darwin-arm64+x64']);
         break;
       case 'arm64':
-        nativeBinding = requireBinding('darwin-arm64');
+        nativeBinding = requireBinding(['darwin-arm64', 'darwin-arm64+x64', 'darwin-x64+arm64']);
         break;
       default:
         throw new Error(`Unsupported architecture on macOS: ${process.arch}`);
@@ -84,21 +114,13 @@ switch (process.platform) {
   case 'linux':
     switch (process.arch) {
       case 'x64':
-        if (isMusl()) {
-          nativeBinding = requireBinding('linux-x64-musl');
-        } else {
-          nativeBinding = requireBinding('linux-x64-gnu');
-        }
+        nativeBinding = requireBinding(['linux-x64']);
         break;
       case 'arm64':
-        if (isMusl()) {
-          nativeBinding = requireBinding('linux-arm64-musl');
-        } else {
-          nativeBinding = requireBinding('linux-arm64-gnu');
-        }
+        nativeBinding = requireBinding(['linux-arm64']);
         break;
       case 'arm':
-        nativeBinding = requireBinding('linux-arm-gnueabihf');
+        nativeBinding = requireBinding(['linux-arm']);
         break;
       default:
         throw new Error(`Unsupported architecture on Linux: ${process.arch}`);
@@ -108,28 +130,6 @@ switch (process.platform) {
     throw new Error(
       `Unsupported OS: ${process.platform}, architecture: ${process.arch}`,
     );
-}
-
-function isMusl(): boolean {
-  const report = process.report?.getReport() as
-    | {
-        header: {
-          glibcVersionRuntime: string;
-        };
-      }
-    | undefined;
-  return typeof report?.header?.glibcVersionRuntime !== 'string';
-}
-
-function requireBinding(target: string) {
-  const localBinding = fs.existsSync(
-    path.join(projectRoot, `quic.${target}.node`),
-  );
-  if (localBinding) {
-    return require(path.join(projectRoot, `quic.${target}.node`));
-  } else {
-    return require(`@matrixai/quic-${target}`);
-  }
 }
 
 export default nativeBinding;

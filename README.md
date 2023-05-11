@@ -423,3 +423,43 @@ const c2 = new QUICClient({ socket: QUICSocket });
     // At any time, endpoints can change the DCID they transmit to a value that has not been used on
     // **another** path.
 ```
+
+
+---
+
+Slow build: `npm run prebuild`.
+
+If you want a fast build use: `npm run napi build --js false`.
+
+
+---
+
+Ok so there's a `napi build --target`  option.
+
+This option is passed to `cargo build --target`.
+
+This is meatn to be a triple.
+
+Like:
+
+```
+<arch><sub>-<vendor>-<sys>-<abi>
+```
+
+The available target list is in `rustc --print target-list`.
+
+For example:
+
+```
+x86_64-unknown-linux-gnu
+x86_64-pc-windows-msvc
+aarch64-apple-darwin
+x86_64-apple-darwin
+universal-apple-darwin
+```
+
+Note that these targets don't need to be specified if we are running on the host platform.
+
+https://github.com/napi-rs/napi-rs/pull/1397
+
+Seems like this should work then.
