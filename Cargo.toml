@@ -16,6 +16,15 @@ serde = { version = "1.0", features = ["derive"] }
 napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.17.1", features = ["boringssl-boring-crate", "boringssl-vendored"] }
 boring = "2.1.0"
+mio = { version = "0.8", features = ["net", "os-poll"] }
+url = "1"
+log = { version = "0.4", features = ["std"] }
+libc = "0.2"
+libm = "0.2"
+ring = "0.16"
+slab = "0.4"
+lazy_static = "1"
+smallvec = { version = "1.10", features = ["serde", "union"] }
 
 [build-dependencies]
 napi-build = "2"
