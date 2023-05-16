@@ -35,6 +35,10 @@ const MAX_DATAGRAM_SIZE: usize = 1350;
 
 const HTTP_REQ_STREAM_ID: u64 = 4;
 
+struct TestData {
+    num_messages: u8,
+}
+
 fn main() {
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
@@ -96,8 +100,8 @@ fn main() {
     config.set_initial_max_data(10_000_000);
     config.set_initial_max_stream_data_bidi_local(1_000_000);
     config.set_initial_max_stream_data_bidi_remote(1_000_000);
-    config.set_initial_max_streams_bidi(100);
-    config.set_initial_max_streams_uni(100);
+    config.set_initial_max_streams_bidi(10000);
+    config.set_initial_max_streams_uni(10000);
     config.set_disable_active_migration(true);
 
     // Generate a random source connection ID for the connection.
@@ -198,11 +202,24 @@ fn main() {
 
         // Send an HTTP request as soon as the connection is established.
         if conn.is_established() && !req_sent {
-            info!("sending HTTP request for {}", url.path());
-
-            let req = format!("GET {}\r\n", url.path());
-            conn.stream_send(HTTP_REQ_STREAM_ID, req.as_bytes(), true)
-                .unwrap();
+            println!("Init data");
+            // init application data
+            match conn.stream_send(0, b"", false) {
+                Ok(_) => {},
+                Err(quiche::Error::Done) => {},
+                Err(e) => {
+                    error!("{} stream send failed {:?}", conn.trace_id(), e);
+                    return;
+                },
+            };
+            match conn.stream_init_application_data(0, TestData {num_messages: 0}) {
+                Ok(_) => {},
+                Err(quiche::Error::Done) => {},
+                Err(e) => {
+                    error!("{} stream init failed {:?}", conn.trace_id(), e);
+                    return;
+                },
+            };
 
             req_sent = true;
         }
@@ -210,32 +227,37 @@ fn main() {
         // Process all readable streams.
         for s in conn.readable() {
             while let Ok((read, fin)) = conn.stream_recv(s, &mut buf) {
-                debug!("received {} bytes", read);
+                println!("received {} bytes", read);
 
                 let stream_buf = &buf[..read];
 
-                debug!(
+                println!(
                     "stream {} has {} bytes (fin? {})",
                     s,
                     stream_buf.len(),
                     fin
                 );
 
-                print!("{}", unsafe {
+                println!("{}", unsafe {
                     std::str::from_utf8_unchecked(stream_buf)
                 });
 
-                // The server reported that it has no more data to send, which
-                // we got the full response. Close the connection.
-                if s == HTTP_REQ_STREAM_ID && fin {
-                    info!(
-                        "response received in {:?}, closing...",
-                        req_start.elapsed()
-                    );
-
-                    conn.close(true, 0x00, b"kthxbye").unwrap();
-                }
             }
+        }
+
+        for s in conn.writable() {
+            println!("Writing stream {}", s);
+            let written = match conn.stream_send(s, b"Hello!", true) {
+                Ok(v) => v,
+
+                Err(quiche::Error::Done) => 0,
+
+                Err(e) => {
+                    error!("{} stream send failed {:?}", conn.trace_id(), e);
+                    return;
+                },
+            };
+            println!("Written {} bytes", written);
         }
 
         // Generate outgoing QUIC packets and send them on the UDP socket, until
