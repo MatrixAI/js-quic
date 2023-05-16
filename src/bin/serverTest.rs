@@ -311,10 +311,11 @@ fn main() {
 
                 // Process all readable streams.
                 for s in client.conn.readable() {
+                    println!("reading stream {}", s);
                     while let Ok((read, fin)) =
                         client.conn.stream_recv(s, &mut buf)
                     {
-                        debug!(
+                        println!(
                             "{} received {} bytes",
                             client.conn.trace_id(),
                             read
@@ -329,8 +330,6 @@ fn main() {
                             stream_buf.len(),
                             fin
                         );
-
-                        handle_stream(client, s, stream_buf, "examples/root");
                     }
                 }
             }
@@ -443,87 +442,18 @@ fn validate_token<'a>(
     Some(quiche::ConnectionId::from_ref(&token[addr.len()..]))
 }
 
-/// Handles incoming HTTP/0.9 requests.
-fn handle_stream(client: &mut Client, stream_id: u64, buf: &[u8], root: &str) {
-    let conn = &mut client.conn;
-
-    if buf.len() > 4 && &buf[..4] == b"GET " {
-        let uri = &buf[4..buf.len()];
-        let uri = String::from_utf8(uri.to_vec()).unwrap();
-        let uri = String::from(uri.lines().next().unwrap());
-        let uri = std::path::Path::new(&uri);
-        let mut path = std::path::PathBuf::from(root);
-
-        for c in uri.components() {
-            if let std::path::Component::Normal(v) = c {
-                path.push(v)
-            }
-        }
-
-        info!(
-            "{} got GET request for {:?} on stream {}",
-            conn.trace_id(),
-            path,
-            stream_id
-        );
-
-        let body = std::fs::read(path.as_path())
-            .unwrap_or_else(|_| b"HELLO!!\r\n".to_vec());
-
-        info!(
-            "{} sending response of size {} on stream {}",
-            conn.trace_id(),
-            body.len(),
-            stream_id
-        );
-
-        let written = match conn.stream_send(stream_id, &body, true) {
-            Ok(v) => v,
-
-            Err(quiche::Error::Done) => 0,
-
-            Err(e) => {
-                error!("{} stream send failed {:?}", conn.trace_id(), e);
-                return;
-            },
-        };
-
-        if written < body.len() {
-            let response = PartialResponse { body, written };
-            client.partial_responses.insert(stream_id, response);
-        }
-    }
-}
-
 /// Handles newly writable streams.
 fn handle_writable(client: &mut Client, stream_id: u64) {
     let conn = &mut client.conn;
+    // end early
+    match conn.stream_send(stream_id, &[], true) {
+      Ok(..) => (),
 
-    debug!("{} stream {} is writable", conn.trace_id(), stream_id);
+      Err(quiche::Error::Done) => (),
 
-    if !client.partial_responses.contains_key(&stream_id) {
-        return;
-    }
+      Err(e) => {
+        error!("{} stream send failed {:?}", conn.trace_id(), e);
 
-    let resp = client.partial_responses.get_mut(&stream_id).unwrap();
-    let body = &resp.body[resp.written..];
-
-    let written = match conn.stream_send(stream_id, body, true) {
-        Ok(v) => v,
-
-        Err(quiche::Error::Done) => 0,
-
-        Err(e) => {
-            client.partial_responses.remove(&stream_id);
-
-            error!("{} stream send failed {:?}", conn.trace_id(), e);
-            return;
-        },
-    };
-
-    resp.written += written;
-
-    if resp.written == resp.body.len() {
-        client.partial_responses.remove(&stream_id);
+      },
     }
 }
