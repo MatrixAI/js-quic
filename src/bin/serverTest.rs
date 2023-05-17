@@ -30,6 +30,7 @@ extern crate log;
 use std::net;
 
 use std::collections::HashMap;
+use std::collections::BTreeSet;
 
 use ring::rand::*;
 
@@ -52,6 +53,7 @@ type ClientMap = HashMap<quiche::ConnectionId<'static>, Client>;
 fn main() {
     let mut buf = [0; 65535];
     let mut out = [0; MAX_DATAGRAM_SIZE];
+    let mut active_count: BTreeSet<u64> = BTreeSet::new();
 
     let mut args = std::env::args();
 
@@ -101,8 +103,8 @@ fn main() {
     config.set_initial_max_stream_data_bidi_local(1_000_000);
     config.set_initial_max_stream_data_bidi_remote(1_000_000);
     config.set_initial_max_stream_data_uni(1_000_000);
-    config.set_initial_max_streams_bidi(100);
-    config.set_initial_max_streams_uni(100);
+    config.set_initial_max_streams_bidi(10000);
+    config.set_initial_max_streams_uni(10000);
     config.set_disable_active_migration(true);
     config.enable_early_data();
 
@@ -311,26 +313,18 @@ fn main() {
 
                 // Process all readable streams.
                 for s in client.conn.readable() {
-                    println!("reading stream {}", s);
-                    while let Ok((read, fin)) =
-                        client.conn.stream_recv(s, &mut buf)
-                    {
-                        println!(
-                            "{} received {} bytes",
-                            client.conn.trace_id(),
-                            read
-                        );
+                  active_count.insert(s);
+                  // println!("reading stream {}", s);
+                  while let Ok((read, fin)) =
+                      client.conn.stream_recv(s, &mut buf)
+                  {
+                      let stream_buf = &buf[..read];
 
-                        let stream_buf = &buf[..read];
-
-                        debug!(
-                            "{} stream {} has {} bytes (fin? {})",
-                            client.conn.trace_id(),
-                            s,
-                            stream_buf.len(),
-                            fin
-                        );
-                    }
+                      if (fin) {
+                        active_count.remove(&s);
+                        println!("stream finished! {}, left {}", s, active_count.len());
+                      }
+                  }
                 }
             }
         }

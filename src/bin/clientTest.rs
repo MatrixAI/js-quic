@@ -36,8 +36,11 @@ const MAX_DATAGRAM_SIZE: usize = 1350;
 const HTTP_REQ_STREAM_ID: u64 = 4;
 
 struct TestData {
-    num_messages: u8,
+    num_messages: i64,
 }
+
+const STREAMS: u64 = 10000;
+const MESSAGES: i64 = 400;
 
 fn main() {
     let mut buf = [0; 65535];
@@ -204,7 +207,9 @@ fn main() {
         if conn.is_established() && !req_sent {
             println!("Init data");
             // init application data
-            match conn.stream_send(0, b"", false) {
+            for n in 0..STREAMS {
+              let stream_id = n * 4;
+              match conn.stream_send(stream_id, b"", false) {
                 Ok(_) => {},
                 Err(quiche::Error::Done) => {},
                 Err(e) => {
@@ -212,7 +217,7 @@ fn main() {
                     return;
                 },
             };
-            match conn.stream_init_application_data(0, TestData {num_messages: 0}) {
+            match conn.stream_init_application_data(stream_id, TestData {num_messages: MESSAGES}) {
                 Ok(_) => {},
                 Err(quiche::Error::Done) => {},
                 Err(e) => {
@@ -220,34 +225,49 @@ fn main() {
                     return;
                 },
             };
-
+            }
             req_sent = true;
         }
 
         // Process all readable streams.
         for s in conn.readable() {
             while let Ok((read, fin)) = conn.stream_recv(s, &mut buf) {
-                println!("received {} bytes", read);
+                // println!("received {} bytes", read);
 
                 let stream_buf = &buf[..read];
 
-                println!(
-                    "stream {} has {} bytes (fin? {})",
-                    s,
-                    stream_buf.len(),
-                    fin
-                );
+                // println!(
+                //     "stream {} has {} bytes (fin? {})",
+                //     s,
+                //     stream_buf.len(),
+                //     fin
+                // );
 
-                println!("{}", unsafe {
-                    std::str::from_utf8_unchecked(stream_buf)
-                });
+                // println!("{}", unsafe {
+                //     std::str::from_utf8_unchecked(stream_buf)
+                // });
 
             }
         }
 
         for s in conn.writable() {
-            println!("Writing stream {}", s);
-            let written = match conn.stream_send(s, b"Hello!", true) {
+            // println!("Writing stream {}", s);
+            // get the application data
+            let app_data = conn.stream_application_data(s)
+              .unwrap()
+              .downcast_mut::<TestData>()
+              .unwrap();
+
+            // println!("numruns {}", app_data.num_messages);
+            // dec the number of messages
+            app_data.num_messages = app_data.num_messages - 1;
+
+            let fin = app_data.num_messages <= 1;
+            if (fin) {
+              println!{"finishing {}", s};
+            }
+            if (app_data.num_messages > 0) {
+              let written = match conn.stream_send(s, b"Hello!", fin) {
                 Ok(v) => v,
 
                 Err(quiche::Error::Done) => 0,
@@ -257,7 +277,7 @@ fn main() {
                     return;
                 },
             };
-            println!("Written {} bytes", written);
+            }
         }
 
         // Generate outgoing QUIC packets and send them on the UDP socket, until
