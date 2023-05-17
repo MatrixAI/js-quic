@@ -36,16 +36,8 @@ use ring::rand::*;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
 
-struct PartialResponse {
-    body: Vec<u8>,
-
-    written: usize,
-}
-
 struct Client {
     conn: quiche::Connection,
-
-    partial_responses: HashMap<u64, PartialResponse>,
 }
 
 type ClientMap = HashMap<quiche::ConnectionId<'static>, Client>;
@@ -165,7 +157,7 @@ fn main() {
                 Ok(v) => v,
 
                 Err(e) => {
-                    error!("Parsing packet header failed: {:?}", e);
+                    println!("Parsing packet header failed: {:?}", e);
                     continue 'read;
                 },
             };
@@ -182,7 +174,7 @@ fn main() {
                 !clients.contains_key(&conn_id)
             {
                 if hdr.ty != quiche::Type::Initial {
-                    error!("Packet is not Initial");
+                    println!("Packet is not Initial");
                     continue 'read;
                 }
 
@@ -248,12 +240,12 @@ fn main() {
                 // The token was not valid, meaning the retry failed, so
                 // drop the packet.
                 if odcid.is_none() {
-                    error!("Invalid address validation token");
+                    println!("Invalid address validation token");
                     continue 'read;
                 }
 
                 if scid.len() != hdr.dcid.len() {
-                    error!("Invalid destination connection ID");
+                    println!("Invalid destination connection ID");
                     continue 'read;
                 }
 
@@ -274,7 +266,6 @@ fn main() {
 
                 let client = Client {
                     conn,
-                    partial_responses: HashMap::new(),
                 };
 
                 clients.insert(scid.clone(), client);
@@ -298,7 +289,7 @@ fn main() {
                 Ok(v) => v,
 
                 Err(e) => {
-                    error!("{} recv failed: {:?}", client.conn.trace_id(), e);
+                    println!("{} recv failed: {:?}", client.conn.trace_id(), e);
                     continue 'read;
                 },
             };
@@ -315,12 +306,12 @@ fn main() {
                 for s in client.conn.readable() {
                   active_count.insert(s);
                   // println!("reading stream {}", s);
-                  while let Ok((read, fin)) =
+                  while let Ok((_read, fin)) =
                       client.conn.stream_recv(s, &mut buf)
                   {
-                      let stream_buf = &buf[..read];
+                      // let stream_buf = &buf[..read];
 
-                      if (fin) {
+                      if fin {
                         active_count.remove(&s);
                         println!("stream finished! {}, left {}", s, active_count.len());
                       }
@@ -343,7 +334,7 @@ fn main() {
                     },
 
                     Err(e) => {
-                        error!("{} send failed: {:?}", client.conn.trace_id(), e);
+                        println!("{} send failed: {:?}", client.conn.trace_id(), e);
 
                         client.conn.close(false, 0x1, b"fail").ok();
                         break;
@@ -446,7 +437,7 @@ fn handle_writable(client: &mut Client, stream_id: u64) {
       Err(quiche::Error::Done) => (),
 
       Err(e) => {
-        error!("{} stream send failed {:?}", conn.trace_id(), e);
+        println!("{} stream send failed {:?}", conn.trace_id(), e);
 
       },
     }

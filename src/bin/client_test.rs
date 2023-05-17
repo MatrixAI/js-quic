@@ -33,14 +33,13 @@ use ring::rand::*;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
 
-const HTTP_REQ_STREAM_ID: u64 = 4;
-
 struct TestData {
     num_messages: i64,
 }
 
 const STREAMS: u64 = 10000;
 const MESSAGES: i64 = 400;
+
 
 fn main() {
     let mut buf = [0; 65535];
@@ -141,7 +140,7 @@ fn main() {
 
     debug!("written {}", write);
 
-    let req_start = std::time::Instant::now();
+    // let req_start = std::time::Instant::now();
 
     let mut req_sent = false;
 
@@ -188,7 +187,7 @@ fn main() {
                 Ok(v) => v,
 
                 Err(e) => {
-                    error!("recv failed: {:?}", e);
+                    println!("recv failed: {:?}", e);
                     continue 'read;
                 },
             };
@@ -231,21 +230,22 @@ fn main() {
 
         // Process all readable streams.
         for s in conn.readable() {
-            while let Ok((read, fin)) = conn.stream_recv(s, &mut buf) {
-                // println!("received {} bytes", read);
+            while let Ok((_read, _fin)) = conn.stream_recv(s, &mut buf) {
+              // ignore messages, just consume.
+              // println!("received {} bytes", read);
 
-                let stream_buf = &buf[..read];
+              // let stream_buf = &buf[..read];
 
-                // println!(
-                //     "stream {} has {} bytes (fin? {})",
-                //     s,
-                //     stream_buf.len(),
-                //     fin
-                // );
+              // println!(
+              //     "stream {} has {} bytes (fin? {})",
+              //     s,
+              //     stream_buf.len(),
+              //     fin
+              // );
 
-                // println!("{}", unsafe {
-                //     std::str::from_utf8_unchecked(stream_buf)
-                // });
+              // println!("{}", unsafe {
+              //     std::str::from_utf8_unchecked(stream_buf)
+              // });
 
             }
         }
@@ -263,17 +263,17 @@ fn main() {
             app_data.num_messages = app_data.num_messages - 1;
 
             let fin = app_data.num_messages <= 1;
-            if (fin) {
+            if fin {
               println!{"finishing {}", s};
             }
-            if (app_data.num_messages > 0) {
-              let written = match conn.stream_send(s, b"Hello!", fin) {
+            if app_data.num_messages > 0 {
+              let _written = match conn.stream_send(s, b"Hello!", fin) {
                 Ok(v) => v,
 
                 Err(quiche::Error::Done) => 0,
 
                 Err(e) => {
-                    error!("{} stream send failed {:?}", conn.trace_id(), e);
+                    println!("{} stream send failed {:?}", conn.trace_id(), e);
                     return;
                 },
             };
@@ -292,7 +292,7 @@ fn main() {
                 },
 
                 Err(e) => {
-                    error!("send failed: {:?}", e);
+                    println!("send failed: {:?}", e);
 
                     conn.close(false, 0x1, b"fail").ok();
                     break;
@@ -312,7 +312,7 @@ fn main() {
         }
 
         if conn.is_closed() {
-            info!("connection closed, {:?}", conn.stats());
+            println!("connection closed, {:?}", conn.stats());
             break;
         }
     }
