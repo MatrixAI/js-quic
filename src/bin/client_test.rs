@@ -38,7 +38,7 @@ struct TestData {
 }
 
 const STREAMS: u64 = 10000;
-const MESSAGES: i64 = 400;
+const MESSAGES: i64 = 200;
 
 
 fn main() {
@@ -102,8 +102,8 @@ fn main() {
     config.set_initial_max_data(10_000_000);
     config.set_initial_max_stream_data_bidi_local(1_000_000);
     config.set_initial_max_stream_data_bidi_remote(1_000_000);
-    config.set_initial_max_streams_bidi(10000);
-    config.set_initial_max_streams_uni(10000);
+    config.set_initial_max_streams_bidi(100000);
+    config.set_initial_max_streams_uni(100000);
     config.set_disable_active_migration(true);
 
     // Generate a random source connection ID for the connection.
@@ -232,52 +232,46 @@ fn main() {
         for s in conn.readable() {
             while let Ok((_read, _fin)) = conn.stream_recv(s, &mut buf) {
               // ignore messages, just consume.
-              // println!("received {} bytes", read);
-
-              // let stream_buf = &buf[..read];
-
-              // println!(
-              //     "stream {} has {} bytes (fin? {})",
-              //     s,
-              //     stream_buf.len(),
-              //     fin
-              // );
-
-              // println!("{}", unsafe {
-              //     std::str::from_utf8_unchecked(stream_buf)
-              // });
-
             }
         }
 
         for s in conn.writable() {
-            // println!("Writing stream {}", s);
-            // get the application data
-            let app_data = conn.stream_application_data(s)
-              .unwrap()
-              .downcast_mut::<TestData>()
-              .unwrap();
+          // get the application data
+          let app_data = conn.stream_application_data(s)
+            .unwrap()
+            .downcast_mut::<TestData>()
+            .unwrap();
 
-            // println!("numruns {}", app_data.num_messages);
-            // dec the number of messages
+          // decrement the number of messages
+          if app_data.num_messages > 0 {
             app_data.num_messages = app_data.num_messages - 1;
+          }
 
-            let fin = app_data.num_messages <= 1;
-            if fin {
-              println!{"finishing {}", s};
-            }
-            if app_data.num_messages > 0 {
-              let _written = match conn.stream_send(s, b"Hello!", fin) {
-                Ok(v) => v,
+          let fin = app_data.num_messages <= 0;
+          if fin {
+            println!{"finishing {}", s};
+            match conn.stream_send(s, &[0; 0], true) {
+              Ok(v) => v,
 
-                Err(quiche::Error::Done) => 0,
+              Err(quiche::Error::Done) => 0,
 
-                Err(e) => {
-                    println!("{} stream send failed {:?}", conn.trace_id(), e);
-                    return;
-                },
+              Err(e) => {
+                  println!("{} stream send failed {:?}", conn.trace_id(), e);
+                  return;
+              },
             };
-            }
+          } else {
+            match conn.stream_send(s, b"Hello!", false) {
+              Ok(v) => v,
+
+              Err(quiche::Error::Done) => 0,
+
+              Err(e) => {
+                  println!("{} stream send failed {:?}", conn.trace_id(), e);
+                  return;
+              },
+            };
+          }
         }
 
         // Generate outgoing QUIC packets and send them on the UDP socket, until

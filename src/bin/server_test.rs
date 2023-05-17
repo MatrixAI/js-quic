@@ -95,8 +95,8 @@ fn main() {
     config.set_initial_max_stream_data_bidi_local(1_000_000);
     config.set_initial_max_stream_data_bidi_remote(1_000_000);
     config.set_initial_max_stream_data_uni(1_000_000);
-    config.set_initial_max_streams_bidi(10000);
-    config.set_initial_max_streams_uni(10000);
+    config.set_initial_max_streams_bidi(100000);
+    config.set_initial_max_streams_uni(100000);
     config.set_disable_active_migration(true);
     config.enable_early_data();
 
@@ -429,16 +429,16 @@ fn validate_token<'a>(
 
 /// Handles newly writable streams.
 fn handle_writable(client: &mut Client, stream_id: u64) {
-    let conn = &mut client.conn;
-    // end early
-    match conn.stream_send(stream_id, &[], true) {
-      Ok(..) => (),
+    // let conn = &mut client.conn;
+    // // end early
+    // match conn.stream_send(stream_id, &[], true) {
+    //   Ok(..) => (),
 
-      Err(quiche::Error::Done) => (),
+    //   Err(quiche::Error::Done) => (),
 
-      Err(e) => {
-        println!("{} stream send failed {:?}", conn.trace_id(), e);
+    //   Err(e) => {
+    //     println!("{} stream send failed {:?}", conn.trace_id(), e);
 
-      },
-    }
+    //   },
+    // }
 }
