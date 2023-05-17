@@ -37,6 +37,14 @@ if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$rust\$rust.1.68.0
   Save-ChocoPackage -PackageName $rust
 }
 
+# Install llvm v16.0.3 (will use cache if exists)
+$llvm = "llvm"
+choco install "$llvm" --version="16.0.3" --require-checksums -y
+# Internalise rust to cache if doesn't exist
+if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$llvm\$llvm.16.0.3.nupkg" -PathType Leaf) ) {
+  Save-ChocoPackage -PackageName $llvm
+}
+
 # Install nasm v2.16.01.20221231 (will use cache if exists)
 $nasm = "nasm"
 choco install "$nasm" --version="2.16.01.20221231" --require-checksums -y
