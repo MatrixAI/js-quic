@@ -217,6 +217,9 @@ build:macos:
     - hash -r
     - npm install --ignore-scripts
     - export PATH="$(npm root)/.bin:$PATH"
+    # Gitlab MacOS already has rust installed
+    # This will override the system installed rust
+    - export PATH="$HOME/.cargo/bin:$PATH"
     # Build x64 and arm64 separately
     - npm run prebuild --verbose -- --arch x64 --production
     - npm run prebuild --verbose -- --arch arm64 --production
