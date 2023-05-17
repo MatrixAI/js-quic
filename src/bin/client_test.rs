@@ -37,8 +37,8 @@ struct TestData {
     num_messages: i64,
 }
 
-const STREAMS: u64 = 10000;
-const MESSAGES: i64 = 200;
+const STREAMS: u64 = 5000;
+const MESSAGES: i64 = 500;
 
 
 fn main() {
@@ -100,8 +100,8 @@ fn main() {
     config.set_max_recv_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_max_send_udp_payload_size(MAX_DATAGRAM_SIZE);
     config.set_initial_max_data(10_000_000);
-    config.set_initial_max_stream_data_bidi_local(1_000_000);
-    config.set_initial_max_stream_data_bidi_remote(1_000_000);
+    config.set_initial_max_stream_data_bidi_local(1_000_000_000_000);
+    config.set_initial_max_stream_data_bidi_remote(1_000_000_000_000);
     config.set_initial_max_streams_bidi(100000);
     config.set_initial_max_streams_uni(100000);
     config.set_disable_active_migration(true);
