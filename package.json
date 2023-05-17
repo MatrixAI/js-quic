@@ -13,6 +13,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "napi": {
+    "name": "quic"
+  },
   "scripts": {
     "prepare": "tsc -p ./tsconfig.build.json",
     "prebuild": "node ./scripts/prebuild.js",
