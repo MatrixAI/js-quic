@@ -13,7 +13,15 @@ export HOMEBREW_NO_ANALYTICS=1
 brew update
 brew install node@18
 brew link --overwrite node@18
-brew install rust
-brew link --overwrite rust
 brew install cmake
 brew link --overwrite cmake
+brew install rustup-init
+brew link --overwrite rustup-init
+
+# Brew does not provide specific versions of rust
+# However rustup provides specific versions
+# Here we provide both toolchains
+rustup-init \
+  --default-toolchain 1.68.2 \
+  --target x86_64-apple-darwin aarch64-apple-darwin \
+  -y

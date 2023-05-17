@@ -42,10 +42,6 @@ async function main(argv = process.argv) {
     case 'arm64':
       targetArch = 'aarch64';
       break;
-    case 'x64+arm64':
-    case 'arm64+x64':
-      targetArch = 'universal';
-      break;
     default:
       console.error('Unsupported architecture');
       process.exitCode = 1;

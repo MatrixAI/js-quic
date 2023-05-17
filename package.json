@@ -40,9 +40,10 @@
     "ip-num": "^1.5.0"
   },
   "optionalDependencies": {
-    "@matrixai/quic-darwin-x64": "0.0.1",
     "@matrixai/quic-linux-x64": "0.0.1",
-    "@matrixai/quic-win32-x64": "0.0.1"
+    "@matrixai/quic-win32-x64": "0.0.1",
+    "@matrixai/quic-darwin-x64": "0.0.1",
+    "@matrixai/quic-darwin-arm64": "0.0.1"
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",

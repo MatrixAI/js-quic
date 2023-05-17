@@ -210,7 +210,6 @@ build:macos:
   image: macos-11-xcode-12
   variables:
     # Produce universal binary
-    npm_config_arch: "x64+arm64"
     RUST_BACKTRACE: "1"
   script:
     - eval "$(brew shellenv)"
@@ -218,7 +217,9 @@ build:macos:
     - hash -r
     - npm install --ignore-scripts
     - export PATH="$(npm root)/.bin:$PATH"
-    - npm run prebuild --verbose -- --production
+    # Build x64 and arm64 separately
+    - npm run prebuild --verbose -- --arch x64 --production
+    - npm run prebuild --verbose -- --arch arm64 --production
     - npm test -- --ci --coverage
     - npm run bench
   artifacts:
