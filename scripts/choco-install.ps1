@@ -36,3 +36,11 @@ choco install "$rust" --version="1.68.0" --require-checksums -y
 if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$rust\$rust.1.68.0.nupkg" -PathType Leaf) ) {
   Save-ChocoPackage -PackageName $rust
 }
+
+# Install nasm v2.16.01.20221231 (will use cache if exists)
+$nasm = "nasm"
+choco install "$nasm" --version="2.16.01.20221231" --require-checksums -y
+# Internalise rust to cache if doesn't exist
+if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$nasm\$nasm.2.16.01.20221231.nupkg" -PathType Leaf) ) {
+  Save-ChocoPackage -PackageName $nasm
+}
