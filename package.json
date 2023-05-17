@@ -13,9 +13,6 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "napi": {
-    "name": "quic"
-  },
   "scripts": {
     "prepare": "tsc -p ./tsconfig.build.json",
     "prebuild": "node ./scripts/prebuild.js",
@@ -46,7 +43,7 @@
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
-    "@napi-rs/cli": "^2.13.2",
+    "@napi-rs/cli": "^2.15.2",
     "@peculiar/asn1-pkcs8": "^2.3.0",
     "@peculiar/asn1-schema": "^2.3.0",
     "@peculiar/asn1-x509": "^2.3.0",
