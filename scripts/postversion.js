@@ -20,7 +20,9 @@ const platform = os.platform();
 
 /* eslint-disable no-console */
 async function main() {
-  console.error('Updating the package.json with optional native dependencies and package-lock.json');
+  console.error(
+    'Updating the package.json with optional native dependencies and package-lock.json',
+  );
   const optionalDepsNative = [];
   for (const key in packageJSON.optionalDependencies) {
     if (key.startsWith(packageJSON.name)) {
@@ -35,18 +37,16 @@ async function main() {
       '--package-lock-only',
       '--save-optional',
       '--save-exact',
-      ...optionalDepsNative
+      ...optionalDepsNative,
     ];
     console.error('Running npm install:');
     console.error(['npm', ...installArgs].join(' '));
-    childProcess.execFileSync(
-      'npm', installArgs, {
-        stdio: ['inherit', 'inherit', 'inherit'],
-        windowsHide: true,
-        encoding: 'utf-8',
-        shell: platform === 'win32' ? true : false,
-      }
-    );
+    childProcess.execFileSync('npm', installArgs, {
+      stdio: ['inherit', 'inherit', 'inherit'],
+      windowsHide: true,
+      encoding: 'utf-8',
+      shell: platform === 'win32' ? true : false,
+    });
   }
 }
 /* eslint-enable no-console */

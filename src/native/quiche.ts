@@ -52,14 +52,12 @@ const prebuildPath = path.join(projectRoot, 'prebuild');
  * try require on all npm targets second.
  */
 function requireBinding(targets: Array<string>): Quiche {
-  const prebuildTargets = targets.map((target) => `quic-${target}.node`);
+  const prebuildTargets = targets.map((target) =>
+    path.join(prebuildPath, `quic-${target}.node`),
+  );
   for (const prebuildTarget of prebuildTargets) {
-    const prebuildBindingPath = path.join(
-      prebuildPath,
-      prebuildTarget
-    );
     try {
-      return require(prebuildBindingPath);
+      return require(prebuildTarget);
     } catch (e) {
       if (e.code !== 'MODULE_NOT_FOUND') throw e;
     }
@@ -73,7 +71,9 @@ function requireBinding(targets: Array<string>): Quiche {
     }
   }
   throw new Error(
-    `Failed requiring possible native bindings: ${prebuildTargets.concat(npmTargets)}`
+    `Failed requiring possible native bindings: ${prebuildTargets.concat(
+      npmTargets,
+    )}`,
   );
 }
 
@@ -102,10 +102,18 @@ switch (process.platform) {
   case 'darwin':
     switch (process.arch) {
       case 'x64':
-        nativeBinding = requireBinding(['darwin-x64', 'darwin-x64+arm64', 'darwin-arm64+x64']);
+        nativeBinding = requireBinding([
+          'darwin-x64',
+          'darwin-x64+arm64',
+          'darwin-arm64+x64',
+        ]);
         break;
       case 'arm64':
-        nativeBinding = requireBinding(['darwin-arm64', 'darwin-arm64+x64', 'darwin-x64+arm64']);
+        nativeBinding = requireBinding([
+          'darwin-arm64',
+          'darwin-arm64+x64',
+          'darwin-x64+arm64',
+        ]);
         break;
       default:
         throw new Error(`Unsupported architecture on macOS: ${process.arch}`);

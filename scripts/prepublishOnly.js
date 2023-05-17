@@ -46,12 +46,12 @@ async function main(argv = process.argv) {
   const projectRoot = path.join(__dirname, '..');
   const prebuildPath = path.join(projectRoot, 'prebuild');
   const prepublishOnlyPath = path.join(projectRoot, 'prepublishOnly');
-  const buildNames = (
-    await fs.promises.readdir(prebuildPath)
-  ).filter((filename) => /^(?:[^-]+)-(?:[^-]+)-(?:[^-]+)$/.test(filename));
+  const buildNames = (await fs.promises.readdir(prebuildPath)).filter(
+    (filename) => /^(?:[^-]+)-(?:[^-]+)-(?:[^-]+)$/.test(filename),
+  );
   if (buildNames.length < 1) {
     console.error(
-      'You must prebuild at least 1 native object with the filename of `name-platform-arch` before prepublish'
+      'You must prebuild at least 1 native object with the filename of `name-platform-arch` before prepublish',
     );
     process.exitCode = 1;
     return process.exitCode;
@@ -64,7 +64,7 @@ async function main(argv = process.argv) {
     // This is `@org/name-platform-arch`, uses `posix` to force usage of `/`
     const packageName = path.posix.join(orgName ?? '', name);
     const constraints = name.match(
-      /^(?:[^-]+)-(?<platform>[^-]+)-(?<arch>[^-]+)$/
+      /^(?:[^-]+)-(?<platform>[^-]+)-(?<arch>[^-]+)$/,
     );
     // This will be `prebuild/name-platform-arch.node`
     const buildPath = path.join(prebuildPath, buildName);
@@ -72,7 +72,7 @@ async function main(argv = process.argv) {
     const packagePath = path.join(prepublishOnlyPath, packageName);
     console.error('Packaging:', packagePath);
     await fs.promises.rm(packagePath, {
-      recursive: true
+      recursive: true,
     });
     await fs.promises.mkdir(packagePath, { recursive: true });
     const nativePackageJSON = {
@@ -86,31 +86,23 @@ async function main(argv = process.argv) {
       license: packageJSON.license,
       repository: packageJSON.repository,
       main: 'node.napi.node',
-      os: [
-        constraints.groups.platform
-      ],
-      cpu: [
-        ...(constraints.groups.arch.split('+'))
-      ],
+      os: [constraints.groups.platform],
+      cpu: [...constraints.groups.arch.split('+')],
     };
     const packageJSONPath = path.join(packagePath, 'package.json');
     console.error(`Writing ${packageJSONPath}`);
     const packageJSONString = JSON.stringify(nativePackageJSON, null, 2);
     console.error(packageJSONString);
-    await fs.promises.writeFile(
-      packageJSONPath,
-      packageJSONString,
-      {
-        encoding: 'utf8'
-      }
-    );
+    await fs.promises.writeFile(packageJSONPath, packageJSONString, {
+      encoding: 'utf8',
+    });
     const packageBuildPath = path.join(packagePath, 'node.napi.node');
     console.error(`Copying ${buildPath} to ${packageBuildPath}`);
     await fs.promises.copyFile(buildPath, packageBuildPath);
     const publishArgs = [
       'publish',
       packagePath,
-      ...(tag != null ? [`--tag=${tag}`]: []),
+      ...(tag != null ? [`--tag=${tag}`] : []),
       '--access=public',
       ...(dryRun ? ['--dry-run'] : []),
     ];

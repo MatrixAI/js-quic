@@ -48,7 +48,7 @@ async function main(argv = process.argv) {
       break;
     default:
       console.error('Unsupported architecture');
-      process.exitCode = 1
+      process.exitCode = 1;
       return process.exitCode;
   }
   let targetVendor;
@@ -68,18 +68,15 @@ async function main(argv = process.argv) {
       targetVendor = 'pc';
       targetSystem = 'windows';
       targetABI = 'msvc';
-      break
+      break;
     default:
       console.error('Unsupported platform');
       process.exitCode = 1;
       return process.exitCode;
   }
-  const target = [
-    targetArch,
-    targetVendor,
-    targetSystem,
-    targetABI
-  ].filter((s) => s != null).join('-');
+  const target = [targetArch, targetVendor, targetSystem, targetABI]
+    .filter((s) => s != null)
+    .join('-');
   const projectRoot = path.join(__dirname, '..');
   const prebuildPath = path.join(projectRoot, 'prebuild');
   await fs.promises.mkdir(prebuildPath, {
@@ -89,37 +86,37 @@ async function main(argv = process.argv) {
   const cargoTOML = await fs.promises.readFile(cargoTOMLPath, 'utf-8');
   const cargoTOMLVersion = cargoTOML.match(/version\s*=\s*"(.*)"/)?.[1];
   if (packageJSON.version !== cargoTOMLVersion) {
-    console.error('Make sure that Cargo.toml version matches the package.json version');
+    console.error(
+      'Make sure that Cargo.toml version matches the package.json version',
+    );
     process.exitCode = 1;
     return process.exitCode;
   }
   await fs.promises.writeFile(cargoTOMLPath, cargoTOML, { encoding: 'utf-8' });
   const buildPath = await fs.promises.mkdtemp(
-   path.join(os.tmpdir(), 'prebuild-')
+    path.join(os.tmpdir(), 'prebuild-'),
   );
   const buildArgs = [
     'build',
     buildPath,
     `--target=${target}`,
-    ...(production ? ['--release', '--strip']: [])
+    ...(production ? ['--release', '--strip'] : []),
   ];
   console.error('Running napi build:');
   console.error(['napi', ...buildArgs].join(' '));
-  childProcess.execFileSync(
-    'napi', buildArgs, {
-      stdio: ['inherit', 'inherit', 'inherit'],
-      windowsHide: true,
-      encoding: 'utf-8',
-      shell: platform === 'win32' ? true : false,
-    }
-  );
+  childProcess.execFileSync('napi', buildArgs, {
+    stdio: ['inherit', 'inherit', 'inherit'],
+    windowsHide: true,
+    encoding: 'utf-8',
+    shell: platform === 'win32' ? true : false,
+  });
   // Rename to `name-platform-arch.node`
   const buildNames = await fs.promises.readdir(buildPath);
   const buildName = buildNames.find((filename) => /\.node$/.test(filename));
   const name = path.basename(buildName, '.node');
   await fs.promises.copyFile(
     path.join(buildPath, buildName),
-    path.join(prebuildPath, `${name}-${platform}-${arch}.node`)
+    path.join(prebuildPath, `${name}-${platform}-${arch}.node`),
   );
   await fs.promises.rm(buildPath, {
     recursive: true,
