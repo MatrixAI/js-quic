@@ -1,6 +1,6 @@
 [package]
 name = "quic"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Roger Qiu <roger.qiu@polyhack.io>"]
 license-file = "LICENSE"
 edition = "2021"
@@ -13,7 +13,7 @@ path = "src/native/napi/lib.rs"
 [dependencies]
 napi = { version = "2", features = ["async", "napi6", "serde-json"] }
 serde = { version = "1.0", features = ["derive"] }
-napi-derive = "2"
+napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.17.1", features = ["boringssl-boring-crate", "boringssl-vendored"] }
 boring = "2.1.0"
 

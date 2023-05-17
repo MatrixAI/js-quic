@@ -5,14 +5,12 @@
 # nix
 /result*
 /builds
-# node-gyp
+# native
 /build
-# prebuildify
-/prebuilds
-
-# napi-rs
+/prebuild
+/prepublishOnly
 /target
-/*.node
+
 
 # Logs
 logs
