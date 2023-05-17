@@ -15,3 +15,5 @@ brew install node@18
 brew link --overwrite node@18
 brew install rust
 brew link --overwrite rust
+brew install cmake
+brew link --overwrite cmake
