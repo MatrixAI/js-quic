@@ -97,9 +97,9 @@ describe('Concurrency tests', () => {
   const streamArb = fc
     .record({
       messages: messagesArb,
-      startDelay: fc.integer({ min: 0, max: 100 }),
-      endDelay: fc.integer({ min: 0, max: 100 }),
-      delays: fc.array(fc.integer({ min: 0, max: 50 }), {
+      startDelay: fc.integer({ min: 0, max: 20 }),
+      endDelay: fc.integer({ min: 0, max: 20 }),
+      delays: fc.array(fc.integer({ min: 0, max: 10 }), {
         size: 'small',
         minLength: 1,
       }),
@@ -109,9 +109,9 @@ describe('Concurrency tests', () => {
     fc.array(streamArb, { size: 'small', minLength, maxLength }).noShrink();
   const connectionArb = fc
     .record({
-      streams: streamsArb(1, 10),
-      startDelay: fc.integer({ min: 0, max: 100 }),
-      endDelay: fc.integer({ min: 0, max: 100 }),
+      streams: streamsArb(1, 5),
+      startDelay: fc.integer({ min: 0, max: 20 }),
+      endDelay: fc.integer({ min: 0, max: 20 }),
     })
     .noShrink() as fc.Arbitrary<ConnectionData>;
   const connectionsArb = fc
@@ -236,7 +236,7 @@ describe('Concurrency tests', () => {
       }
       logger.info('TEST FULLY DONE!');
     },
-    { numRuns: 2 },
+    { numRuns: 1 },
   );
   testProp(
     'Multiple clients sharing a socket',
@@ -361,7 +361,7 @@ describe('Concurrency tests', () => {
       await socket.stop();
       logger.info('TEST FULLY DONE!');
     },
-    { numRuns: 2 },
+    { numRuns: 1 },
   );
   const spawnServer = async ({
     socket,

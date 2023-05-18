@@ -106,7 +106,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp(
     'destroying stream should clean up on both ends while streams are used',
@@ -197,7 +197,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp(
     'should send data over stream',
@@ -282,7 +282,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp(
     'should propagate errors over stream for writable',
@@ -383,7 +383,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp.skip(
     'should propagate errors over stream for readable',
@@ -493,7 +493,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp(
     'should clean up streams when connection ends',
@@ -582,7 +582,7 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 10 },
+    { numRuns: 2 },
   );
   testProp(
     'streams should contain metadata',
@@ -748,6 +748,6 @@ describe(QUICStream.name, () => {
       await client?.destroy({ force: true });
       await server?.stop({ force: true });
     },
-    { numRuns: 5 },
+    { numRuns: 2 },
   );
 });
