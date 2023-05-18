@@ -50,7 +50,12 @@ async function main(_argv = process.argv): Promise<number> {
   const server = new QUICServer({
     crypto,
     logger: logger.getChild(QUICServer.name),
-    config: {},
+    config: {
+      tlsConfig: {
+        privKeyFromPemFile: './tests/fixtures/certs/okp1.key',
+        certChainFromPemFile: './tests/fixtures/certs/okp1.crt',
+      },
+    },
   });
 
   await server.start({

@@ -374,7 +374,7 @@ describe('Concurrency tests', () => {
     socket: QUICSocket | undefined;
     port: Port | undefined;
     cleanUpHoldProm: Promise<void>;
-    config: Partial<QUICConfig> & { TlsConfig?: TlsConfig };
+    config: Partial<QUICConfig> & { tlsConfig: TlsConfig };
     serverStreams: Array<StreamData>;
     reasonToCode: StreamReasonToCode;
   }) => {

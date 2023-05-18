@@ -88,7 +88,7 @@ class QUICServer extends EventTarget {
     // This actually requires TLS
     // You have to specify these some how
     // We can force it
-    config: Partial<QUICConfig> & { TlsConfig?: TlsConfig };
+    config: Partial<QUICConfig> & { tlsConfig: TlsConfig };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
