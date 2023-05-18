@@ -94,7 +94,14 @@ async function main(argv = process.argv) {
     const packageJSONString = JSON.stringify(nativePackageJSON, null, 2);
     console.error(packageJSONString);
     await fs.promises.writeFile(packageJSONPath, packageJSONString, {
-      encoding: 'utf8',
+      encoding: 'utf-8',
+    });
+    const packageReadmePath = path.join(packagePath, 'README.md');
+    console.error(`Writing ${packageReadmePath}`);
+    const packageReadme = `# ${packageName}\n`;
+    console.error(packageReadme);
+    await fs.promises.writeFile(packageReadmePath, packageReadme, {
+      encoding: 'utf-8',
     });
     const packageBuildPath = path.join(packagePath, 'node.napi.node');
     console.error(`Copying ${buildPath} to ${packageBuildPath}`);
