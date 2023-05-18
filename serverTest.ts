@@ -6,7 +6,6 @@ import * as testsUtils from './tests/utils';
 import { promise } from './src/utils';
 import { SendInfo } from './src/native/types';
 import { clearTimeout } from 'timers';
-import * as events from './src/events';
 import QUICConnectionId from './src/QUICConnectionId';
 import { Connection } from './src/native/types';
 import path from 'path';
@@ -14,14 +13,13 @@ import path from 'path';
 
 async function main () {
   const MAX_DATAGRAM_SIZE = 1350;
-  const buf = Buffer.alloc(65535, 0);
   const out = Buffer.alloc(quiche.MAX_DATAGRAM_SIZE, 0);
-  const message = Buffer.from('Hello!');
   const emptyBuffer = Buffer.alloc(0, 0);
   type ConnectionData = {
     conn: Connection;
     timeout: NodeJS.Timeout | null;
     deadline: number;
+    streams: Set<number>;
   }
   const connectionMap: Map<string, ConnectionData> = new Map();
 
@@ -32,8 +30,6 @@ async function main () {
 
   const host = "127.0.0.1";
   const localPort = 4433;
-  const STREAMS = 1000;
-  const MESSAGES = 200;
 
   const socketBind = utils.promisify(socket.bind).bind(socket);
   const socketClose = utils.promisify(socket.close).bind(socket);
@@ -90,7 +86,6 @@ async function main () {
   const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
   await crypto.ops.randomBytes(scidBuffer);
 
-  let req_sent = false;
   let receivedEvent = promise();
   let timeoutEvent = promise();
   let writableEvent = promise();
@@ -267,6 +262,7 @@ async function main () {
       client = {
         deadline: Infinity,
         timeout: null,
+        streams: new Set(),
         conn
       }
       connectionMap.set(Buffer.from(scid).toString(), client);
@@ -291,10 +287,14 @@ async function main () {
       // Process readable
       for (const streamId of client.conn.readable()) {
         // drop data and track finish frame
+        client.streams.add(streamId);
         while (true) {
           try {
             const [, fin] = client.conn.streamRecv(streamId, data);
-            if (fin) console.log("Stream finished! ", streamId);
+            if (fin) {
+              client.streams.delete(streamId)
+              console.log("Stream finished! ", streamId, "left", client.streams.size);
+            }
           } catch (e) {
             if (e.message === 'Done') break;
             throw e;
