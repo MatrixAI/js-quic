@@ -12,6 +12,7 @@
  *     /name-linux-x64
  *       /package.json
  *       /node.napi.node
+ *       /README.md
  */
 
 const os = require('os');
