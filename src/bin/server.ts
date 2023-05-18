@@ -21,11 +21,15 @@ async function main(_argv = process.argv): Promise<number> {
 
   const key = await webcrypto.subtle.exportKey('raw', cryptoKey);
 
+  // You must supply a crypto utility object.
+  // Here we use webcrypto. But anything can suffice.
+  // Note here we use `cryptoKey` directly instead of the
+  // `_key` ArrayBuffer, this is because webcrypto does not
+  // support using raw keys directly.
   const crypto = {
     key,
     ops: {
       sign: async (_key: ArrayBuffer, data: ArrayBuffer) => {
-        // Use `cryptoKey` due to webcrypto requirements
         return webcrypto.subtle.sign('HMAC', cryptoKey, data);
       },
       verify: async (
@@ -33,7 +37,6 @@ async function main(_argv = process.argv): Promise<number> {
         data: ArrayBuffer,
         sig: ArrayBuffer,
       ) => {
-        // Use `cryptoKey` due to webcrypto requirements
         return webcrypto.subtle.verify('HMAC', cryptoKey, sig, data);
       },
       randomBytes: async (data: ArrayBuffer) => {
