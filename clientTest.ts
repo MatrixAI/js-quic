@@ -6,6 +6,7 @@ import * as testsUtils from './tests/utils';
 import { promise } from './src/utils';
 import { SendInfo } from './src/native/types';
 import { clearTimeout } from 'timers';
+import path from 'path';
 
 
 async function main () {
@@ -41,8 +42,7 @@ async function main () {
     errorP,
     socketBind(localPort)
   ])
-  console.log('bound');
-
+  console.log('bound', localPort);
   const config = buildQuicheConfig({
     verifyPeer: false,
     applicationProtos: [
@@ -64,7 +64,7 @@ async function main () {
 
     enableEarlyData: false,
     grease: false,
-    logKeys: "tmp/key.log",
+    logKeys: path.resolve(path.join(__dirname, "./tmp/key2.log")),
     supportedPrivateKeyAlgos: undefined,
     tlsConfig: undefined,
     verifyFromPemFile: undefined,
@@ -96,6 +96,8 @@ async function main () {
     },
     config,
   );
+
+  conn.setKeylog(path.resolve(path.join(__dirname, "./tmp/key2.log")));
 
   let timeout: NodeJS.Timeout | null = null;
   let deadline: number = Infinity;
@@ -162,6 +164,7 @@ async function main () {
         port: remoteInfo.port,
       },
     };
+    console.log(recvInfo);
     conn.recv(data, recvInfo);
     receivedEvent.resolveP();
     receivedEvent = promise();
