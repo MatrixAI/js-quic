@@ -20,6 +20,7 @@ async function main () {
     timeout: NodeJS.Timeout | null;
     deadline: number;
     streams: Set<number>;
+    fins: number;
   }
   const connectionMap: Map<string, ConnectionData> = new Map();
 
@@ -157,7 +158,7 @@ async function main () {
       return;
     }
 
-    const dcid: Uint8Array = header.dcid;
+    const dcid: Buffer = Buffer.from(header.dcid);
     let scid: Uint8Array = new QUICConnectionId(
       await crypto.ops.sign(
         crypto.key,
@@ -168,7 +169,8 @@ async function main () {
     );
 
     let client: ConnectionData;
-    if (!connectionMap.has(Buffer.from(dcid).toString())) {
+    if (!connectionMap.has(dcid.toString())) {
+      console.log('Got a new connection!!!!!!!!!!', dcid.toString('hex'))
       if (header.ty !== quiche.Type.Initial) {
         console.log(`QUIC packet must be Initial for new connections`);
         return;
@@ -192,9 +194,12 @@ async function main () {
             remoteInfo.port,
             remoteInfo.address,
           );
-        } catch {
+          // console.log('sent bytes', versionDatagramLength);
+        } catch (e) {
+          console.error(e);
           return;
         }
+        console.log(`Sent VersionNegotiation packet to ${remoteInfo.address}"${remoteInfo.port}`);
         return;
       }
       // At this point we are processing an `Initial` packet.
@@ -203,6 +208,7 @@ async function main () {
       const token = header.token!;
       // Stateless Retry
       if (token.byteLength === 0) {
+        console.log('Doing stateless retry')
         const token = await mintToken(dcid, remoteInfo.address, crypto);
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         const retryDatagramLength = quiche.retry(
@@ -221,53 +227,76 @@ async function main () {
             remoteInfo.port,
             remoteInfo.address,
           );
+          // console.log('sent bytes ', retryDatagramLength);
         } catch (e) {
+          console.error(e);
           return;
         }
+        console.log(`Sent Retry packet to ${remoteInfo.address}"${remoteInfo.port}`)
         return;
       }
       // At this point in time, the packet's DCID is the originally-derived DCID.
       // While the DCID embedded in the token is the original DCID that the client first created.
+      console.log(
+        'validate',
+        Buffer.from(token),
+        remoteInfo.address,
+      );
       const dcidOriginal = await validateToken(
         Buffer.from(token),
         remoteInfo.address,
         crypto,
       );
+      console.log(dcidOriginal);
       if (dcidOriginal == null) {
+        console.log(
+          `QUIC packet token failed validation due to missing DCID`,
+        );
         return;
       }
       // Check that the newly-derived DCID (passed in as the SCID) is the same
       // length as the packet DCID.
       // This ensures that the derivation process hasn't changed.
       if (scid.byteLength !== header.dcid.byteLength) {
+        console.log(
+          `QUIC packet token failed validation due to mismatched length`,
+        );
         return;
       }
       // Here we shall re-use the originally-derived DCID as the SCID
       scid = new QUICConnectionId(header.dcid);
-
-      console.log('creating new connection')
+      console.log(
+        `Accepting new connection from QUIC packet from ${remoteInfo.address}:${remoteInfo.port}`,
+      );
+      const localHost  = {
+        host: host,
+        port: localPort,
+      };
+      const remoteHost = {
+        host: remoteInfo.address,
+        port: remoteInfo.port,
+      };
+      console.log(
+        dcidOriginal,
+      )
       const conn = quiche.Connection.accept(
         scid,
         dcidOriginal,
-        {
-          host: host,
-          port: localPort,
-        },
-        {
-          host: remoteInfo.address,
-          port: remoteInfo.port,
-        },
+        localHost,
+        remoteHost,
         config,
       )
       client = {
         deadline: Infinity,
         timeout: null,
         streams: new Set(),
-        conn
+        conn,
+        fins: 0,
       }
+      console.log('setting connection ', Buffer.from(scid).toString('hex'));
       connectionMap.set(Buffer.from(scid).toString(), client);
     } else {
-      client = connectionMap.get(Buffer.from(dcid).toString())!;
+      client = connectionMap.get(dcid.toString())!;
     }
 
     client.conn.recv(data, recvInfo);
@@ -293,10 +322,17 @@ async function main () {
             const [, fin] = client.conn.streamRecv(streamId, data);
             if (fin) {
               client.streams.delete(streamId)
-              console.log("Stream finished! ", streamId, "left", client.streams.size);
+              client.fins ++;
+              console.log("Stream finished! ", streamId, "left", client.streams.size, 'fins:', client.fins);
+              break;
             }
           } catch (e) {
             if (e.message === 'Done') break;
+            console.error(e);
+            if (/^InvalidStreamState.*/.test(e.message)) {
+              console.log('got ', e.message)
+              break;
+            }
             throw e;
           }
         }
@@ -326,12 +362,12 @@ async function main () {
         let sendInfo: SendInfo;
         try {
           [write, sendInfo] = client.conn.send(out);
-          console.log(sendInfo);
         } catch (e) {
           if (e.message == 'Done') break;
           throw e;
         }
         await socketSend(out, 0, write, sendInfo.to.port, sendInfo.to.host);
+        // console.log('sent bytes ', write);
         checkTimeout(client);
       }
       if (client.conn.isClosed()) {
@@ -350,7 +386,7 @@ async function mintToken(
   peerHost: string,
   crypto: any
 ): Promise<Buffer> {
-  const msgData = { dcid: Buffer.from(dcid).toString(), host: peerHost };
+  const msgData = { dcid: Buffer.from(dcid).toString('hex'), host: peerHost };
   const msgJSON = JSON.stringify(msgData);
   const msgBuffer = Buffer.from(msgJSON);
   const msgSig = Buffer.from(
@@ -372,9 +408,11 @@ async function validateToken(
   let tokenData;
   try {
     tokenData = JSON.parse(tokenBuffer.toString());
-  } catch {
+    console.log(tokenData);
+  } catch (e){
     return;
   }
+  console.log(tokenData)
   if (typeof tokenData !== 'object' || tokenData == null) {
     return;
   }
@@ -395,6 +433,7 @@ async function validateToken(
   } catch {
     return;
   }
+  console.log('data', msgData);
   if (typeof msgData !== 'object' || msgData == null) {
     return;
   }
@@ -404,6 +443,9 @@ async function validateToken(
   if (msgData.host !== peerHost) {
     return;
   }
+  console.log('dcid', msgData.dcid);
+  console.log('id', QUICConnectionId.fromString(msgData.dcid))
+  console.log('buf', Buffer.from(msgData.dcid, 'hex'));
   return QUICConnectionId.fromString(msgData.dcid);
 }
 

@@ -24,8 +24,10 @@ async function main () {
   const host = "127.0.0.1";
   const port = 4433;
   const localPort = 55555;
-  const STREAMS = 1000;
-  const MESSAGES = 200;
+  const STREAMS = 5000;
+  const MESSAGES = 10;
+  let finsSent = 0;
+  let finsRecv = 0;
 
   type StreamData = {
     messagesLeft: number;
@@ -164,7 +166,7 @@ async function main () {
         port: remoteInfo.port,
       },
     };
-    console.log(recvInfo);
+    // console.log('received bytes', data.byteLength);
     conn.recv(data, recvInfo);
     receivedEvent.resolveP();
     receivedEvent = promise();
@@ -178,6 +180,7 @@ async function main () {
     console.error(e);
     throw e;
   });
+  // console.log('sent bytes ', write)
 
   checkTimeout();
 
@@ -215,9 +218,14 @@ async function main () {
       while(true) {
         try  {
           const [_read, fin] = conn.streamRecv(streamId, buf);
-          if (fin) console.log('stream finished: ', streamId);
+          if (fin) {
+            finsRecv ++;
+            // console.log('stream finished: ', streamId, 'finsRecv', finsRecv);
+            break;
+          }
         } catch (e) {
           if (e.message == 'Done') break;
+          console.log('error', e.message, )
           throw e;
         }
       }
@@ -237,10 +245,12 @@ async function main () {
         try {
           conn.streamSend(streamId, emptyBuffer, true);
           streamMap.delete(streamId);
-          if (streamMap.size === 0) console.log('finished all streams')
+          finsSent++;
+          // console.log('finsihed', finsSent, streamMap.size)
+          if (streamMap.size === 0) console.log('finished all streams, fins sent', finsSent)
         } catch (e) {
           if(e.message == 'Done') {
-            // console.log('sending returned done');
+            console.log('sending returned done');
             continue
           }
           throw e;
@@ -272,7 +282,7 @@ async function main () {
         throw e;
       }
       await socketSend(out, 0, write, sendInfo.to.port, sendInfo.to.host);
-      // console.log('packet sent');
+      // console.log('sent bytes ', write);
       checkTimeout();
     }
 
