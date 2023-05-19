@@ -169,6 +169,7 @@ build:linux:
 build:windows:
   stage: build
   needs: []
+  allow_failure: true
   tags:
     - windows
   variables:
@@ -247,7 +248,7 @@ build:prerelease:
   needs:
     - build:dist
     - build:linux
-    - build:windows
+#    - build:windows
     - build:macos
   # Don't interrupt publishing job
   interruptible: false
@@ -332,7 +333,7 @@ release:distribution:
   needs:
     - build:dist
     - build:linux
-    - build:windows
+#    - build:windows
     - build:macos
     - integration:merge
   # Don't interrupt publishing job

@@ -204,7 +204,7 @@ class QUICClient extends EventTarget {
     // Setting up keep alive
     connection.setKeepAlive(keepaliveIntervalTime);
     // Now we create the client
-    const client = new QUICClient({
+    const client = new this({
       crypto,
       socket,
       connection,

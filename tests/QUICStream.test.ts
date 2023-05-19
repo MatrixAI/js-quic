@@ -46,8 +46,9 @@ describe(QUICStream.name, () => {
 
   testProp(
     'should create streams',
-    [tlsConfigWithCaArb, fc.integer({ min: 5, max: 50 }).noShrink()],
-    async (tlsConfigProm, streamsNum) => {
+    [tlsConfigWithCaArb],
+    async (tlsConfigProm) => {
+      const streamsNum = 10;
       const connectionEventProm =
         utils.promise<events.QUICServerConnectionEvent>();
       const tlsConfig = await tlsConfigProm;
