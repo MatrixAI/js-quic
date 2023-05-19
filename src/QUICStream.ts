@@ -7,7 +7,7 @@ import type {
   ConnectionMetadata,
 } from './types';
 import type { Connection } from './native/types';
-import { ReadableStream, WritableStream } from 'stream/web';
+import { ReadableStream, WritableStream, ByteLengthQueuingStrategy } from 'stream/web';
 import Logger from '@matrixai/logger';
 import {
   CreateDestroy,
@@ -21,7 +21,7 @@ import * as errors from './errors';
 
 /**
  * Events:
- * - destroy
+ * - streamDestroy
  *
  * Swap from using `readable` and `writable` to just function calls.
  * It's basically the same, since it's just the connection telling the stream
@@ -68,16 +68,12 @@ class QUICStream
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
-    maxReadableStreamBytes = 100_000, // About 100KB
-    maxWritableStreamBytes = 100_000, // About 100KB
     logger = new Logger(`${this.name} ${streamId}`),
   }: {
     streamId: StreamId;
     connection: QUICConnection;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
@@ -93,8 +89,6 @@ class QUICStream
       connection,
       reasonToCode,
       codeToReason,
-      maxReadableStreamBytes,
-      maxWritableStreamBytes,
       logger,
     });
     connection.streamMap.set(stream.streamId, stream);
@@ -107,16 +101,12 @@ class QUICStream
     connection,
     reasonToCode,
     codeToReason,
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
     logger,
   }: {
     streamId: StreamId;
     connection: QUICConnection;
     reasonToCode: StreamReasonToCode;
     codeToReason: StreamCodeToReason;
-    maxReadableStreamBytes: number;
-    maxWritableStreamBytes: number;
     logger: Logger;
   }) {
     super();
@@ -142,9 +132,10 @@ class QUICStream
           await this.closeRecv(true, reason);
         },
       },
-      {
-        highWaterMark: maxReadableStreamBytes,
-      },
+      new ByteLengthQueuingStrategy({
+        highWaterMark: 0,
+        // highWaterMark: maxReadableStreamBytes,
+      }),
     );
 
     this.writable = new WritableStream(
@@ -181,9 +172,10 @@ class QUICStream
           await this.closeSend(true, reason);
         },
       },
-      {
-        highWaterMark: maxWritableStreamBytes,
-      },
+      new ByteLengthQueuingStrategy({
+        highWaterMark: 0,
+        // highWaterMark: maxWritableStreamBytes,
+      }),
     );
   }
 
