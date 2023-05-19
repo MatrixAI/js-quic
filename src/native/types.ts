@@ -44,11 +44,11 @@ interface Config {
 interface ConfigConstructor {
   new (): Config;
   withBoringSslCtx(
-    certPem: Uint8Array | null,
-    keyPem: Uint8Array | null,
-    supportedKeyAlgos: string | null,
-    ca_cert_pem: Uint8Array | null,
-    verify_peer: boolean,
+    verifyPeer: boolean,
+    ca?: Uint8Array | undefined | null,
+    key?: Array<Uint8Array> | undefined | null,
+    cert?: Array<Uint8Array> | undefined | null,
+    sigalgs?: string | undefined | null,
   ): Config;
 }
 

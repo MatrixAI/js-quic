@@ -72,15 +72,8 @@ class QUICSocket extends EventTarget {
       }
       return;
     }
-
-    // Apparently if it is a UDP datagram
-    // it could be a QUIC datagram, and not part of any connection
-    // However I don't know how the DCID would work in a QUIC dgram
-    // We have not explored this yet
-
     // Destination Connection ID is the ID the remote peer chose for us.
     const dcid = new QUICConnectionId(header.dcid);
-
     // Derive our SCID using HMAC signing.
     const scid = new QUICConnectionId(
       await this.crypto.ops.sign(
@@ -90,12 +83,10 @@ class QUICSocket extends EventTarget {
       0,
       quiche.MAX_CONN_ID_LEN,
     );
-
     const remoteInfo_ = {
       host: remoteInfo.address as Host,
       port: remoteInfo.port as Port,
     };
-
     // Now both must be checked
     let conn: QUICConnection;
     if (!this.connectionMap.has(dcid) && !this.connectionMap.has(scid)) {
@@ -207,10 +198,12 @@ class QUICSocket extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
+    reuseAddr = false,
     ipv6Only = false,
   }: {
     host?: Host | Hostname;
     port?: Port;
+    reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
@@ -223,7 +216,7 @@ class QUICSocket extends EventTarget {
     );
     this.socket = dgram.createSocket({
       type: udpType,
-      reuseAddr: false,
+      reuseAddr,
       ipv6Only,
     });
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);

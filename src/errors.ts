@@ -4,6 +4,10 @@ class ErrorQUIC<T> extends AbstractError<T> {
   static description = 'QUIC error';
 }
 
+class ErrorQUICConfig<T> extends ErrorQUIC<T> {
+  static description = 'QUIC config error';
+}
+
 class ErrorQUICSocket<T> extends ErrorQUIC<T> {
   static description = 'QUIC Socket error';
 }
@@ -105,6 +109,7 @@ class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
 
 export {
   ErrorQUIC,
+  ErrorQUICConfig,
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,
   ErrorQUICSocketServerDuplicate,

@@ -10,7 +10,7 @@ import type {
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig, TlsConfig } from './config';
+import type { QUICConfig } from './config';
 import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -70,8 +70,8 @@ class QUICServer extends EventTarget {
 
   public constructor({
     crypto,
-    socket,
     config,
+    socket,
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
@@ -84,11 +84,11 @@ class QUICServer extends EventTarget {
       key: ArrayBuffer;
       ops: Crypto;
     };
+    config: Partial<QUICConfig> & {
+      key: string | Array<string> | Uint8Array | Array<Uint8Array>;
+      cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
+    };
     socket?: QUICSocket;
-    // This actually requires TLS
-    // You have to specify these some how
-    // We can force it
-    config: Partial<QUICConfig> & { tlsConfig: TlsConfig };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
@@ -146,15 +146,17 @@ class QUICServer extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
+    reuseAddr,
   }: {
     host?: Host | Hostname;
     port?: Port;
+    reuseAddr?: boolean;
   } = {}) {
     let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
-      await this.socket.start({ host, port });
+      await this.socket.start({ host, port, reuseAddr });
       this.socket.addEventListener('error', this.handleQUICSocketError);
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
@@ -193,6 +195,9 @@ class QUICServer extends EventTarget {
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
+  /**
+   * @internal
+   */
   public async connectionNew(
     data: Buffer,
     remoteInfo: RemoteInfo,
