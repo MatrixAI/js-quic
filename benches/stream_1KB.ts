@@ -26,7 +26,7 @@ async function main() {
   };
 
   const data1KiB = Buffer.alloc(1024, 0xf0);
-  const host = '::ffff:127.0.0.1' as Host;
+  const host = '127.0.0.1' as Host;
   const certChainPem = await fs.promises.readFile(
     path.resolve(path.join(__dirname), '../tests/fixtures/certs/rsa1.crt'),
   );
@@ -79,11 +79,13 @@ async function main() {
     },
     host,
     port: quicServer.port,
+    localHost: host,
     crypto,
     logger,
   });
+
   // Running benchmark
-  const summary = b.suite(
+  const summary = await b.suite(
     path.basename(__filename, path.extname(__filename)),
     b.add('send 1Kib of data', async () => {
       const stream = await client.connection.streamNew();
@@ -103,11 +105,9 @@ async function main() {
       ]);
     }),
     ...suiteCommon,
-    b.complete(async () => {
-      await quicServer.stop({ force: true });
-      await client.destroy({ force: true });
-    }),
   );
+  await quicServer.stop({ force: true });
+  await client.destroy({ force: true });
   return summary;
 }
 

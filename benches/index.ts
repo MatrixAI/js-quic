@@ -4,13 +4,13 @@ import fs from 'fs';
 import path from 'path';
 import si from 'systeminformation';
 import Stream1KB from './stream_1KB';
-import Dummy from './dummy';
+// import Dummy from './dummy';
 
 async function main(): Promise<void> {
   await fs.promises.mkdir(path.join(__dirname, 'results'), { recursive: true });
   // Running benches
   await Stream1KB();
-  await Dummy();
+  // await Dummy();
   const resultFilenames = await fs.promises.readdir(
     path.join(__dirname, 'results'),
   );
