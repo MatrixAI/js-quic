@@ -377,7 +377,7 @@ class QUICConnection extends EventTarget {
     if (this.conn.isTimedOut()) {
       this.logger.error('Connection timed out');
       this.dispatchEvent(
-        new events.QUICSocketErrorEvent({
+        new events.QUICConnectionErrorEvent({
           detail: new errors.ErrorQUICConnectionTimeout(),
         }),
       );

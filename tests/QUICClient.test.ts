@@ -199,7 +199,51 @@ describe(QUICClient.name, () => {
       }),
     ).rejects.toThrow(errors.ErrorQUICConnectionTimeout);
   });
-  test.todo('client times out after connection stops responding');
+  test('client times out after connection stops responding', async () => {
+    const host = '127.0.0.1' as Host;
+    const server = new QUICServer({
+      crypto,
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        tlsConfig: fixtures.tlsConfigMemRSA1,
+        verifyPeer: false,
+      },
+    });
+    testsUtils.extractSocket(server, sockets);
+    // @ts-ignore: kidnap protected property
+    const serverSocket = server.socket;
+    await server.start({host});
+    const client = await QUICClient.createQUICClient({
+      host,
+      port: server.port,
+      localHost: host,
+      crypto,
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        maxIdleTimeout: 1000,
+        verifyPeer: false,
+      },
+    });
+    testsUtils.extractSocket(client, sockets);
+
+    // creating promise for client connection timeout
+    const clientConnectionTimeout = promise<void>();
+    const handleConnectionError = (event: events.QUICClientErrorEvent) => {
+      console.log(event.detail);
+      if (event.detail instanceof errors.ErrorQUICConnectionTimeout) {
+        clientConnectionTimeout.resolveP();
+        client.connection.removeEventListener('error', handleConnectionError);
+      }
+    };
+    client.connection.addEventListener('error', handleConnectionError);
+
+    // kill the server socket
+    console.log('step 1');
+    await serverSocket.stop(true);
+    console.log('step 2');
+    await clientConnectionTimeout.p;
+    console.log('step 3');
+  });
   test.todo('server times out after connection stops responding');
   test.todo('server handles socket error');
   test.todo('client handles socket error');
