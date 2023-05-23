@@ -13,7 +13,6 @@
  * to prevent `npm` from attempting to download unpublished packages.
  */
 
-const process = require('process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -24,26 +23,36 @@ const platform = os.platform();
 
 /* eslint-disable no-console */
 async function main() {
-
-  console.error(
-    'Updating the cargo.toml version to match new version',
-  );
+  console.error('Updating the cargo.toml version to match new version');
   const projectRoot = path.join(__dirname, '..');
   const cargoTOMLPath = path.join(projectRoot, 'Cargo.toml');
   const cargoTOML = await fs.promises.readFile(cargoTOMLPath, 'utf-8');
   const cargoTOMLMatch = cargoTOML.match(/version\s*=\s*"(.*)"/);
-  const cargoTOMLUpdated = cargoTOML.replace(cargoTOMLMatch[0], `version = "${packageJSON.version}"`);
+  const cargoTOMLUpdated = cargoTOML.replace(
+    cargoTOMLMatch[0],
+    `version = "${packageJSON.version}"`,
+  );
   await fs.promises.writeFile(cargoTOMLPath, cargoTOMLUpdated, 'utf-8');
 
-  console.error(
-    'Staging changes in git',
-  );
-  childProcess.execFileSync('git', ['add', cargoTOMLPath], {
+  console.error('updating cargo lock file with change');
+  childProcess.execFileSync('cargo', ['update', '--package', 'quic'], {
     stdio: ['inherit', 'inherit', 'inherit'],
     windowsHide: true,
     encoding: 'utf-8',
     shell: platform === 'win32' ? true : false,
   });
+
+  console.error('Staging changes in git');
+  childProcess.execFileSync(
+    'git',
+    ['add', cargoTOMLPath, path.join(projectRoot, 'Cargo.lock')],
+    {
+      stdio: ['inherit', 'inherit', 'inherit'],
+      windowsHide: true,
+      encoding: 'utf-8',
+      shell: platform === 'win32' ? true : false,
+    },
+  );
 
   console.error(
     'Updating the package.json with optional native dependencies and package-lock.json',
