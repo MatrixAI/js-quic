@@ -20,7 +20,7 @@
     "prepare": "tsc -p ./tsconfig.build.json",
     "prebuild": "node ./scripts/prebuild.js",
     "build": "rimraf ./dist && tsc -p ./tsconfig.build.json",
-    "postversion": "node ./scripts/postversion.js",
+    "version": "node ./scripts/version.js",
     "prepublishOnly": "node ./scripts/prepublishOnly.js",
     "ts-node": "ts-node",
     "test": "jest",
