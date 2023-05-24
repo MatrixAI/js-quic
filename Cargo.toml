@@ -1,6 +1,6 @@
 [package]
 name = "quic"
-version = "0.0.7-alpha.0"
+version = "0.0.7-alpha.1"
 authors = ["Roger Qiu <roger.qiu@polyhack.io>"]
 license-file = "LICENSE"
 edition = "2021"
