@@ -1,6 +1,6 @@
 {
   "name": "@matrixai/quic",
-  "version": "0.0.4-alpha.0",
+  "version": "0.0.5-alpha.0",
   "bin": {
     "server": "dist/bin/server.js"
   },
@@ -40,10 +40,10 @@
     "ip-num": "^1.5.0"
   },
   "optionalDependencies": {
-    "@matrixai/quic-darwin-arm64": "0.0.4-alpha.0",
-    "@matrixai/quic-darwin-x64": "0.0.4-alpha.0",
-    "@matrixai/quic-linux-x64": "0.0.4-alpha.0",
-    "@matrixai/quic-win32-x64": "0.0.4-alpha.0"
+    "@matrixai/quic-darwin-arm64": "0.0.5-alpha.0",
+    "@matrixai/quic-darwin-x64": "0.0.5-alpha.0",
+    "@matrixai/quic-linux-x64": "0.0.5-alpha.0",
+    "@matrixai/quic-win32-x64": "0.0.5-alpha.0"
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
