@@ -13,4 +13,6 @@
 /benches
 /build
 /builds
+/prebuild
+/prepublishOnly
 /dist/tsbuildinfo
