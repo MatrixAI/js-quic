@@ -72,9 +72,13 @@ async function main(argv = process.argv) {
     // This will be `prepublishOnly/@org/name-platform-arch`
     const packagePath = path.join(prepublishOnlyPath, packageName);
     console.error('Packaging:', packagePath);
-    await fs.promises.rm(packagePath, {
-      recursive: true,
-    });
+    try {
+      await fs.promises.rm(packagePath, {
+        recursive: true,
+      });
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    }
     await fs.promises.mkdir(packagePath, { recursive: true });
     const nativePackageJSON = {
       name: packageName,
