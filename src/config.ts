@@ -61,16 +61,107 @@ type QUICConfig = {
    */
   verifyPeer: boolean;
 
+  /**
+   * Enables the logging of secret keys to a file path.
+   * Use this with wireshark to decrypt the QUIC packets for debugging.
+   * This defaults to undefined.
+   */
   logKeys?: string;
+
+  /**
+   * Enable "Generate Random extensions and Sustain Extensibilty".
+   * This prevents protocol ossification by periodically introducing
+   * random no-op values in the optional fields in TLS.
+   * This defaults to true.
+   */
   grease: boolean;
+
+  /**
+   * Maximum number of milliseconds to wait for an idle connection.
+   * If this time is exhausted with no answer from the peer, then
+   * the connection will timeout. This applies to any open connection.
+   * Note that the QUIC client will repeatedly send initial packets to
+   * a non-responding QUIC server up to this time.
+   * This is defaulted to infinite.
+   */
   maxIdleTimeout: number;
+
+  /**
+   * Maximum incoming UDP payload size.
+   * The maximum IPv4 UDP payload size is 65507.
+   * The maximum IPv6 UDP payload size is 65527.
+   * This is defaulted to 65527.
+   */
   maxRecvUdpPayloadSize: number;
+
+  /**
+   * Maximum outgoing UDP payload size.
+   *
+   * It is advantageous to set this size to be lower than the maximum
+   * transmission unit size, which is commonly set to 1500.
+   * This is defaulted 1200. It is also the minimum.
+   */
   maxSendUdpPayloadSize: number;
+
+  /**
+   * Maximum buffer size of incoming stream data for an entire connection.
+   * If set to 0, then no incoming stream data is allowed, therefore setting
+   * to 0 effectively disables incoming stream data.
+   * This defaults to 10 MiB.
+   */
   initialMaxData: number;
+
+  /**
+   * Maximum buffer size of incoming stream data for a locally initiated
+   * bidirectional stream. This is the buffer size for a single stream.
+   * If set to 0, this disables incoming stream data for locally initiated
+   * bidirectional streams.
+   * This defaults to 1 MiB.
+   */
   initialMaxStreamDataBidiLocal: number;
+
+  /**
+   * Maximum buffer size of incoming stream data for a remotely initiated
+   * bidirectional stream. This is the buffer size for a single stream.
+   * If set to 0, this disables incoming stream data for remotely initiated
+   * bidirectional streams.
+   * This defaults to 1 MiB.
+   */
   initialMaxStreamDataBidiRemote: number;
+
+  /**
+   * Maximum buffer size of incoming stream data for a remotely initiated
+   * unidirectional stream. This is the buffer size for a single stream.
+   * If set to 0, this disables incoming stream data for remotely initiated
+   * unidirectional streams.
+   * This defaults to 1 MiB.
+   */
+  initialMaxStreamDataUni: number;
+
+  /**
+   * Maximum number of remotely initiated bidirectional streams.
+   * A bidirectional stream is closed once all incoming data is read up to the
+   * fin offset or when the stream's read direction is shutdown and all
+   * outgoing data is acked by the peer up to the fin offset or when the
+   * stream's write direction is shutdown.
+   * This defaults to 100.
+   */
   initialMaxStreamsBidi: number;
+
+  /**
+   * Maximum number of remotely initiated unidirectional streams.
+   * A unidirectional stream is closed once all incoming data is read up to the
+   * fin offset or when the stream's read direction is shutdown.
+   * This defaults to 100.
+   */
   initialMaxStreamsUni: number;
+
+  /**
+   * Enables receiving dgram.
+   * This defaults to true.
+   */
+  enableDgram: boolean;
+
   disableActiveMigration: boolean;
   applicationProtos: string[];
   enableEarlyData: boolean;
@@ -100,14 +191,16 @@ const clientDefault: QUICConfig = {
   sigalgs,
   verifyPeer: true,
   grease: true,
-  maxIdleTimeout: 5000,
+  maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  initialMaxData: 10000000,
-  initialMaxStreamDataBidiLocal: 1000000,
-  initialMaxStreamDataBidiRemote: 1000000,
+  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN,
+  initialMaxData: 10 * 1024 * 1024,
+  initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
+  initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
+  initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
+  enableDgram: true,
   disableActiveMigration: true,
   // Test if this is needed
   applicationProtos: ['http/0.9'],
@@ -118,14 +211,16 @@ const serverDefault: QUICConfig = {
   sigalgs,
   verifyPeer: false,
   grease: true,
-  maxIdleTimeout: 5000,
+  maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  initialMaxData: 10000000,
-  initialMaxStreamDataBidiLocal: 1000000,
-  initialMaxStreamDataBidiRemote: 1000000,
+  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN,
+  initialMaxData: 10 * 1024 * 1024,
+  initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
+  initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
+  initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
+  enableDgram: true,
   disableActiveMigration: true,
   // Test if this is needed
   applicationProtos: ['http/0.9'],
