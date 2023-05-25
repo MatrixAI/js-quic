@@ -1,8 +1,7 @@
 import type { Crypto, Host, Hostname, Port } from './types';
 import type { Config } from './native/types';
-import type { QUICConfig } from './config';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { StreamCodeToReason, StreamReasonToCode } from './types';
+import type { QUICConfig, StreamCodeToReason, StreamReasonToCode } from './types';
 import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
 import { destroyed, running } from '@matrixai/async-init';

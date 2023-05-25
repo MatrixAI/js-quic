@@ -7,10 +7,10 @@ import type {
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
+  QUICConfig,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig } from './config';
 import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
@@ -48,8 +48,6 @@ class QUICServer extends EventTarget {
   protected socket: QUICSocket;
   protected reasonToCode: StreamReasonToCode | undefined;
   protected codeToReason: StreamCodeToReason | undefined;
-  protected maxReadableStreamBytes?: number | undefined;
-  protected maxWritableStreamBytes?: number | undefined;
   protected keepaliveIntervalTime?: number | undefined;
   protected connectionMap: QUICConnectionMap;
 
@@ -75,8 +73,6 @@ class QUICServer extends EventTarget {
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
     keepaliveIntervalTime,
     logger,
   }: {
@@ -92,8 +88,6 @@ class QUICServer extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
     keepaliveIntervalTime?: number;
     logger?: Logger;
   }) {
@@ -122,8 +116,6 @@ class QUICServer extends EventTarget {
     this.config = quicConfig;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-    this.maxReadableStreamBytes = maxReadableStreamBytes;
-    this.maxWritableStreamBytes = maxWritableStreamBytes;
     this.keepaliveIntervalTime = keepaliveIntervalTime;
   }
 
@@ -304,8 +296,6 @@ class QUICServer extends EventTarget {
       config: this.config,
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,
-      maxReadableStreamBytes: this.maxReadableStreamBytes,
-      maxWritableStreamBytes: this.maxWritableStreamBytes,
       logger: this.logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),

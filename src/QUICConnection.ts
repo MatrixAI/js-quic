@@ -1,12 +1,10 @@
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
-// This is specialized type
-import type { QUICConfig } from './config';
 import type { Host, Port, RemoteInfo, StreamId } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
-import type { ConnectionMetadata } from './types';
+import type { QUICConfig, ConnectionMetadata } from './types';
 import {
   CreateDestroy,
   ready,

@@ -1,6 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Crypto, Host, Port } from '@/types';
-import type { QUICConfig } from '@/config';
+import type { QUICConfig, Crypto, Host, Port } from '@/types';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
