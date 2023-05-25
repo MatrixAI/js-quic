@@ -1,5 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { QUICConfig, Crypto, Host, Port } from '@/types';
+import type { QUICConfig, Crypto, Host, Hostname, Port } from '@/types';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
@@ -134,6 +134,116 @@ describe(QUICServer.name, () => {
       await quicServer.start();
       // Default to dual-stack
       expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+  });
+  describe.only('binding to host and port', () => {
+    test('listen on IPv4', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: '127.0.0.1' as Host
+      });
+      expect(quicServer.host).toBe('127.0.0.1');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('listen on IPv6', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: '::1' as Host
+      });
+      expect(quicServer.host).toBe('::1');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('listen on dual stack', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: '::' as Host
+      });
+      expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('listen on IPv4 mapped IPv6', async () => {
+      // NOT RECOMMENDED, because send addresses will have to be mapped
+      // addresses, which means you can ONLY connect to mapped addresses
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: '::ffff:127.0.0.1' as Host
+      });
+      expect(quicServer.host).toBe('::ffff:127.0.0.1');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+      await quicServer.start({
+        host: '::ffff:7f00:1' as Host
+      });
+      // Will resolve to dotted-decimal variant
+      expect(quicServer.host).toBe('::ffff:127.0.0.1');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('listen on hostname', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: 'localhost' as Hostname
+      });
+      // Default to using dns lookup, which uses the OS DNS resolver
+      const host = await utils.resolveHostname('localhost' as Hostname);
+      expect(quicServer.host).toBe(host);
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('listen on hostname and custom resolver', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
+        },
+        resolveHostname: () => '127.0.0.1' as Host,
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: 'abcdef' as Hostname
+      });
+      expect(quicServer.host).toBe('127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
     });
