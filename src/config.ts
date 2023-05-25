@@ -28,15 +28,15 @@ const clientDefault: QUICConfig = {
   verifyPeer: true,
   grease: true,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN,
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
+  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200,
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
   initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
-  enableDgram: true,
+  enableDgram: [false, 0, 0],
   disableActiveMigration: true,
   // Test if this is needed
   applicationProtos: ['http/0.9'],
@@ -48,15 +48,15 @@ const serverDefault: QUICConfig = {
   verifyPeer: false,
   grease: true,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN,
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
+  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
   initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
-  enableDgram: true,
+  enableDgram: [false, 0, 0],
   disableActiveMigration: true,
   // Test if this is needed
   applicationProtos: ['http/0.9'],
@@ -178,8 +178,10 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   quicheConfig.setInitialMaxStreamDataBidiRemote(
     config.initialMaxStreamDataBidiRemote,
   );
+  quicheConfig.setInitialMaxStreamDataUni(config.initialMaxStreamDataUni);
   quicheConfig.setInitialMaxStreamsBidi(config.initialMaxStreamsBidi);
   quicheConfig.setInitialMaxStreamsUni(config.initialMaxStreamsUni);
+  quicheConfig.enableDgram(...config.enableDgram);
   quicheConfig.setDisableActiveMigration(config.disableActiveMigration);
   quicheConfig.setApplicationProtos(config.applicationProtos);
   return quicheConfig;

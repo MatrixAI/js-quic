@@ -252,9 +252,10 @@ type QUICConfig = {
 
   /**
    * Enables receiving dgram.
-   * This defaults to true.
+   * The 2 numbers are receive queue length and send queue length.
+   * This defaults to `[false, 0, 0]`.
    */
-  enableDgram: boolean;
+  enableDgram: [boolean, number, number];
 
   disableActiveMigration: boolean;
   applicationProtos: string[];
