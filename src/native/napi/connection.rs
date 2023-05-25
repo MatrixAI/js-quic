@@ -1030,7 +1030,10 @@ impl Connection {
 
   #[napi]
   pub fn is_closed(&self) -> bool {
-    return self.0.is_closed();
+    // eprintln!("RUST: CALLING IS_CLOSED");
+    let x = self.0.is_closed();
+    // eprintln!("RUST: FINISH CALLING IS_CLOSED=======");
+    return x;
   }
 
   #[napi]

@@ -170,6 +170,7 @@ class QUICServer extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
+    // console.time('destroy conn');
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     const destroyProms: Array<Promise<void>> = [];
@@ -177,6 +178,7 @@ class QUICServer extends EventTarget {
       destroyProms.push(connection.destroy({ force }));
     }
     await Promise.all(destroyProms);
+    // console.timeEnd('destroy conn');
     this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped

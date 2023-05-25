@@ -12,8 +12,7 @@ import * as utils from '@/utils';
 import * as testsUtils from './utils';
 
 describe(QUICServer.name, () => {
-  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
-    new StreamHandler(
+  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [ new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
@@ -138,7 +137,7 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
-  describe.only('binding to host and port', () => {
+  describe('binding to host and port', () => {
     test('listen on IPv4', async () => {
       const quicServer = new QUICServer({
         crypto,
@@ -248,6 +247,83 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
+  describe.only('connection bootstrap', () => {
+    // Test without peer verification
+    test.only('', async () => {
+      const quicServer = new QUICServer({
+        crypto,
+        config: {
+          // key: keyPairRSAPEM.privateKey,
+          // cert: certRSAPEM,
+          key: keyPairECDSAPEM.privateKey,
+          cert: certECDSAPEM,
+          verifyPeer: false
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      await quicServer.start({
+        host: '127.0.0.1' as Host
+      });
+
+      const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+      await crypto.ops.randomBytes(scidBuffer);
+      const scid = new QUICConnectionId(scidBuffer);
+
+      // Verify peer
+      // Note that you cannot send to IPv4 from dual stack socket
+      // It must be sent as IPv4 mapped IPv6
+
+      const socket = new QUICSocket({
+        crypto,
+        logger: logger.getChild(QUICSocket.name),
+      });
+      await socket.start({
+        host: '127.0.0.1' as Host
+      });
+
+      // ???
+      const clientConfig: QUICConfig = {
+        ...clientDefault,
+        verifyPeer: false
+      };
+
+      // This creates a connection state
+      // We now need to trigger it
+      const connection = await QUICConnection.connectQUICConnection({
+        scid,
+        socket,
+        remoteInfo: {
+          host: quicServer.host,
+          port: quicServer.port,
+        },
+        config: clientConfig,
+        logger: logger.getChild(QUICConnection.name)
+      });
+
+      connection.addEventListener('error', (e) => {
+        console.log('error', e);
+      });
+
+      // Trigger the connection
+      await connection.send();
+
+      // wait till it is established
+      console.log('BEFORE ESTABLISHED P');
+      await connection.establishedP;
+      console.log('AFTER ESTABLISHED P');
+
+      // You must destroy the connection
+      console.log('DESTROY CONNECTION');
+      await connection.destroy();
+      console.log('DESTROYED CONNECTION');
+
+      console.log('STOP SOCKET');
+      await socket.stop();
+      console.time('STOPPED SOCKET');
+      await quicServer.stop();
+      console.timeEnd('STOPPED SOCKET');
+    });
+  });
   // test('bootstrapping a new connection', async () => {
   //   const quicServer = new QUICServer({
   //     crypto,
@@ -302,4 +378,7 @@ describe(QUICServer.name, () => {
   describe('updating configuration', () => {
     // We want to test changing the configuration over time
   });
+  // Test hole punching, there's an initiation function
+  // We can make it start doing this, but technically it's the socket's duty to do this
+  // not just the server side
 });

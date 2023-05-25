@@ -92,6 +92,9 @@ class QUICConnection extends EventTarget {
   protected _remoteHost: Host;
   protected _remotePort: Port;
 
+  protected times = 0;
+
+
   /**
    * Create QUICConnection by connecting to a server
    */
@@ -333,6 +336,9 @@ class QUICConnection extends EventTarget {
       clearTimeout(this.keepAliveInterval);
       delete this.keepAliveInterval;
     }
+
+    // console.time('stream destroy');
+
     // Handle destruction concurrently
     const destroyProms: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
@@ -347,6 +353,10 @@ class QUICConnection extends EventTarget {
       }
     }
     await Promise.all(destroyProms);
+
+    // console.timeEnd('stream destroy');
+
+    // console.time('conn close');
     try {
       // If this is already closed, then `Done` will be thrown
       // Otherwise it can send `CONNECTION_CLOSE` frame
@@ -364,13 +374,24 @@ class QUICConnection extends EventTarget {
         utils.never();
       }
     }
+    // console.timeEnd('conn close');
+
+    // console.time('conn destroy send');
+
     // Sending if
     await this.send();
     // If it is not closed, it could still be draining
     this.logger.debug('Waiting for closeP');
+
+    // console.time('conn close');
     await this.closedP;
+    // console.timeEnd('conn close');
+
     this.logger.debug('closeP resolved');
     this.connectionMap.delete(this.connectionId);
+
+    // console.timeEnd('conn destroy send');
+
     // Checking if timed out
     if (this.conn.isTimedOut()) {
       this.logger.error('Connection timed out');
@@ -454,7 +475,10 @@ class QUICConnection extends EventTarget {
         this.resolveEstablishedP();
       }
       if (this.conn.isClosed()) {
-        if (this.resolveCloseP != null) this.resolveCloseP();
+        if (this.resolveCloseP != null) {
+          // console.log('RESOLVE CLOSE P1');
+          this.resolveCloseP();
+        }
         return;
       }
       if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
@@ -546,9 +570,16 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async send(): Promise<void> {
+    // console.log('SEND CALLED');
     this.logger.debug('SEND CALLED');
+    // console.log('-------------CHECKING IS CLOSED');
     if (this.conn.isClosed()) {
-      if (this.resolveCloseP != null) this.resolveCloseP();
+      // console.log('FINISH CHECKING IS CLOSED');
+      if (this.resolveCloseP != null) {
+        this.logger.warn('RESOLVE CLOSE P2' + new Date());
+        // console.log('RESOLVE CLOSE P2', new Date());
+        this.resolveCloseP();
+      }
       return;
     } else if (this.conn.isDraining()) {
       return;
@@ -567,7 +598,10 @@ class QUICConnection extends EventTarget {
           if (e.message === 'Done') {
             if (this.conn.isClosed()) {
               this.logger.debug('SEND CLOSED');
-              if (this.resolveCloseP != null) this.resolveCloseP();
+              if (this.resolveCloseP != null) {
+                // console.log('RESOLVE CLOSE P3');
+                this.resolveCloseP();
+              }
               return;
             }
             this.logger.debug('SEND IS DONE');
@@ -643,6 +677,7 @@ class QUICConnection extends EventTarget {
         this.conn.isClosed() &&
         this.resolveCloseP != null
       ) {
+        // console.log('RESOLVE CLOSE P4');
         // If we flushed the draining, then this is what will happen
         this.resolveCloseP();
       }
@@ -726,14 +761,19 @@ class QUICConnection extends EventTarget {
   // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
   protected deadline: number = 0;
   protected onTimeout = async () => {
+    this.logger.warn('ON TIMEOUT CALLED ' + new Date());
     this.logger.debug('timeout on timeout');
     // Clearing timeout
     clearTimeout(this.timer);
     delete this.timer;
     this.deadline = Infinity;
     // Doing timeout actions
+    // console.time('INTERNAL ON TIMEOUT');
     this.conn.onTimeout();
+    // console.timeEnd('INTERNAL ON TIMEOUT');
+    this.logger.warn('BEFORE CALLING SEND' + new Date());
     if (this[destroyed] === false) await this.send();
+    this.logger.warn('AFTER CALLING SEND ' + new Date());
     if (
       this[status] !== 'destroying' &&
       (this.conn.isClosed() || this.conn.isDraining())
@@ -742,7 +782,9 @@ class QUICConnection extends EventTarget {
       // Destroy in the background, we still need to process packets
       void this.destroy().catch(() => {});
     }
+    this.logger.warn('BEFORE CHECK TIMEOUT' + new Date());
     this.checkTimeout();
+    this.logger.warn('AFTER CHECK TIMEOUT' + new Date());
   };
   /**
    * Checks the timeout event, should be called whenever the following events happen.
@@ -759,6 +801,9 @@ class QUICConnection extends EventTarget {
     this.logger.debug('timeout checking timeout');
     // During construction, this ends up being null
     const time = this.conn.timeout();
+    this.logger.error(`THE TIME (${this.times}): ` + time + ' ' + new Date());
+    this.times++;
+
     if (time == null) {
       // Clear timeout
       if (this.timer != null) this.logger.debug('timeout clearing timeout');
@@ -777,6 +822,9 @@ class QUICConnection extends EventTarget {
           clearTimeout(this.timer);
           delete this.timer;
           this.deadline = newDeadline;
+
+          this.logger.warn('BEFORE SET TIMEOUT 1: ' + time);
+
           this.timer = setTimeout(this.onTimeout, time);
         }
       } else {
@@ -788,6 +836,9 @@ class QUICConnection extends EventTarget {
         }
         this.logger.debug(`timeout creating timer with ${time} delay`);
         this.deadline = newDeadline;
+
+        this.logger.warn('BEFORE SET TIMEOUT 2: ' + time);
+
         this.timer = setTimeout(this.onTimeout, time);
       }
     }
