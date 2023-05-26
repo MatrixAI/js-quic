@@ -47,6 +47,43 @@ describe('quiche', () => {
     expect(clientConn.isReadable()).toBeFalse();
     expect(clientConn.isClosed()).toBeFalse();
     expect(clientConn.isDraining()).toBeFalse();
+
+
+    const textDecoder = new TextDecoder();
+    const textEncoder = new TextEncoder();
+    const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
+    const [sendLength, sendInfo] = clientConn.send(sendBuffer);
+
+    // This is the initial delay for the dialing procedure
+    // Quiche will repeatedly send the initial packet until it is received
+    // or exhausted the idle timeout, which in this case is 0 (disabled)
+    expect(typeof clientConn.timeout()).toBe('number');
+    expect(clientConn.isTimedOut()).toBeFalse();
+    expect(clientConn.isInEarlyData()).toBeFalse();
+    expect(clientConn.isEstablished()).toBeFalse();
+    expect(clientConn.isResumed()).toBeFalse();
+    expect(clientConn.isReadable()).toBeFalse();
+    expect(clientConn.isClosed()).toBeFalse();
+    expect(clientConn.isDraining()).toBeFalse();
+
+
+    // This proves that only 1 send is necessary at the beginning
+    // Repeated send will throw `Done`
+    const sendBuffer2 = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
+    expect(() => clientConn.send(sendBuffer2)).toThrow('Done');
+
+
+    // We can  do something here!
+    const header = quiche.Header.fromSlice(sendBuffer, quiche.MAX_CONN_ID_LEN);
+
+    console.log(header);
+    console.log(header.dcid);
+    console.log(header.scid);
+
+
+    // console.log(sendLength, sendInfo, textDecoder.decode(sendBuffer.slice(0, sendLength)));
+
+
     clientConn.close(true, 0, Buffer.from(''));
     expect(clientConn.timeout()).toBeNull();
     expect(clientConn.isTimedOut()).toBeFalse();
