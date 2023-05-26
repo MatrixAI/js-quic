@@ -129,8 +129,15 @@ class QUICConnectionServer extends EventTarget {
 
     // THIS WILL ALWALS BE NULL
     // EVEN if we are accepting connection
-    const time = this.conn.timeout();
-    console.log(time);
+    console.log(this.conn.timeout());
+    this.conn.onTimeout();
+    this.conn.onTimeout();
+    console.log(this.conn.timeout());
+    console.log(this.conn.timeout());
+    this.conn.onTimeout();
+    console.log(this.conn.timeout());
+    this.conn.onTimeout();
+    console.log(this.conn.timeout());
 
   }
 
@@ -191,6 +198,7 @@ class QUICConnectionServer extends EventTarget {
     }
 
     // Now this needs to go ahead and send shit!
+    this.connectionMap.delete(this.connectionId);
 
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }

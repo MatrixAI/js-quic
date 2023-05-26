@@ -161,8 +161,6 @@ class QUICConnection extends EventTarget {
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -172,8 +170,6 @@ class QUICConnection extends EventTarget {
     config: QUICConfig;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
