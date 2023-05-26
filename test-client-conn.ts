@@ -4,12 +4,13 @@ import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from './src/QUICServer';
 import QUICConnectionId from './src/QUICConnectionId';
-import QUICConnection from './src/QUICConnection';
+// import QUICConnection from './src/QUICConnection';
 import QUICSocket from './src/QUICSocket';
 import { clientDefault, buildQuicheConfig } from './src/config';
 import { quiche } from './src/native';
 import * as utils from './src/utils';
 import * as testsUtils from './tests/utils';
+import QUICConnection
 
   let keyPairRSA: {
     publicKey: JsonWebKey;
@@ -89,86 +90,8 @@ async function main() {
     ),
   ]);
 
-      const quicServer = new QUICServer({
-        crypto,
-        config: {
-          // key: keyPairRSAPEM.privateKey,
-          // cert: certRSAPEM,
-          key: keyPairECDSAPEM.privateKey,
-          cert: certECDSAPEM,
-          verifyPeer: false
-        },
-        logger: logger.getChild('QUICServer'),
-      });
-      await quicServer.start({
-        host: '127.0.0.1' as Host
-      });
-
-      const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
-      await crypto.ops.randomBytes(scidBuffer);
-      const scid = new QUICConnectionId(scidBuffer);
-
-      // Verify peer
-      // Note that you cannot send to IPv4 from dual stack socket
-      // It must be sent as IPv4 mapped IPv6
-
-      const socket = new QUICSocket({
-        crypto,
-        logger: logger.getChild(QUICSocket.name),
-      });
-      await socket.start({
-        host: '127.0.0.1' as Host
-      });
-
-      // ???
-      const clientConfig: QUICConfig = {
-        ...clientDefault,
-        verifyPeer: false
-      };
-
-      // This creates a connection state
-      // We now need to trigger it
-      const connection = await QUICConnection.connectQUICConnection({
-        scid,
-        socket,
-        remoteInfo: {
-          host: quicServer.host,
-          port: quicServer.port,
-        },
-        config: clientConfig,
-        logger: logger.getChild(QUICConnection.name + '--CLIENT CONNECTION--')
-      });
-
-      connection.addEventListener('error', (e) => {
-        console.log('error', e);
-      });
-
-      // Trigger the connection
-      await connection.send();
-
-      // wait till it is established
-      // console.log('BEFORE ESTABLISHED P');
-      await connection.establishedP;
-      // console.log('AFTER ESTABLISHED P');
-
-      // You must destroy the connection
-      // console.log('DESTROY CONNECTION');
-      await connection.destroy();
-      // console.log('DESTROYED CONNECTION');
 
 
-      // Due to idle timer?
-
-      await socket.stop();
-
-      console.log('<<<< STARTED TO SLEEP');
-      await testsUtils.sleep(100000);
-      console.log('<<<< FINISHED TO SLEEP');
-
-      // console.log('STOP SOCKET');
-      console.time('STOP SERVER');
-      await quicServer.stop();
-      console.timeEnd('STOP SERVER');
 }
 
 void main();

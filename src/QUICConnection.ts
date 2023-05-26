@@ -34,16 +34,12 @@ import { promise } from './utils';
 interface QUICConnection extends CreateDestroy {}
 @CreateDestroy()
 class QUICConnection extends EventTarget {
-  public readonly connectionId: QUICConnectionId;
   public readonly type: 'client' | 'server';
+  public readonly connectionId: QUICConnectionId;
 
   public conn: Connection;
   public connectionMap: QUICConnectionMap;
   public streamMap: Map<StreamId, QUICStream> = new Map();
-  protected reasonToCode: StreamReasonToCode;
-  protected codeToReason: StreamCodeToReason;
-  // protected maxReadableStreamBytes: number | undefined;
-  // protected maxWritableStreamBytes: number | undefined;
 
   // This basically allows one to await this promise
   // once resolved, always resolved...
@@ -57,6 +53,9 @@ class QUICConnection extends EventTarget {
 
   protected logger: Logger;
   protected socket: QUICSocket;
+  protected reasonToCode: StreamReasonToCode;
+  protected codeToReason: StreamCodeToReason;
+
   protected timer?: ReturnType<typeof setTimeout>;
   protected keepAliveInterval?: ReturnType<typeof setInterval>;
   public readonly closedP: Promise<void>;
@@ -106,8 +105,6 @@ class QUICConnection extends EventTarget {
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -116,8 +113,6 @@ class QUICConnection extends EventTarget {
     config: QUICConfig;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
@@ -147,8 +142,6 @@ class QUICConnection extends EventTarget {
       remoteInfo,
       reasonToCode,
       codeToReason,
-      // maxReadableStreamBytes,
-      // maxWritableStreamBytes,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -210,8 +203,6 @@ class QUICConnection extends EventTarget {
       remoteInfo,
       reasonToCode,
       codeToReason,
-      // maxReadableStreamBytes,
-      // maxWritableStreamBytes,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -227,8 +218,6 @@ class QUICConnection extends EventTarget {
     remoteInfo,
     reasonToCode,
     codeToReason,
-    // maxReadableStreamBytes,
-    // maxWritableStreamBytes,
     logger,
   }: {
     type: 'client' | 'server';
@@ -238,8 +227,6 @@ class QUICConnection extends EventTarget {
     remoteInfo: RemoteInfo;
     reasonToCode: StreamReasonToCode;
     codeToReason: StreamCodeToReason;
-    // maxReadableStreamBytes: number | undefined;
-    // maxWritableStreamBytes: number | undefined;
     logger: Logger;
   }) {
     super();
@@ -253,9 +240,11 @@ class QUICConnection extends EventTarget {
     this._remotePort = remoteInfo.port;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-    // this.maxReadableStreamBytes = maxReadableStreamBytes;
-    // this.maxWritableStreamBytes = maxWritableStreamBytes;
+
     // Sets the timeout on the first
+    // I don't think this is useful
+    // It's just state
+    // It always results in an empty timeout
     this.checkTimeout();
 
     // Note that you must be able to reject too
@@ -317,19 +306,33 @@ class QUICConnection extends EventTarget {
   }
 
   /**
-   * This provides the ability to destroy with a specific error. This will wait for the connection to fully drain.
+   * Destroys the connection.
+   * The `applicationError` if the connection close is due to the transport
+   * layer or due to the application layer.
+   * If `applicationError` is true, you can use any number as the `errorCode`.
+   * The other peer must should understand the `errorCode`.
+   * If `applicationError` is false, you must use `errorCode` from
+   * `ConnectionErrorCode`.
+   * The default `applicationError` is true because a normal graceful close
+   * is an application error.
+   * The default `errorCode` of 0 means no error or general error.
    */
   public async destroy({
-    appError = false,
-    errorCode = quiche.ConnectionErrorCode.NoError,
+    applicationError = true,
+    errorCode = 0,
     errorMessage = '',
     force = false,
   }: {
-    appError?: boolean;
+    applicationError?: false;
     errorCode?: ConnectionErrorCode;
     errorMessage?: string;
     force?: boolean;
-  } = {}) {
+  } | {
+    applicationError: true;
+    errorCode?: number;
+    errorMessage?: string;
+    force?: boolean;
+  }= {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
     // Clean up keep alive
     if (this.keepAliveInterval != null) {
@@ -366,7 +369,7 @@ class QUICConnection extends EventTarget {
       // 1 packet containing a `CONNECTION_CLOSE` frame too
       // (with `NO_ERROR` code if appropriate)
       // It must enter into a draining state, and no other packets can be sent
-      this.conn.close(appError, errorCode, Buffer.from(errorMessage));
+      this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
     } catch (e) {
       if (e.message !== 'Done') {
         this.logger.debug('already closed');
@@ -379,15 +382,23 @@ class QUICConnection extends EventTarget {
     // console.time('conn destroy send');
 
     // Sending if
+    this.logger.error('SEND BEFORE WAIT FOR CLOSE P');
     await this.send();
     // If it is not closed, it could still be draining
-    this.logger.debug('Waiting for closeP');
 
-    // console.time('conn close');
+    // This depends on the the `this.resolveCloseP()`
+    // When that is called, the connection is considered closed
+    this.logger.error('>>>> WAIT FOR CLOSE P');
+
+    // This is false
+    this.logger.error(`>>>> Connection is closed? ${this.conn.isClosed()}`);
+    // This is true
+    this.logger.error(`>>>> Connection is draining? ${this.conn.isDraining()}`);
+
     await this.closedP;
-    // console.timeEnd('conn close');
 
-    this.logger.debug('closeP resolved');
+    this.logger.error('>>>> PASS CLOSED P');
+
     this.connectionMap.delete(this.connectionId);
 
     // console.timeEnd('conn destroy send');
@@ -407,6 +418,9 @@ class QUICConnection extends EventTarget {
       clearTimeout(this.timer);
       delete this.timer;
     }
+
+    this.logger.error('DESTROYED');
+
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
@@ -590,12 +604,18 @@ class QUICConnection extends EventTarget {
       let sendLength: number;
       let sendInfo: SendInfo;
       while (true) {
+
+        this.logger.error('--> WHILE LOOP ITERATION');
+
         try {
-          this.logger.debug('Did a send');
           [sendLength, sendInfo] = this.conn.send(sendBuffer);
         } catch (e) {
           this.logger.debug(`SEND FAILED WITH ${e.message}`);
           if (e.message === 'Done') {
+            this.logger.error('--> DONE AFTER CONN SEND');
+
+            this.logger.error(`--> IS CONN CLOSED? ${this.conn.isClosed()}`);
+
             if (this.conn.isClosed()) {
               this.logger.debug('SEND CLOSED');
               if (this.resolveCloseP != null) {
@@ -605,6 +625,8 @@ class QUICConnection extends EventTarget {
               return;
             }
             this.logger.debug('SEND IS DONE');
+
+            this.logger.error('--> FINISH WHILE LOOP');
             return;
           }
           this.logger.error('Failed to send, cleaning up');
@@ -639,6 +661,9 @@ class QUICConnection extends EventTarget {
           );
           return;
         }
+
+        this.logger.error('--> SEND ON SOCKET');
+
         try {
           this.logger.debug(
             `ATTEMPTING SEND ${sendLength} bytes to ${sendInfo.to.port}:${sendInfo.to.host}`,
@@ -663,13 +688,24 @@ class QUICConnection extends EventTarget {
         numSent += 1;
       }
     } finally {
+      this.logger.error("--> SEND's FINALLY");
+
       if (numSent > 0) this.garbageCollectStreams('send');
       this.logger.debug('SEND FINALLY');
+
+      this.logger.error('--> CHECK TIMEOUT');
+
+      this.logger.error(`--> IS CONN CLOSED? ${this.conn.isClosed()}`);
+      this.logger.error(`--> IS CONN DRAINING? ${this.conn.isDraining()}`);
+
       this.checkTimeout();
       if (
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
+
+        this.logger.error('--> CALLING VOID DESTROY');
+
         // Ignore errors and run in background
         void this.destroy().catch(() => {});
       } else if (
@@ -677,6 +713,9 @@ class QUICConnection extends EventTarget {
         this.conn.isClosed() &&
         this.resolveCloseP != null
       ) {
+
+        this.logger.error('--> RESOLVE CLOSE P4');
+
         // console.log('RESOLVE CLOSE P4');
         // If we flushed the draining, then this is what will happen
         this.resolveCloseP();
@@ -786,6 +825,7 @@ class QUICConnection extends EventTarget {
     this.checkTimeout();
     this.logger.warn('AFTER CHECK TIMEOUT' + new Date());
   };
+
   /**
    * Checks the timeout event, should be called whenever the following events happen.
    * 1. `send()` is called
