@@ -62,12 +62,15 @@ class QUICSocket extends EventTarget {
     try {
       header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
     } catch (e) {
-      // `InvalidPacket` means that this is not a QUIC packet.
-      // If so, then we just ignore the packet.
-      if (e.message !== 'InvalidPacket') {
-        // Only emit an error if it is not an `InvalidPacket` error.
-        // Do note, that this kind of error is a peer error.
-        // The error is not due to us.
+      // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
+      // packet. If so, then we just ignore the packet.
+      if (
+        e.message !== 'BufferTooShort' &&
+        e.message !== 'InvalidPacket'
+      ) {
+        // Only emit an error if it is not a `BufferTooShort` or
+        // `InvalidPacket` error. Do note, that this kind of error is a peer
+        // error. The error is not due to us.
         this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
       }
       return;
