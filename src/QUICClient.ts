@@ -158,8 +158,6 @@ class QUICClient extends EventTarget {
       config: quicConfig,
       reasonToCode,
       codeToReason,
-      maxReadableStreamBytes,
-      maxWritableStreamBytes,
       logger: logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),

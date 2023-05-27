@@ -237,11 +237,10 @@ class QUICConnection extends EventTarget {
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
 
-    // Sets the timeout on the first
-    // I don't think this is useful
-    // It's just state
-    // It always results in an empty timeout
-    this.checkTimeout();
+
+    // No need to check the timeout during constructor
+    // It's always null
+    // The timeout should only be called at the end
 
     // Note that you must be able to reject too
     // otherwise one might await for establishment forever

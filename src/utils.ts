@@ -5,7 +5,9 @@ import type {
   ConnectionIdString,
   Host,
   Hostname,
+  Crypto
 } from './types';
+import QUICConnectionId from './QUICConnectionId';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import * as errors from './errors';
@@ -318,6 +320,74 @@ function certificatePEMsToCertChainPem(pems: Array<string>): string {
   return certChainPEM;
 }
 
+async function mintToken(
+  dcid: QUICConnectionId,
+  peerHost: Host,
+  crypto:{
+    key: ArrayBuffer;
+    ops: Crypto;
+  }
+): Promise<Buffer> {
+  const msgData = { dcid: dcid.toString(), host: peerHost };
+  const msgJSON = JSON.stringify(msgData);
+  const msgBuffer = Buffer.from(msgJSON);
+  const msgSig = Buffer.from(
+    await crypto.ops.sign(crypto.key, msgBuffer),
+  );
+  const tokenData = {
+    msg: msgBuffer.toString('base64url'),
+    sig: msgSig.toString('base64url'),
+  };
+  const tokenJSON = JSON.stringify(tokenData);
+  return Buffer.from(tokenJSON);
+}
+
+async function validateToken(
+  tokenBuffer: Buffer,
+  peerHost: Host,
+  crypto: {
+    key: ArrayBuffer;
+    ops: Crypto;
+  }
+): Promise<QUICConnectionId | undefined> {
+  let tokenData;
+  try {
+    tokenData = JSON.parse(tokenBuffer.toString());
+  } catch {
+    return;
+  }
+  if (typeof tokenData !== 'object' || tokenData == null) {
+    return;
+  }
+  if (
+    typeof tokenData.msg !== 'string' ||
+    typeof tokenData.sig !== 'string'
+  ) {
+    return;
+  }
+  const msgBuffer = Buffer.from(tokenData.msg, 'base64url');
+  const msgSig = Buffer.from(tokenData.sig, 'base64url');
+  if (!(await crypto.ops.verify(crypto.key, msgBuffer, msgSig))) {
+    return;
+  }
+  let msgData;
+  try {
+    msgData = JSON.parse(msgBuffer.toString());
+  } catch {
+    return;
+  }
+  if (typeof msgData !== 'object' || msgData == null) {
+    return;
+  }
+  if (typeof msgData.dcid !== 'string' || typeof msgData.host !== 'string') {
+    return;
+  }
+  if (msgData.host !== peerHost) {
+    return;
+  }
+  return QUICConnectionId.fromString(msgData.dcid);
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -341,4 +411,7 @@ export {
   never,
   certificateDERToPEM,
   certificatePEMsToCertChainPem,
+
+  mintToken,
+  validateToken,
 };

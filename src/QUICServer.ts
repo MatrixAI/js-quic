@@ -405,18 +405,7 @@ class QUICServer extends EventTarget {
     dcid: QUICConnectionId,
     peerHost: Host,
   ): Promise<Buffer> {
-    const msgData = { dcid: dcid.toString(), host: peerHost };
-    const msgJSON = JSON.stringify(msgData);
-    const msgBuffer = Buffer.from(msgJSON);
-    const msgSig = Buffer.from(
-      await this.crypto.ops.sign(this.crypto.key, msgBuffer),
-    );
-    const tokenData = {
-      msg: msgBuffer.toString('base64url'),
-      sig: msgSig.toString('base64url'),
-    };
-    const tokenJSON = JSON.stringify(tokenData);
-    return Buffer.from(tokenJSON);
+    return utils.mintToken(dcid, peerHost, this.crypto);
   }
 
   /**
@@ -430,42 +419,7 @@ class QUICServer extends EventTarget {
     tokenBuffer: Buffer,
     peerHost: Host,
   ): Promise<QUICConnectionId | undefined> {
-    let tokenData;
-    try {
-      tokenData = JSON.parse(tokenBuffer.toString());
-    } catch {
-      return;
-    }
-    if (typeof tokenData !== 'object' || tokenData == null) {
-      return;
-    }
-    if (
-      typeof tokenData.msg !== 'string' ||
-      typeof tokenData.sig !== 'string'
-    ) {
-      return;
-    }
-    const msgBuffer = Buffer.from(tokenData.msg, 'base64url');
-    const msgSig = Buffer.from(tokenData.sig, 'base64url');
-    if (!(await this.crypto.ops.verify(this.crypto.key, msgBuffer, msgSig))) {
-      return;
-    }
-    let msgData;
-    try {
-      msgData = JSON.parse(msgBuffer.toString());
-    } catch {
-      return;
-    }
-    if (typeof msgData !== 'object' || msgData == null) {
-      return;
-    }
-    if (typeof msgData.dcid !== 'string' || typeof msgData.host !== 'string') {
-      return;
-    }
-    if (msgData.host !== peerHost) {
-      return;
-    }
-    return QUICConnectionId.fromString(msgData.dcid);
+    return utils.validateToken(tokenBuffer, peerHost, this.crypto);
   }
 }
 

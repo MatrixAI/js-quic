@@ -258,7 +258,19 @@ type QUICConfig = {
   enableDgram: [boolean, number, number];
 
   disableActiveMigration: boolean;
+
+  /**
+   * Application protocols is necessary for ALPN.
+   * This is must be non-empty, otherwise there will be a
+   * `NO_APPLICATION_PROTOCOL` error.
+   * Choose from: https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids
+   * For HTTP3, use `['h3', 'h3-29', 'h3-28', 'h3-27']`.
+   * Both the client and server must share the ALPN in order to establish a
+   * connection.
+   * This defaults to `['quic']` as a placeholder ALPN.
+   */
   applicationProtos: string[];
+
   enableEarlyData: boolean;
 };
 

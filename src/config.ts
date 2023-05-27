@@ -38,8 +38,7 @@ const clientDefault: QUICConfig = {
   initialMaxStreamsUni: 100,
   enableDgram: [false, 0, 0],
   disableActiveMigration: true,
-  // Test if this is needed
-  applicationProtos: ['http/0.9'],
+  applicationProtos: ['quic'],
   enableEarlyData: true,
 };
 
@@ -58,8 +57,7 @@ const serverDefault: QUICConfig = {
   initialMaxStreamsUni: 100,
   enableDgram: [false, 0, 0],
   disableActiveMigration: true,
-  // Test if this is needed
-  applicationProtos: ['http/0.9'],
+  applicationProtos: ['quic'],
   enableEarlyData: true,
 };
 
