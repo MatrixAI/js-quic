@@ -37,9 +37,31 @@ class QUICConnection extends EventTarget {
   public readonly type: 'client' | 'server';
   public readonly connectionId: QUICConnectionId;
 
+  /**
+   * @internal
+   */
   public conn: Connection;
+
+  /**
+   * @internal
+   */
   public connectionMap: QUICConnectionMap;
+
+  /**
+   * @internal
+   */
   public streamMap: Map<StreamId, QUICStream> = new Map();
+
+  /**
+   * @internal
+   */
+  public sendRecvLock: Lock = new Lock();
+
+  protected logger: Logger;
+  protected socket: QUICSocket;
+  protected reasonToCode: StreamReasonToCode;
+  protected codeToReason: StreamCodeToReason;
+
 
   // This basically allows one to await this promise
   // once resolved, always resolved...
@@ -51,17 +73,26 @@ class QUICConnection extends EventTarget {
   public readonly handshakeP: Promise<void>;
   protected resolveHandshakeP: () => void;
 
-  protected logger: Logger;
-  protected socket: QUICSocket;
-  protected reasonToCode: StreamReasonToCode;
-  protected codeToReason: StreamCodeToReason;
 
   protected timer?: ReturnType<typeof setTimeout>;
   protected keepAliveInterval?: ReturnType<typeof setInterval>;
   public readonly closedP: Promise<void>;
   protected resolveCloseP?: () => void;
 
+
   protected streamIdLock: Lock = new Lock();
+
+  /**
+   * This can change on every `recv` call
+   */
+  protected _remoteHost: Host;
+
+  /**
+   * This can change on every `recv` call
+   */
+  protected _remotePort: Port;
+
+  protected times = 0;
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -75,23 +106,17 @@ class QUICConnection extends EventTarget {
    */
   protected streamIdServerBidi: StreamId = 0b01 as StreamId;
 
-  // /**
-  //  * Client initiated unidirectional stream starts at 2.
-  //  * Increment by 4 to get the next ID.
-  //  */
-  // protected streamIdClientUni: StreamId = 0b10 as StreamId;
+  /**
+   * Client initiated unidirectional stream starts at 2.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdClientUni: StreamId = 0b10 as StreamId;
 
-  // /**
-  //  * Server initiated unidirectional stream starts at 3.
-  //  * Increment by 4 to get the next ID.
-  //  */
-  // protected streamIdServerUni: StreamId = 0b11 as StreamId;
-
-  // These can change on every `recv` call
-  protected _remoteHost: Host;
-  protected _remotePort: Port;
-
-  protected times = 0;
+  /**
+   * Server initiated unidirectional stream starts at 3.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdServerUni: StreamId = 0b11 as StreamId;
 
 
   /**
@@ -144,7 +169,18 @@ class QUICConnection extends EventTarget {
       codeToReason,
       logger,
     });
+    // Registers the connection to the socket
+    // The socket will now know that a connection exists
     socket.connectionMap.set(connection.connectionId, connection);
+
+    // At this point the connection isn't actually established
+    // The user has to trigger a send!
+    // Then after it triggers a send
+    // It has to wait for the `connection.establishedP`
+    // Why can't we do it here?
+    // I think we can actually do this here
+
+
     logger.info(`Connected ${this.name}`);
     return connection;
   }

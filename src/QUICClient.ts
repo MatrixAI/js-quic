@@ -1,4 +1,6 @@
-import type { Crypto, Host, Hostname, Port } from './types';
+import { Timer } from '@matrixai/timer';
+import type { PromiseCancellable } from '@matrixai/async-cancellable';
+import type { Crypto, Host, Hostname, Port, ContextTimed } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type { QUICConfig, StreamCodeToReason, StreamReasonToCode } from './types';
@@ -44,40 +46,72 @@ class QUICClient extends EventTarget {
    * @param options.localHost
    * @param options.localPort
    */
-  public static async createQUICClient({
-    host,
-    port,
-    localHost = '::' as Host,
-    localPort = 0 as Port,
-    crypto,
-    socket,
-    resolveHostname = utils.resolveHostname,
-    reasonToCode,
-    codeToReason,
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
-    keepaliveIntervalTime,
-    logger = new Logger(`${this.name}`),
-    config = {},
-  }: {
-    host: Host | Hostname;
-    port: Port;
-    localHost?: Host | Hostname;
-    localPort?: Port;
-    crypto: {
-      key: ArrayBuffer;
-      ops: Crypto;
-    };
-    socket?: QUICSocket;
-    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
-    reasonToCode?: StreamReasonToCode;
-    codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
-    keepaliveIntervalTime?: number;
-    logger?: Logger;
-    config?: Partial<QUICConfig>;
-  }) {
+
+
+  // The extra overloaded type above
+  // overrides the type signature
+  // so it reutrns PromiseCancellable
+  public static createQUICClient(
+    opts: {
+      host: Host | Hostname;
+      port: Port;
+      localHost?: Host | Hostname;
+      localPort?: Port;
+      crypto: {
+        key: ArrayBuffer;
+        ops: Crypto;
+      };
+      socket?: QUICSocket;
+      resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+      reasonToCode?: StreamReasonToCode;
+      codeToReason?: StreamCodeToReason;
+      maxReadableStreamBytes?: number;
+      maxWritableStreamBytes?: number;
+      keepaliveIntervalTime?: number;
+      logger?: Logger;
+      config?: Partial<QUICConfig>;
+    },
+    ctx?: Partial<ContextTimed>,
+  ): PromiseCancellable<QUICClient>;
+  public static async createQUICClient(
+    {
+      host,
+      port,
+      localHost = '::' as Host,
+      localPort = 0 as Port,
+      crypto,
+      socket,
+      resolveHostname = utils.resolveHostname,
+      reasonToCode,
+      codeToReason,
+      keepaliveIntervalTime,
+      logger = new Logger(`${this.name}`),
+      config = {},
+    }: {
+      host: Host | Hostname;
+      port: Port;
+      localHost?: Host | Hostname;
+      localPort?: Port;
+      crypto: {
+        key: ArrayBuffer;
+        ops: Crypto;
+      };
+      socket?: QUICSocket;
+      resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+      reasonToCode?: StreamReasonToCode;
+      codeToReason?: StreamCodeToReason;
+      keepaliveIntervalTime?: number;
+      logger?: Logger;
+      config?: Partial<QUICConfig>;
+    },
+    ctx: ContextTimed
+  ): Promise<QUICClient> {
+
+    // note that the ctx cannot be used yet
+    // we have to move the @timedCancellable decorator
+    // and extract it from Polykey to do this
+
+
     const quicConfig = {
       ...clientDefault,
       ...config,

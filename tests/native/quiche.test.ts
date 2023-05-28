@@ -315,7 +315,7 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        // Client will retry the initial packet
+        // Client will retry the initial packet with the token
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),

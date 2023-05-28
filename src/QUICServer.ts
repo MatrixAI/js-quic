@@ -189,6 +189,11 @@ class QUICServer extends EventTarget {
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
+  // Because the `ctx` is not passed in from the outside
+  // It makes sense that this is only done during construction
+  // And importantly we just enable the cancellation of this
+  // Nothing else really
+
   /**
    * @internal
    */
@@ -199,6 +204,17 @@ class QUICServer extends EventTarget {
     dcid: QUICConnectionId,
     scid: QUICConnectionId,
   ): Promise<QUICConnection | undefined> {
+
+    // Here we just create a "task"
+    // The task will be managed by the server
+    // And when we destroy the server
+    // If we force it, it can force close "accepting"
+    // tasks
+    // I'm not sure if that requires an abort signal
+    // If we are not dealing with promises
+    // In fact the existence of a connection construct
+    // That is still accepting, is equivalent to this thing
+
     const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
     if (header.ty !== quiche.Type.Initial) {
       this.logger.debug(`QUIC packet must be Initial for new connections`);

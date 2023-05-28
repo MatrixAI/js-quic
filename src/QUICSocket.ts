@@ -114,26 +114,23 @@ class QUICSocket extends EventTarget {
       conn = conn_;
     } else {
       conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
-
-      // The connection may be a client or server connection
-      // When we register a client, we have to put the connection in our
-      // connection map
     }
-    await conn.recv(data, remoteInfo_);
 
-    // The `conn.recv` now may actually destroy the connection
-    // In that sense, there's nothing to send
-    // That's the `conn.destroy` might call `conn.send`
-    // So it's all sent
-    // So we should only send things if it isn't already destroyed
-    // Remember that there is 3 possible events to the QUICConnection
-    // send, recv, timeout
-    // That's it.
-    // Each send/recv/timeout may result in a destruction
-    if (!conn[destroyed]) {
-      // Ignore any errors, concurrent with destruction
-      await conn.send().catch(() => {});
-    }
+    // Any call to send should result in a call to send if we aren't destroyed
+    await conn.sendRecvLock.withF(async () => {
+      await conn.recv(data, remoteInfo_);
+      // The `conn.recv` now may actually destroy the connection
+      // In that sense, there's nothing to send
+      // That's the `conn.destroy` might call `conn.send`
+      if (!conn[destroyed]) {
+        await conn.send();
+      }
+    });
+
+    // if (!conn[destroyed]) {
+    //   // Ignore any errors, concurrent with destruction
+    //   await conn.send().catch(() => {});
+    // }
   };
 
   /**
