@@ -1,4 +1,3 @@
-import { Timer } from '@matrixai/timer';
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { Crypto, Host, Hostname, Port, ContextTimed } from './types';
 import type { Config } from './native/types';
@@ -7,6 +6,7 @@ import type { QUICConfig, StreamCodeToReason, StreamReasonToCode } from './types
 import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
 import { destroyed, running } from '@matrixai/async-init';
+import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -46,11 +46,6 @@ class QUICClient extends EventTarget {
    * @param options.localHost
    * @param options.localPort
    */
-
-
-  // The extra overloaded type above
-  // overrides the type signature
-  // so it reutrns PromiseCancellable
   public static createQUICClient(
     opts: {
       host: Host | Hostname;
@@ -73,6 +68,7 @@ class QUICClient extends EventTarget {
     },
     ctx?: Partial<ContextTimed>,
   ): PromiseCancellable<QUICClient>;
+  @timedCancellable(true, Infinity, errors.ErrorQUICClientCreateTimeOut)
   public static async createQUICClient(
     {
       host,
@@ -104,13 +100,11 @@ class QUICClient extends EventTarget {
       logger?: Logger;
       config?: Partial<QUICConfig>;
     },
-    ctx: ContextTimed
+    @context ctx: ContextTimed
   ): Promise<QUICClient> {
 
-    // note that the ctx cannot be used yet
-    // we have to move the @timedCancellable decorator
-    // and extract it from Polykey to do this
-
+    // Use the ctx now
+    // It's lazy, so we need to handle the abort signal ourselves
 
     const quicConfig = {
       ...clientDefault,

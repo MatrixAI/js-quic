@@ -49,6 +49,10 @@ class ErrorQUICClient<T> extends ErrorQUIC<T> {
   static description = 'QUIC Client error';
 }
 
+class ErrorQUICClientCreateTimeOut<T> extends ErrorQUICClient<T> {
+  static description = 'QUICC Client create timeout';
+}
+
 class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
   static description = 'QUIC Client is destroyed';
 }
@@ -120,6 +124,7 @@ export {
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
   ErrorQUICClient,
+  ErrorQUICClientCreateTimeOut,
   ErrorQUICClientDestroyed,
   ErrorQUICClientSocketNotRunning,
   ErrorQUICClientInvalidHost,
