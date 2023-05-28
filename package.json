@@ -31,7 +31,8 @@
     "bench": "rimraf ./benches/results && ts-node ./benches"
   },
   "dependencies": {
-    "@matrixai/async-cancellable": "^1.0.4",
+    "@matrixai/async-cancellable": "^1.0.6",
+    "@matrixai/contexts": "^1.0.0",
     "@matrixai/async-init": "^1.8.1",
     "@matrixai/async-locks": "^3.2.0",
     "@matrixai/errors": "^1.1.2",
