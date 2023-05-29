@@ -155,6 +155,17 @@ describe('quiche', () => {
         expect(clientConn.isDraining()).toBeFalse();
       });
     });
+    describe('', () => {
+      // We want to test with an actual max idle timeout
+      // And see what happens in that case
+
+      // ALSO we need to test the case when we verify the peer
+      // SERVER verify peer
+      // vs
+      // CLIENT verify peer
+      // vs
+      // BOTH
+    });
     describe('connection between client and server with RSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
