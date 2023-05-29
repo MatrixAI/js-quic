@@ -155,7 +155,7 @@ describe('quiche', () => {
         expect(clientConn.isDraining()).toBeFalse();
       });
     });
-    describe.only('establish connection between client and server with RSA', () => {
+    describe('connection between client and server with RSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -391,7 +391,6 @@ describe('quiche', () => {
         expect(serverConn.isDraining()).toBeFalse();
       });
       test('client <-initial- server', async () => {
-        // SERVER -initial-> CLIENT
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
@@ -430,10 +429,8 @@ describe('quiche', () => {
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
-
-        // The timeout changes now..., it's much faster
-        console.log(clientConn.timeout());
-
+        // Timeout is lowered
+        expect(clientConn.timeout()).toBeLessThan(100);
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         expect(clientConn.isEstablished()).toBeFalse();
@@ -450,9 +447,6 @@ describe('quiche', () => {
         );
       });
       test('client <-handshake- server', async () => {
-        // SERVER -handshake-> CLIENT
-        // Immediately followed by a handshake frame
-        // This is why you need a while loop to exhaust the frames
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderHandshake = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
@@ -461,11 +455,8 @@ describe('quiche', () => {
         expect(serverHeaderHandshake.ty).toBe(quiche.Type.Handshake);
         expect(new QUICConnectionId(serverHeaderHandshake.scid)).toEqual(serverScid);
         expect(new QUICConnectionId(serverHeaderHandshake.dcid)).toEqual(serverDcid);
-
-        // Also here, it's a low timeout too
-        // I think this is because, this part is expected to occur quickly!
-        console.log(serverConn.timeout());
-
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeFalse();
@@ -484,12 +475,14 @@ describe('quiche', () => {
         );
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
-        // CLIENT is established
         expect(clientConn.isEstablished()).toBeTrue();
         expect(clientConn.isResumed()).toBeFalse();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
+      });
+      test('client is established', async () => {
+        expect(clientConn.isEstablished()).toBeTrue();
       });
       test('client -handshake-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
@@ -511,15 +504,16 @@ describe('quiche', () => {
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
-        // SERVER is established
         expect(serverConn.isEstablished()).toBeTrue();
         expect(serverConn.isResumed()).toBeFalse();
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
       });
+      test('server is established', async () => {
+        expect(serverConn.isEstablished()).toBeTrue();
+      });
       test('client <-short- server', async () => {
-        // SERVER -short-> CLIENT
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
@@ -538,6 +532,8 @@ describe('quiche', () => {
         // This is due to max idle timeout of 0
         expect(clientConn.timeout()).toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
       });
       test('client -short-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
@@ -545,10 +541,7 @@ describe('quiche', () => {
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
-        expect(clientConn.timeout()).toBeNull();
-        expect(serverConn.timeout()).not.toBeNull();
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
-        // CLIENT is done
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -564,7 +557,6 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-        // SERVER is done
         expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -574,7 +566,7 @@ describe('quiche', () => {
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
       });
-      test('established', async () => {
+      test('client and server established', async () => {
         // Both client and server is established
         // Server connection timeout is now null
         // Note that this occurs after the server has received the last short frame
@@ -585,7 +577,7 @@ describe('quiche', () => {
         expect(clientConn.timeout()).toBeNull();
         expect(serverConn.timeout()).toBeNull();
       });
-      test('close', async () => {
+      test('client close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -595,7 +587,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        // CLIENT -short-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -671,7 +662,7 @@ describe('quiche', () => {
     });
 
 
-    describe('establish connection between client and server with ECDSA', () => {
+    describe('connection between client and server with ECDSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -707,7 +698,7 @@ describe('quiche', () => {
         clientQuicheConfig = buildQuicheConfig(clientConfig);
         serverQuicheConfig = buildQuicheConfig(serverConfig);
       });
-      test('connect', async () => {
+      test('client connect', async () => {
         // Randomly genrate the client SCID
         const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
         await crypto.ops.randomBytes(scidBuffer);
@@ -728,7 +719,7 @@ describe('quiche', () => {
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
       });
-      test('dialing', async () => {
+      test('client dialing', async () => {
         // Send the initial packet
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         // The initial frame will always be 1200 bytes
@@ -779,7 +770,7 @@ describe('quiche', () => {
         // Copy sendBuffer_ into sendBuffer
         clientBuffer.set(clientBuffer_);
       });
-      test('negotiation', async () => {
+      test('client and server negotiation', async () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer,
@@ -847,21 +838,17 @@ describe('quiche', () => {
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitialRetry.ty).toBe(quiche.Type.Initial);
-
         expect(
           new QUICConnectionId(clientHeaderInitialRetry.scid)
         ).toEqual(clientScid);
-
         // The DCID is now updated to the server generated one
         expect(
           new QUICConnectionId(clientHeaderInitialRetry.dcid)
         ).toEqual(serverScid);
-
         // The retried initial packet has the signed token
         expect(Buffer.from(clientHeaderInitialRetry.token!)).toEqual(token);
         expect(clientHeaderInitialRetry.version).toBe(quiche.PROTOCOL_VERSION);
         expect(clientHeaderInitialRetry.versions).toBeNull();
-
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
@@ -870,6 +857,8 @@ describe('quiche', () => {
         );
         // The original randomly generated DCID was embedded in the token
         expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
         serverConn = quiche.Connection.accept(
           serverScid,
           clientDcid,
@@ -890,9 +879,6 @@ describe('quiche', () => {
         // generated DCID, we can update their respective DCID
         clientDcid = serverScid;
         serverDcid = clientScid;
-      });
-      test('established', async () => {
-        // CLIENT -initial-> SERVER
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -909,7 +895,8 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-        // SERVER -initial-> CLIENT
+      });
+      test('client <-initial- server', async () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
@@ -940,22 +927,19 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-
-        // Client is now established
-        // This occurs upon receiving the initial frame
+      });
+      test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
-
-        // CLIENT -initial-> SERVER
+      });
+      test('client -initial-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
-
-        // The timeout changes now..., it's much faster
-        console.log('ECDSA timeout', clientConn.timeout());
-
+        // Timeout is lowered
+        expect(clientConn.timeout()).toBeLessThan(100);
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         expect(clientConn.isEstablished()).toBeTrue();
@@ -963,10 +947,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-
-
-        // Upon receiving
-        // this changes very quickly!
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -974,35 +954,17 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-
-        // Server is now established upon receiving the initial
+      });
+      test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();
-
-        // SERVER -short-> CLIENT
-        // Immediately followed by a short frame
+      });
+      test('client <-short- server', async () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
-        // The SCID is dropped as it is unnecessary
-        expect(serverHeaderShort.scid).toHaveLength(0);
-        expect(new QUICConnectionId(serverHeaderShort.dcid)).toEqual(serverDcid);
-
-        // Also here, it's a low timeout too
-        // I think this is because, this part is expected to occur quickly!
-        console.log('ECDSA timeout', serverConn.timeout());
-
-        expect(serverConn.isTimedOut()).toBeFalse();
-        expect(serverConn.isInEarlyData()).toBeFalse();
-        expect(serverConn.isEstablished()).toBeTrue();
-        expect(serverConn.isResumed()).toBeFalse();
-        expect(serverConn.isReadable()).toBeFalse();
-        expect(serverConn.isClosed()).toBeFalse();
-        expect(serverConn.isDraining()).toBeFalse();
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
-        // Client receives server's short frame
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -1010,14 +972,15 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-        expect(clientConn.isTimedOut()).toBeFalse();
-        expect(clientConn.isInEarlyData()).toBeFalse();
-        expect(clientConn.isEstablished()).toBeTrue();
-        expect(clientConn.isResumed()).toBeFalse();
-        expect(clientConn.isReadable()).toBeFalse();
-        expect(clientConn.isClosed()).toBeFalse();
-        expect(clientConn.isDraining()).toBeFalse();
-        // CLIENT -short-> SERVER
+        // Client connection timeout is now null
+        // Both client and server is established
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
+      });
+      test('client -short-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -1025,8 +988,13 @@ describe('quiche', () => {
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(clientConn.timeout()).toBeNull();
-        expect(serverConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1034,7 +1002,7 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-        expect(serverConn.timeout()).toBeNull();
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeTrue();
@@ -1042,15 +1010,19 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      });
+      test('client and server established', async () => {
         // Both client and server is established
         // Server connection timeout is now null
         // Note that this occurs after the server has received the last short frame
         // This is due to max idle timeout of 0
+        // need to check the timeout
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(serverConn.isEstablished()).toBeTrue();
         expect(clientConn.timeout()).toBeNull();
         expect(serverConn.timeout()).toBeNull();
       });
-      test('close', async () => {
+      test('client close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -1060,7 +1032,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        // CLIENT -short-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -1140,7 +1111,7 @@ describe('quiche', () => {
     // We are not using fast check here because I need precise control over the state changes
     // For debugging purposes
 
-    describe('establish connection between client and server with Ed25519', () => {
+    describe('connection between client and server with Ed25519', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -1176,7 +1147,7 @@ describe('quiche', () => {
         clientQuicheConfig = buildQuicheConfig(clientConfig);
         serverQuicheConfig = buildQuicheConfig(serverConfig);
       });
-      test('connect', async () => {
+      test('client connect', async () => {
         // Randomly genrate the client SCID
         const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
         await crypto.ops.randomBytes(scidBuffer);
@@ -1197,7 +1168,7 @@ describe('quiche', () => {
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
       });
-      test('dialing', async () => {
+      test('client dialing', async () => {
         // Send the initial packet
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         // The initial frame will always be 1200 bytes
@@ -1248,7 +1219,7 @@ describe('quiche', () => {
         // Copy sendBuffer_ into sendBuffer
         clientBuffer.set(clientBuffer_);
       });
-      test('negotiation', async () => {
+      test('client and server negotiation', async () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer,
@@ -1316,21 +1287,17 @@ describe('quiche', () => {
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitialRetry.ty).toBe(quiche.Type.Initial);
-
         expect(
           new QUICConnectionId(clientHeaderInitialRetry.scid)
         ).toEqual(clientScid);
-
         // The DCID is now updated to the server generated one
         expect(
           new QUICConnectionId(clientHeaderInitialRetry.dcid)
         ).toEqual(serverScid);
-
         // The retried initial packet has the signed token
         expect(Buffer.from(clientHeaderInitialRetry.token!)).toEqual(token);
         expect(clientHeaderInitialRetry.version).toBe(quiche.PROTOCOL_VERSION);
         expect(clientHeaderInitialRetry.versions).toBeNull();
-
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
@@ -1339,6 +1306,8 @@ describe('quiche', () => {
         );
         // The original randomly generated DCID was embedded in the token
         expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
         serverConn = quiche.Connection.accept(
           serverScid,
           clientDcid,
@@ -1359,9 +1328,6 @@ describe('quiche', () => {
         // generated DCID, we can update their respective DCID
         clientDcid = serverScid;
         serverDcid = clientScid;
-      });
-      test('established', async () => {
-        // CLIENT -initial-> SERVER
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1378,7 +1344,8 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-        // SERVER -initial-> CLIENT
+      });
+      test('client <-initial- server', async () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
@@ -1409,22 +1376,19 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-
-        // Client is now established
-        // This occurs upon receiving the initial frame
+      });
+      test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
-
-        // CLIENT -initial-> SERVER
+      });
+      test('client -initial-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
-
-        // The timeout changes now..., it's much faster
-        console.log('ECDSA timeout', clientConn.timeout());
-
+        // Timeout is lowered
+        expect(clientConn.timeout()).toBeLessThan(100);
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         expect(clientConn.isEstablished()).toBeTrue();
@@ -1432,10 +1396,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-
-
-        // Upon receiving
-        // this changes very quickly!
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1443,35 +1403,17 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-
-        // Server is now established upon receiving the initial
+      });
+      test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();
-
-        // SERVER -short-> CLIENT
-        // Immediately followed by a short frame
+      });
+      test('client <-short- server', async () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
-        // The SCID is dropped as it is unnecessary
-        expect(serverHeaderShort.scid).toHaveLength(0);
-        expect(new QUICConnectionId(serverHeaderShort.dcid)).toEqual(serverDcid);
-
-        // Also here, it's a low timeout too
-        // I think this is because, this part is expected to occur quickly!
-        console.log('ECDSA timeout', serverConn.timeout());
-
-        expect(serverConn.isTimedOut()).toBeFalse();
-        expect(serverConn.isInEarlyData()).toBeFalse();
-        expect(serverConn.isEstablished()).toBeTrue();
-        expect(serverConn.isResumed()).toBeFalse();
-        expect(serverConn.isReadable()).toBeFalse();
-        expect(serverConn.isClosed()).toBeFalse();
-        expect(serverConn.isDraining()).toBeFalse();
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
-        // Client receives server's short frame
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -1479,14 +1421,15 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-        expect(clientConn.isTimedOut()).toBeFalse();
-        expect(clientConn.isInEarlyData()).toBeFalse();
-        expect(clientConn.isEstablished()).toBeTrue();
-        expect(clientConn.isResumed()).toBeFalse();
-        expect(clientConn.isReadable()).toBeFalse();
-        expect(clientConn.isClosed()).toBeFalse();
-        expect(clientConn.isDraining()).toBeFalse();
-        // CLIENT -short-> SERVER
+        // Client connection timeout is now null
+        // Both client and server is established
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
+      });
+      test('client -short-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -1494,8 +1437,13 @@ describe('quiche', () => {
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(clientConn.timeout()).toBeNull();
-        expect(serverConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1503,7 +1451,7 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-        expect(serverConn.timeout()).toBeNull();
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeTrue();
@@ -1511,15 +1459,19 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      });
+      test('client and server established', async () => {
         // Both client and server is established
         // Server connection timeout is now null
         // Note that this occurs after the server has received the last short frame
         // This is due to max idle timeout of 0
+        // need to check the timeout
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(serverConn.isEstablished()).toBeTrue();
         expect(clientConn.timeout()).toBeNull();
         expect(serverConn.timeout()).toBeNull();
       });
-      test('close', async () => {
+      test('client close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -1529,7 +1481,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        // CLIENT -short-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -1565,7 +1516,6 @@ describe('quiche', () => {
         expect(clientConn.isClosed()).toBeTrue();
         // Connection is left as draining
         expect(clientConn.isDraining()).toBeTrue();
-        // -short-> SERVER
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1602,7 +1552,6 @@ describe('quiche', () => {
         // Connection is left as draining
         expect(serverConn.isDraining()).toBeTrue();
       });
-
     });
 
   });
