@@ -388,6 +388,10 @@ async function validateToken(
   return QUICConnectionId.fromString(msgData.dcid);
 }
 
+async function sleep(ms: number): Promise<void> {
+  return await new Promise<void>((r) => setTimeout(r, ms));
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -411,7 +415,7 @@ export {
   never,
   certificateDERToPEM,
   certificatePEMsToCertChainPem,
-
   mintToken,
   validateToken,
+  sleep,
 };

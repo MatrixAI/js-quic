@@ -1,4 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
+import type { Connection } from '@/native/types';
 import type QUICSocket from '@/QUICSocket';
 import type QUICClient from '@/QUICClient';
 import type QUICServer from '@/QUICServer';
@@ -600,6 +601,24 @@ const handleStreamProm = async (stream: QUICStream, streamData: StreamData) => {
   }
 };
 
+/**
+ * When the `conn.timeout()` returns `0`, it is still a valid timeout.
+ * Only when it returns `null`, is the timeout fully exhausted.
+ * This should only be called after `conn.onTimeout()` is triggered.
+ * This is useful for tests that need to exhaust the timeout.
+ */
+async function waitForTimeoutNull(conn: Connection): Promise<void> {
+  while (true) {
+    const timeout = conn.timeout();
+    if (timeout === 0) {
+      await sleep(timeout);
+      conn.onTimeout();
+    } else if (timeout == null) {
+      return;
+    }
+  }
+}
+
 export {
   sleep,
   randomBytes,
@@ -616,6 +635,7 @@ export {
   verifyHMAC,
   extractSocket,
   handleStreamProm,
+  waitForTimeoutNull,
 };
 
 export type { Messages, StreamData };

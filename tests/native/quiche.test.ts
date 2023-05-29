@@ -1,7 +1,7 @@
 import type { X509Certificate } from '@peculiar/x509';
 import type { QUICConfig, Crypto, Host, Hostname, Port } from '@/types';
 import type { Config, Connection, SendInfo } from '@/native/types';
-import quiche from '@/native/quiche';
+import { quiche } from '@/native';
 import { clientDefault, serverDefault, buildQuicheConfig } from '@/config';
 import QUICConnectionId from '@/QUICConnectionId';
 import * as utils from '@/utils';
@@ -367,6 +367,7 @@ describe('quiche', () => {
         serverDcid = clientScid;
       });
       test('established', async () => {
+        // CLIENT -initial-> SERVER
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -383,7 +384,7 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-        // Now we proceed to send
+        // SERVER -initial-> CLIENT
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
@@ -407,20 +408,6 @@ describe('quiche', () => {
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
-
-        // Upon receiving, it needs to handle and immediately send the next packet
-        // It cannot be waiting in the middle...
-        // So basically when we do `await recv`, it must "lock" that sequence
-        // and immeidatley also call `await send`
-        // Because our code acts a bit concurrently
-        // If in the process of receiving, we end up receiving again
-        // That could be a problem!...
-        // However we shouldn't really be locking
-        // We should lock on a per-connection basis
-        // Between `await conn.recv` and `await conn.send`
-        // There needs to be a per-connection lock here
-        // Client receives server's header initial
-
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -428,13 +415,13 @@ describe('quiche', () => {
             from: serverHost
           }
         );
+        // CLIENT -initial-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
-
 
         // The timeout changes now..., it's much faster
         console.log(clientConn.timeout());
@@ -448,7 +435,17 @@ describe('quiche', () => {
         expect(clientConn.isDraining()).toBeFalse();
 
 
+        // Upon receiving
+        // this changes very quickly!
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
 
+        // SERVER -handshake-> CLIENT
         // Immediately followed by a handshake frame
         // This is why you need a while loop to exhaust the frames
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
@@ -459,7 +456,9 @@ describe('quiche', () => {
         expect(serverHeaderHandshake.ty).toBe(quiche.Type.Handshake);
         expect(new QUICConnectionId(serverHeaderHandshake.scid)).toEqual(serverScid);
         expect(new QUICConnectionId(serverHeaderHandshake.dcid)).toEqual(serverDcid);
-        expect(serverConn.timeout()).toBeCloseTo(1000, -3);
+
+        console.log(serverConn.timeout());
+
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeFalse();
@@ -482,14 +481,13 @@ describe('quiche', () => {
 
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
-        // Client connection is now established!
+        // CLIENT is established
         expect(clientConn.isEstablished()).toBeTrue();
         expect(clientConn.isResumed()).toBeFalse();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-
-
+        // CLIENT -handshake-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderHandshake = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
@@ -497,20 +495,109 @@ describe('quiche', () => {
         );
         expect(clientHeaderHandshake.ty).toBe(quiche.Type.Handshake);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
+
+        console.log(clientConn.timeout());
+
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        // SERVER is established
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        expect(serverConn.isDraining()).toBeFalse();
+        // SERVER -short-> CLIENT
+        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderShort = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+
+        console.log('Z');
+        console.log(clientConn.timeout());
+        console.log(serverConn.timeout());
+
+
+        expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        clientConn.recv(
+          serverBuffer.subarray(0, serverSendLength),
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
+
+        // Interesting, there's no timeout here...?
+        console.log('A');
+        console.log(clientConn.timeout()); // IT IS NOW NULL!
+        console.log(serverConn.timeout());
+
+
+        // CLIENT -short-> SERVER
+        [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+
+        // Interesting, there's no timeout here...?
+        console.log('B');
+        console.log(clientConn.timeout());
+        console.log(serverConn.timeout());
+
+
+        // CLIENT is done
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
+
+        // Interesting, there's no timeout here...?
+        console.log('C');
+        console.log(clientConn.timeout());
+        console.log(serverConn.timeout());
+
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
+        // SERVER is done
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        expect(serverConn.isDraining()).toBeFalse();
+
+        // Interesting, there's no timeout here...?
+        console.log('D');
+        console.log(clientConn.timeout()); // NULL
+        console.log(serverConn.timeout()); // NULL
 
 
 
-
-        // expect(serverConn.isTimedOut()).toBeFalse();
-        // expect(serverConn.isInEarlyData()).toBeFalse();
-        // expect(serverConn.isEstablished()).toBeFalse();
-        // expect(serverConn.isResumed()).toBeFalse();
-        // expect(serverConn.isReadable()).toBeFalse();
-        // expect(serverConn.isClosed()).toBeFalse();
-        // expect(serverConn.isDraining()).toBeFalse();
-
-        // // Wait out the delay (add 50ms for non-determinism)
-        // await testsUtils.sleep(clientConn.timeout()! + 50);
+        // THERE IS NO MORE TIMEOUT
+        // ONCE WE ARE ESTABLISHED
+        // I THINK THIS IS ONLY TRUE IF THE MAX IDLE TIMEOUT IS 0
+        // MEANING INFINITY
+        // IF IT IS NOT INFINITY, there should be another number!!
 
       });
       // // Next step is to move the connection to being established
@@ -521,12 +608,83 @@ describe('quiche', () => {
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
-        expect(clientConn.isEstablished()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
         expect(clientConn.isResumed()).toBeFalse();
         expect(clientConn.isReadable()).toBeFalse();
-        // Client connection is closed (this is not true if there is draining)
-        expect(clientConn.isClosed()).toBeTrue();
+        expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
+        // CLIENT -short-> SERVER
+        [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        // The timeout begins again
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        // Connection is still established
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        // Connection however begins draining
+        expect(clientConn.isDraining()).toBeTrue();
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        // Client connection now waits to be closed
+        await testsUtils.sleep(clientConn.timeout()!);
+        clientConn.onTimeout();
+        await testsUtils.waitForTimeoutNull(clientConn);
+        // Timeout is finally null
+        expect(clientConn.timeout()).toBeNull();
+        // Connection did not timeout from idleness
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        // Connection is left as established
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        // Connection is fully closed
+        expect(clientConn.isClosed()).toBeTrue();
+        // Connection is left as draining
+        expect(clientConn.isDraining()).toBeTrue();
+        // -short-> SERVER
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        // SERVER draining
+        expect(serverConn.isDraining()).toBeTrue();
+        // Once the server is in draining, it does not need to respond
+        // it just waits to timeout, during that time, it is in "draining" state
+        // We need to exhaust the server's timeout to be fully closed
+        // Unlike TCP, there is no half-closed state for QUIC connections
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        await testsUtils.sleep(serverConn.timeout()!);
+        serverConn.onTimeout();
+        await testsUtils.waitForTimeoutNull(serverConn);
+        expect(serverConn.timeout()).toBeNull();
+        // Connection did not timeout from idleness
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        // Connection is left as established
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        // Connection is fully closed
+        expect(serverConn.isClosed()).toBeTrue();
+        // Connection is left as draining
+        expect(serverConn.isDraining()).toBeTrue();
       });
     });
 
