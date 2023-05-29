@@ -7,15 +7,6 @@ import QUICConnectionId from '@/QUICConnectionId';
 import * as utils from '@/utils';
 import * as testsUtils from '../utils';
 
-/**
- * 1. Try splitting up the `established` test
- * 2. They can be reusable chunks of code
- * 3. That way it's easier to see the main differences!
- * 4. Need to test with idle max timeout
- * 5. Need to test with verifying the certificate
- * 6. Good idea to split up the tests across files
- */
-
 describe('quiche', () => {
   let crypto: {
     key: ArrayBuffer;
@@ -368,10 +359,368 @@ describe('quiche', () => {
         });
       });
       describe('handshake timeout', () => {
-
+        // These tests run in-order, and each step is a state transition
+        const clientHost = {
+          host: '127.0.0.1' as Host,
+          port: 55555 as Port,
+        };
+        const serverHost = {
+          host: '127.0.0.1' as Host,
+          port: 55556,
+        };
+        // These buffers will be used between the tests and will be mutated
+        let clientSendLength: number, clientSendInfo: SendInfo;
+        const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        let serverSendLength: number, serverSendInfo: SendInfo;
+        const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        let clientQuicheConfig: Config;
+        let serverQuicheConfig: Config;
+        let clientScid: QUICConnectionId;
+        let clientDcid: QUICConnectionId;
+        let serverScid: QUICConnectionId;
+        let serverDcid: QUICConnectionId;
+        let clientConn: Connection;
+        let serverConn: Connection;
+        beforeAll(async () => {
+          const clientConfig: QUICConfig = {
+            ...clientDefault,
+            verifyPeer: false,
+            maxIdleTimeout: 2000
+          };
+          const serverConfig: QUICConfig = {
+            ...serverDefault,
+            key: keyPairRSAPEM.privateKey,
+            cert: certRSAPEM,
+            maxIdleTimeout: 2000
+          };
+          clientQuicheConfig = buildQuicheConfig(clientConfig);
+          serverQuicheConfig = buildQuicheConfig(serverConfig);
+        });
+        test('client connect', async () => {
+          // Randomly genrate the client SCID
+          const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+          await crypto.ops.randomBytes(scidBuffer);
+          clientScid = new QUICConnectionId(scidBuffer);
+          clientConn = quiche.Connection.connect(
+            null,
+            clientScid,
+            clientHost,
+            serverHost,
+            clientQuicheConfig,
+          );
+        });
+        test('client dialing', async () => {
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        });
+        test('client and server negotiation', async () => {
+          const clientHeaderInitial = quiche.Header.fromSlice(
+            clientBuffer,
+            quiche.MAX_CONN_ID_LEN
+          );
+          clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+          serverScid = new QUICConnectionId(
+            await crypto.ops.sign(
+              crypto.key,
+              clientDcid,
+            ),
+            0,
+            quiche.MAX_CONN_ID_LEN
+          );
+          const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+          const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+          const retryDatagramLength = quiche.retry(
+            clientScid,
+            clientDcid,
+            serverScid,
+            token,
+            clientHeaderInitial.version,
+            retryDatagram
+          );
+          // Retry gets sent back to be processed by the client
+          clientConn.recv(
+            retryDatagram.subarray(0, retryDatagramLength),
+            {
+              to: clientHost,
+              from: serverHost
+            }
+          );
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          const clientHeaderInitialRetry = quiche.Header.fromSlice(
+            clientBuffer.subarray(0, clientSendLength),
+            quiche.MAX_CONN_ID_LEN
+          );
+          const dcidOriginal = await utils.validateToken(
+            Buffer.from(clientHeaderInitialRetry.token!),
+            clientHost.host,
+            crypto
+          );
+          expect(dcidOriginal).toEqual(clientDcid);
+        });
+        test('server accept', async () => {
+          serverConn = quiche.Connection.accept(
+            serverScid,
+            clientDcid,
+            serverHost,
+            clientHost,
+            serverQuicheConfig
+          );
+          clientDcid = serverScid;
+          serverDcid = clientScid;
+          expect(serverConn.timeout()).toBeNull();
+          serverConn.recv(
+            clientBuffer.subarray(0, clientSendLength),
+            {
+              to: serverHost,
+              from: clientHost
+            }
+          );
+          // Once an idle max timeout is set, this timeout is no longer null
+          // Either the client or server or both can set the idle timeout
+          expect(serverConn.timeout()).not.toBeNull();
+        });
+        test('client <-initial- server', async () => {
+          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          clientConn.recv(
+            serverBuffer.subarray(0, serverSendLength),
+            {
+              to: clientHost,
+              from: serverHost
+            }
+          );
+        });
+        test('client -initial-> server', async () => {
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          serverConn.recv(
+            clientBuffer.subarray(0, clientSendLength),
+            {
+              to: serverHost,
+              from: clientHost
+            }
+          );
+        });
+        test('client <-handshake- server timeout', async () => {
+          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          expect(clientConn.timeout()).not.toBeNull();
+          expect(serverConn.timeout()).not.toBeNull();
+          expect(clientConn.isTimedOut()).toBeFalse();
+          expect(serverConn.isTimedOut()).toBeFalse();
+          // Let's assume the handshake frame never gets received by the client
+          await testsUtils.sleep(serverConn.timeout()!);
+          serverConn.onTimeout();
+          await testsUtils.waitForTimeoutNull(serverConn);
+          expect(serverConn.isTimedOut()).toBeTrue();
+          expect(serverConn.isInEarlyData()).toBeFalse();
+          expect(serverConn.isEstablished()).toBeFalse();
+          expect(serverConn.isResumed()).toBeFalse();
+          expect(serverConn.isReadable()).toBeFalse();
+          expect(serverConn.isClosed()).toBeTrue();
+          expect(serverConn.isDraining()).toBeFalse();
+          await testsUtils.sleep(clientConn.timeout()!);
+          clientConn.onTimeout();
+          await testsUtils.waitForTimeoutNull(clientConn);
+          expect(clientConn.isTimedOut()).toBeTrue();
+          expect(clientConn.isInEarlyData()).toBeFalse();
+          expect(clientConn.isEstablished()).toBeFalse();
+          expect(clientConn.isResumed()).toBeFalse();
+          expect(clientConn.isReadable()).toBeFalse();
+          expect(clientConn.isClosed()).toBeTrue();
+          expect(clientConn.isDraining()).toBeFalse();
+        });
       });
       describe('established timeout', () => {
-
+        // These tests run in-order, and each step is a state transition
+        const clientHost = {
+          host: '127.0.0.1' as Host,
+          port: 55555 as Port,
+        };
+        const serverHost = {
+          host: '127.0.0.1' as Host,
+          port: 55556,
+        };
+        // These buffers will be used between the tests and will be mutated
+        let clientSendLength: number, clientSendInfo: SendInfo;
+        const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        let serverSendLength: number, serverSendInfo: SendInfo;
+        const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        let clientQuicheConfig: Config;
+        let serverQuicheConfig: Config;
+        let clientScid: QUICConnectionId;
+        let clientDcid: QUICConnectionId;
+        let serverScid: QUICConnectionId;
+        let serverDcid: QUICConnectionId;
+        let clientConn: Connection;
+        let serverConn: Connection;
+        beforeAll(async () => {
+          const clientConfig: QUICConfig = {
+            ...clientDefault,
+            verifyPeer: false,
+            maxIdleTimeout: 2000
+          };
+          const serverConfig: QUICConfig = {
+            ...serverDefault,
+            key: keyPairRSAPEM.privateKey,
+            cert: certRSAPEM,
+            maxIdleTimeout: 2000
+          };
+          clientQuicheConfig = buildQuicheConfig(clientConfig);
+          serverQuicheConfig = buildQuicheConfig(serverConfig);
+        });
+        test('client connect', async () => {
+          // Randomly genrate the client SCID
+          const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+          await crypto.ops.randomBytes(scidBuffer);
+          clientScid = new QUICConnectionId(scidBuffer);
+          clientConn = quiche.Connection.connect(
+            null,
+            clientScid,
+            clientHost,
+            serverHost,
+            clientQuicheConfig,
+          );
+        });
+        test('client dialing', async () => {
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        });
+        test('client and server negotiation', async () => {
+          const clientHeaderInitial = quiche.Header.fromSlice(
+            clientBuffer,
+            quiche.MAX_CONN_ID_LEN
+          );
+          clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+          serverScid = new QUICConnectionId(
+            await crypto.ops.sign(
+              crypto.key,
+              clientDcid,
+            ),
+            0,
+            quiche.MAX_CONN_ID_LEN
+          );
+          const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+          const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+          const retryDatagramLength = quiche.retry(
+            clientScid,
+            clientDcid,
+            serverScid,
+            token,
+            clientHeaderInitial.version,
+            retryDatagram
+          );
+          // Retry gets sent back to be processed by the client
+          clientConn.recv(
+            retryDatagram.subarray(0, retryDatagramLength),
+            {
+              to: clientHost,
+              from: serverHost
+            }
+          );
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          const clientHeaderInitialRetry = quiche.Header.fromSlice(
+            clientBuffer.subarray(0, clientSendLength),
+            quiche.MAX_CONN_ID_LEN
+          );
+          const dcidOriginal = await utils.validateToken(
+            Buffer.from(clientHeaderInitialRetry.token!),
+            clientHost.host,
+            crypto
+          );
+          expect(dcidOriginal).toEqual(clientDcid);
+        });
+        test('server accept', async () => {
+          serverConn = quiche.Connection.accept(
+            serverScid,
+            clientDcid,
+            serverHost,
+            clientHost,
+            serverQuicheConfig
+          );
+          clientDcid = serverScid;
+          serverDcid = clientScid;
+          expect(serverConn.timeout()).toBeNull();
+          serverConn.recv(
+            clientBuffer.subarray(0, clientSendLength),
+            {
+              to: serverHost,
+              from: clientHost
+            }
+          );
+          // Once an idle max timeout is set, this timeout is no longer null
+          // Either the client or server or both can set the idle timeout
+          expect(serverConn.timeout()).not.toBeNull();
+        });
+        test('client <-initial- server', async () => {
+          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          clientConn.recv(
+            serverBuffer.subarray(0, serverSendLength),
+            {
+              to: clientHost,
+              from: serverHost
+            }
+          );
+        });
+        test('client -initial-> server', async () => {
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          serverConn.recv(
+            clientBuffer.subarray(0, clientSendLength),
+            {
+              to: serverHost,
+              from: clientHost
+            }
+          );
+        });
+        test('client <-handshake- server', async () => {
+          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          clientConn.recv(
+            serverBuffer.subarray(0, serverSendLength),
+            {
+              to: clientHost,
+              from: serverHost
+            }
+          );
+        });
+        test('client is established', async () => {
+          expect(clientConn.isEstablished()).toBeTrue();
+        });
+        test('client -handshake-> sever', async () => {
+          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          serverConn.recv(
+            clientBuffer.subarray(0, clientSendLength),
+            {
+              to: serverHost,
+              from: clientHost
+            }
+          );
+        });
+        test('server is established', async () => {
+          expect(serverConn.isEstablished()).toBeTrue();
+        });
+        test('client <-short- server timeout', async () => {
+          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          expect(clientConn.timeout()).not.toBeNull();
+          expect(serverConn.timeout()).not.toBeNull();
+          expect(clientConn.isTimedOut()).toBeFalse();
+          expect(serverConn.isTimedOut()).toBeFalse();
+          // Let's assume the handshake frame never gets received by the client
+          await testsUtils.sleep(serverConn.timeout()!);
+          serverConn.onTimeout();
+          await testsUtils.waitForTimeoutNull(serverConn);
+          expect(serverConn.isTimedOut()).toBeTrue();
+          expect(serverConn.isInEarlyData()).toBeFalse();
+          expect(serverConn.isEstablished()).toBeTrue();
+          expect(serverConn.isResumed()).toBeFalse();
+          expect(serverConn.isReadable()).toBeFalse();
+          expect(serverConn.isClosed()).toBeTrue();
+          expect(serverConn.isDraining()).toBeFalse();
+          await testsUtils.sleep(clientConn.timeout()!);
+          clientConn.onTimeout();
+          await testsUtils.waitForTimeoutNull(clientConn);
+          expect(clientConn.isTimedOut()).toBeTrue();
+          expect(clientConn.isInEarlyData()).toBeFalse();
+          expect(clientConn.isEstablished()).toBeTrue();
+          expect(clientConn.isResumed()).toBeFalse();
+          expect(clientConn.isReadable()).toBeFalse();
+          expect(clientConn.isClosed()).toBeTrue();
+          expect(clientConn.isDraining()).toBeFalse();
+        });
       });
     });
     describe('connection between client and server with RSA', () => {
@@ -880,8 +1229,6 @@ describe('quiche', () => {
         expect(serverConn.isDraining()).toBeTrue();
       });
     });
-
-
     describe('connection between client and server with ECDSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
@@ -1324,13 +1671,7 @@ describe('quiche', () => {
         // Connection is left as draining
         expect(serverConn.isDraining()).toBeTrue();
       });
-
     });
-
-    // We also need to test what happens WITH max idle timeout
-    // We are not using fast check here because I need precise control over the state changes
-    // For debugging purposes
-
     describe('connection between client and server with Ed25519', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
@@ -1773,6 +2114,5 @@ describe('quiche', () => {
         expect(serverConn.isDraining()).toBeTrue();
       });
     });
-
   });
 });
