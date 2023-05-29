@@ -457,6 +457,8 @@ describe('quiche', () => {
         expect(new QUICConnectionId(serverHeaderHandshake.scid)).toEqual(serverScid);
         expect(new QUICConnectionId(serverHeaderHandshake.dcid)).toEqual(serverDcid);
 
+        // Also here, it's a low timeout too
+        // I think this is because, this part is expected to occur quickly!
         console.log(serverConn.timeout());
 
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -475,10 +477,6 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-
-        // Also now it should be a small timeout
-        console.log(clientConn.timeout());
-
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         // CLIENT is established
@@ -495,6 +493,8 @@ describe('quiche', () => {
         );
         expect(clientHeaderHandshake.ty).toBe(quiche.Type.Handshake);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -502,9 +502,7 @@ describe('quiche', () => {
             from: clientHost
           }
         );
-
-        console.log(clientConn.timeout());
-
+        expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         // SERVER is established
@@ -519,12 +517,6 @@ describe('quiche', () => {
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN
         );
-
-        console.log('Z');
-        console.log(clientConn.timeout());
-        console.log(serverConn.timeout());
-
-
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
@@ -533,27 +525,20 @@ describe('quiche', () => {
             from: serverHost
           }
         );
-
-        // Interesting, there's no timeout here...?
-        console.log('A');
-        console.log(clientConn.timeout()); // IT IS NOW NULL!
-        console.log(serverConn.timeout());
-
-
+        // Client connection timeout is now null
+        // Both client and server is established
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
         // CLIENT -short-> SERVER
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
-
-        // Interesting, there's no timeout here...?
-        console.log('B');
-        console.log(clientConn.timeout());
-        console.log(serverConn.timeout());
-
-
         // CLIENT is done
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -563,12 +548,6 @@ describe('quiche', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-
-        // Interesting, there's no timeout here...?
-        console.log('C');
-        console.log(clientConn.timeout());
-        console.log(serverConn.timeout());
-
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -585,24 +564,13 @@ describe('quiche', () => {
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
-
-        // Interesting, there's no timeout here...?
-        console.log('D');
-        console.log(clientConn.timeout()); // NULL
-        console.log(serverConn.timeout()); // NULL
-
-
-
-        // THERE IS NO MORE TIMEOUT
-        // ONCE WE ARE ESTABLISHED
-        // I THINK THIS IS ONLY TRUE IF THE MAX IDLE TIMEOUT IS 0
-        // MEANING INFINITY
-        // IF IT IS NOT INFINITY, there should be another number!!
-
+        // Both client and server is established
+        // Server connection timeout is now null
+        // Note that this occurs after the server has received the last short frame
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).toBeNull();
       });
-      // // Next step is to move the connection to being established
-      // test('', async () => {
-      // });
       test('close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
         expect(clientConn.timeout()).toBeNull();
