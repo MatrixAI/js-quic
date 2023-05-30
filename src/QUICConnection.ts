@@ -13,6 +13,7 @@ import {
 import Logger from '@matrixai/logger';
 import { Lock } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
+import { Timer } from '@matrixai/timer';
 import { buildQuicheConfig } from './config';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
@@ -27,72 +28,95 @@ import { promise } from './utils';
  * Not to the server.
  *
  * Events (events are executed post-facto):
- * - stream - when new stream is created
- * - destroy - when destruction is done
- * - error - when an error is emitted
+ * - connectionStream
+ * - connectionDestroy
+ * - connectionError
+ * - streamDestroy
  */
 interface QUICConnection extends CreateDestroy {}
 @CreateDestroy()
 class QUICConnection extends EventTarget {
+  /**
+   * This determines when it is a client or server connection.
+   */
   public readonly type: 'client' | 'server';
+
+  /**
+   * This is the source connection ID.
+   */
   public readonly connectionId: QUICConnectionId;
 
   /**
+   * Internal native connection object.
    * @internal
    */
-  public conn: Connection;
+  public readonly conn: Connection;
 
   /**
+   * Internal conn state transition lock.
+   * This is used to serialize state transitions to `conn`.
+   * This is also used by `QUICSocket`.
    * @internal
    */
-  public connectionMap: QUICConnectionMap;
+  public readonly connLock: Lock = new Lock();
 
   /**
+   * Internal stream map.
+   * This is also used by `QUICStream`.
    * @internal
    */
-  public streamMap: Map<StreamId, QUICStream> = new Map();
+  public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
   /**
-   * @internal
+   * Connection establishment.
+   * This can resolve or reject.
+   * Rejections cascade down to `secureEstablishedP` and `closedP`.
    */
-  public sendRecvLock: Lock = new Lock();
+  public readonly establishedP: Promise<void>;
 
+  /**
+   * Connection has been verified and secured.
+   * This can only happen after `establishedP`.
+   * On the server side, being established means it is also secure established.
+   * On the client side, after being established, the client must wait for the
+   * first short frame before it is also secure established.
+   * This can resolve or reject.
+   * Rejections cascade down to `closedP`.
+   */
+  public readonly secureEstablishedP: Promise<void>;
+
+  /**
+   * Connection closed promise.
+   * This can resolve or reject.
+   */
+  public readonly closedP: Promise<void>;
+
+  /**
+   * Logger.
+   */
   protected logger: Logger;
+
+  /**
+   * Underlying socket.
+   */
   protected socket: QUICSocket;
+
+  /**
+   * Converts reason to code.
+   * Used during `QUICStream` creation.
+   */
   protected reasonToCode: StreamReasonToCode;
+
+  /**
+   * Converts code to reason.
+   * Used during `QUICStream` creation.
+   */
   protected codeToReason: StreamCodeToReason;
 
-
-  // This basically allows one to await this promise
-  // once resolved, always resolved...
-  // note that this may be rejected... at the beginning
-  // if the connection setup fails (not sure how this can work yet)
-  public readonly establishedP: Promise<void>;
-  protected resolveEstablishedP: () => void;
-  protected rejectEstablishedP: (reason?: any) => void;
-  public readonly handshakeP: Promise<void>;
-  protected resolveHandshakeP: () => void;
-
-
-  protected timer?: ReturnType<typeof setTimeout>;
-  protected keepAliveInterval?: ReturnType<typeof setInterval>;
-  public readonly closedP: Promise<void>;
-  protected resolveCloseP?: () => void;
-
-
+  /**
+   * Stream ID increment lock.
+   */
   protected streamIdLock: Lock = new Lock();
-
-  /**
-   * This can change on every `recv` call
-   */
-  protected _remoteHost: Host;
-
-  /**
-   * This can change on every `recv` call
-   */
-  protected _remotePort: Port;
-
-  protected times = 0;
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -118,6 +142,45 @@ class QUICConnection extends EventTarget {
    */
   protected streamIdServerUni: StreamId = 0b11 as StreamId;
 
+  /**
+   * Internal conn timer. This is used to tick the state transitions on the
+   * conn.
+   */
+  protected connTimer?: Timer;
+
+  /**
+   * Keep alive timer.
+   * If the max idle time is set to >0, the connection can time out on idleness.
+   * Idleness is where there is no response from the other side. This can happen
+   * from the beginning to the establishment of the connection and while the
+   * connection is established. Normally there is nothing that will keep the
+   * connection alive if there is no activity. This keep alive mechanism will
+   * trigger ping frames to ensure that there is connection activity.
+   * If the max idle time is set to 0, the connection never times out on idleness.
+   * However this keep alive mechanism will continue to work in case you need
+   * activity on the connection for some reason.
+   * Note that the timer used for the `ContextTimed` in `QUICClient.createQUICClient`
+   * is independent of the max idle time. This keep alive mechanism will only
+   * start working after secure establishment.
+   */
+  protected keepAliveTimer?: Timer;
+
+  /**
+   * This can change on every `recv` call
+   */
+  protected _remoteHost: Host;
+
+  /**
+   * This can change on every `recv` call
+   */
+  protected _remotePort: Port;
+
+  protected resolveEstablishedP: () => void;
+  protected rejectEstablishedP: (reason?: any) => void;
+  protected resolveSecureEstablishedP: () => void;
+  protected rejectSecureEstablishedP: (reason?: any) => void;
+  protected resolveClosedP: () => void;
+  protected rejectClosedP: (reason?: any) => void;
 
   /**
    * Create QUICConnection by connecting to a server
@@ -172,15 +235,6 @@ class QUICConnection extends EventTarget {
     // Registers the connection to the socket
     // The socket will now know that a connection exists
     socket.connectionMap.set(connection.connectionId, connection);
-
-    // At this point the connection isn't actually established
-    // The user has to trigger a send!
-    // Then after it triggers a send
-    // It has to wait for the `connection.establishedP`
-    // Why can't we do it here?
-    // I think we can actually do this here
-
-
     logger.info(`Connected ${this.name}`);
     return connection;
   }
@@ -266,7 +320,8 @@ class QUICConnection extends EventTarget {
     this.type = type;
     this.conn = conn;
     this.connectionId = connectionId;
-    this.connectionMap = socket.connectionMap;
+
+    // this.connectionMap = socket.connectionMap;
     this.socket = socket;
     this._remoteHost = remoteInfo.host;
     this._remotePort = remoteInfo.port;
@@ -430,7 +485,7 @@ class QUICConnection extends EventTarget {
 
     this.logger.error('>>>> PASS CLOSED P');
 
-    this.connectionMap.delete(this.connectionId);
+    this.socket.connectionMap.delete(this.connectionId);
 
     // console.timeEnd('conn destroy send');
 

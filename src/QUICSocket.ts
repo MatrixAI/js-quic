@@ -15,8 +15,8 @@ import * as errors from './errors';
 
 /**
  * Events:
- * - error
- * - stop
+ * - socketError
+ * - socketStop
  */
 interface QUICSocket extends StartStop {}
 @StartStop()

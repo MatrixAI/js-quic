@@ -1,12 +1,18 @@
 import type QUICConnection from './QUICConnection';
 import type QUICStream from './QUICStream';
 
+// Socket events
+
 class QUICSocketStopEvent extends Event {
   constructor(options?: EventInit) {
-    super('stop', options);
+    super('socketStop', options);
   }
 }
 
+/**
+ * If the socket is encapsulated in the client or server, then any error event
+ * will be re-meitted as a `clientError` or `serverError` event.
+ */
 class QUICSocketErrorEvent extends Event {
   public detail: Error;
   constructor(
@@ -14,114 +20,16 @@ class QUICSocketErrorEvent extends Event {
       detail: Error;
     },
   ) {
-    super('error', options);
+    super('socketError', options);
     this.detail = options.detail;
   }
 }
 
-class QUICServerConnectionEvent extends Event {
-  public detail: QUICConnection;
-  constructor(
-    options: EventInit & {
-      detail: QUICConnection;
-    },
-  ) {
-    super('connection', options);
-    this.detail = options.detail;
-  }
-}
-
-class QUICServerStopEvent extends Event {
-  constructor(options?: EventInit) {
-    super('stop', options);
-  }
-}
-
-class QUICServerErrorEvent extends Event {
-  public detail: QUICSocketErrorEvent | Error;
-  constructor(
-    options: EventInit & {
-      detail: QUICSocketErrorEvent | Error;
-    },
-  ) {
-    super('error', options);
-    this.detail = options.detail;
-  }
-}
-
-// The stream, may come with initial information
-// So we can put the remote info regarding that
-// Into the stream
-// Each stream will have a fixed conn ID
-// Then again... it's possible for the stream to have varying peer info too
-// It sort of depends again
-// Since you could be handling 1 stream
-// Then another stream runs, concurrently from a different remote host
-// So you never really get the initial thing
-
-class QUICConnectionStreamEvent extends Event {
-  public detail: QUICStream;
-  constructor(
-    options: EventInit & {
-      detail: QUICStream;
-    },
-  ) {
-    super('stream', options);
-    this.detail = options.detail;
-  }
-}
-
-class QUICConnectionSendEvent extends Event {
-  constructor(options?: EventInit) {
-    super('send', options);
-  }
-}
-
-class QUICConnectionRecvEvent extends Event {
-  constructor(options?: EventInit) {
-    super('recv', options);
-  }
-}
-
-class QUICConnectionDestroyEvent extends Event {
-  constructor(options?: EventInit) {
-    super('destroy', options);
-  }
-}
-
-class QUICConnectionErrorEvent extends Event {
-  public detail: Error;
-  constructor(
-    options: EventInit & {
-      detail: Error;
-    },
-  ) {
-    super('error', options);
-    this.detail = options.detail;
-  }
-}
-
-class QUICStreamReadableEvent extends Event {
-  constructor(options?: EventInit) {
-    super('readable', options);
-  }
-}
-
-class QUICStreamWritableEvent extends Event {
-  constructor(options?: EventInit) {
-    super('writable', options);
-  }
-}
-
-class QUICStreamDestroyEvent extends Event {
-  constructor(options?: EventInit) {
-    super('destroy', options);
-  }
-}
+// Client events
 
 class QUICClientDestroyEvent extends Event {
   constructor(options?: EventInit) {
-    super('destroy', options);
+    super('clientDestroy', options);
   }
 }
 
@@ -132,25 +40,93 @@ class QUICClientErrorEvent extends Event {
       detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
     },
   ) {
-    super('error', options);
+    super('clientError', options);
     this.detail = options.detail;
+  }
+}
+
+// Server events
+
+class QUICServerConnectionEvent extends Event {
+  public detail: QUICConnection;
+  constructor(
+    options: EventInit & {
+      detail: QUICConnection;
+    },
+  ) {
+    super('serverConnection', options);
+    this.detail = options.detail;
+  }
+}
+
+class QUICServerStopEvent extends Event {
+  constructor(options?: EventInit) {
+    super('serverStop', options);
+  }
+}
+
+class QUICServerErrorEvent extends Event {
+  public detail: QUICSocketErrorEvent | Error;
+  constructor(
+    options: EventInit & {
+      detail: QUICSocketErrorEvent | Error;
+    },
+  ) {
+    super('serverError', options);
+    this.detail = options.detail;
+  }
+}
+
+// Connection events
+
+class QUICConnectionStreamEvent extends Event {
+  public detail: QUICStream;
+  constructor(
+    options: EventInit & {
+      detail: QUICStream;
+    },
+  ) {
+    super('connectionStream', options);
+    this.detail = options.detail;
+  }
+}
+
+class QUICConnectionDestroyEvent extends Event {
+  constructor(options?: EventInit) {
+    super('connectionDestroy', options);
+  }
+}
+
+class QUICConnectionErrorEvent extends Event {
+  public detail: Error;
+  constructor(
+    options: EventInit & {
+      detail: Error;
+    },
+  ) {
+    super('connectionError', options);
+    this.detail = options.detail;
+  }
+}
+
+// Stream events
+
+class QUICStreamDestroyEvent extends Event {
+  constructor(options?: EventInit) {
+    super('streamDestroy', options);
   }
 }
 
 export {
   QUICSocketStopEvent,
   QUICSocketErrorEvent,
+  QUICClientDestroyEvent,
+  QUICClientErrorEvent,
   QUICServerConnectionEvent,
   QUICServerStopEvent,
   QUICServerErrorEvent,
   QUICConnectionStreamEvent,
-  QUICConnectionSendEvent,
-  QUICConnectionRecvEvent,
   QUICConnectionDestroyEvent,
   QUICConnectionErrorEvent,
-  QUICStreamReadableEvent,
-  QUICStreamWritableEvent,
   QUICStreamDestroyEvent,
-  QUICClientDestroyEvent,
-  QUICClientErrorEvent,
 };

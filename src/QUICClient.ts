@@ -20,9 +20,19 @@ import QUICConnectionId from './QUICConnectionId';
  * You must provide a error handler `addEventListener('error')`.
  * Otherwise errors will just be ignored.
  *
+ * Use the same event names.
+ * However it needs to bubble up.
+ * And the right target needs to be used.
+ *
  * Events:
- * - error - (could be a QUICSocketErrorEvent OR QUICClientErrorEvent)
- * - destroy
+ * - clientError - (could be a QUICSocketErrorEvent OR QUICClientErrorEvent)
+ * - clientDestroy
+ * - socketError - this also results in a client error
+ * - socketStop
+ * - connectionError - connection error event
+ * - connectionDestroy - connection destroy event
+ * - connectionStream
+ * - streamDestroy
  */
 interface QUICClient extends CreateDestroy {}
 @CreateDestroy()

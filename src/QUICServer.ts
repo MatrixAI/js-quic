@@ -30,9 +30,15 @@ import QUICSocket from './QUICSocket';
  * Otherwise errors will just be ignored.
  *
  * Events:
- * - connection
- * - error - (could be a QUICSocketErrorEvent OR QUICServerErrorEvent)
- * - stop
+ * - serverStop
+ * - serverError - (could be a QUICSocketErrorEvent OR QUICServerErrorEvent)
+ * - serverConnection
+ * - connectionStream - when new stream is created from a connection
+ * - connectionError - connection error event
+ * - connectionDestroy - when connection is destroyed
+ * - streamDestroy - when stream is destroyed
+ * - socketError - this also results in a server error
+ * - socketStop
  */
 interface QUICServer extends StartStop {}
 @StartStop()

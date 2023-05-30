@@ -21,7 +21,7 @@ import * as errors from './errors';
 
 /**
  * Events:
- * - destroy
+ * - streamDestroy
  *
  * Swap from using `readable` and `writable` to just function calls.
  * It's basically the same, since it's just the connection telling the stream
@@ -68,16 +68,12 @@ class QUICStream
     reasonToCode = () => 0,
     codeToReason = (type, code) =>
       new Error(`${type.toString()} ${code.toString()}`),
-    // maxReadableStreamBytes = 100_000, // About 100KB
-    // maxWritableStreamBytes = 100_000, // About 100KB
     logger = new Logger(`${this.name} ${streamId}`),
   }: {
     streamId: StreamId;
     connection: QUICConnection;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    // maxReadableStreamBytes?: number;
-    // maxWritableStreamBytes?: number;
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
@@ -93,8 +89,6 @@ class QUICStream
       connection,
       reasonToCode,
       codeToReason,
-      // maxReadableStreamBytes,
-      // maxWritableStreamBytes,
       logger,
     });
     connection.streamMap.set(stream.streamId, stream);
@@ -107,16 +101,12 @@ class QUICStream
     connection,
     reasonToCode,
     codeToReason,
-    // maxReadableStreamBytes,
-    // maxWritableStreamBytes,
     logger,
   }: {
     streamId: StreamId;
     connection: QUICConnection;
     reasonToCode: StreamReasonToCode;
     codeToReason: StreamCodeToReason;
-    // maxReadableStreamBytes: number;
-    // maxWritableStreamBytes: number;
     logger: Logger;
   }) {
     super();
