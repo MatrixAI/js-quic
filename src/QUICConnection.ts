@@ -327,23 +327,11 @@ class QUICConnection extends EventTarget {
     this.type = type;
     this.conn = conn;
     this.connectionId = connectionId;
-
-    // this.connectionMap = socket.connectionMap;
     this.socket = socket;
-    this._remoteHost = remoteInfo.host;
-    this._remotePort = remoteInfo.port;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-
-
-    // No need to check the timeout during constructor
-    // It's always null
-    // The timeout should only be called at the end
-
-    // Note that you must be able to reject too
-    // otherwise one might await for establishment forever
-    // the server side has to code up their own bootstrap
-    // but the client side just uses the quiche library
+    this._remoteHost = remoteInfo.host;
+    this._remotePort = remoteInfo.port;
     const {
       p: establishedP,
       resolveP: resolveEstablishedP,
@@ -352,19 +340,22 @@ class QUICConnection extends EventTarget {
     this.establishedP = establishedP;
     this.resolveEstablishedP = resolveEstablishedP;
     this.rejectEstablishedP = rejectEstablishedP;
-    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
-    this.resolveCloseP = resolveClosedP;
+    const {
+      p: secureEstablishedP,
+      resolveP: resolveSecureEstablishedP,
+      rejectP: rejectSecureEstablishedP
+    } = utils.promise();
+    this.secureEstablishedP = secureEstablishedP;
+    this.resolveSecureEstablishedP = resolveSecureEstablishedP;
+    this.rejectSecureEstablishedP = rejectSecureEstablishedP;
+    const {
+      p: closedP,
+      resolveP: resolveClosedP,
+      rejectP: rejectClosedP,
+    } = utils.promise();
     this.closedP = closedP;
-    const { p: handshakeP, resolveP: resolveHandshakeP } = utils.promise();
-    this.handshakeP = handshakeP;
-    this.resolveHandshakeP = resolveHandshakeP;
-  }
-
-  // Immediately call this after construction
-  // if you want to pass the key log to something
-  // note that you must close the file descriptor afterward
-  public setKeylog(path) {
-    this.conn.setKeylog(path);
+    this.resolveClosedP = resolveClosedP;
+    this.rejectClosedP = rejectClosedP;
   }
 
   public get remoteHost() {
