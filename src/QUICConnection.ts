@@ -37,6 +37,120 @@ interface QUICConnection extends CreateDestroy {}
 @CreateDestroy()
 class QUICConnection extends EventTarget {
   /**
+   * Create QUICConnection by connecting to a server
+   */
+  public static async connectQUICConnection({
+    scid,
+    socket,
+    remoteInfo,
+    config,
+    reasonToCode = () => 0,
+    codeToReason = (type, code) =>
+      new Error(`${type.toString()} ${code.toString()}`),
+    logger = new Logger(`${this.name} ${scid}`),
+  }: {
+    scid: QUICConnectionId;
+    socket: QUICSocket;
+    remoteInfo: RemoteInfo;
+    config: QUICConfig;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
+    logger?: Logger;
+  }) {
+    logger.info(`Connect ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
+    const conn = quiche.Connection.connect(
+      null,
+      scid,
+      {
+        host: socket.host,
+        port: socket.port,
+      },
+      {
+        host: remoteInfo.host,
+        port: remoteInfo.port,
+      },
+      quicheConfig,
+    );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
+    const connection = new this({
+      type: 'client',
+      conn,
+      connectionId: scid,
+      socket,
+      remoteInfo,
+      reasonToCode,
+      codeToReason,
+      logger,
+    });
+    // Registers the connection to the socket
+    // The socket will now know that a connection exists
+    socket.connectionMap.set(connection.connectionId, connection);
+    logger.info(`Connected ${this.name}`);
+    return connection;
+  }
+
+  /**
+   * Create QUICConnection by accepting a client
+   */
+  public static async acceptQUICConnection({
+    scid,
+    dcid,
+    socket,
+    remoteInfo,
+    config,
+    reasonToCode = () => 0,
+    codeToReason = (type, code) =>
+      new Error(`${type.toString()} ${code.toString()}`),
+    logger = new Logger(`${this.name} ${scid}`),
+  }: {
+    scid: QUICConnectionId;
+    dcid: QUICConnectionId;
+    socket: QUICSocket;
+    remoteInfo: RemoteInfo;
+    config: QUICConfig;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
+    logger?: Logger;
+  }): Promise<QUICConnection> {
+    logger.info(`Accept ${this.name}`);
+    const quicheConfig = buildQuicheConfig(config);
+    const conn = quiche.Connection.accept(
+      scid,
+      dcid,
+      {
+        host: socket.host,
+        port: socket.port,
+      },
+      {
+        host: remoteInfo.host,
+        port: remoteInfo.port,
+      },
+      quicheConfig,
+    );
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn.setKeylog(config.logKeys);
+    }
+    const connection = new this({
+      type: 'server',
+      conn,
+      connectionId: scid,
+      socket,
+      remoteInfo,
+      reasonToCode,
+      codeToReason,
+      logger,
+    });
+    socket.connectionMap.set(connection.connectionId, connection);
+    logger.info(`Accepted ${this.name}`);
+    return connection;
+  }
+
+  /**
    * This determines when it is a client or server connection.
    */
   public readonly type: 'client' | 'server';
@@ -175,126 +289,19 @@ class QUICConnection extends EventTarget {
    */
   protected _remotePort: Port;
 
+  /**
+   * Bubble up all QUIC stream events.
+   */
+  protected handleQUICStreamEvents = (e: events.QUICStreamEvent) => {
+    this.dispatchEvent(e);
+  };
+
   protected resolveEstablishedP: () => void;
   protected rejectEstablishedP: (reason?: any) => void;
   protected resolveSecureEstablishedP: () => void;
   protected rejectSecureEstablishedP: (reason?: any) => void;
   protected resolveClosedP: () => void;
   protected rejectClosedP: (reason?: any) => void;
-
-  /**
-   * Create QUICConnection by connecting to a server
-   */
-  public static async connectQUICConnection({
-    scid,
-    socket,
-    remoteInfo,
-    config,
-    reasonToCode = () => 0,
-    codeToReason = (type, code) =>
-      new Error(`${type.toString()} ${code.toString()}`),
-    logger = new Logger(`${this.name} ${scid}`),
-  }: {
-    scid: QUICConnectionId;
-    socket: QUICSocket;
-    remoteInfo: RemoteInfo;
-    config: QUICConfig;
-    reasonToCode?: StreamReasonToCode;
-    codeToReason?: StreamCodeToReason;
-    logger?: Logger;
-  }) {
-    logger.info(`Connect ${this.name}`);
-    const quicheConfig = buildQuicheConfig(config);
-    const conn = quiche.Connection.connect(
-      null,
-      scid,
-      {
-        host: socket.host,
-        port: socket.port,
-      },
-      {
-        host: remoteInfo.host,
-        port: remoteInfo.port,
-      },
-      quicheConfig,
-    );
-    // This will output to the log keys file path
-    if (config.logKeys != null) {
-      conn.setKeylog(config.logKeys);
-    }
-    const connection = new this({
-      type: 'client',
-      conn,
-      connectionId: scid,
-      socket,
-      remoteInfo,
-      reasonToCode,
-      codeToReason,
-      logger,
-    });
-    // Registers the connection to the socket
-    // The socket will now know that a connection exists
-    socket.connectionMap.set(connection.connectionId, connection);
-    logger.info(`Connected ${this.name}`);
-    return connection;
-  }
-
-  /**
-   * Create QUICConnection by accepting a client
-   */
-  public static async acceptQUICConnection({
-    scid,
-    dcid,
-    socket,
-    remoteInfo,
-    config,
-    reasonToCode = () => 0,
-    codeToReason = (type, code) =>
-      new Error(`${type.toString()} ${code.toString()}`),
-    logger = new Logger(`${this.name} ${scid}`),
-  }: {
-    scid: QUICConnectionId;
-    dcid: QUICConnectionId;
-    socket: QUICSocket;
-    remoteInfo: RemoteInfo;
-    config: QUICConfig;
-    reasonToCode?: StreamReasonToCode;
-    codeToReason?: StreamCodeToReason;
-    logger?: Logger;
-  }): Promise<QUICConnection> {
-    logger.info(`Accept ${this.name}`);
-    const quicheConfig = buildQuicheConfig(config);
-    const conn = quiche.Connection.accept(
-      scid,
-      dcid,
-      {
-        host: socket.host,
-        port: socket.port,
-      },
-      {
-        host: remoteInfo.host,
-        port: remoteInfo.port,
-      },
-      quicheConfig,
-    );
-    // This will output to the log keys file path
-    if (config.logKeys != null) {
-      conn.setKeylog(config.logKeys);
-    }
-    const connection = new this({
-      type: 'server',
-      conn,
-      connectionId: scid,
-      socket,
-      remoteInfo,
-      reasonToCode,
-      codeToReason,
-      logger,
-    });
-    socket.connectionMap.set(connection.connectionId, connection);
-    logger.info(`Accepted ${this.name}`);
-    return connection;
-  }
 
   public constructor({
     type,
