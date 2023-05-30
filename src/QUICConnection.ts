@@ -457,8 +457,8 @@ class QUICConnection extends EventTarget {
       // It must enter into a draining state, and no other packets can be sent
       this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
     } catch (e) {
+      // If the connection is already closed, `Done` will be thrown
       if (e.message !== 'Done') {
-        this.logger.debug('already closed');
         // No other exceptions are expected
         utils.never();
       }
