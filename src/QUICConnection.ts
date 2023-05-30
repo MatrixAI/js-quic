@@ -5,11 +5,7 @@ import type { Host, Port, RemoteInfo, StreamId } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { QUICConfig, ConnectionMetadata } from './types';
-import {
-  CreateDestroy,
-  ready,
-  status,
-} from '@matrixai/async-init/dist/CreateDestroy';
+import { StartStop, ready, status } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
 import { Lock } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
@@ -33,123 +29,9 @@ import { promise } from './utils';
  * - connectionError
  * - streamDestroy
  */
-interface QUICConnection extends CreateDestroy {}
-@CreateDestroy()
+interface QUICConnection extends StartStop {}
+@StartStop()
 class QUICConnection extends EventTarget {
-  /**
-   * Create QUICConnection by connecting to a server
-   */
-  public static async connectQUICConnection({
-    scid,
-    socket,
-    remoteInfo,
-    config,
-    reasonToCode = () => 0,
-    codeToReason = (type, code) =>
-      new Error(`${type.toString()} ${code.toString()}`),
-    logger = new Logger(`${this.name} ${scid}`),
-  }: {
-    scid: QUICConnectionId;
-    socket: QUICSocket;
-    remoteInfo: RemoteInfo;
-    config: QUICConfig;
-    reasonToCode?: StreamReasonToCode;
-    codeToReason?: StreamCodeToReason;
-    logger?: Logger;
-  }) {
-    logger.info(`Connect ${this.name}`);
-    const quicheConfig = buildQuicheConfig(config);
-    const conn = quiche.Connection.connect(
-      null,
-      scid,
-      {
-        host: socket.host,
-        port: socket.port,
-      },
-      {
-        host: remoteInfo.host,
-        port: remoteInfo.port,
-      },
-      quicheConfig,
-    );
-    // This will output to the log keys file path
-    if (config.logKeys != null) {
-      conn.setKeylog(config.logKeys);
-    }
-    const connection = new this({
-      type: 'client',
-      conn,
-      connectionId: scid,
-      socket,
-      remoteInfo,
-      reasonToCode,
-      codeToReason,
-      logger,
-    });
-    // Registers the connection to the socket
-    // The socket will now know that a connection exists
-    socket.connectionMap.set(connection.connectionId, connection);
-    logger.info(`Connected ${this.name}`);
-    return connection;
-  }
-
-  /**
-   * Create QUICConnection by accepting a client
-   */
-  public static async acceptQUICConnection({
-    scid,
-    dcid,
-    socket,
-    remoteInfo,
-    config,
-    reasonToCode = () => 0,
-    codeToReason = (type, code) =>
-      new Error(`${type.toString()} ${code.toString()}`),
-    logger = new Logger(`${this.name} ${scid}`),
-  }: {
-    scid: QUICConnectionId;
-    dcid: QUICConnectionId;
-    socket: QUICSocket;
-    remoteInfo: RemoteInfo;
-    config: QUICConfig;
-    reasonToCode?: StreamReasonToCode;
-    codeToReason?: StreamCodeToReason;
-    logger?: Logger;
-  }): Promise<QUICConnection> {
-    logger.info(`Accept ${this.name}`);
-    const quicheConfig = buildQuicheConfig(config);
-    const conn = quiche.Connection.accept(
-      scid,
-      dcid,
-      {
-        host: socket.host,
-        port: socket.port,
-      },
-      {
-        host: remoteInfo.host,
-        port: remoteInfo.port,
-      },
-      quicheConfig,
-    );
-    // This will output to the log keys file path
-    if (config.logKeys != null) {
-      conn.setKeylog(config.logKeys);
-    }
-    const connection = new this({
-      type: 'server',
-      conn,
-      connectionId: scid,
-      socket,
-      remoteInfo,
-      reasonToCode,
-      codeToReason,
-      logger,
-    });
-    socket.connectionMap.set(connection.connectionId, connection);
-    logger.info(`Accepted ${this.name}`);
-    return connection;
-  }
-
   /**
    * This determines when it is a client or server connection.
    */
@@ -305,28 +187,79 @@ class QUICConnection extends EventTarget {
 
   public constructor({
     type,
-    conn,
-    connectionId,
-    socket,
+    scid,
+    dcid,
     remoteInfo,
-    reasonToCode,
-    codeToReason,
+    config,
+    socket,
+    reasonToCode = () => 0,
+    codeToReason = (type, code) => new Error(`${type} ${code}`),
     logger,
   }: {
-    type: 'client' | 'server';
-    conn: Connection;
-    connectionId: QUICConnectionId;
-    socket: QUICSocket;
+    type: 'client';
+    scid: QUICConnectionId;
+    dcid?: undefined;
     remoteInfo: RemoteInfo;
-    reasonToCode: StreamReasonToCode;
-    codeToReason: StreamCodeToReason;
-    logger: Logger;
+    config: QUICConfig;
+    socket: QUICSocket;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
+    logger?: Logger;
+  } | {
+    type: 'server';
+    scid: QUICConnectionId;
+    dcid: QUICConnectionId;
+    remoteInfo: RemoteInfo;
+    config: QUICConfig;
+    socket: QUICSocket;
+    reasonToCode?: StreamReasonToCode;
+    codeToReason?: StreamCodeToReason;
+    logger?: Logger;
   }) {
     super();
-    this.logger = logger;
+    this.logger = logger ?? new Logger(`${this.constructor.name} ${scid}`);
+    const quicheConfig = buildQuicheConfig(config);
+    let conn: Connection;
+    if (type === 'client')  {
+      // This message will be connected to the `this.start`
+      this.logger.info(`Connect ${this.constructor.name}`);
+      conn = quiche.Connection.connect(
+        null,
+        scid,
+        {
+          host: socket.host,
+          port: socket.port,
+        },
+        {
+          host: remoteInfo.host,
+          port: remoteInfo.port,
+        },
+        quicheConfig,
+      );
+    } else if (type === 'server') {
+      // This message will be connected to `this.start`
+      this.logger.info(`Accept ${this.constructor.name}`);
+      conn = quiche.Connection.accept(
+        scid,
+        dcid,
+        {
+          host: socket.host,
+          port: socket.port,
+        },
+        {
+          host: remoteInfo.host,
+          port: remoteInfo.port,
+        },
+        quicheConfig,
+      );
+    }
+    // This will output to the log keys file path
+    if (config.logKeys != null) {
+      conn!.setKeylog(config.logKeys);
+    }
     this.type = type;
-    this.conn = conn;
-    this.connectionId = connectionId;
+    this.conn = conn!;
+    this.connectionId = scid;
     this.socket = socket;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
@@ -356,6 +289,8 @@ class QUICConnection extends EventTarget {
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
     this.rejectClosedP = rejectClosedP;
+    // Registers this connection instance to the socket
+    socket.connectionMap.set(scid, this);
   }
 
   public get remoteHost() {
@@ -374,19 +309,51 @@ class QUICConnection extends EventTarget {
     return this.socket.port;
   }
 
-  public get remoteInfo(): ConnectionMetadata {
-    const derCerts = this.conn.peerCertChain();
-    const remoteCertificates =
-      derCerts != null
-        ? derCerts.map((der) => utils.certificateDERToPEM(der))
-        : null;
-    return {
-      remoteCertificates,
-      localHost: this.localHost,
-      localPort: this.localPort,
-      remoteHost: this.remoteHost,
-      remotePort: this.remotePort,
-    };
+  // So this is a CreateDestroy
+  // when created, this doesn't actually mean this is possible
+  // It is because, the connection isn't even fully established
+  // There's several stages after it
+  // Since there is `secureEstablishedP` and `closeP`
+  // These 2 technically translate to the `start` and `stop`
+  // The reason you need this is because the QUIC Socket needs to be able to do recv and send
+  // On the connection instance
+  // Therefore, one must be able to CREATE it to get the instance
+  // Generally creation implies starting
+  // That's the problem here
+
+  // I think if this was swapped to a `StartStop`
+  // we can actually instead have...
+  // the ability to "construct" it
+  // then start/stop independnetly
+  // then start/stop can wait for certain events
+  // while you can proceed to call recv/send on the connection object
+  // just by having it constructed!
+
+
+
+  /**
+   * This is the same as basically waiting for `secureEstablishedP`
+   * While this is occurring one can call the `recv` and `send` to make this happen
+   */
+  public async start() {
+
+  }
+
+  /**
+   * This is the same as basically waiting for `closedP`.
+   */
+  public async stop() {
+
+  }
+
+  /**
+   * I don't know if this makes any sense
+   */
+  @ready(new errors.ErrorQUICConnectionDestroyed())
+  public getRemoteCerts(): Array<string> | undefined {
+    const certsDER = this.conn.peerCertChain();
+    if (certsDER == null) return;
+    return certsDER.map(utils.certificateDERToPEM);
   }
 
   /**
