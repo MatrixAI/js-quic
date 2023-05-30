@@ -335,7 +335,16 @@ class QUICConnection extends EventTarget {
    * This is the same as basically waiting for `secureEstablishedP`
    * While this is occurring one can call the `recv` and `send` to make this happen
    */
-  public async start() {
+
+  // It should set the keep alive here!!!
+  // That's what is important here
+  // If we want to do this
+  // Techncially you just need to start it!
+  public async start({
+    keepAliveIntervalTime
+  }: {
+    keepAliveIntervalTime?: number
+  }): Promise<void> {
 
   }
 
