@@ -3,16 +3,14 @@ import type QUICStream from './QUICStream';
 
 // Socket events
 
+abstract class QUICSocketEvent extends Event {};
+
 class QUICSocketStopEvent extends Event {
   constructor(options?: EventInit) {
     super('socketStop', options);
   }
 }
 
-/**
- * If the socket is encapsulated in the client or server, then any error event
- * will be re-meitted as a `clientError` or `serverError` event.
- */
 class QUICSocketErrorEvent extends Event {
   public detail: Error;
   constructor(
@@ -27,6 +25,8 @@ class QUICSocketErrorEvent extends Event {
 
 // Client events
 
+abstract class QUICClientEvent extends Event {};
+
 class QUICClientDestroyEvent extends Event {
   constructor(options?: EventInit) {
     super('clientDestroy', options);
@@ -34,10 +34,10 @@ class QUICClientDestroyEvent extends Event {
 }
 
 class QUICClientErrorEvent extends Event {
-  public detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
+  public detail: Error;
   constructor(
     options: EventInit & {
-      detail: QUICSocketErrorEvent | QUICConnectionErrorEvent;
+      detail: Error;
     },
   ) {
     super('clientError', options);
@@ -46,6 +46,8 @@ class QUICClientErrorEvent extends Event {
 }
 
 // Server events
+
+abstract class QUICServerEvent extends Event {};
 
 class QUICServerConnectionEvent extends Event {
   public detail: QUICConnection;
@@ -79,7 +81,9 @@ class QUICServerErrorEvent extends Event {
 
 // Connection events
 
-class QUICConnectionStreamEvent extends Event {
+abstract class QUICConnectionEvent extends Event {};
+
+class QUICConnectionStreamEvent extends QUICConnectionEvent {
   public detail: QUICStream;
   constructor(
     options: EventInit & {
@@ -91,13 +95,13 @@ class QUICConnectionStreamEvent extends Event {
   }
 }
 
-class QUICConnectionDestroyEvent extends Event {
+class QUICConnectionDestroyEvent extends QUICConnectionEvent {
   constructor(options?: EventInit) {
     super('connectionDestroy', options);
   }
 }
 
-class QUICConnectionErrorEvent extends Event {
+class QUICConnectionErrorEvent extends QUICConnectionEvent {
   public detail: Error;
   constructor(
     options: EventInit & {
@@ -111,22 +115,29 @@ class QUICConnectionErrorEvent extends Event {
 
 // Stream events
 
-class QUICStreamDestroyEvent extends Event {
+abstract class QUICStreamEvent extends Event {};
+
+class QUICStreamDestroyEvent extends QUICStreamEvent {
   constructor(options?: EventInit) {
     super('streamDestroy', options);
   }
 }
 
 export {
+  QUICSocketEvent,
   QUICSocketStopEvent,
   QUICSocketErrorEvent,
+  QUICClientEvent,
   QUICClientDestroyEvent,
   QUICClientErrorEvent,
+  QUICServerEvent,
   QUICServerConnectionEvent,
   QUICServerStopEvent,
   QUICServerErrorEvent,
+  QUICConnectionEvent,
   QUICConnectionStreamEvent,
   QUICConnectionDestroyEvent,
   QUICConnectionErrorEvent,
+  QUICStreamEvent,
   QUICStreamDestroyEvent,
 };

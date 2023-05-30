@@ -27,7 +27,7 @@ import QUICConnectionId from './QUICConnectionId';
  * Events:
  * - clientError - (could be a QUICSocketErrorEvent OR QUICClientErrorEvent)
  * - clientDestroy
- * - socketError - this also results in a client error
+ * - socketError
  * - socketStop
  * - connectionError - connection error event
  * - connectionDestroy - connection destroy event
@@ -145,12 +145,12 @@ class QUICClient extends EventTarget {
         resolveHostname,
         logger: logger.getChild(QUICSocket.name),
       });
-      socket.addEventListener('error', handleQUICSocketError, { once: true });
       isSocketShared = false;
       await socket.start({
         host: localHost,
         port: localPort,
       });
+      socket.addEventListener('socketError', handleQUICSocketError, { once: true });
     } else {
       if (!socket[running]) {
         throw new errors.ErrorQUICClientSocketNotRunning();
@@ -251,34 +251,26 @@ class QUICClient extends EventTarget {
     return client;
   }
 
-  /**
-   * Handle QUIC socket errors
-   * This is only used if the socket is not shared
-   * If the socket is shared, then it is expected that the user
-   * would listen on error events on the socket itself
-   * Otherwise this will propagate such errors to the server
-   */
-  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(
-      new events.QUICClientErrorEvent({
-        detail: e,
-      }),
-    );
+  protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
+    this.dispatchEvent(e);
+    if (e instanceof events.QUICSocketErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICServerErrorEvent({
+          detail: e.detail,
+        }),
+      );
+    }
   };
 
-  /**
-   * Handles QUIC connection errors
-   * This is always used because QUICClient is
-   * one to one with QUICConnection
-   */
-  protected handleQUICConnectionError = (
-    e: events.QUICConnectionErrorEvent,
-  ) => {
-    this.dispatchEvent(
-      new events.QUICClientErrorEvent({
-        detail: e,
-      }),
-    );
+  protected handleQUICConnectionEvents = (e: events.QUICConnectionEvent) => {
+    this.dispatchEvent(e);
+    if (e instanceof events.QUICClientErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICClientErrorEvent({
+          detail: e.detail,
+        }),
+      );
+    }
   };
 
   public constructor({
@@ -302,12 +294,33 @@ class QUICClient extends EventTarget {
     this.crypto = crypto;
     this.socket = socket;
     this.isSocketShared = isSocketShared;
-    // Registers itself to the socket
-    if (!isSocketShared) {
-      this.socket.addEventListener('error', this.handleQUICSocketError);
-    }
     this._connection = connection;
-    this._connection.addEventListener('error', this.handleQUICConnectionError);
+    // Listen on all socket events
+    socket.addEventListener(
+      'socketError',
+      this.handleQUICSocketEvents
+    );
+    socket.addEventListener(
+      'socketStop',
+      this.handleQUICSocketEvents
+    );
+    // Listen on all connection events
+    connection.addEventListener(
+      'connectionStream',
+      this.handleQUICConnectionEvents
+    );
+    connection.addEventListener(
+      'connectionDestroy',
+      this.handleQUICConnectionEvents
+    );
+    connection.addEventListener(
+      'connectionError',
+      this.handleQUICConnectionEvents
+    );
+    connection.addEventListener(
+      'streamDestroy',
+      this.handleQUICConnectionEvents
+    );
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())

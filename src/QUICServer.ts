@@ -57,19 +57,19 @@ class QUICServer extends EventTarget {
   protected keepaliveIntervalTime?: number | undefined;
   protected connectionMap: QUICConnectionMap;
 
-  /**
-   * Handle QUIC socket errors
-   * This is only used if the socket is not shared
-   * If the socket is shared, then it is expected that the user
-   * would listen on error events on the socket itself
-   * Otherwise this will propagate such errors to the server
-   */
-  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(
-      new events.QUICServerErrorEvent({
-        detail: e,
-      }),
-    );
+  protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
+    this.dispatchEvent(e);
+    if (e instanceof events.QUICSocketErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICServerErrorEvent({
+          detail: e.detail,
+        }),
+      );
+    }
+  };
+
+  protected handleQUICConnectionEvents = (e: events.QUICConnectionEvent) => {
+    this.dispatchEvent(e);
   };
 
   public constructor({
@@ -155,7 +155,6 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(host, port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
       await this.socket.start({ host, port, reuseAddr });
-      this.socket.addEventListener('error', this.handleQUICSocketError);
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
       // If the socket is shared, it must already be started
@@ -165,6 +164,17 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(this.socket.host, this.socket.port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
     }
+
+    // Register on all socket events
+    this.socket.addEventListener(
+      'socketError',
+      this.handleQUICSocketEvents
+    );
+    this.socket.addEventListener(
+      'socketStop',
+      this.handleQUICSocketEvents
+    );
+
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
