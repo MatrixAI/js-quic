@@ -75,22 +75,21 @@ class QUICSocket extends EventTarget {
         e.message !== 'BufferTooShort' &&
         e.message !== 'InvalidPacket'
       ) {
-        // Only emit an error if it is not a `BufferTooShort` or
-        // `InvalidPacket` error. Do note, that this kind of error is a peer
-        // error. The error is not due to us.
+        // Emit error if it is not a `BufferTooShort` or `InvalidPacket` error.
+        // This would indicate something went wrong in header parsing.
+        // This is not a critical error, but should be checked.
         this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
       }
       return;
     }
-
-    // During the connection creation on the server side
-    // It only makes sense to do this while the packet is of `Initial` type
-
     // All QUIC packets will have the `dcid` header property
     // However short packets will not have the `scid` property
     // The destination connection ID is supposed to be our connection ID
     const dcid = new QUICConnectionId(header.dcid);
-
+    const remoteInfo_ = {
+      host: remoteInfo.address as Host,
+      port: remoteInfo.port as Port,
+    };
     let connection: QUICConnection;
     if (!this.connectionMap.has(dcid)) {
       // If the DCID is not known, and the server has not been registered then
@@ -98,18 +97,11 @@ class QUICSocket extends EventTarget {
       if (this.server == null) {
         return;
       }
-      // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
-      // packet.
-      if (
-        header.ty === quiche.Type.Initial ||
-        header.ty === quiche.Type.ZeroRTT
-      ) {
-        return;
-      }
-      // Note that in this case, this happens by itself
-      // There's no way for the connection to have concurrent state changes
-
-      const connection_ = await this.server.connectionNew();
+      const connection_ = await this.server.connectionNew(
+        remoteInfo_,
+        header,
+        dcid,
+      );
       // If there's no connection yet
       // then the server is middle of version negotiation or stateless retry
       if (connection_ == null) {
@@ -119,76 +111,19 @@ class QUICSocket extends EventTarget {
     } else {
       connection = this.connectionMap.get(dcid)!;
     }
-    await connection.connLock.withF(async () => {
-      // If the connection is no longer running, we just ignore it
-      // This can be disabled if we can technically ignore after a close?
-      if (!connection[running]) {
-        return;
-      }
-      conn.recv(data, remoteInfo_);
-      await conn.send();
-    });
-
-
-
-
-
-    // TODO:
-    // THIS IS SUPPOSED TO HAPPEN INSIDE THE QUICSERVER
-    // MOVE THIS INTO THE QUICSERVER!
-    // const scid = new QUICConnectionId(
-    //   await this.crypto.ops.sign(
-    //     this.crypto.key,
-    //     dcid, // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
-    //   ),
-    //   0,
-    //   quiche.MAX_CONN_ID_LEN,
-    // );
-    const remoteInfo_ = {
-      host: remoteInfo.address as Host,
-      port: remoteInfo.port as Port,
-    };
-    // Now both must be checked
-    let conn: QUICConnection;
-    if (!this.connectionMap.has(dcid) && !this.connectionMap.has(scid)) {
-      // If a server is not registered
-      // then this packet is useless, and we can discard it
-      if (this.server == null) {
-        return;
-      }
-      const conn_ = await this.server.connectionNew(
-        data,
-        remoteInfo_,
-        header,
-        dcid,
-        scid,
-      );
-      // If there's no connection yet
-      // Then the server is in the middle of the version negotiation/stateless retry
-      // or the handshake process
-      if (conn_ == null) {
-        return;
-      }
-      conn = conn_;
-    } else {
-      conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
+    // If the connection has already stopped running
+    // then we discard the packet.
+    if (!connection[running]) {
+      return;
     }
-
-    // Any call to send should result in a call to send if we aren't destroyed
-    await conn.sendRecvLock.withF(async () => {
-      await conn.recv(data, remoteInfo_);
-      // The `conn.recv` now may actually destroy the connection
-      // In that sense, there's nothing to send
-      // That's the `conn.destroy` might call `conn.send`
-      if (!conn[destroyed]) {
-        await conn.send();
-      }
+    // Acquire the conn lock, this ensures mutual exclusion
+    // for state changes on the internal connection
+    await connection.connLock.withF(async () => {
+      // Even if we are `stopping`, the `quiche` library says we need to
+      // continue processing any packets.
+      connection.recv(data, remoteInfo_);
+      await connection.send();
     });
-
-    // if (!conn[destroyed]) {
-    //   // Ignore any errors, concurrent with destruction
-    //   await conn.send().catch(() => {});
-    // }
   };
 
   /**

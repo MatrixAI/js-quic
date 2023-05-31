@@ -227,28 +227,33 @@ class QUICServer extends EventTarget {
    * @internal
    */
   public async connectionNew(
-    data: Buffer,
     remoteInfo: RemoteInfo,
     header: Header,
     dcid: QUICConnectionId,
-    scid: QUICConnectionId,
   ): Promise<QUICConnection | undefined> {
 
-    // Here we just create a "task"
-    // The task will be managed by the server
-    // And when we destroy the server
-    // If we force it, it can force close "accepting"
-    // tasks
-    // I'm not sure if that requires an abort signal
-    // If we are not dealing with promises
-    // In fact the existence of a connection construct
-    // That is still accepting, is equivalent to this thing
-
-    const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
-    if (header.ty !== quiche.Type.Initial) {
-      this.logger.debug(`QUIC packet must be Initial for new connections`);
+    // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
+    // packet.
+    if (
+      header.ty !== quiche.Type.Initial &&
+      header.ty !== quiche.Type.ZeroRTT
+    ) {
       return;
     }
+
+    // Derive the new connection's SCID from the client generated DCID
+    const scid = new QUICConnectionId(
+      await this.crypto.ops.sign(
+        this.crypto.key,
+        dcid,
+      ),
+      0,
+      quiche.MAX_CONN_ID_LEN,
+    );
+
+    const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
+
+
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
       this.logger.debug(
