@@ -252,7 +252,7 @@ describe('quiche connection lifecycle', () => {
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
-            clientBuffer,
+            clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -402,7 +402,7 @@ describe('quiche connection lifecycle', () => {
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
-            clientBuffer,
+            clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -571,7 +571,7 @@ describe('quiche connection lifecycle', () => {
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
-            clientBuffer,
+            clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -711,7 +711,7 @@ describe('quiche connection lifecycle', () => {
         });
       });
     });
-    describe.only('connection between client and server with RSA', () => {
+    describe('connection between client and server with RSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -822,7 +822,7 @@ describe('quiche connection lifecycle', () => {
       test('client and server negotiation', async () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
-          clientBuffer,
+          clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         // It will be an initial packet
@@ -938,6 +938,9 @@ describe('quiche connection lifecycle', () => {
         // Now that both the client and server has selected their own SCID, where
         // the server derived its SCID from the initial client's randomly
         // generated DCID, we can update their respective DCID
+        // This means that the client's connection ID is still the randomly
+        // generated SCID at the beginning, while the server's connection ID
+        // is the derived SCID when it sent the retry packet.
         clientDcid = serverScid;
         serverDcid = clientScid;
         // Server receives the retried initial frame
@@ -977,12 +980,9 @@ describe('quiche connection lifecycle', () => {
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN
         );
-
         expect(serverHeaderInitial.ty).toBe(quiche.Type.Initial);
         expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(serverScid);
         expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(serverDcid);
-
-
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
@@ -1353,7 +1353,7 @@ describe('quiche connection lifecycle', () => {
       test('client and server negotiation', async () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
-          clientBuffer,
+          clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         // It will be an initial packet
@@ -1796,7 +1796,7 @@ describe('quiche connection lifecycle', () => {
       test('client and server negotiation', async () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
-          clientBuffer,
+          clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN
         );
         // It will be an initial packet

@@ -46,11 +46,20 @@ class QUICClient extends EventTarget {
 
   /**
    * Creates a QUIC Client
-   * @param options
-   * @param options.host - target host, if wildcard, it is resolved to its localhost `0.0.0.0` becomes `127.0.0.1` and `::` becomes `::1`
-   * @param options.port - defaults to 0
-   * @param options.localHost
-   * @param options.localPort
+   *
+   * @param opts
+   * @param opts.host - peer host where `0.0.0.0` becomes `127.0.0.1` and `::` becomes `::1`
+   * @param opts.port
+   * @param opts.localHost - defaults to `::` (dualstack)
+   * @param opts.localPort - defaults 0
+   * @param opts.crypto - client only needs the ability to generate random bytes
+   * @param opts.config - optional config
+   * @param opts.socket - optional QUICSocket to use
+   * @param opts.resolveHostname - optional hostname resolver
+   * @param opts.reasonToCode - optional reason to code map
+   * @param opts.codeToReason - optional code to reason map
+   * @param opts.keepaliveIntervalTime - optional keepalive interval time
+   * @param opts.logger - optional logger
    */
   public static createQUICClient(
     opts: {
@@ -58,15 +67,18 @@ class QUICClient extends EventTarget {
       port: Port;
       localHost?: Host | Hostname;
       localPort?: Port;
+      crypto: {
+        ops: {
+          randomBytes(data: ArrayBuffer): Promise<void>;
+        };
+      };
+      config?: Partial<QUICConfig>;
       socket?: QUICSocket;
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
-      maxReadableStreamBytes?: number;
-      maxWritableStreamBytes?: number;
       keepaliveIntervalTime?: number;
       logger?: Logger;
-      config?: Partial<QUICConfig>;
     },
     ctx?: Partial<ContextTimed>,
   ): PromiseCancellable<QUICClient>;
@@ -78,29 +90,30 @@ class QUICClient extends EventTarget {
       localHost = '::' as Host,
       localPort = 0 as Port,
       crypto,
+      config = {},
       socket,
       resolveHostname = utils.resolveHostname,
       reasonToCode,
       codeToReason,
       keepaliveIntervalTime,
       logger = new Logger(`${this.name}`),
-      config = {},
     }: {
       host: Host | Hostname;
       port: Port;
       localHost?: Host | Hostname;
       localPort?: Port;
       crypto: {
-        key: ArrayBuffer;
-        ops: Crypto;
+        ops: {
+          randomBytes(data: ArrayBuffer): Promise<void>;
+        };
       };
+      config?: Partial<QUICConfig>;
       socket?: QUICSocket;
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
       keepaliveIntervalTime?: number;
       logger?: Logger;
-      config?: Partial<QUICConfig>;
     },
     @context ctx: ContextTimed
   ): Promise<QUICClient> {
@@ -133,7 +146,6 @@ class QUICClient extends EventTarget {
     let isSocketShared: boolean;
     if (socket == null) {
       socket = new QUICSocket({
-        crypto,
         resolveHostname,
         logger: logger.getChild(QUICSocket.name),
       });

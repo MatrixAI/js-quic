@@ -48,7 +48,14 @@ class QUICServer extends EventTarget {
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
+    ops: {
+      sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+      verify(
+        key: ArrayBuffer,
+        data: ArrayBuffer,
+        sig: ArrayBuffer,
+      ): Promise<boolean>;
+    };
   };
   protected config: QUICConfig;
   protected socket: QUICSocket;
@@ -84,7 +91,14 @@ class QUICServer extends EventTarget {
   }: {
     crypto: {
       key: ArrayBuffer;
-      ops: Crypto;
+      ops: {
+        sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+        verify(
+          key: ArrayBuffer,
+          data: ArrayBuffer,
+          sig: ArrayBuffer,
+        ): Promise<boolean>;
+      };
     };
     config: Partial<QUICConfig> & {
       key: string | Array<string> | Uint8Array | Array<Uint8Array>;
@@ -106,7 +120,6 @@ class QUICServer extends EventTarget {
     this.crypto = crypto;
     if (socket == null) {
       this.socket = new QUICSocket({
-        crypto,
         resolveHostname,
         logger: this.logger.getChild(QUICSocket.name),
       });

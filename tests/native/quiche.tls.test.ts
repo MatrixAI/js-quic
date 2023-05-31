@@ -138,7 +138,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -369,7 +369,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -589,7 +589,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -796,7 +796,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -1007,7 +1007,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -1205,7 +1205,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -1392,7 +1392,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -1603,7 +1603,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
@@ -1801,7 +1801,7 @@ describe('quiche tls', () => {
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
-        clientBuffer,
+        clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN
       );
       clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);

@@ -37,9 +37,16 @@ class QUICSocket extends EventTarget {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  protected crypto: {
+  protected crypto?: {
     key: ArrayBuffer;
-    ops: Crypto;
+    ops: {
+      sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+      verify(
+        key: ArrayBuffer,
+        data: ArrayBuffer,
+        sig: ArrayBuffer,
+      ): Promise<boolean>;
+    };
   };
 
   /**
@@ -75,34 +82,60 @@ class QUICSocket extends EventTarget {
       }
       return;
     }
+
+    // During the connection creation on the server side
+    // It only makes sense to do this while the packet is of `Initial` type
+
     // All QUIC packets will have the `dcid` header property
     // However short packets will not have the `scid` property
-    // The destination connection ID is usually our source connection ID
+    // The destination connection ID is supposed to be our connection ID
     const dcid = new QUICConnectionId(header.dcid);
 
+    let connection: QUICConnection;
+    if (!this.connectionMap.has(dcid)) {
+      // If the DCID is not known, and the server has not been registered then
+      // we discard the packet>
+      if (this.server == null) {
+        return;
+      }
+      // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
+      // packet.
+      if (
+        header.ty === quiche.Type.Initial ||
+        header.ty === quiche.Type.ZeroRTT
+      ) {
+        return;
+      }
+      // Note that in this case, this happens by itself
+      // There's no way for the connection to have concurrent state changes
 
-    // The only reason to do this here is for negotiation
-    // On the server side during negotiation,
-    // When the client sends initial packet, it generates a random DCID
-    // This is because the client doesn't know the server connections ID yet
-    // The server connection doesn't yet exist, so it doesn't have an ID
-    // The server receiving, will derive a new SCID by signing the client's generated DCID
-    // This however is ONLY used during the stateless retry
-    // This new SCID is used when returning back an retry packet
-    // The client will then use this SCID as the DCID for the next initial packet
-    // The server will verify this initial packet, if it passes
-    // It will go back to using the "original" DCID that the client generated
-    // as its own connection ID, and thus source connection ID
+      const connection_ = await this.server.connectionNew();
+      // If there's no connection yet
+      // then the server is middle of version negotiation or stateless retry
+      if (connection_ == null) {
+        return;
+      }
+      connection = connection_;
+    } else {
+      connection = this.connectionMap.get(dcid)!;
+    }
+
+    // Now that we are in fact doing this
 
 
-    const scid = new QUICConnectionId(
-      await this.crypto.ops.sign(
-        this.crypto.key,
-        dcid, // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
-      ),
-      0,
-      quiche.MAX_CONN_ID_LEN,
-    );
+
+
+    // TODO:
+    // THIS IS SUPPOSED TO HAPPEN INSIDE THE QUICSERVER
+    // MOVE THIS INTO THE QUICSERVER!
+    // const scid = new QUICConnectionId(
+    //   await this.crypto.ops.sign(
+    //     this.crypto.key,
+    //     dcid, // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
+    //   ),
+    //   0,
+    //   quiche.MAX_CONN_ID_LEN,
+    // );
     const remoteInfo_ = {
       host: remoteInfo.address as Host,
       port: remoteInfo.port as Port,
@@ -158,20 +191,14 @@ class QUICSocket extends EventTarget {
   };
 
   public constructor({
-    crypto,
     resolveHostname = utils.resolveHostname,
     logger,
   }: {
-    crypto: {
-      key: ArrayBuffer;
-      ops: Crypto;
-    };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
-    this.crypto = crypto;
     this.resolveHostname = resolveHostname;
   }
 
