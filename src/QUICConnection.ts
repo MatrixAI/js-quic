@@ -340,7 +340,10 @@ class QUICConnection extends EventTarget {
   // That's what is important here
   // If we want to do this
   // Techncially you just need to start it!
+  // If you don't set it, it doesn't get set!
+  // When we start it
   public async start({
+
     keepAliveIntervalTime
   }: {
     keepAliveIntervalTime?: number

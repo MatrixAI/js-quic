@@ -75,9 +75,26 @@ class QUICSocket extends EventTarget {
       }
       return;
     }
-    // Destination Connection ID is the ID the remote peer chose for us.
+    // All QUIC packets will have the `dcid` header property
+    // However short packets will not have the `scid` property
+    // The destination connection ID is usually our source connection ID
     const dcid = new QUICConnectionId(header.dcid);
-    // Derive our SCID using HMAC signing.
+
+
+    // The only reason to do this here is for negotiation
+    // On the server side during negotiation,
+    // When the client sends initial packet, it generates a random DCID
+    // This is because the client doesn't know the server connections ID yet
+    // The server connection doesn't yet exist, so it doesn't have an ID
+    // The server receiving, will derive a new SCID by signing the client's generated DCID
+    // This however is ONLY used during the stateless retry
+    // This new SCID is used when returning back an retry packet
+    // The client will then use this SCID as the DCID for the next initial packet
+    // The server will verify this initial packet, if it passes
+    // It will go back to using the "original" DCID that the client generated
+    // as its own connection ID, and thus source connection ID
+
+
     const scid = new QUICConnectionId(
       await this.crypto.ops.sign(
         this.crypto.key,

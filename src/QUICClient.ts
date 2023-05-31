@@ -40,10 +40,6 @@ class QUICClient extends EventTarget {
   public readonly isSocketShared: boolean;
   protected socket: QUICSocket;
   protected logger: Logger;
-  protected crypto: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
   protected config: Config;
   protected _connection: QUICConnection;
   protected connectionMap: QUICConnectionMap;
@@ -62,10 +58,6 @@ class QUICClient extends EventTarget {
       port: Port;
       localHost?: Host | Hostname;
       localPort?: Port;
-      crypto: {
-        key: ArrayBuffer;
-        ops: Crypto;
-      };
       socket?: QUICSocket;
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
@@ -274,16 +266,11 @@ class QUICClient extends EventTarget {
   };
 
   public constructor({
-    crypto,
     socket,
     isSocketShared,
     connection,
     logger,
   }: {
-    crypto: {
-      key: ArrayBuffer;
-      ops: Crypto;
-    };
     socket: QUICSocket;
     isSocketShared: boolean;
     connection: QUICConnection;
@@ -291,7 +278,6 @@ class QUICClient extends EventTarget {
   }) {
     super();
     this.logger = logger;
-    this.crypto = crypto;
     this.socket = socket;
     this.isSocketShared = isSocketShared;
     this._connection = connection;

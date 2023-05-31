@@ -711,7 +711,7 @@ describe('quiche connection lifecycle', () => {
         });
       });
     });
-    describe('connection between client and server with RSA', () => {
+    describe.only('connection between client and server with RSA', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -862,6 +862,18 @@ describe('quiche connection lifecycle', () => {
           retryDatagram
         );
         const timeoutBeforeRecv = clientConn.timeout();
+        const serverHeaderRetry = quiche.Header.fromSlice(
+          retryDatagram.subarray(0, retryDatagramLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(serverHeaderRetry.ty).toBe(quiche.Type.Retry);
+        // Retry packet's SCID is the derived SCID
+        expect(new QUICConnectionId(serverHeaderRetry.scid)).toEqual(
+          serverScid
+        );
+        expect(new QUICConnectionId(serverHeaderRetry.dcid)).toEqual(
+          clientScid
+        );
         // Retry gets sent back to be processed by the client
         clientConn.recv(
           retryDatagram.subarray(0, retryDatagramLength),
@@ -965,9 +977,12 @@ describe('quiche connection lifecycle', () => {
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN
         );
+
         expect(serverHeaderInitial.ty).toBe(quiche.Type.Initial);
         expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(serverScid);
         expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(serverDcid);
+
+
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
@@ -1077,6 +1092,11 @@ describe('quiche connection lifecycle', () => {
           quiche.MAX_CONN_ID_LEN
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        // SCID is dropped on the short frame
+        expect(serverHeaderShort.scid).toHaveLength(0);
+        expect(new QUICConnectionId(serverHeaderShort.dcid)).toEqual(
+          clientScid
+        );
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -1099,6 +1119,11 @@ describe('quiche connection lifecycle', () => {
           quiche.MAX_CONN_ID_LEN
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        // SCID is dropped on the short frame
+        expect(clientHeaderShort.scid).toHaveLength(0);
+        expect(new QUICConnectionId(clientHeaderShort.dcid)).toEqual(
+          serverScid
+        );
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
