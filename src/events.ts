@@ -5,6 +5,12 @@ import type QUICStream from './QUICStream';
 
 abstract class QUICSocketEvent extends Event {};
 
+class QUICSocketStartEvent extends Event {
+  constructor(options?: EventInit) {
+    super('socketStart', options);
+  }
+}
+
 class QUICSocketStopEvent extends Event {
   constructor(options?: EventInit) {
     super('socketStop', options);
@@ -61,6 +67,12 @@ class QUICServerConnectionEvent extends Event {
   }
 }
 
+class QUICServerStartEvent extends Event {
+  constructor(options?: EventInit) {
+    super('serverStart', options);
+  }
+}
+
 class QUICServerStopEvent extends Event {
   constructor(options?: EventInit) {
     super('serverStop', options);
@@ -95,9 +107,15 @@ class QUICConnectionStreamEvent extends QUICConnectionEvent {
   }
 }
 
-class QUICConnectionDestroyEvent extends QUICConnectionEvent {
+class QUICConnectionStartEvent extends QUICConnectionEvent {
   constructor(options?: EventInit) {
-    super('connectionDestroy', options);
+    super('connectionStart', options);
+  }
+}
+
+class QUICConnectionStopEvent extends QUICConnectionEvent {
+  constructor(options?: EventInit) {
+    super('connectionStop', options);
   }
 }
 
@@ -125,6 +143,7 @@ class QUICStreamDestroyEvent extends QUICStreamEvent {
 
 export {
   QUICSocketEvent,
+  QUICSocketStartEvent,
   QUICSocketStopEvent,
   QUICSocketErrorEvent,
   QUICClientEvent,
@@ -132,11 +151,13 @@ export {
   QUICClientErrorEvent,
   QUICServerEvent,
   QUICServerConnectionEvent,
+  QUICServerStartEvent,
   QUICServerStopEvent,
   QUICServerErrorEvent,
   QUICConnectionEvent,
   QUICConnectionStreamEvent,
-  QUICConnectionDestroyEvent,
+  QUICConnectionStartEvent,
+  QUICConnectionStopEvent,
   QUICConnectionErrorEvent,
   QUICStreamEvent,
   QUICStreamDestroyEvent,

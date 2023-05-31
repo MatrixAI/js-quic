@@ -256,7 +256,7 @@ class QUICSocket extends EventTarget {
    * If force is true, it will skip checking connections and stop the socket.
    * @param force - Will force the socket to end even if there are active connections, used for cleaning up after tests.
    */
-  public async stop(force = false): Promise<void> {
+  public async stop({ force = false }: { force?: boolean } = {}): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     if (!force && this.connectionMap.size > 0) {

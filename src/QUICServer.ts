@@ -224,6 +224,8 @@ class QUICServer extends EventTarget {
   // Nothing else really
 
   /**
+   * This method must not throw any exceptions.
+   * Any errors must be emitted as events.
    * @internal
    */
   public async connectionNew(

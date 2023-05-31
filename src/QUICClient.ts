@@ -1,5 +1,6 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-import type { Crypto, Host, Hostname, Port, ContextTimed } from './types';
+import type { ContextTimed } from '@matrixai/contexts'
+import type { Crypto, Host, Hostname, Port } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type { QUICConfig, StreamCodeToReason, StreamReasonToCode } from './types';
@@ -7,6 +8,7 @@ import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
 import { destroyed, running } from '@matrixai/async-init';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
+
 import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -25,13 +27,13 @@ import QUICConnectionId from './QUICConnectionId';
  * And the right target needs to be used.
  *
  * Events:
- * - clientError - (could be a QUICSocketErrorEvent OR QUICClientErrorEvent)
+ * - clientError encapsulates:
+ *   - socketError
+ *   - connectionError
  * - clientDestroy
- * - socketError
  * - socketStop
- * - connectionError - connection error event
- * - connectionDestroy - connection destroy event
  * - connectionStream
+ * - connectionStop
  * - streamDestroy
  */
 interface QUICClient extends CreateDestroy {}
@@ -95,7 +97,6 @@ class QUICClient extends EventTarget {
       resolveHostname = utils.resolveHostname,
       reasonToCode,
       codeToReason,
-      keepaliveIntervalTime,
       logger = new Logger(`${this.name}`),
     }: {
       host: Host | Hostname;
@@ -112,36 +113,34 @@ class QUICClient extends EventTarget {
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
-      keepaliveIntervalTime?: number;
       logger?: Logger;
     },
     @context ctx: ContextTimed
   ): Promise<QUICClient> {
-
-    // Use the ctx now
-    // It's lazy, so we need to handle the abort signal ourselves
-
+    let address = utils.buildAddress(host, port);
+    logger.info(`Create ${this.name} to ${address}`);
     const quicConfig = {
       ...clientDefault,
       ...config,
     };
+    // SCID for the client is randomly generated
+    // DCID is also randomly generated, but by the quiche library
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
-    let address = utils.buildAddress(host, port);
-    logger.info(`Create ${this.name} to ${address}`);
     let [host_] = await utils.resolveHost(host, resolveHostname);
     // If the target host is in fact an zero IP, it cannot be used
     // as a target host, so we need to resolve it to a non-zero IP
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
-    const { p: errorP, rejectP: rejectErrorP } = utils.promise<never>();
+    // This error promise is only used during `connection.start()`.
+    const {
+      p: socketErrorP,
+      rejectP: rejectSocketErrorP
+    } = utils.promise<never>();
     const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-      rejectErrorP(e.detail);
-    };
-    const handleConnectionError = (e: events.QUICConnectionErrorEvent) => {
-      rejectErrorP(e.detail);
+      rejectSocketErrorP(e.detail);
     };
     let isSocketShared: boolean;
     if (socket == null) {
@@ -154,13 +153,17 @@ class QUICClient extends EventTarget {
         host: localHost,
         port: localPort,
       });
-      socket.addEventListener('socketError', handleQUICSocketError, { once: true });
     } else {
       if (!socket[running]) {
         throw new errors.ErrorQUICClientSocketNotRunning();
       }
       isSocketShared = true;
     }
+    socket.addEventListener(
+      'socketError',
+      handleQUICSocketError,
+      { once: true }
+    );
     // Check that the target `host` is compatible with the bound socket host
     if (
       socket.type === 'ipv4' &&
@@ -190,7 +193,8 @@ class QUICClient extends EventTarget {
         `Cannot connect to ${host_} an IPv4 mapped IPv6 QUICClient`,
       );
     }
-    const connection = await QUICConnection.connectQUICConnection({
+    const connection = new QUICConnection({
+      type: 'client',
       scid,
       socket,
       remoteInfo: {
@@ -204,47 +208,30 @@ class QUICClient extends EventTarget {
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),
     });
-    connection.addEventListener('error', handleConnectionError, { once: true });
-    logger.debug('CLIENT TRIGGER SEND');
-    // This will not raise an error
-    await connection.send();
-    // This will wait to be established, while also rejecting on error
+    const abortController = new AbortController();
+    ctx.signal.addEventListener('abort', (r) => {
+      abortController.abort(r);
+    });
     try {
-      await Promise.race([connection.establishedP, errorP]);
+      await Promise.race([
+        await connection.start(
+          undefined,
+          { ...ctx, signal: abortController.signal }
+        ),
+        socketErrorP,
+      ]);
     } catch (e) {
-      logger.error(e.toString());
-      // Console.error(e);
-      logger.debug(`Is shared?: ${isSocketShared}`);
-      // Waiting for connection to destroy
-      if (connection[destroyed] === false) {
-        const destroyedProm = utils.promise<void>();
-        connection.addEventListener(
-          'destroy',
-          () => {
-            destroyedProm.resolveP();
-          },
-          {
-            once: true,
-          },
-        );
-        await destroyedProm.p;
-      }
+      // In case the `connection.start` is on-going, we need to abort it
+      abortController.abort(e);
       if (!isSocketShared) {
-        // Stop our own socket
+        // Stop is idempotent
         await socket.stop();
       }
       throw e;
+    } finally {
+      socket.removeEventListener('socketError', handleQUICSocketError);
     }
-
-    // Remove the temporary socket error handler
-    socket.removeEventListener('error', handleQUICSocketError);
-    // Remove the temporary connection error handler
-    connection.removeEventListener('error', handleConnectionError);
-    // Setting up keep alive
-    connection.setKeepAlive(keepaliveIntervalTime);
-    // Now we create the client
     const client = new this({
-      crypto,
       socket,
       connection,
       isSocketShared,
@@ -255,25 +242,96 @@ class QUICClient extends EventTarget {
     return client;
   }
 
-  protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
-    this.dispatchEvent(e);
+  /**
+   * This must not throw any exceptions.
+   */
+  protected handleQUICSocketEvents = async (e: events.QUICSocketEvent) => {
     if (e instanceof events.QUICSocketErrorEvent) {
+      // QUIC socket errors are re-emitted but a destroy takes place
       this.dispatchEvent(
-        new events.QUICServerErrorEvent({
-          detail: e.detail,
+        new events.QUICClientErrorEvent({
+          detail: new errors.ErrorQUICClient(
+            'Socket error',
+            {
+              cause: e.detail,
+            }
+          )
         }),
       );
+      try {
+        // Force destroy means don't destroy gracefully
+        await this.destroy({
+          force: true
+        });
+      } catch (e) {
+        this.dispatchEvent(
+          new events.QUICClientErrorEvent({
+            detail: e.detail,
+          }),
+        );
+      }
+    } else if (e instanceof events.QUICSocketStopEvent) {
+      // If a QUIC socket stopped, we immediately destroy
+      // However, the stop will have its own constraints
+      try {
+        // Force destroy means don't destroy gracefully
+        await this.destroy({
+          force: true
+        });
+      } catch (e) {
+        this.dispatchEvent(
+          new events.QUICClientErrorEvent({
+            detail: e.detail,
+          }),
+        );
+      }
+    } else {
+      this.dispatchEvent(e);
     }
   };
 
-  protected handleQUICConnectionEvents = (e: events.QUICConnectionEvent) => {
-    this.dispatchEvent(e);
-    if (e instanceof events.QUICClientErrorEvent) {
+  /**
+   * This must not throw any exceptions.
+   */
+  protected handleQUICConnectionEvents = async (e: events.QUICConnectionEvent) => {
+    if (e instanceof events.QUICConnectionErrorEvent) {
       this.dispatchEvent(
         new events.QUICClientErrorEvent({
-          detail: e.detail,
+          detail: new errors.ErrorQUICClient(
+            'Connection error',
+            {
+              cause: e.detail,
+            }
+          )
         }),
       );
+      try {
+        // Force destroy means don't destroy gracefully
+        await this.destroy({
+          force: true
+        });
+      } catch (e) {
+        this.dispatchEvent(
+          new events.QUICClientErrorEvent({
+            detail: e.detail,
+          }),
+        );
+      }
+    } else if (e instanceof events.QUICConnectionStopEvent) {
+      try {
+        // Force destroy means don't destroy gracefully
+        await this.destroy({
+          force: true
+        });
+      } catch (e) {
+        this.dispatchEvent(
+          new events.QUICClientErrorEvent({
+            detail: e.detail,
+          }),
+        );
+      }
+    } else {
+      this.dispatchEvent(e);
     }
   };
 
@@ -308,7 +366,7 @@ class QUICClient extends EventTarget {
       this.handleQUICConnectionEvents
     );
     connection.addEventListener(
-      'connectionDestroy',
+      'connectionStop',
       this.handleQUICConnectionEvents
     );
     connection.addEventListener(
@@ -333,12 +391,18 @@ class QUICClient extends EventTarget {
 
   @ready(new errors.ErrorQUICClientDestroyed())
   public get connection() {
-    // This is supposed to return a specialised INTERFACE
-    // so we aren't just returning QUICConnection
-    // the difference between internal interface and external interface
     return this._connection;
   }
 
+  /**
+   * Force destroy means that we don't destroy gracefully.
+   * This should only occur when an error occurs from the socket
+   * or from the connection. If the socket is stopped or the connection
+   * is stopped, then we also force destroy.
+   * Suppose the socket failed, and we attempt to stop the connection.
+   * The connection may attempt to stop gracefully. That would result in
+   * an exception because the socket send method no longer works.
+   */
   public async destroy({
     force = false,
   }: {
@@ -346,20 +410,39 @@ class QUICClient extends EventTarget {
   } = {}) {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
-
-    // We may want to allow one to specialise this
-    await this._connection.destroy({ force });
+    // Listen on all socket events
+    this.socket.removeEventListener(
+      'socketError',
+      this.handleQUICSocketEvents
+    );
+    this.socket.removeEventListener(
+      'socketStop',
+      this.handleQUICSocketEvents
+    );
+    // Listen on all connection events
+    this.connection.removeEventListener(
+      'connectionStream',
+      this.handleQUICConnectionEvents
+    );
+    this.connection.removeEventListener(
+      'connectionStop',
+      this.handleQUICConnectionEvents
+    );
+    this.connection.removeEventListener(
+      'connectionError',
+      this.handleQUICConnectionEvents
+    );
+    this.connection.removeEventListener(
+      'streamDestroy',
+      this.handleQUICConnectionEvents
+    );
+    await this._connection.stop({ force });
     if (!this.isSocketShared) {
-      await this.socket.stop();
-      this.socket.removeEventListener('error', this.handleQUICSocketError);
+      await this.socket.stop({ force });
     }
     this.dispatchEvent(new events.QUICClientDestroyEvent());
     this.logger.info(`Destroyed ${this.constructor.name} on ${address}`);
   }
-
-  // Unlike the server
-  // upon a connection failing/destroying
-  // it should result in the CLIENT also being destroyed
 }
 
 export default QUICClient;

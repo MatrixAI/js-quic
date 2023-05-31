@@ -180,12 +180,21 @@ type QUICConfig = {
   grease: boolean;
 
   /**
+   * This controls the interval for keeping alive an idle connection.
+   * This time will be used to send a ping frame to keep the connection alive.
+   * This is only useful if the `maxIdleTimeout` is set to greater than 0.
+   * This is defaulted to `undefined`.
+   * This is not a quiche option.
+   */
+  keepAliveIntervalTime?: number;
+
+  /**
    * Maximum number of milliseconds to wait for an idle connection.
    * If this time is exhausted with no answer from the peer, then
    * the connection will timeout. This applies to any open connection.
    * Note that the QUIC client will repeatedly send initial packets to
    * a non-responding QUIC server up to this time.
-   * This is defaulted to infinite.
+   * This is defaulted to `0` meaning infinite time.
    */
   maxIdleTimeout: number;
 

@@ -493,6 +493,10 @@ class QUICConnection extends EventTarget {
    * This pushes data to the streams.
    * When the connection is draining, we can still receive data.
    * However, no streams are allowed to read or write.
+   *
+   * This method must not throw any exceptions.
+   * Any errors must be emitted as events.
+   * @internal
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
@@ -644,6 +648,10 @@ class QUICConnection extends EventTarget {
    *
    * We can push the connection into the stream.
    * The streams have access to the connection object.
+   *
+   * This method must not throw any exceptions.
+   * Any errors must be emitted as events.
+   * @internal
    */
   @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
   public async send(): Promise<void> {
