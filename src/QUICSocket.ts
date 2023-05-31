@@ -4,7 +4,7 @@ import type { Crypto, Host, Hostname, Port } from './types';
 import type { Header } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import { running, destroyed } from '@matrixai/async-init';
+import { status, running, destroyed } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
@@ -119,8 +119,16 @@ class QUICSocket extends EventTarget {
     } else {
       connection = this.connectionMap.get(dcid)!;
     }
+    await connection.connLock.withF(async () => {
+      // If the connection is no longer running, we just ignore it
+      // This can be disabled if we can technically ignore after a close?
+      if (!connection[running]) {
+        return;
+      }
+      conn.recv(data, remoteInfo_);
+      await conn.send();
+    });
 
-    // Now that we are in fact doing this
 
 
 

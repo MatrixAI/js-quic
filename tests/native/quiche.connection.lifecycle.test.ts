@@ -100,7 +100,7 @@ describe('quiche connection lifecycle', () => {
         };
         clientQuicheConfig = buildQuicheConfig(clientConfig);
       });
-      test('connect', async () => {
+      test('client connect', async () => {
         // Randomly genrate the client SCID
         const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
         await crypto.ops.randomBytes(scidBuffer);
@@ -121,8 +121,20 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
       });
-      test('close', async () => {
-        clientConn.close(true, 0, Buffer.from(''));
+      test('client close', async () => {
+        clientConn.close(true, 0, Buffer.from('Hello World'));
+        expect(clientConn.peerError()).toBeNull();
+        // According to RFC9000, if the connection is not in a position
+        // to send the connection close frame, then the local error
+        // is changed to be a protocol level error with the `ApplicationError`
+        // code and a cleared reason.
+        // If this connection was in a position to send the error, then
+        // we would expect the `isApp` to be `true`.
+        expect(clientConn.localError()).toEqual({
+          isApp: false,
+          errorCode: quiche.ConnectionErrorCode.ApplicationError,
+          reason: new Uint8Array()
+        });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -132,6 +144,23 @@ describe('quiche connection lifecycle', () => {
         // Client connection is closed (this is not true if there is draining)
         expect(clientConn.isClosed()).toBeTrue();
         expect(clientConn.isDraining()).toBeFalse();
+      });
+      test('after client close', async () => {
+        const randomPacketBuffer = new ArrayBuffer(1000);
+        await testsUtils.randomBytes(randomPacketBuffer);
+        const randomPacket = new Uint8Array(randomPacketBuffer);
+        // Random packets are received after the connection is closed
+        // However they are just dropped automatically
+        clientConn.recv(
+          randomPacket,
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
+        const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.isClosed()).toBeTrue();
       });
     });
     describe('connection timeouts', () => {
@@ -1160,7 +1189,12 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.timeout()).toBeNull();
       });
       test('client close', async () => {
-        clientConn.close(true, 0, Buffer.from(''));
+        clientConn.close(true, 0, Buffer.from('Application Close'));
+        expect(clientConn.localError()).toEqual({
+          isApp: true,
+          errorCode: 0,
+          reason: new Uint8Array(Buffer.from('Application Close'))
+        });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -1212,6 +1246,12 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
+        // The server receives the client's error
+        expect(serverConn.peerError()).toEqual({
+          isApp: true,
+          errorCode: 0,
+          reason: new Uint8Array(Buffer.from('Application Close'))
+        });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeTrue();
@@ -1603,7 +1643,12 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.timeout()).toBeNull();
       });
       test('client close', async () => {
-        clientConn.close(true, 0, Buffer.from(''));
+        clientConn.close(false, 2, new Uint8Array());
+        expect(clientConn.localError()).toEqual({
+          isApp: false,
+          errorCode: 2,
+          reason: new Uint8Array()
+        });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -1655,6 +1700,11 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
+        expect(serverConn.peerError()).toEqual({
+          isApp: false,
+          errorCode: 2,
+          reason: new Uint8Array()
+        });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeTrue();
@@ -2046,7 +2096,12 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.timeout()).toBeNull();
       });
       test('client close', async () => {
-        clientConn.close(true, 0, Buffer.from(''));
+        clientConn.close(false, 1, Buffer.from(''));
+        expect(clientConn.localError()).toEqual({
+          isApp: false,
+          errorCode: 1,
+          reason: new Uint8Array()
+        });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -2097,6 +2152,11 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
+        expect(serverConn.peerError()).toEqual({
+          isApp: false,
+          errorCode: 1,
+          reason: new Uint8Array()
+        });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
         expect(serverConn.isEstablished()).toBeTrue();

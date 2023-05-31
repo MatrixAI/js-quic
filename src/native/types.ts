@@ -205,7 +205,7 @@ enum ConnectionErrorCode {
 type ConnectionError = {
   isApp: boolean;
   errorCode: number;
-  reason: Array<number>;
+  reason: Uint8Array;
 };
 
 type Stats = {

@@ -36,7 +36,7 @@ pub enum ConnectionErrorCode {
 pub struct ConnectionError {
   pub is_app: bool,
   pub error_code: i64,
-  pub reason: Vec<u8>,
+  pub reason: Uint8Array,
 }
 
 impl From<quiche::ConnectionError> for ConnectionError {
@@ -44,7 +44,7 @@ impl From<quiche::ConnectionError> for ConnectionError {
     return ConnectionError {
       is_app: err.is_app,
       error_code: err.error_code as i64,
-      reason: err.reason.to_vec(),
+      reason: Uint8Array::new(err.reason),
     };
   }
 }
