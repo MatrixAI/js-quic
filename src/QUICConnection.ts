@@ -300,8 +300,46 @@ class QUICConnection extends EventTarget {
     // THE server does it ever call `await start()`?
     // No cause `connectionNew` needs to give you back the connection instance object
 
+    // The server does need to trigger `conn.start()`
+    // However it does not need to do this for `connectionNew`
+
+
+
     // Registers this connection instance to the socket
-    socket.connectionMap.set(scid, this);
+    // socket.connectionMap.set(scid, this);
+    // ^- I want to know where this should go
+    // It seems that it should be in the `start` function now
+    // Because, the opposite is in the `stop`
+    // This also means in order for this to occur
+    // Then the server must also call `start` not just client
+    // For the connection to be "started"
+    // The QUIC Socket shouldn't bother "handling" such a call though
+    // It just need the conn
+    // But it could also expect that upon getting a new connection
+    // That it would have already been registerd on the socket
+    // Then it just `this.connectionMap.get(dcid)`
+
+    // I think this setting must happen inside the `start`
+    // Therefore the server must also then trigger the start
+    // But it must catch any exceptions, as events
+    // It wouldn't wait for this promise though...
+    // But you may have a dangling promise?
+    // But I wonder if dangling promises are a problem?
+    // Because JS sort of forgets about it...
+    // Well it doesn't keep the node process open
+    // But the GC may not garbage collect it
+    // Cause if it is waiting on promise to be resolved
+    // Yes it can e GCed... I'm pretyt sure it can
+    // So a void promise could work...
+    // But also another issue is whihle a connection is starting
+    // There's no way to cancel is there?
+    // If you are destroying a server, you have to be able to stop
+    // connections that are starting, connections that are stopping
+    // and ready connections too
+
+    // Ok so `start` is what registers it
+    // Makes sense
+
   }
 
   public get remoteHost() {
@@ -353,29 +391,7 @@ class QUICConnection extends EventTarget {
   @timedCancellable(true, Infinity, errors.ErrorQUICConnectionStartTimeOut)
   public async start(@context ctx: ContextTimed): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
-
-
-    // If we never even started
     ctx.signal.throwIfAborted();
-
-    // We also need to just reject
-    // With the valid exception essentially
-
-
-    // So here, we were "waiting"
-    // So after they constuct the socket
-    // `await connection.start`
-    // The connection is already registered in the socket
-    // So it is sending things here
-    // We have to be able to `recvP` and shit
-    // In doing so we are waiting for the `secureEstablishedP`.
-
-    // That's basically it! LOL
-
-    // We are going to abort this
-    // Cause the final signal handler should also be removed
-    // When we add it
-
     ctx.signal.addEventListener('abort', (r) => {
       this.rejectEstablishedP(r);
       this.rejectSecureEstablishedP(r);
@@ -384,25 +400,29 @@ class QUICConnection extends EventTarget {
       // Technically the connection is closed
       this.rejectClosedP(r);
     });
-
-
-    // Here we wait for `secureEstablishedP`
-    // When a timeout reason occurs
-    // This gets thrown up there
-    // All we are doing here is waiting for the `secureEstablishedP` to be true
-    // That only runs when the final set of conditions is true
-    // Specifically the first SHORT packet after it is established
-
-
+    // Set the connection up
+    this.socket.connectionMap.set(this.connectionId, this);
+    // Waits for the first short packet after establishment
+    // This ensures that TLS has been established and verified on both sides
     await this.secureEstablishedP;
-
     // After this is done
     // We need to established the keep alive interval time
-
+    this.startKeepAliveTimer();
+    // Do we remove the on abort event listener?
+    // I forgot...
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
   /**
+   * The `applicationError` if the connection close is due to the transport
+   * layer or due to the application layer.
+   * If `applicationError` is true, you can use any number as the `errorCode`.
+   * The other peer must should understand the `errorCode`.
+   * If `applicationError` is false, you must use `errorCode` from
+   * `ConnectionErrorCode`.
+   * The default `applicationError` is true because a normal graceful close
+   * is an application error.
+   * The default `errorCode` of 0 means no error or general error.
    * This is the same as basically waiting for `closedP`.
    */
   public async stop({
@@ -422,21 +442,6 @@ class QUICConnection extends EventTarget {
     force?: boolean;
   }= {}) {
     this.logger.info(`Stop ${this.constructor.name}`);
-    // The reason is just to stop it
-    // There's nothing else
-
-    this.keepAliveTimer?.cancel();
-
-    // I don't really get this
-    // Stopping the connection
-    // Needs to destroy all streams
-    // But the stream destruction can be graceful
-    // But is there even such a thing?
-    // When a stream is closed, it's just closed
-    // You just end up closing both the writable side and readable side
-    // Plus if we use `force` here, we have to assume other parts are broken
-    // Then we need to propagate the force here
-
     const streamDestroyPs: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
       // TODO: ensure that `stream.destroy` understands `force`
@@ -445,16 +450,15 @@ class QUICConnection extends EventTarget {
       streamDestroyPs.push(stream.destroy({ force }));
     }
     await Promise.all(streamDestroyPs);
-
-    // To do this we need to LOCK the conn transition
-
-
+    // Do we do this afterwards or before?
+    this.stopKeepAliveTimer();
     try {
       // We need to lock the connLock
       // Note that this has no timeout
       // We must have any deadlocks here!
       // Plus ctx isn't accepted by the async-locks yet
-
+      // If already closed this will error out
+      // But nothing will happen
       await this.connLock.withF(async () => {
         // If this is already closed, then `Done` will be thrown
         // Otherwise it can send `CONNECTION_CLOSE` frame
@@ -480,138 +484,139 @@ class QUICConnection extends EventTarget {
     // Now we await for the closedP
     await this.closedP;
 
+    // I believe the conn timer would always be cancelled
+    // At the very end... so maybe we don't need to do this?
+    // This may not be needed
+    this.stopTimer();
+
     // The reason we only delete afterwards
     // Is because we do it before we are opened (or just constructed)
     // Techincally it was constructed, and then we added ourselves to it
     // But during `start` we are just waiting
     this.socket.connectionMap.delete(this.connectionId);
-
-    // The above needs to trigger a send call!
-
-
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
   /**
    * I don't know if this makes any sense
    */
-  @ready(new errors.ErrorQUICConnectionDestroyed())
+  @ready(new errors.ErrorQUICConnectionNotRunning())
   public getRemoteCerts(): Array<string> | undefined {
     const certsDER = this.conn.peerCertChain();
     if (certsDER == null) return;
     return certsDER.map(utils.certificateDERToPEM);
   }
 
-  /**
-   * Destroys the connection.
-   * The `applicationError` if the connection close is due to the transport
-   * layer or due to the application layer.
-   * If `applicationError` is true, you can use any number as the `errorCode`.
-   * The other peer must should understand the `errorCode`.
-   * If `applicationError` is false, you must use `errorCode` from
-   * `ConnectionErrorCode`.
-   * The default `applicationError` is true because a normal graceful close
-   * is an application error.
-   * The default `errorCode` of 0 means no error or general error.
-   */
-  public async destroy({
-    applicationError = true,
-    errorCode = 0,
-    errorMessage = '',
-    force = false,
-  }: {
-    applicationError?: false;
-    errorCode?: ConnectionErrorCode;
-    errorMessage?: string;
-    force?: boolean;
-  } | {
-    applicationError: true;
-    errorCode?: number;
-    errorMessage?: string;
-    force?: boolean;
-  }= {}) {
-    this.logger.info(`Destroy ${this.constructor.name}`);
+  // /**
+  //  * Destroys the connection.
+  //  * The `applicationError` if the connection close is due to the transport
+  //  * layer or due to the application layer.
+  //  * If `applicationError` is true, you can use any number as the `errorCode`.
+  //  * The other peer must should understand the `errorCode`.
+  //  * If `applicationError` is false, you must use `errorCode` from
+  //  * `ConnectionErrorCode`.
+  //  * The default `applicationError` is true because a normal graceful close
+  //  * is an application error.
+  //  * The default `errorCode` of 0 means no error or general error.
+  //  */
+  // public async destroy({
+  //   applicationError = true,
+  //   errorCode = 0,
+  //   errorMessage = '',
+  //   force = false,
+  // }: {
+  //   applicationError?: false;
+  //   errorCode?: ConnectionErrorCode;
+  //   errorMessage?: string;
+  //   force?: boolean;
+  // } | {
+  //   applicationError: true;
+  //   errorCode?: number;
+  //   errorMessage?: string;
+  //   force?: boolean;
+  // }= {}) {
+  //   this.logger.info(`Destroy ${this.constructor.name}`);
 
-    // console.time('stream destroy');
+  //   // console.time('stream destroy');
 
-    // Handle destruction concurrently
-    const destroyProms: Array<Promise<void>> = [];
-    for (const stream of this.streamMap.values()) {
-      if (force) {
-        destroyProms.push(stream.destroy());
-      } else {
-        const destroyProm = promise();
-        stream.addEventListener('destroy', () => destroyProm.resolveP(), {
-          once: true,
-        });
-        destroyProms.push(destroyProm.p);
-      }
-    }
-    await Promise.all(destroyProms);
+  //   // Handle destruction concurrently
+  //   const destroyProms: Array<Promise<void>> = [];
+  //   for (const stream of this.streamMap.values()) {
+  //     if (force) {
+  //       destroyProms.push(stream.destroy());
+  //     } else {
+  //       const destroyProm = promise();
+  //       stream.addEventListener('destroy', () => destroyProm.resolveP(), {
+  //         once: true,
+  //       });
+  //       destroyProms.push(destroyProm.p);
+  //     }
+  //   }
+  //   await Promise.all(destroyProms);
 
-    try {
-      // If this is already closed, then `Done` will be thrown
-      // Otherwise it can send `CONNECTION_CLOSE` frame
-      // This can be 0x1c close at the QUIC layer or no errors
-      // Or it can be 0x1d for application close with an error
-      // Upon receiving a `CONNECTION_CLOSE`, you can send back
-      // 1 packet containing a `CONNECTION_CLOSE` frame too
-      // (with `NO_ERROR` code if appropriate)
-      // It must enter into a draining state, and no other packets can be sent
-      this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
-    } catch (e) {
-      // If the connection is already closed, `Done` will be thrown
-      if (e.message !== 'Done') {
-        // No other exceptions are expected
-        utils.never();
-      }
-    }
-    // console.timeEnd('conn close');
+  //   try {
+  //     // If this is already closed, then `Done` will be thrown
+  //     // Otherwise it can send `CONNECTION_CLOSE` frame
+  //     // This can be 0x1c close at the QUIC layer or no errors
+  //     // Or it can be 0x1d for application close with an error
+  //     // Upon receiving a `CONNECTION_CLOSE`, you can send back
+  //     // 1 packet containing a `CONNECTION_CLOSE` frame too
+  //     // (with `NO_ERROR` code if appropriate)
+  //     // It must enter into a draining state, and no other packets can be sent
+  //     this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
+  //   } catch (e) {
+  //     // If the connection is already closed, `Done` will be thrown
+  //     if (e.message !== 'Done') {
+  //       // No other exceptions are expected
+  //       utils.never();
+  //     }
+  //   }
+  //   // console.timeEnd('conn close');
 
-    // console.time('conn destroy send');
+  //   // console.time('conn destroy send');
 
-    // Sending if
-    this.logger.error('SEND BEFORE WAIT FOR CLOSE P');
-    await this.send();
-    // If it is not closed, it could still be draining
+  //   // Sending if
+  //   this.logger.error('SEND BEFORE WAIT FOR CLOSE P');
+  //   await this.send();
+  //   // If it is not closed, it could still be draining
 
-    // This depends on the the `this.resolveCloseP()`
-    // When that is called, the connection is considered closed
-    this.logger.error('>>>> WAIT FOR CLOSE P');
+  //   // This depends on the the `this.resolveCloseP()`
+  //   // When that is called, the connection is considered closed
+  //   this.logger.error('>>>> WAIT FOR CLOSE P');
 
-    // This is false
-    this.logger.error(`>>>> Connection is closed? ${this.conn.isClosed()}`);
-    // This is true
-    this.logger.error(`>>>> Connection is draining? ${this.conn.isDraining()}`);
+  //   // This is false
+  //   this.logger.error(`>>>> Connection is closed? ${this.conn.isClosed()}`);
+  //   // This is true
+  //   this.logger.error(`>>>> Connection is draining? ${this.conn.isDraining()}`);
 
-    await this.closedP;
+  //   await this.closedP;
 
-    this.logger.error('>>>> PASS CLOSED P');
+  //   this.logger.error('>>>> PASS CLOSED P');
 
-    this.socket.connectionMap.delete(this.connectionId);
+  //   this.socket.connectionMap.delete(this.connectionId);
 
-    // console.timeEnd('conn destroy send');
+  //   // console.timeEnd('conn destroy send');
 
-    // Checking if timed out
-    if (this.conn.isTimedOut()) {
-      this.logger.error('Connection timed out');
-      this.dispatchEvent(
-        new events.QUICSocketErrorEvent({
-          detail: new errors.ErrorQUICConnectionTimeout(),
-        }),
-      );
-    }
-    this.dispatchEvent(new events.QUICConnectionDestroyEvent());
-    // Clean up timeout if it's still running
-    if (this.timer != null) {
-      clearTimeout(this.timer);
-      delete this.timer;
-    }
+  //   // Checking if timed out
+  //   if (this.conn.isTimedOut()) {
+  //     this.logger.error('Connection timed out');
+  //     this.dispatchEvent(
+  //       new events.QUICSocketErrorEvent({
+  //         detail: new errors.ErrorQUICConnectionTimeout(),
+  //       }),
+  //     );
+  //   }
+  //   this.dispatchEvent(new events.QUICConnectionDestroyEvent());
+  //   // Clean up timeout if it's still running
+  //   if (this.timer != null) {
+  //     clearTimeout(this.timer);
+  //     delete this.timer;
+  //   }
 
-    this.logger.error('DESTROYED');
+  //   this.logger.error('DESTROYED');
 
-    this.logger.info(`Destroyed ${this.constructor.name}`);
-  }
+  //   this.logger.info(`Destroyed ${this.constructor.name}`);
+  // }
 
   /**
    * Called when the socket receives data from the remote side intended for this connection.
@@ -624,8 +629,11 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
-  public async recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+  @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['stopping'])
+  public recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+
+    // Recv is not an async function anymore
+
     this.logger.debug('RECV CALLED');
     try {
       // The remote info may have changed on each receive
@@ -779,7 +787,7 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  @ready(new errors.ErrorQUICConnectionDestroyed(), false, ['destroying'])
+  @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['stopping'])
   public async send(): Promise<void> {
     // console.log('SEND CALLED');
     this.logger.debug('SEND CALLED');
@@ -925,7 +933,7 @@ class QUICConnection extends EventTarget {
    * Only supports bidi streams atm.
    * This is a serialised call, it must be blocking.
    */
-  @ready(new errors.ErrorQUICConnectionDestroyed())
+  @ready(new errors.ErrorQUICConnectionNotRunning())
   public async streamNew(streamType: 'bidi' = 'bidi'): Promise<QUICStream> {
     // Technically you can do concurrent bidi and uni style streams
     // but no support for uni streams yet
@@ -976,7 +984,7 @@ class QUICConnection extends EventTarget {
    * Used to update or disable the keep alive interval.
    * Calling this will reset the delay before the next keep alive.
    */
-  @ready(new errors.ErrorQUICConnectionDestroyed())
+  @ready(new errors.ErrorQUICConnectionNotRunning())
   public setKeepAlive(intervalDelay?: number) {
     // Clearing timeout prior to update
     if (this.keepAliveInterval != null) {
