@@ -60,7 +60,6 @@ class QUICClient extends EventTarget {
    * @param opts.resolveHostname - optional hostname resolver
    * @param opts.reasonToCode - optional reason to code map
    * @param opts.codeToReason - optional code to reason map
-   * @param opts.keepaliveIntervalTime - optional keepalive interval time
    * @param opts.logger - optional logger
    */
   public static createQUICClient(
@@ -79,7 +78,6 @@ class QUICClient extends EventTarget {
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
-      keepaliveIntervalTime?: number;
       logger?: Logger;
     },
     ctx?: Partial<ContextTimed>,
@@ -215,7 +213,6 @@ class QUICClient extends EventTarget {
     try {
       await Promise.race([
         await connection.start(
-          undefined,
           { ...ctx, signal: abortController.signal }
         ),
         socketErrorP,

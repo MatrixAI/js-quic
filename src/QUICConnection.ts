@@ -1,3 +1,5 @@
+import type { PromiseCancellable } from '@matrixai/async-cancellable';
+import type { ContextTimed } from '@matrixai/contexts';
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
@@ -17,6 +19,7 @@ import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
 import { promise } from './utils';
+import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -289,6 +292,14 @@ class QUICConnection extends EventTarget {
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
     this.rejectClosedP = rejectClosedP;
+
+    // !!!!
+    // Should we do this only on `start`?
+    // That way, upon calling start
+    // The `socket.connectionMap` can be done!
+    // THE server does it ever call `await start()`?
+    // No cause `connectionNew` needs to give you back the connection instance object
+
     // Registers this connection instance to the socket
     socket.connectionMap.set(scid, this);
   }
@@ -336,26 +347,149 @@ class QUICConnection extends EventTarget {
    * While this is occurring one can call the `recv` and `send` to make this happen
    */
 
-  // It should set the keep alive here!!!
-  // That's what is important here
-  // If we want to do this
-  // Techncially you just need to start it!
-  // If you don't set it, it doesn't get set!
-  // When we start it
-  public async start({
 
-    keepAliveIntervalTime
-  }: {
-    keepAliveIntervalTime?: number
-  }): Promise<void> {
 
+  public start(ctx?: Partial<ContextTimed>): PromiseCancellable<void>;
+  @timedCancellable(true, Infinity, errors.ErrorQUICConnectionStartTimeOut)
+  public async start(@context ctx: ContextTimed): Promise<void> {
+    this.logger.info(`Start ${this.constructor.name}`);
+
+
+    // If we never even started
+    ctx.signal.throwIfAborted();
+
+    // We also need to just reject
+    // With the valid exception essentially
+
+
+    // So here, we were "waiting"
+    // So after they constuct the socket
+    // `await connection.start`
+    // The connection is already registered in the socket
+    // So it is sending things here
+    // We have to be able to `recvP` and shit
+    // In doing so we are waiting for the `secureEstablishedP`.
+
+    // That's basically it! LOL
+
+    // We are going to abort this
+    // Cause the final signal handler should also be removed
+    // When we add it
+
+    ctx.signal.addEventListener('abort', (r) => {
+      this.rejectEstablishedP(r);
+      this.rejectSecureEstablishedP(r);
+
+      // Is this actually true?
+      // Technically the connection is closed
+      this.rejectClosedP(r);
+    });
+
+
+    // Here we wait for `secureEstablishedP`
+    // When a timeout reason occurs
+    // This gets thrown up there
+    // All we are doing here is waiting for the `secureEstablishedP` to be true
+    // That only runs when the final set of conditions is true
+    // Specifically the first SHORT packet after it is established
+
+
+    await this.secureEstablishedP;
+
+    // After this is done
+    // We need to established the keep alive interval time
+
+    this.logger.info(`Started ${this.constructor.name}`);
   }
 
   /**
    * This is the same as basically waiting for `closedP`.
    */
-  public async stop() {
+  public async stop({
+    applicationError = true,
+    errorCode = 0,
+    errorMessage = '',
+    force  = false
+  }: {
+    applicationError?: false;
+    errorCode?: ConnectionErrorCode;
+    errorMessage?: string;
+    force?: boolean;
+  } | {
+    applicationError: true;
+    errorCode?: number;
+    errorMessage?: string;
+    force?: boolean;
+  }= {}) {
+    this.logger.info(`Stop ${this.constructor.name}`);
+    // The reason is just to stop it
+    // There's nothing else
 
+    this.keepAliveTimer?.cancel();
+
+    // I don't really get this
+    // Stopping the connection
+    // Needs to destroy all streams
+    // But the stream destruction can be graceful
+    // But is there even such a thing?
+    // When a stream is closed, it's just closed
+    // You just end up closing both the writable side and readable side
+    // Plus if we use `force` here, we have to assume other parts are broken
+    // Then we need to propagate the force here
+
+    const streamDestroyPs: Array<Promise<void>> = [];
+    for (const stream of this.streamMap.values()) {
+      // TODO: ensure that `stream.destroy` understands `force`
+      // Without it, it should be graceful
+      // With it, then it should assume the rest of the system could be broken
+      streamDestroyPs.push(stream.destroy({ force }));
+    }
+    await Promise.all(streamDestroyPs);
+
+    // To do this we need to LOCK the conn transition
+
+
+    try {
+      // We need to lock the connLock
+      // Note that this has no timeout
+      // We must have any deadlocks here!
+      // Plus ctx isn't accepted by the async-locks yet
+
+      await this.connLock.withF(async () => {
+        // If this is already closed, then `Done` will be thrown
+        // Otherwise it can send `CONNECTION_CLOSE` frame
+        // This can be 0x1c close at the QUIC layer or no errors
+        // Or it can be 0x1d for application close with an error
+        // Upon receiving a `CONNECTION_CLOSE`, you can send back
+        // 1 packet containing a `CONNECTION_CLOSE` frame too
+        // (with `NO_ERROR` code if appropriate)
+        // It must enter into a draining state, and no other packets can be sent
+        this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
+        // If we get a `Done` exception we don't bother calling send
+        // The send only gets sent if the `Done` is not the case
+        await this.send();
+      });
+    } catch (e) {
+      // If the connection is already closed, `Done` will be thrown
+      if (e.message !== 'Done') {
+        // No other exceptions are expected
+        utils.never();
+      }
+    }
+
+    // Now we await for the closedP
+    await this.closedP;
+
+    // The reason we only delete afterwards
+    // Is because we do it before we are opened (or just constructed)
+    // Techincally it was constructed, and then we added ourselves to it
+    // But during `start` we are just waiting
+    this.socket.connectionMap.delete(this.connectionId);
+
+    // The above needs to trigger a send call!
+
+
+    this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
   /**
@@ -397,11 +531,6 @@ class QUICConnection extends EventTarget {
     force?: boolean;
   }= {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    // Clean up keep alive
-    if (this.keepAliveInterval != null) {
-      clearTimeout(this.keepAliveInterval);
-      delete this.keepAliveInterval;
-    }
 
     // console.time('stream destroy');
 
@@ -420,9 +549,6 @@ class QUICConnection extends EventTarget {
     }
     await Promise.all(destroyProms);
 
-    // console.timeEnd('stream destroy');
-
-    // console.time('conn close');
     try {
       // If this is already closed, then `Done` will be thrown
       // Otherwise it can send `CONNECTION_CLOSE` frame

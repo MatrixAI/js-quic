@@ -70,6 +70,10 @@ class ErrorQUICConnection<T> extends ErrorQUIC<T> {
   static description = 'QUIC Connection error';
 }
 
+class ErrorQUICConnectionStartTimeOut<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection start timeout';
+}
+
 class ErrorQUICConnectionDestroyed<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection is destroyed';
 }
@@ -129,6 +133,7 @@ export {
   ErrorQUICClientSocketNotRunning,
   ErrorQUICClientInvalidHost,
   ErrorQUICConnection,
+  ErrorQUICConnectionStartTimeOut,
   ErrorQUICConnectionDestroyed,
   ErrorQUICConnectionTimeout,
   ErrorQUICConnectionTLSFailure,
