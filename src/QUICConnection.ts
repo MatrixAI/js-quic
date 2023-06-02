@@ -450,22 +450,12 @@ class QUICConnection extends EventTarget {
    * @internal
    */
   public recv(data: Uint8Array, remoteInfo: RemoteInfo) {
-
-    // We do not need to start the timer here
-    // We only need to do it, and thus "reset" the timer
-    // In the send call
-    // But we need to reset it multiple times
-
-    // Recv is not an async function anymore
-
-    this.logger.debug('RECV CALLED');
     try {
-      // The remote info may have changed on each receive
-      // here we update!
-      // This still requires testing to see what happens
+      // The remote information may be changed on each receive
+      // However to do so would mean connection migration,
+      // which is is not yet supported
       this._remoteHost = remoteInfo.host;
       this._remotePort = remoteInfo.port;
-      // Used by quiche
       const recvInfo = {
         to: {
           host: this.localHost,
@@ -477,23 +467,23 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
+        // This can process concatenated QUIC packets
+        // This may mutate `data`
         this.conn.recv(data, recvInfo);
-        this.logger.info(`RECEIVED ${data.byteLength} of data`);
       } catch (e) {
-        this.logger.error(`recv error ${e.message}`);
-        // Depending on the exception, the `this.conn.recv`
-        // may have automatically started closing the connection
-        if (e.message === 'TlsFail') {
-          const newError = new errors.ErrorQUICConnectionTLSFailure(undefined, {
-            data: {
-              localError: this.conn.localError(),
-              peerError: this.conn.peerError(),
-            },
-          });
-          this.dispatchEvent(
-            new events.QUICConnectionErrorEvent({ detail: newError }),
-          );
-        } else {
+
+        // If we have an exception here
+        // It indicates a failure during the TLS
+        // Note that doing so, should result in rejection of anything
+        // When we fail the TLS
+        // We still need to "send" something back to them
+        // Also remember that when we close things
+
+        // THIS IS NOT AN ERROR of this quic connection
+        // If there's a TLS failure, it's because the peer is failed here
+        // So it's not an error of this connection
+
+        if (e.message !== 'TlsFail') {
           this.dispatchEvent(
             new events.QUICConnectionErrorEvent({
               detail: new errors.ErrorQUICConnection(e.message, {
@@ -505,10 +495,13 @@ class QUICConnection extends EventTarget {
               }),
             }),
           );
+
+          return;
         }
-        return;
       }
-      this.dispatchEvent(new events.QUICConnectionRecvEvent());
+
+
+
       // Here we can resolve our promises!
       if (this.conn.isEstablished()) {
         this.resolveEstablishedP();

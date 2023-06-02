@@ -158,13 +158,28 @@ describe('quiche connection lifecycle', () => {
             from: serverHost
           }
         );
+        // You can receive multiple times without any problems
+        clientConn.recv(
+          randomPacket,
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
+        clientConn.recv(
+          randomPacket,
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isClosed()).toBeTrue();
       });
     });
     describe('connection timeouts', () => {
-      describe('dialing timeout', () => {
+      describe.only('dialing timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
           host: '127.0.0.1' as Host,
@@ -223,6 +238,9 @@ describe('quiche connection lifecycle', () => {
           // Connection is closed
           expect(clientConn.isClosed()).toBeTrue();
           expect(clientConn.isDraining()).toBeFalse();
+          // No errors during idle timeout
+          expect(clientConn.localError()).toBeNull();
+          expect(clientConn.peerError()).toBeNull();
         });
       });
       describe('initial timeout', () => {

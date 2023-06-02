@@ -479,6 +479,13 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
       expect(serverConn.isEstablished()).toBeFalse();
@@ -685,6 +692,16 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+
+      expect(clientConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(clientConn.peerError()).toBeNull();
+
+
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
       expect(clientConn.isEstablished()).toBeFalse();
@@ -716,6 +733,13 @@ describe('quiche tls', () => {
           from: clientHost
         }
       );
+      expect(serverConn.localError()).toBeNull();
+      expect(serverConn.peerError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
       expect(serverConn.timeout()).not.toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1095,6 +1119,13 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
       expect(serverConn.isEstablished()).toBeFalse();
@@ -1126,6 +1157,13 @@ describe('quiche tls', () => {
           from: serverHost
         }
       );
+      expect(clientConn.localError()).toBeNull();
+      expect(clientConn.peerError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
       expect(clientConn.timeout()).not.toBeNull();
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
@@ -1281,6 +1319,13 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+      expect(clientConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(clientConn.peerError()).toBeNull();
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
       expect(clientConn.isEstablished()).toBeFalse();
@@ -1312,6 +1357,13 @@ describe('quiche tls', () => {
           from: clientHost
         }
       );
+      expect(serverConn.localError()).toBeNull();
+      expect(serverConn.peerError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
       expect(serverConn.timeout()).not.toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1691,6 +1743,13 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
       expect(serverConn.isEstablished()).toBeFalse();
@@ -1722,6 +1781,13 @@ describe('quiche tls', () => {
           from: serverHost
         }
       );
+      expect(clientConn.localError()).toBeNull();
+      expect(clientConn.peerError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
       expect(clientConn.timeout()).not.toBeNull();
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
@@ -1877,6 +1943,17 @@ describe('quiche tls', () => {
           }
         )
       ).toThrow('TlsFail');
+
+
+      expect(clientConn.localError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+      expect(clientConn.peerError()).toBeNull();
+
+
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
       expect(clientConn.isEstablished()).toBeFalse();
@@ -1908,6 +1985,16 @@ describe('quiche tls', () => {
           from: clientHost
         }
       );
+
+      expect(serverConn.localError()).toBeNull();
+      expect(serverConn.peerError()).toEqual({
+        isApp: false,
+        // This code is unknown!
+        errorCode: 304,
+        reason: new Uint8Array()
+      });
+
+
       expect(serverConn.timeout()).not.toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
