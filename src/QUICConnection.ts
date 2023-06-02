@@ -100,6 +100,8 @@ class QUICConnection extends EventTarget {
    */
   protected socket: QUICSocket;
 
+  protected config: QUICConfig;
+
   /**
    * Converts reason to code.
    * Used during `QUICStream` creation.
@@ -145,7 +147,7 @@ class QUICConnection extends EventTarget {
    * Internal conn timer. This is used to tick the state transitions on the
    * conn.
    */
-  protected connTimer?: Timer;
+  protected connTimeOutTimer?: Timer;
 
   /**
    * Keep alive timer.
@@ -162,7 +164,7 @@ class QUICConnection extends EventTarget {
    * is independent of the max idle time. This keep alive mechanism will only
    * start working after secure establishment.
    */
-  protected keepAliveTimer?: Timer;
+  protected keepAliveIntervalTimer?: Timer;
 
   /**
    * This can change on every `recv` call
@@ -264,6 +266,7 @@ class QUICConnection extends EventTarget {
     this.conn = conn!;
     this.connectionId = scid;
     this.socket = socket;
+    this.config = config;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this._remoteHost = remoteInfo.host;
@@ -407,7 +410,11 @@ class QUICConnection extends EventTarget {
     await this.secureEstablishedP;
     // After this is done
     // We need to established the keep alive interval time
-    this.startKeepAliveTimer();
+    if (this.config.keepAliveIntervalTime != null) {
+      this.startKeepAliveIntervalTimer(
+        this.config.keepAliveIntervalTime
+      );
+    }
     // Do we remove the on abort event listener?
     // I forgot...
     this.logger.info(`Started ${this.constructor.name}`);
@@ -451,7 +458,7 @@ class QUICConnection extends EventTarget {
     }
     await Promise.all(streamDestroyPs);
     // Do we do this afterwards or before?
-    this.stopKeepAliveTimer();
+    this.stopKeepAliveIntervalTimer();
     try {
       // We need to lock the connLock
       // Note that this has no timeout
@@ -487,7 +494,7 @@ class QUICConnection extends EventTarget {
     // I believe the conn timer would always be cancelled
     // At the very end... so maybe we don't need to do this?
     // This may not be needed
-    this.stopTimer();
+    this.stopConnTimeOutTimer();
 
     // The reason we only delete afterwards
     // Is because we do it before we are opened (or just constructed)
@@ -496,6 +503,65 @@ class QUICConnection extends EventTarget {
     this.socket.connectionMap.delete(this.connectionId);
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
+
+  /**
+   * Starts the keep alive interval timer.
+   * Make sure to set the interval to be less than then the `maxIdleTime` unless
+   * if the `maxIdleTime` is `0`.
+   * If the `maxIdleTime` is `0`, then this is not needed to keep the connection
+   * open. However it can still be useful to maintain liveness for NAT purposes.
+   */
+  protected startKeepAliveIntervalTimer(ms: number): void {
+    const keepAliveHandler = async () => {
+      // Intelligently schedule a PING frame.
+      // If the connection has already sent ack-eliciting frames
+      // then this is a noop.
+      await this.connLock.withF(async () => {
+        this.conn.sendAckEliciting();
+        await this.send();
+      });
+      this.keepAliveIntervalTimer = new Timer({
+        delay: ms,
+        handler: keepAliveHandler
+      });
+    };
+    this.keepAliveIntervalTimer = new Timer({
+      delay: ms,
+      handler: keepAliveHandler
+    });
+  }
+
+  /**
+   * Stops the keep alive interval timer
+   */
+  protected stopKeepAliveIntervalTimer(): void {
+    this.keepAliveIntervalTimer?.cancel();
+  }
+
+
+  protected startConnTimeOutTimer(): void {
+    const connTimeOutHandler = () => {
+      const timeout = this.conn.timeout();
+      // If this is `null`, then technically there's nothing to do
+      if (timeout == null) return;
+      this.connTimeOutTimer = new Timer({
+        delay: timeout,
+        handler: connTimeOutHandler
+      });
+    };
+    // If this is `null` technically there's nothing to do
+    const timeout = this.conn.timeout();
+    if (timeout == null) return;
+    this.connTimeOutTimer = new Timer({
+      delay: timeout,
+      handler: connTimeOutHandler
+    });
+  }
+
+  protected stopConnTimeOutTimer(): void {
+    this.connTimeOutTimer?.cancel();
+  }
+
 
   /**
    * I don't know if this makes any sense
