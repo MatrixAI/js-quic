@@ -7,7 +7,7 @@ import type { Host, Port, RemoteInfo, StreamId } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { QUICConfig, ConnectionMetadata } from './types';
-import { StartStop, ready, status } from '@matrixai/async-init/dist/StartStop';
+import { StartStop, ready, status, running } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
 import { Lock } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
@@ -28,8 +28,8 @@ import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
  *
  * Events (events are executed post-facto):
  * - connectionStream
- * - connectionDestroy
- * - connectionError
+ * - connectionStop
+ * - connectionError - can occur due to a timeout too
  * - streamDestroy
  */
 interface QUICConnection extends StartStop {}
@@ -295,54 +295,6 @@ class QUICConnection extends EventTarget {
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
     this.rejectClosedP = rejectClosedP;
-
-    // !!!!
-    // Should we do this only on `start`?
-    // That way, upon calling start
-    // The `socket.connectionMap` can be done!
-    // THE server does it ever call `await start()`?
-    // No cause `connectionNew` needs to give you back the connection instance object
-
-    // The server does need to trigger `conn.start()`
-    // However it does not need to do this for `connectionNew`
-
-
-
-    // Registers this connection instance to the socket
-    // socket.connectionMap.set(scid, this);
-    // ^- I want to know where this should go
-    // It seems that it should be in the `start` function now
-    // Because, the opposite is in the `stop`
-    // This also means in order for this to occur
-    // Then the server must also call `start` not just client
-    // For the connection to be "started"
-    // The QUIC Socket shouldn't bother "handling" such a call though
-    // It just need the conn
-    // But it could also expect that upon getting a new connection
-    // That it would have already been registerd on the socket
-    // Then it just `this.connectionMap.get(dcid)`
-
-    // I think this setting must happen inside the `start`
-    // Therefore the server must also then trigger the start
-    // But it must catch any exceptions, as events
-    // It wouldn't wait for this promise though...
-    // But you may have a dangling promise?
-    // But I wonder if dangling promises are a problem?
-    // Because JS sort of forgets about it...
-    // Well it doesn't keep the node process open
-    // But the GC may not garbage collect it
-    // Cause if it is waiting on promise to be resolved
-    // Yes it can e GCed... I'm pretyt sure it can
-    // So a void promise could work...
-    // But also another issue is whihle a connection is starting
-    // There's no way to cancel is there?
-    // If you are destroying a server, you have to be able to stop
-    // connections that are starting, connections that are stopping
-    // and ready connections too
-
-    // Ok so `start` is what registers it
-    // Makes sense
-
   }
 
   public get remoteHost() {
@@ -361,35 +313,10 @@ class QUICConnection extends EventTarget {
     return this.socket.port;
   }
 
-  // So this is a CreateDestroy
-  // when created, this doesn't actually mean this is possible
-  // It is because, the connection isn't even fully established
-  // There's several stages after it
-  // Since there is `secureEstablishedP` and `closeP`
-  // These 2 technically translate to the `start` and `stop`
-  // The reason you need this is because the QUIC Socket needs to be able to do recv and send
-  // On the connection instance
-  // Therefore, one must be able to CREATE it to get the instance
-  // Generally creation implies starting
-  // That's the problem here
-
-  // I think if this was swapped to a `StartStop`
-  // we can actually instead have...
-  // the ability to "construct" it
-  // then start/stop independnetly
-  // then start/stop can wait for certain events
-  // while you can proceed to call recv/send on the connection object
-  // just by having it constructed!
-
-
-
   /**
    * This is the same as basically waiting for `secureEstablishedP`
    * While this is occurring one can call the `recv` and `send` to make this happen
    */
-
-
-
   public start(ctx?: Partial<ContextTimed>): PromiseCancellable<void>;
   @timedCancellable(true, Infinity, errors.ErrorQUICConnectionStartTimeOut)
   public async start(@context ctx: ContextTimed): Promise<void> {
@@ -501,188 +428,20 @@ class QUICConnection extends EventTarget {
     // Techincally it was constructed, and then we added ourselves to it
     // But during `start` we are just waiting
     this.socket.connectionMap.delete(this.connectionId);
+
+    this.dispatchEvent(new events.QUICConnectionStopEvent());
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
   /**
-   * Starts the keep alive interval timer.
-   * Make sure to set the interval to be less than then the `maxIdleTime` unless
-   * if the `maxIdleTime` is `0`.
-   * If the `maxIdleTime` is `0`, then this is not needed to keep the connection
-   * open. However it can still be useful to maintain liveness for NAT purposes.
-   */
-  protected startKeepAliveIntervalTimer(ms: number): void {
-    const keepAliveHandler = async () => {
-      // Intelligently schedule a PING frame.
-      // If the connection has already sent ack-eliciting frames
-      // then this is a noop.
-      await this.connLock.withF(async () => {
-        this.conn.sendAckEliciting();
-        await this.send();
-      });
-      this.keepAliveIntervalTimer = new Timer({
-        delay: ms,
-        handler: keepAliveHandler
-      });
-    };
-    this.keepAliveIntervalTimer = new Timer({
-      delay: ms,
-      handler: keepAliveHandler
-    });
-  }
-
-  /**
-   * Stops the keep alive interval timer
-   */
-  protected stopKeepAliveIntervalTimer(): void {
-    this.keepAliveIntervalTimer?.cancel();
-  }
-
-
-  protected startConnTimeOutTimer(): void {
-    const connTimeOutHandler = () => {
-      const timeout = this.conn.timeout();
-      // If this is `null`, then technically there's nothing to do
-      if (timeout == null) return;
-      this.connTimeOutTimer = new Timer({
-        delay: timeout,
-        handler: connTimeOutHandler
-      });
-    };
-    // If this is `null` technically there's nothing to do
-    const timeout = this.conn.timeout();
-    if (timeout == null) return;
-    this.connTimeOutTimer = new Timer({
-      delay: timeout,
-      handler: connTimeOutHandler
-    });
-  }
-
-  protected stopConnTimeOutTimer(): void {
-    this.connTimeOutTimer?.cancel();
-  }
-
-
-  /**
-   * I don't know if this makes any sense
+   * Gets an array of certificates in PEM format start on the leaf.
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
-  public getRemoteCerts(): Array<string> | undefined {
+  public getRemoteCertsChain(): Array<string> {
     const certsDER = this.conn.peerCertChain();
-    if (certsDER == null) return;
+    if (certsDER == null) return [];
     return certsDER.map(utils.certificateDERToPEM);
   }
-
-  // /**
-  //  * Destroys the connection.
-  //  * The `applicationError` if the connection close is due to the transport
-  //  * layer or due to the application layer.
-  //  * If `applicationError` is true, you can use any number as the `errorCode`.
-  //  * The other peer must should understand the `errorCode`.
-  //  * If `applicationError` is false, you must use `errorCode` from
-  //  * `ConnectionErrorCode`.
-  //  * The default `applicationError` is true because a normal graceful close
-  //  * is an application error.
-  //  * The default `errorCode` of 0 means no error or general error.
-  //  */
-  // public async destroy({
-  //   applicationError = true,
-  //   errorCode = 0,
-  //   errorMessage = '',
-  //   force = false,
-  // }: {
-  //   applicationError?: false;
-  //   errorCode?: ConnectionErrorCode;
-  //   errorMessage?: string;
-  //   force?: boolean;
-  // } | {
-  //   applicationError: true;
-  //   errorCode?: number;
-  //   errorMessage?: string;
-  //   force?: boolean;
-  // }= {}) {
-  //   this.logger.info(`Destroy ${this.constructor.name}`);
-
-  //   // console.time('stream destroy');
-
-  //   // Handle destruction concurrently
-  //   const destroyProms: Array<Promise<void>> = [];
-  //   for (const stream of this.streamMap.values()) {
-  //     if (force) {
-  //       destroyProms.push(stream.destroy());
-  //     } else {
-  //       const destroyProm = promise();
-  //       stream.addEventListener('destroy', () => destroyProm.resolveP(), {
-  //         once: true,
-  //       });
-  //       destroyProms.push(destroyProm.p);
-  //     }
-  //   }
-  //   await Promise.all(destroyProms);
-
-  //   try {
-  //     // If this is already closed, then `Done` will be thrown
-  //     // Otherwise it can send `CONNECTION_CLOSE` frame
-  //     // This can be 0x1c close at the QUIC layer or no errors
-  //     // Or it can be 0x1d for application close with an error
-  //     // Upon receiving a `CONNECTION_CLOSE`, you can send back
-  //     // 1 packet containing a `CONNECTION_CLOSE` frame too
-  //     // (with `NO_ERROR` code if appropriate)
-  //     // It must enter into a draining state, and no other packets can be sent
-  //     this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
-  //   } catch (e) {
-  //     // If the connection is already closed, `Done` will be thrown
-  //     if (e.message !== 'Done') {
-  //       // No other exceptions are expected
-  //       utils.never();
-  //     }
-  //   }
-  //   // console.timeEnd('conn close');
-
-  //   // console.time('conn destroy send');
-
-  //   // Sending if
-  //   this.logger.error('SEND BEFORE WAIT FOR CLOSE P');
-  //   await this.send();
-  //   // If it is not closed, it could still be draining
-
-  //   // This depends on the the `this.resolveCloseP()`
-  //   // When that is called, the connection is considered closed
-  //   this.logger.error('>>>> WAIT FOR CLOSE P');
-
-  //   // This is false
-  //   this.logger.error(`>>>> Connection is closed? ${this.conn.isClosed()}`);
-  //   // This is true
-  //   this.logger.error(`>>>> Connection is draining? ${this.conn.isDraining()}`);
-
-  //   await this.closedP;
-
-  //   this.logger.error('>>>> PASS CLOSED P');
-
-  //   this.socket.connectionMap.delete(this.connectionId);
-
-  //   // console.timeEnd('conn destroy send');
-
-  //   // Checking if timed out
-  //   if (this.conn.isTimedOut()) {
-  //     this.logger.error('Connection timed out');
-  //     this.dispatchEvent(
-  //       new events.QUICSocketErrorEvent({
-  //         detail: new errors.ErrorQUICConnectionTimeout(),
-  //       }),
-  //     );
-  //   }
-  //   this.dispatchEvent(new events.QUICConnectionDestroyEvent());
-  //   // Clean up timeout if it's still running
-  //   if (this.timer != null) {
-  //     clearTimeout(this.timer);
-  //     delete this.timer;
-  //   }
-
-  //   this.logger.error('DESTROYED');
-
-  //   this.logger.info(`Destroyed ${this.constructor.name}`);
-  // }
 
   /**
    * Called when the socket receives data from the remote side intended for this connection.
@@ -695,8 +454,12 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['stopping'])
   public recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+
+    // We do not need to start the timer here
+    // We only need to do it, and thus "reset" the timer
+    // In the send call
+    // But we need to reset it multiple times
 
     // Recv is not an async function anymore
 
@@ -853,7 +616,6 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['stopping'])
   public async send(): Promise<void> {
     // console.log('SEND CALLED');
     this.logger.debug('SEND CALLED');
@@ -994,6 +756,136 @@ class QUICConnection extends EventTarget {
     }
   }
 
+  protected setConnTimeOutTimer(): void {
+    const connTimeOutHandler = async () => {
+      // This can only be called when the timeout has occurred
+      // This transitions the connection state
+      this.conn.onTimeout();
+
+      // At this point...
+      // we check the conditions on the connection
+      // This way we can RESOLVE things like
+      // conn closed or established or other things
+      // or if we are draining
+      // if we have timed out... etc
+      // All state changes need to result in reaction
+      // Is established is not required
+      // But we can have a bunch of things that check and react accordingly
+      // So if it is timed out, it gets closed too
+      // But if it is is timed out due to idle we raise an error
+
+      if (this.conn.isTimedOut()) {
+
+        // This is just a dispatch on the connection error
+        // Note that this may cause the client to attempt
+        // to stop the socket and stuff
+        // The client should ignore this event error
+        // Becuase it's actually being handled
+        // On the other hand...
+        // If we randomly fail here
+        // It's correct to properly raise an event
+        // To bubble up....
+
+        this.dispatchEvent(
+          new events.QUICConnectionErrorEvent({
+            detail: new errors.ErrorQUICConnectionTimeout()
+          })
+        );
+      }
+
+      // At the same time, we may in fact be closed too
+      if (this.conn.isClosed()) {
+        // We actually finally closed here
+        // Actually theq uestion is that this could be an error
+        // The act of closing is an error?
+        // That's confusing
+        this.resolveClosedP();
+        // If we are not stopping nor are we stopped
+        // And we are not running, call await this stop
+
+        // We need to trigger this as well by calling stop
+        // What happens if we are starting too?
+        if (this[running] && this[status] !== 'stopping') {
+          // If we are already stopping, stop multiple times is idempotent
+          // Wait if we call stop multiple times
+          // Actually we may already be stopping
+          // But also that if the status is starting
+          // But also if we are starting
+          // Resolve the closeP
+          // is technicaly an error!
+
+          await this.stop();
+        }
+
+        // Finish
+        return;
+      }
+
+      // Note that a `0` timeout is still a valid timeout
+      const timeout = this.conn.timeout();
+      // If this is `null`, then technically there's nothing to do
+      if (timeout == null) return;
+      this.connTimeOutTimer = new Timer({
+        delay: timeout,
+        handler: connTimeOutHandler
+      });
+    };
+    // Note that a `0` timeout is still a valid timeout
+    const timeout = this.conn.timeout();
+    // If this is `null` there's nothing to do
+    if (timeout == null) return;
+    // If there was an existing timer, we cancel it and set a new one
+    if (this.connTimeOutTimer != null) {
+      this.connTimeOutTimer.cancel();
+    }
+    this.connTimeOutTimer = new Timer({
+      delay: timeout,
+      handler: connTimeOutHandler
+    });
+  }
+
+  /**
+   * Starts the keep alive interval timer.
+   * Make sure to set the interval to be less than then the `maxIdleTime` unless
+   * if the `maxIdleTime` is `0`.
+   * If the `maxIdleTime` is `0`, then this is not needed to keep the connection
+   * open. However it can still be useful to maintain liveness for NAT purposes.
+   */
+  protected startKeepAliveIntervalTimer(ms: number): void {
+    const keepAliveHandler = async () => {
+      // Intelligently schedule a PING frame.
+      // If the connection has already sent ack-eliciting frames
+      // then this is a noop.
+      await this.connLock.withF(async () => {
+        this.conn.sendAckEliciting();
+        await this.send();
+      });
+      this.keepAliveIntervalTimer = new Timer({
+        delay: ms,
+        handler: keepAliveHandler
+      });
+    };
+    this.keepAliveIntervalTimer = new Timer({
+      delay: ms,
+      handler: keepAliveHandler
+    });
+  }
+
+  /**
+   * Stops the keep alive interval timer
+   */
+  protected stopKeepAliveIntervalTimer(): void {
+    this.keepAliveIntervalTimer?.cancel();
+  }
+
+
+
+
+
+
+
+
+
   /**
    * Creates a new stream on the connection.
    * Only supports bidi streams atm.
@@ -1046,26 +938,26 @@ class QUICConnection extends EventTarget {
     });
   }
 
-  /**
-   * Used to update or disable the keep alive interval.
-   * Calling this will reset the delay before the next keep alive.
-   */
-  @ready(new errors.ErrorQUICConnectionNotRunning())
-  public setKeepAlive(intervalDelay?: number) {
-    // Clearing timeout prior to update
-    if (this.keepAliveInterval != null) {
-      clearTimeout(this.keepAliveInterval);
-      delete this.keepAliveInterval;
-    }
-    // Setting up keep alive interval
-    if (intervalDelay != null) {
-      this.keepAliveInterval = setInterval(async () => {
-        // Trigger an ping frame and send
-        this.conn.sendAckEliciting();
-        await this.send();
-      }, intervalDelay);
-    }
-  }
+  // /**
+  //  * Used to update or disable the keep alive interval.
+  //  * Calling this will reset the delay before the next keep alive.
+  //  */
+  // @ready(new errors.ErrorQUICConnectionNotRunning())
+  // public setKeepAlive(intervalDelay?: number) {
+  //   // Clearing timeout prior to update
+  //   if (this.keepAliveInterval != null) {
+  //     clearTimeout(this.keepAliveInterval);
+  //     delete this.keepAliveInterval;
+  //   }
+  //   // Setting up keep alive interval
+  //   if (intervalDelay != null) {
+  //     this.keepAliveInterval = setInterval(async () => {
+  //       // Trigger an ping frame and send
+  //       this.conn.sendAckEliciting();
+  //       await this.send();
+  //     }, intervalDelay);
+  //   }
+  // }
 
   // Timeout handling, these methods handle time keeping for quiche.
   // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
