@@ -418,11 +418,6 @@ class QUICConnection extends EventTarget {
     // Now we await for the closedP
     await this.closedP;
 
-    // I believe the conn timer would always be cancelled
-    // At the very end... so maybe we don't need to do this?
-    // This may not be needed
-    this.stopConnTimeOutTimer();
-
     // The reason we only delete afterwards
     // Is because we do it before we are opened (or just constructed)
     // Techincally it was constructed, and then we added ourselves to it
