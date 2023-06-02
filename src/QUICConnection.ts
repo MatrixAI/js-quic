@@ -283,6 +283,10 @@ class QUICConnection extends EventTarget {
     } = utils.promise();
     this.establishedP = establishedP;
     this.resolveEstablishedP = () => {
+
+      // Upon the first time you call this, it is now true
+      // But prior to this
+
       this.wasEstablished = true;
       resolveEstablishedP();
     };
