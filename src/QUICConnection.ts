@@ -67,30 +67,6 @@ class QUICConnection extends EventTarget {
   public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
   /**
-   * Connection establishment.
-   * This can resolve or reject.
-   * Rejections cascade down to `secureEstablishedP` and `closedP`.
-   */
-  public readonly establishedP: Promise<void>;
-
-  /**
-   * Connection has been verified and secured.
-   * This can only happen after `establishedP`.
-   * On the server side, being established means it is also secure established.
-   * On the client side, after being established, the client must wait for the
-   * first short frame before it is also secure established.
-   * This can resolve or reject.
-   * Rejections cascade down to `closedP`.
-   */
-  public readonly secureEstablishedP: Promise<void>;
-
-  /**
-   * Connection closed promise.
-   * This can resolve or reject.
-   */
-  public readonly closedP: Promise<void>;
-
-  /**
    * Logger.
    */
   protected logger: Logger;
@@ -183,12 +159,41 @@ class QUICConnection extends EventTarget {
     this.dispatchEvent(e);
   };
 
+  /**
+   * Connection establishment.
+   * This can resolve or reject.
+   * Rejections cascade down to `secureEstablishedP` and `closedP`.
+   */
+  protected establishedP: Promise<void>;
+
+  /**
+   * Connection has been verified and secured.
+   * This can only happen after `establishedP`.
+   * On the server side, being established means it is also secure established.
+   * On the client side, after being established, the client must wait for the
+   * first short frame before it is also secure established.
+   * This can resolve or reject.
+   * Rejections cascade down to `closedP`.
+   */
+  protected secureEstablishedP: Promise<void>;
+
+  /**
+   * Connection closed promise.
+   * This can resolve or reject.
+   */
+  protected closedP: Promise<void>;
+
+
+  protected wasEstablished: boolean = false;
+
   protected resolveEstablishedP: () => void;
   protected rejectEstablishedP: (reason?: any) => void;
   protected resolveSecureEstablishedP: () => void;
   protected rejectSecureEstablishedP: (reason?: any) => void;
   protected resolveClosedP: () => void;
   protected rejectClosedP: (reason?: any) => void;
+
+  protected lastErrorMessage?: string;
 
   public constructor({
     type,
@@ -277,8 +282,21 @@ class QUICConnection extends EventTarget {
       rejectP: rejectEstablishedP,
     } = utils.promise();
     this.establishedP = establishedP;
-    this.resolveEstablishedP = resolveEstablishedP;
+    this.resolveEstablishedP = () => {
+      this.wasEstablished = true;
+      resolveEstablishedP();
+    };
     this.rejectEstablishedP = rejectEstablishedP;
+
+    // We can do something where, once you "resolve"
+    // Then it is in fact established
+    // Alternatively, we can just bind into the `establishedP` here
+    // Does this become a dangling promsie?
+    // Cause it is `void` here
+    // I think it's better to use the `resolveEstablishedP`
+
+
+
     const {
       p: secureEstablishedP,
       resolveP: resolveSecureEstablishedP,
@@ -471,48 +489,75 @@ class QUICConnection extends EventTarget {
         // This may mutate `data`
         this.conn.recv(data, recvInfo);
       } catch (e) {
-
-        // If we have an exception here
-        // It indicates a failure during the TLS
-        // Note that doing so, should result in rejection of anything
-        // When we fail the TLS
-        // We still need to "send" something back to them
-        // Also remember that when we close things
-
-        // THIS IS NOT AN ERROR of this quic connection
-        // If there's a TLS failure, it's because the peer is failed here
-        // So it's not an error of this connection
-
         if (e.message !== 'TlsFail') {
-          this.dispatchEvent(
-            new events.QUICConnectionErrorEvent({
-              detail: new errors.ErrorQUICConnection(e.message, {
-                cause: e,
-                data: {
-                  localError: this.conn.localError(),
-                  peerError: this.conn.peerError(),
-                },
-              }),
-            }),
-          );
-
-          return;
+          // No other exceptions are expected
+          utils.never();
         }
+        // Do note that if we get a TlsFail
+        // We must proceed without throwing any exceptions
+        // But we must "save" the error here
+        // We don't need the save the localError or remoteError
+        // Cause that will be "saved"
+        // Only this e.message <- this will be whatever is the last message
+        this.lastErrorMessage = e.message;
       }
 
+      // We don't actually "fail"
+      // the closedP until we proceed
+      // But note that if there's an error
 
-
-      // Here we can resolve our promises!
       if (this.conn.isEstablished()) {
         this.resolveEstablishedP();
-      }
-      if (this.conn.isClosed()) {
-        if (this.resolveCloseP != null) {
-          // console.log('RESOLVE CLOSE P1');
-          this.resolveCloseP();
+
+
+        if (this.type === 'server') {
+          // For server connections, if we are established
+          // we are secure established
+          this.resolveSecureEstablishedP();
+        } else if (this.type === 'client') {
+
+          // We need a hueristic to indicate whether we are securely established
+
+          // If we are already established
+          // AND IF, we are getting a packet after establishment
+          // And we didn't result in an error
+          // Neither draining, nor closed, nor timed out
+
+          // For server connections
+          // If we are already established, then we are secure established
+
+          // To know if the server is also established
+          // We need to know the NEXT recv after we are already established
+          // So we received something, and that allows us to be established
+          // UPON the next recv
+          // We need to ensure:
+          // 1. No errors
+          // 2. Not draining
+          // 3. No
+          // YES the main thing is that there is no errors
+          // I think that's the KEY
+          // But we must only switch
+          // If were "already" established
+          // That this wasn't the first time we were established
+
         }
+      }
+
+      // We also need to know whether this is our first short frame
+      // After we are already established
+      // This may not be robust
+      // Cause technically
+      // What if we were "concatenated" packet
+      // Then it could be a problem right?
+
+
+      if (this.conn.isClosed()) {
+        this.resolveClosedP();
         return;
       }
+
+
+
       if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
         const readIds: Array<number> = [];
         for (const streamId of this.conn.readable() as Iterable<StreamId>) {

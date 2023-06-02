@@ -121,7 +121,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -352,7 +352,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -579,7 +579,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -803,7 +803,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -1014,7 +1014,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -1226,7 +1226,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -1427,7 +1427,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -1638,7 +1638,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);
@@ -1850,7 +1850,7 @@ describe('quiche tls', () => {
       serverQuicheConfig = buildQuicheConfig(serverConfig);
     });
     test('client connect', async () => {
-      // Randomly genrate the client SCID
+      // Randomly generate the client SCID
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
       await crypto.ops.randomBytes(scidBuffer);
       clientScid = new QUICConnectionId(scidBuffer);

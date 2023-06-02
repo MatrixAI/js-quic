@@ -179,7 +179,7 @@ describe('quiche connection lifecycle', () => {
       });
     });
     describe('connection timeouts', () => {
-      describe.only('dialing timeout', () => {
+      describe('dialing timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
           host: '127.0.0.1' as Host,
