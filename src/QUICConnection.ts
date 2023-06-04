@@ -9,7 +9,7 @@ import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { QUICConfig, ConnectionMetadata } from './types';
 import { StartStop, ready, status, running } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
-import { Lock } from '@matrixai/async-locks';
+import { Lock, LockBox } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
 import { Timer } from '@matrixai/timer';
 import { buildQuicheConfig } from './config';
@@ -381,22 +381,25 @@ class QUICConnection extends EventTarget {
    * The default `errorCode` of 0 means no error or general error.
    * This is the same as basically waiting for `closedP`.
    */
-  public async stop({
-    applicationError = true,
-    errorCode = 0,
-    errorMessage = '',
-    force  = false
-  }: {
-    applicationError?: false;
-    errorCode?: ConnectionErrorCode;
-    errorMessage?: string;
-    force?: boolean;
-  } | {
-    applicationError: true;
-    errorCode?: number;
-    errorMessage?: string;
-    force?: boolean;
-  }= {}) {
+  public async stop(
+    {
+      applicationError = true,
+      errorCode = 0,
+      errorMessage = '',
+      force  = false
+    }: {
+      applicationError?: false;
+      errorCode?: ConnectionErrorCode;
+      errorMessage?: string;
+      force?: boolean;
+    } | {
+      applicationError: true;
+      errorCode?: number;
+      errorMessage?: string;
+      force?: boolean;
+    }= {},
+    lock: Lock = this.connLock
+  ) {
     this.logger.info(`Stop ${this.constructor.name}`);
     const streamDestroyPs: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
@@ -653,92 +656,23 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  public async send(): Promise<void> {
-    // console.log('SEND CALLED');
-    this.logger.debug('SEND CALLED');
-    // console.log('-------------CHECKING IS CLOSED');
-    if (this.conn.isClosed()) {
-      // console.log('FINISH CHECKING IS CLOSED');
-      if (this.resolveCloseP != null) {
-        this.logger.warn('RESOLVE CLOSE P2' + new Date());
-        // console.log('RESOLVE CLOSE P2', new Date());
-        this.resolveCloseP();
-      }
-      return;
-    } else if (this.conn.isDraining()) {
-      return;
-    }
-    let numSent = 0;
-    try {
+  public async send(lock: Lock = this.connLock): Promise<void> {
+
+    await this.connLock.withF(async () => {
       const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
       let sendLength: number;
       let sendInfo: SendInfo;
-      while (true) {
-
-        this.logger.error('--> WHILE LOOP ITERATION');
-
-        try {
-          [sendLength, sendInfo] = this.conn.send(sendBuffer);
-        } catch (e) {
-          this.logger.debug(`SEND FAILED WITH ${e.message}`);
-          if (e.message === 'Done') {
-            this.logger.error('--> DONE AFTER CONN SEND');
-
-            this.logger.error(`--> IS CONN CLOSED? ${this.conn.isClosed()}`);
-
-            if (this.conn.isClosed()) {
-              this.logger.debug('SEND CLOSED');
-              if (this.resolveCloseP != null) {
-                // console.log('RESOLVE CLOSE P3');
-                this.resolveCloseP();
-              }
-              return;
-            }
-            this.logger.debug('SEND IS DONE');
-
-            this.logger.error('--> FINISH WHILE LOOP');
-            return;
-          }
-          this.logger.error('Failed to send, cleaning up');
+      try {
+        // Send until `Done`
+        while (true) {
           try {
-            // If the `this.conn.send` failed, then this close
-            // may not be able to be sent to the outside
-            // It's possible a second call to `this.conn.send` will succeed
-            // Otherwise a timeout will occur, which will eventually destroy
-            // this connection
-
-            this.conn.close(
-              false,
-              quiche.ConnectionErrorCode.InternalError,
-              Buffer.from('Failed to send data', 'utf-8'), // The message!
-            );
+            [sendLength, sendInfo] = this.conn.send(sendBuffer);
           } catch (e) {
-            // Only `Done` is possible, no other errors are possible
-            if (e.message !== 'Done') {
-              utils.never();
+            if (e.message === 'Done') {
+              break;
             }
+            throw e;
           }
-          this.dispatchEvent(
-            new events.QUICConnectionErrorEvent({
-              detail: new errors.ErrorQUICConnection(e.message, {
-                cause: e,
-                data: {
-                  localError: this.conn.localError(),
-                  peerError: this.conn.peerError(),
-                },
-              }),
-            }),
-          );
-          return;
-        }
-
-        this.logger.error('--> SEND ON SOCKET');
-
-        try {
-          this.logger.debug(
-            `ATTEMPTING SEND ${sendLength} bytes to ${sendInfo.to.port}:${sendInfo.to.host}`,
-          );
-
           await this.socket.send(
             sendBuffer,
             0,
@@ -746,51 +680,42 @@ class QUICConnection extends EventTarget {
             sendInfo.to.port,
             sendInfo.to.host,
           );
-          this.logger.info(`SENT ${sendLength} of data`);
-        } catch (e) {
-          this.logger.error(`send error ${e.message}`);
-          this.dispatchEvent(
-            new events.QUICConnectionErrorEvent({ detail: e }),
-          );
-          return;
         }
-        this.dispatchEvent(new events.QUICConnectionSendEvent());
-        numSent += 1;
+      } catch (e) {
+
+        // If called `stop` due to an error here
+        // we MUST not call `this.send` again
+        // in fact, we do a hard-stop
+        // There's no need to even have a timeout at all
+        // Remember this exception COULD be due to `e`
+        // It could be due to `localError` or `remoteError`
+        // All of this is possbile
+        // Generally at least one of them is the reason
+
+        // the error has to be one or the other
+
+        await this.stop({
+          error: e
+        });
+
+        // We need to finish without any exceptions
+        return;
       }
-    } finally {
-      this.logger.error("--> SEND's FINALLY");
+      if (this.conn.isClosed()) {
 
-      if (numSent > 0) this.garbageCollectStreams('send');
-      this.logger.debug('SEND FINALLY');
+        // But if it is closed with no error
+        // Then we just have to proceed!
+        // Plus if we are called here
 
-      this.logger.error('--> CHECK TIMEOUT');
+        await this.stop({
+          error: this.conn.localError() ?? this.conn.remoteError(),
+        });
 
-      this.logger.error(`--> IS CONN CLOSED? ${this.conn.isClosed()}`);
-      this.logger.error(`--> IS CONN DRAINING? ${this.conn.isDraining()}`);
-
-      this.checkTimeout();
-      if (
-        this[status] !== 'destroying' &&
-        (this.conn.isClosed() || this.conn.isDraining())
-      ) {
-
-        this.logger.error('--> CALLING VOID DESTROY');
-
-        // Ignore errors and run in background
-        void this.destroy().catch(() => {});
-      } else if (
-        this[status] === 'destroying' &&
-        this.conn.isClosed() &&
-        this.resolveCloseP != null
-      ) {
-
-        this.logger.error('--> RESOLVE CLOSE P4');
-
-        // console.log('RESOLVE CLOSE P4');
-        // If we flushed the draining, then this is what will happen
-        this.resolveCloseP();
+      } else {
+        // In all other cases, reset the conn timer
+        this.setConnTimeOutTimer();
       }
-    }
+    });
   }
 
   protected setConnTimeOutTimer(): void {
@@ -930,6 +855,11 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
   public async streamNew(streamType: 'bidi' = 'bidi'): Promise<QUICStream> {
+
+    // You wouldn't want AsyncMonitor here
+    // The problem is that we want re-entrant contexts
+
+
     // Technically you can do concurrent bidi and uni style streams
     // but no support for uni streams yet
     // So we don't bother with it
@@ -996,35 +926,35 @@ class QUICConnection extends EventTarget {
   //   }
   // }
 
-  // Timeout handling, these methods handle time keeping for quiche.
-  // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
-  protected deadline: number = 0;
-  protected onTimeout = async () => {
-    this.logger.warn('ON TIMEOUT CALLED ' + new Date());
-    this.logger.debug('timeout on timeout');
-    // Clearing timeout
-    clearTimeout(this.timer);
-    delete this.timer;
-    this.deadline = Infinity;
-    // Doing timeout actions
-    // console.time('INTERNAL ON TIMEOUT');
-    this.conn.onTimeout();
-    // console.timeEnd('INTERNAL ON TIMEOUT');
-    this.logger.warn('BEFORE CALLING SEND' + new Date());
-    if (this[destroyed] === false) await this.send();
-    this.logger.warn('AFTER CALLING SEND ' + new Date());
-    if (
-      this[status] !== 'destroying' &&
-      (this.conn.isClosed() || this.conn.isDraining())
-    ) {
-      this.logger.debug('CALLING DESTROY 3');
-      // Destroy in the background, we still need to process packets
-      void this.destroy().catch(() => {});
-    }
-    this.logger.warn('BEFORE CHECK TIMEOUT' + new Date());
-    this.checkTimeout();
-    this.logger.warn('AFTER CHECK TIMEOUT' + new Date());
-  };
+  // // Timeout handling, these methods handle time keeping for quiche.
+  // // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
+  // protected deadline: number = 0;
+  // protected onTimeout = async () => {
+  //   this.logger.warn('ON TIMEOUT CALLED ' + new Date());
+  //   this.logger.debug('timeout on timeout');
+  //   // Clearing timeout
+  //   clearTimeout(this.timer);
+  //   delete this.timer;
+  //   this.deadline = Infinity;
+  //   // Doing timeout actions
+  //   // console.time('INTERNAL ON TIMEOUT');
+  //   this.conn.onTimeout();
+  //   // console.timeEnd('INTERNAL ON TIMEOUT');
+  //   this.logger.warn('BEFORE CALLING SEND' + new Date());
+  //   if (this[destroyed] === false) await this.send();
+  //   this.logger.warn('AFTER CALLING SEND ' + new Date());
+  //   if (
+  //     this[status] !== 'destroying' &&
+  //     (this.conn.isClosed() || this.conn.isDraining())
+  //   ) {
+  //     this.logger.debug('CALLING DESTROY 3');
+  //     // Destroy in the background, we still need to process packets
+  //     void this.destroy().catch(() => {});
+  //   }
+  //   this.logger.warn('BEFORE CHECK TIMEOUT' + new Date());
+  //   this.checkTimeout();
+  //   this.logger.warn('AFTER CHECK TIMEOUT' + new Date());
+  // };
 
   /**
    * Checks the timeout event, should be called whenever the following events happen.
@@ -1037,65 +967,65 @@ class QUICConnection extends EventTarget {
    * 2. Update the timer if `conn.timeout()` is less than current timeout.
    * 3. clean up timer if `conn.timeout()` is null.
    */
-  protected checkTimeout = () => {
-    this.logger.debug('timeout checking timeout');
-    // During construction, this ends up being null
-    const time = this.conn.timeout();
-    this.logger.error(`THE TIME (${this.times}): ` + time + ' ' + new Date());
-    this.times++;
+  // protected checkTimeout = () => {
+  //   this.logger.debug('timeout checking timeout');
+  //   // During construction, this ends up being null
+  //   const time = this.conn.timeout();
+  //   this.logger.error(`THE TIME (${this.times}): ` + time + ' ' + new Date());
+  //   this.times++;
 
-    if (time == null) {
-      // Clear timeout
-      if (this.timer != null) this.logger.debug('timeout clearing timeout');
-      clearTimeout(this.timer);
-      delete this.timer;
-      this.deadline = Infinity;
-    } else {
-      const newDeadline = Date.now() + time;
-      if (this.timer != null) {
-        if (time === 0) {
-          this.logger.debug('timeout triggering instant timeout');
-          // Skip timer and call onTimeout
-          setImmediate(this.onTimeout);
-        } else if (newDeadline < this.deadline) {
-          this.logger.debug(`timeout updating timer with ${time} delay`);
-          clearTimeout(this.timer);
-          delete this.timer;
-          this.deadline = newDeadline;
+  //   if (time == null) {
+  //     // Clear timeout
+  //     if (this.timer != null) this.logger.debug('timeout clearing timeout');
+  //     clearTimeout(this.timer);
+  //     delete this.timer;
+  //     this.deadline = Infinity;
+  //   } else {
+  //     const newDeadline = Date.now() + time;
+  //     if (this.timer != null) {
+  //       if (time === 0) {
+  //         this.logger.debug('timeout triggering instant timeout');
+  //         // Skip timer and call onTimeout
+  //         setImmediate(this.onTimeout);
+  //       } else if (newDeadline < this.deadline) {
+  //         this.logger.debug(`timeout updating timer with ${time} delay`);
+  //         clearTimeout(this.timer);
+  //         delete this.timer;
+  //         this.deadline = newDeadline;
 
-          this.logger.warn('BEFORE SET TIMEOUT 1: ' + time);
+  //         this.logger.warn('BEFORE SET TIMEOUT 1: ' + time);
 
-          this.timer = setTimeout(this.onTimeout, time);
-        }
-      } else {
-        if (time === 0) {
-          this.logger.debug('timeout triggering instant timeout');
-          // Skip timer and call onTimeout
-          setImmediate(this.onTimeout);
-          return;
-        }
-        this.logger.debug(`timeout creating timer with ${time} delay`);
-        this.deadline = newDeadline;
+  //         this.timer = setTimeout(this.onTimeout, time);
+  //       }
+  //     } else {
+  //       if (time === 0) {
+  //         this.logger.debug('timeout triggering instant timeout');
+  //         // Skip timer and call onTimeout
+  //         setImmediate(this.onTimeout);
+  //         return;
+  //       }
+  //       this.logger.debug(`timeout creating timer with ${time} delay`);
+  //       this.deadline = newDeadline;
 
-        this.logger.warn('BEFORE SET TIMEOUT 2: ' + time);
+  //       this.logger.warn('BEFORE SET TIMEOUT 2: ' + time);
 
-        this.timer = setTimeout(this.onTimeout, time);
-      }
-    }
-  };
+  //       this.timer = setTimeout(this.onTimeout, time);
+  //     }
+  //   }
+  // };
 
-  protected garbageCollectStreams(where: string) {
-    const nums: Array<number> = [];
-    // Only check if packets were sent
-    for (const [streamId, quicStream] of this.streamMap) {
-      // Stream sending can finish after a packet is sent
-      nums.push(streamId);
-      quicStream.read();
-    }
-    if (nums.length > 0) {
-      this.logger.info(`checking read finally ${where} for ${nums}`);
-    }
-  }
+  // protected garbageCollectStreams(where: string) {
+  //   const nums: Array<number> = [];
+  //   // Only check if packets were sent
+  //   for (const [streamId, quicStream] of this.streamMap) {
+  //     // Stream sending can finish after a packet is sent
+  //     nums.push(streamId);
+  //     quicStream.read();
+  //   }
+  //   if (nums.length > 0) {
+  //     this.logger.info(`checking read finally ${where} for ${nums}`);
+  //   }
+  // }
 }
 
 export default QUICConnection;
