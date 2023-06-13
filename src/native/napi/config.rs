@@ -1,6 +1,12 @@
 // use core::panicking::panic;
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use std::thread;
+use napi::{
+  JsUnknown,
+};
+
 
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
@@ -47,18 +53,49 @@ impl Config {
   }
 
   #[napi(factory)]
-  pub fn with_boring_ssl_ctx(
+  pub fn with_boring_ssl_ctx<T: Fn() -> napi::Result<bool>>(
     cert_pem: Option<Uint8Array>,
     key_pem: Option<Uint8Array>,
     supported_key_algos: Option<String>,
     ca_cert_pem: Option<Uint8Array>,
     verify_peer: bool,
+    verify_callback: T,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
     ).or_else(
       |err| Err(Error::from_reason(err.to_string()))
     )?;
+
+    // Setting up verify callback
+    // let threadsafe_fun: ThreadsafeFunction<(String, String), ErrorStrategy::CalleeHandled> = verify_callback
+    //   .create_threadsafe_function(0, |ctx| {
+    //     let (s1, s2): (String, String) = ctx.value;
+    //     println!("value: {}", s1);
+    //     println!("value: {}", s2);
+    //     Ok(vec![
+    //       ctx.env.create_string(&s1.to_string()).unwrap().into_unknown(),
+    //       ctx.env.create_int32(42).unwrap().into_unknown(),
+    //       ctx.env.create_string(&s2.to_string()).unwrap().into_unknown(),
+    //     ])
+    //   })?;
+    //
+    // let asd = thread::spawn(move || {
+    //   threadsafe_fun.call(
+    //     Ok(("hello one!".to_string(), "hello two!".to_string())),
+    //     ThreadsafeFunctionCallMode::Blocking,
+    //   )
+    // }).join();
+
+    // let asd = threadsafe_fun.call(
+    //   Ok(("hello one!".to_string(), "hello two!".to_string())),
+    //   ThreadsafeFunctionCallMode::Blocking,
+    // );
+
+    if let Ok(result) = verify_callback() {
+      println!("asd: {}", result);
+    }
+
     let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
     else { boring::ssl::SslVerifyMode::NONE };
     ssl_ctx_builder.set_verify_callback(verify_value, |succeeded, cert_store| {
@@ -74,12 +111,12 @@ impl Config {
         },
         _ => None,
       };
-      if let Some(cert) = cert {
-        println!("pem\n{}", cert);
-      } else {
-        println!("No current cert?");
-        return false;
-      }
+      // if let Some(cert) = cert {
+      //   println!("pem\n{}", cert);
+      // } else {
+      //   println!("No current cert?");
+      //   return false;
+      // }
 
       // converting cert chain
       let chain: Option<Vec<String>> = match cert_store.chain() {
@@ -95,15 +132,15 @@ impl Config {
         _ => None,
       };
 
-      if let Some(chain) = chain {
-        println!("ayyyy");
-        for pem in chain {
-          println!("pem:\n{}", pem);
-        }
-      } else {
-        println!("No chain?");
-        return false;
-      }
+      // if let Some(chain) = chain {
+      //   println!("ayyyy");
+      //   for pem in chain {
+      //     println!("pem:\n{}", pem);
+      //   }
+      // } else {
+      //   println!("No chain?");
+      //   return false;
+      // }
 
       succeeded
     });

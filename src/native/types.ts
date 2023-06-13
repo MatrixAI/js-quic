@@ -49,6 +49,7 @@ interface ConfigConstructor {
     supportedKeyAlgos: string | null,
     ca_cert_pem: Uint8Array | null,
     verify_peer: boolean,
+    verify_callback: (a: string, b: string) => string,
   ): Config;
 }
 
