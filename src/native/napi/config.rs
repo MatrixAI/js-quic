@@ -61,7 +61,52 @@ impl Config {
     )?;
     let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
     else { boring::ssl::SslVerifyMode::NONE };
-    ssl_ctx_builder.set_verify(verify_value);
+    ssl_ctx_builder.set_verify_callback(verify_value, |succeeded, cert_store| {
+      println!("normalSuc? {}", succeeded);
+
+      // Converting current cert
+      let cert: Option<String> = match cert_store.current_cert() {
+        Some(cert) => {
+          match cert.to_pem() {
+            Ok(pem) => Some(String::from_utf8(pem).unwrap()),
+            Err(_) => None,
+          }
+        },
+        _ => None,
+      };
+      if let Some(cert) = cert {
+        println!("pem\n{}", cert);
+      } else {
+        println!("No current cert?");
+        return false;
+      }
+
+      // converting cert chain
+      let chain: Option<Vec<String>> = match cert_store.chain() {
+        Some(stack) => {
+          Some(stack.into_iter().filter_map(|cert| {
+            match cert.to_pem() {
+              Ok(pem) => Some(String::from_utf8(pem).unwrap()),
+              Err(_) => None,
+            }
+          })
+            .collect::<Vec<String>>())
+        },
+        _ => None,
+      };
+
+      if let Some(chain) = chain {
+        println!("ayyyy");
+        for pem in chain {
+          println!("pem:\n{}", pem);
+        }
+      } else {
+        println!("No chain?");
+        return false;
+      }
+
+      succeeded
+    });
     // Processing and adding the cert chain
     if let Some(cert_pem) = cert_pem {
       let x509_cert_chain = boring::x509::X509::stack_from_pem(
