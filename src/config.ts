@@ -95,9 +95,9 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     config.supportedPrivateKeyAlgos ?? null,
     config.verifyPem != null ? Buffer.from(config.verifyPem) : null,
     config.verifyPeer,
-    (...args): string => {
+    (...args): boolean => {
       console.log(args);
-      return 'result';
+      return true;
     }
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {

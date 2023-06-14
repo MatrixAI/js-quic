@@ -6,7 +6,7 @@ use std::thread;
 use napi::{
   JsUnknown,
 };
-
+use futures::executor::block_on;
 
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
@@ -53,13 +53,14 @@ impl Config {
   }
 
   #[napi(factory)]
-  pub fn with_boring_ssl_ctx<T: Fn() -> napi::Result<bool>>(
+  pub fn with_boring_ssl_ctx(
+    env: Env,
     cert_pem: Option<Uint8Array>,
     key_pem: Option<Uint8Array>,
     supported_key_algos: Option<String>,
     ca_cert_pem: Option<Uint8Array>,
     verify_peer: bool,
-    verify_callback: T,
+    verify_callback: JsFunction,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
@@ -67,38 +68,18 @@ impl Config {
       |err| Err(Error::from_reason(err.to_string()))
     )?;
 
-    // Setting up verify callback
-    // let threadsafe_fun: ThreadsafeFunction<(String, String), ErrorStrategy::CalleeHandled> = verify_callback
-    //   .create_threadsafe_function(0, |ctx| {
-    //     let (s1, s2): (String, String) = ctx.value;
-    //     println!("value: {}", s1);
-    //     println!("value: {}", s2);
-    //     Ok(vec![
-    //       ctx.env.create_string(&s1.to_string()).unwrap().into_unknown(),
-    //       ctx.env.create_int32(42).unwrap().into_unknown(),
-    //       ctx.env.create_string(&s2.to_string()).unwrap().into_unknown(),
-    //     ])
-    //   })?;
-    //
-    // let asd = thread::spawn(move || {
-    //   threadsafe_fun.call(
-    //     Ok(("hello one!".to_string(), "hello two!".to_string())),
-    //     ThreadsafeFunctionCallMode::Blocking,
-    //   )
-    // }).join();
-
-    // let asd = threadsafe_fun.call(
-    //   Ok(("hello one!".to_string(), "hello two!".to_string())),
-    //   ThreadsafeFunctionCallMode::Blocking,
-    // );
-
-    if let Ok(result) = verify_callback() {
-      println!("asd: {}", result);
-    }
+    let tsfn: ThreadsafeFunction<(u32, String), ErrorStrategy::CalleeHandled> =
+      verify_callback
+      .create_threadsafe_function(0, |ctx| {
+        let(num, s) = ctx.value;
+        println!("value: {}", num);
+        println!("value: {}", s);
+        ctx.env.create_string("Hello!").map(|v| vec![v])
+      })?;
 
     let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
     else { boring::ssl::SslVerifyMode::NONE };
-    ssl_ctx_builder.set_verify_callback(verify_value, |succeeded, cert_store| {
+    ssl_ctx_builder.set_verify_callback(verify_value, move |succeeded, cert_store| {
       println!("normalSuc? {}", succeeded);
 
       // Converting current cert
@@ -141,6 +122,41 @@ impl Config {
       //   println!("No chain?");
       //   return false;
       // }
+
+      // let cert_jsval = match cert {
+      //   Some(cert) => env.create_string(&cert).unwrap().into_unknown(),
+      //   None => env.get_undefined().unwrap().into_unknown(),
+      // };
+      // let chain_jsval = match chain {
+      //   Some(chain) => {
+      //     for pem in chain {
+      //       return env.create_string(pem)?;
+      //     }
+      //   },
+      //   None => env.get_undefined()?,
+      // };
+      //
+      // let args = &vec![
+      //   cert_jsval,
+      //   // chain_jsval,
+      // ];
+      // let result = verify_callback.call(None, args).unwrap();
+      // let val = result
+      //   .coerce_to_bool().unwrap()
+      //   .get_value().unwrap();
+      // println!("result was: {}", val);
+
+      println!("Making native call");
+      let result = tsfn.call_async::<napi::JsBoolean>(
+        Ok((100, "hello!".to_string())),
+      );
+      println!("waiting....");
+      let asd = block_on(result);
+      let val = asd
+        .unwrap()
+        .get_value()
+        .unwrap();
+      println!("Result!: {}", val);
 
       succeeded
     });
