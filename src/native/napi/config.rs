@@ -1,15 +1,24 @@
 // use core::panicking::panic;
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
-use std::thread;
-use napi::{
-  JsUnknown,
+use napi::threadsafe_function::{
+  ErrorStrategy,
+  ThreadsafeFunction,
+  ThreadsafeFunctionCallMode,
+  ThreadSafeCallContext,
 };
-use futures::executor::block_on;
 
 #[napi]
 pub struct Config(pub (crate) quiche::Config);
+
+struct CallbackData {
+  pre_verify: bool,
+  cert: Option<String>,
+  chain: Option<Vec<String>>,
+  depth: u32,
+  error_message: String,
+  length: u32,
+}
 
 /// Equivalent to quiche::CongestionControlAlgorithm
 #[napi]
@@ -52,14 +61,16 @@ impl Config {
     return Ok(Config(config));
   }
 
+
+
   #[napi(factory)]
   pub fn with_boring_ssl_ctx(
-    env: Env,
     cert_pem: Option<Uint8Array>,
     key_pem: Option<Uint8Array>,
     supported_key_algos: Option<String>,
     ca_cert_pem: Option<Uint8Array>,
     verify_peer: bool,
+    verify_allow_fail: bool,
     verify_callback: JsFunction,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
@@ -68,20 +79,46 @@ impl Config {
       |err| Err(Error::from_reason(err.to_string()))
     )?;
 
-    let tsfn: ThreadsafeFunction<(u32, String), ErrorStrategy::CalleeHandled> =
+    let tsfn: ThreadsafeFunction<CallbackData, ErrorStrategy::CalleeHandled> =
       verify_callback
-      .create_threadsafe_function(0, |ctx| {
-        let(num, s) = ctx.value;
-        println!("value: {}", num);
-        println!("value: {}", s);
-        ctx.env.create_string("Hello!").map(|v| vec![v])
+      .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<CallbackData>| {
+        let js_cert = match ctx.value.cert {
+          Some(cert) => ctx.env.create_string(&cert)?.into_unknown(),
+          None => ctx.env.get_undefined()?.into_unknown(),
+        };
+        let js_chain = match ctx.value.chain {
+          Some(chain) => {
+            let mut js_array = ctx.env.create_array_with_length(chain.len())?;
+            for (i, pem) in chain.iter().enumerate() {
+              let js_pem = ctx.env.create_string(pem)?.into_unknown();
+              js_array.set_element(u32::try_from(i).unwrap(), js_pem);
+            }
+            js_array.into_unknown()
+          },
+          None => ctx.env.get_undefined()?.into_unknown(),
+        };
+
+        let js_pre_success = ctx.env.get_boolean(ctx.value.pre_verify)?.into_unknown();
+        let js_depth = ctx.env.create_uint32(ctx.value.depth)?.into_unknown();
+        let js_error_message = ctx.env.create_string(&ctx.value.error_message)?.into_unknown();
+        let js_length = ctx.env.create_uint32(ctx.value.length)?.into_unknown();
+        let mut js_record = ctx.env.create_object()?;
+        js_record.set_named_property("preSuccess", js_pre_success);
+        js_record.set_named_property("errorMessage", js_error_message);
+        js_record.set_named_property("depth", js_depth);
+        js_record.set_named_property("length", js_length);
+        js_record.set_named_property("cert", js_cert);
+        js_record.set_named_property("chain", js_chain);
+
+        let args = vec![
+          js_record.into_unknown(),
+        ];
+        Ok(args)
       })?;
 
     let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
     else { boring::ssl::SslVerifyMode::NONE };
-    ssl_ctx_builder.set_verify_callback(verify_value, move |succeeded, cert_store| {
-      println!("normalSuc? {}", succeeded);
-
+    ssl_ctx_builder.set_verify_callback(verify_value, move |pre_verify, cert_store| {
       // Converting current cert
       let cert: Option<String> = match cert_store.current_cert() {
         Some(cert) => {
@@ -92,12 +129,6 @@ impl Config {
         },
         _ => None,
       };
-      // if let Some(cert) = cert {
-      //   println!("pem\n{}", cert);
-      // } else {
-      //   println!("No current cert?");
-      //   return false;
-      // }
 
       // converting cert chain
       let chain: Option<Vec<String>> = match cert_store.chain() {
@@ -113,52 +144,36 @@ impl Config {
         _ => None,
       };
 
-      // if let Some(chain) = chain {
-      //   println!("ayyyy");
-      //   for pem in chain {
-      //     println!("pem:\n{}", pem);
-      //   }
-      // } else {
-      //   println!("No chain?");
-      //   return false;
-      // }
+      let depth = cert_store.error_depth();
+      println!("Error depth: {}", depth);
 
-      // let cert_jsval = match cert {
-      //   Some(cert) => env.create_string(&cert).unwrap().into_unknown(),
-      //   None => env.get_undefined().unwrap().into_unknown(),
-      // };
-      // let chain_jsval = match chain {
-      //   Some(chain) => {
-      //     for pem in chain {
-      //       return env.create_string(pem)?;
-      //     }
-      //   },
-      //   None => env.get_undefined()?,
-      // };
-      //
-      // let args = &vec![
-      //   cert_jsval,
-      //   // chain_jsval,
-      // ];
-      // let result = verify_callback.call(None, args).unwrap();
-      // let val = result
-      //   .coerce_to_bool().unwrap()
-      //   .get_value().unwrap();
-      // println!("result was: {}", val);
+      let error_message = cert_store.error().error_string().to_string();
+      println!("Error? {}", error_message);
 
-      println!("Making native call");
-      let result = tsfn.call_async::<napi::JsBoolean>(
-        Ok((100, "hello!".to_string())),
+      let length = match &chain {
+        Some(chain) => u32::try_from(chain.len()).unwrap(),
+        _ => 0,
+      };
+
+      let callback_data = CallbackData {
+        pre_verify,
+        cert,
+        chain,
+        depth,
+        error_message,
+        length,
+      };
+
+      tsfn.call(
+        Ok(callback_data),
+        ThreadsafeFunctionCallMode::Blocking,
       );
-      println!("waiting....");
-      let asd = block_on(result);
-      let val = asd
-        .unwrap()
-        .get_value()
-        .unwrap();
-      println!("Result!: {}", val);
 
-      succeeded
+      if verify_allow_fail {
+        true
+      } else {
+        pre_verify
+      }
     });
     // Processing and adding the cert chain
     if let Some(cert_pem) = cert_pem {
