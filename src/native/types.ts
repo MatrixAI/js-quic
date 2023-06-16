@@ -45,6 +45,7 @@ interface ConfigConstructor {
   new (): Config;
   withBoringSslCtx(
     verifyPeer: boolean,
+    verifyAllowFail: boolean,
     ca?: Uint8Array | undefined | null,
     key?: Array<Uint8Array> | undefined | null,
     cert?: Array<Uint8Array> | undefined | null,

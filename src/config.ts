@@ -26,6 +26,7 @@ const sigalgs = [
 const clientDefault: QUICConfig = {
   sigalgs,
   verifyPeer: true,
+  verifyAllowFail: false,
   grease: true,
   maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
@@ -45,6 +46,7 @@ const clientDefault: QUICConfig = {
 const serverDefault: QUICConfig = {
   sigalgs,
   verifyPeer: false,
+  verifyAllowFail: false,
   grease: true,
   maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
@@ -148,6 +150,7 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   try {
     quicheConfig = quiche.Config.withBoringSslCtx(
       config.verifyPeer,
+      config.verifyAllowFail,
       caPEMBuffer,
       keyPEMBuffers,
       certChainPEMBuffers,

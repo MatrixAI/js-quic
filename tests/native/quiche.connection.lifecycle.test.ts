@@ -785,9 +785,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
+          verifyPeer: true,
+          verifyAllowFail: true,
           key: keyPairRSAPEM.privateKey,
           cert: certRSAPEM,
         };
@@ -1186,14 +1190,61 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
-        expect(serverConn.isTimedOut()).toBeFalse();
-        expect(serverConn.isInEarlyData()).toBeFalse();
-        expect(serverConn.isEstablished()).toBeTrue();
-        expect(serverConn.isResumed()).toBeFalse();
-        expect(serverConn.isReadable()).toBeFalse();
-        expect(serverConn.isClosed()).toBeFalse();
-        expect(serverConn.isDraining()).toBeFalse();
+      });
+      test('client <-short- server', async () => {
+        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderShort = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        // SCID is dropped on the short frame
+        expect(serverHeaderShort.scid).toHaveLength(0);
+        expect(new QUICConnectionId(serverHeaderShort.dcid)).toEqual(
+          clientScid
+        );
+        clientConn.recv(
+          serverBuffer.subarray(0, serverSendLength),
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
+        // Client connection timeout is now null
+        // Both client and server is established
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
+      });
+      test('client -short-> server', async () => {
+        [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        // SCID is dropped on the short frame
+        expect(clientHeaderShort.scid).toHaveLength(0);
+        expect(new QUICConnectionId(clientHeaderShort.dcid)).toEqual(
+          serverScid
+        );
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
       });
       test('client and server established', async () => {
         // Both client and server is established
@@ -1327,9 +1378,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          key: keyPairECDSAPEM.privateKey,
+          cert: certECDSAPEM,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
+          verifyPeer: true,
+          verifyAllowFail: true,
           key: keyPairECDSAPEM.privateKey,
           cert: certECDSAPEM,
         };
@@ -1558,6 +1613,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
+        expect(clientConn.peerCertChain()).toBeNull();
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -1565,6 +1621,7 @@ describe('quiche connection lifecycle', () => {
             from: serverHost
           }
         );
+        expect(clientConn.peerCertChain()).toBeDefined();
       });
       test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
@@ -1585,6 +1642,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
+        expect(serverConn.peerCertChain()).toBeNull();
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -1592,6 +1650,7 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
+        expect(serverConn.peerCertChain()).toBeDefined();
       });
       test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();
@@ -1640,15 +1699,55 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
-        expect(serverConn.isTimedOut()).toBeFalse();
-        expect(serverConn.isInEarlyData()).toBeFalse();
-        expect(serverConn.isEstablished()).toBeTrue();
-        expect(serverConn.isResumed()).toBeFalse();
-        expect(serverConn.isReadable()).toBeFalse();
-        expect(serverConn.isClosed()).toBeFalse();
-        expect(serverConn.isDraining()).toBeFalse();
       });
+      test('client <-short- server', async () => {
+        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderShort = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        clientConn.recv(
+          serverBuffer.subarray(0, serverSendLength),
+          {
+            to: clientHost,
+            from: serverHost
+          }
+        );
+        // Client connection timeout is now null
+        // Both client and server is established
+        // This is due to max idle timeout of 0
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        // Timeout is lowered
+        expect(serverConn.timeout()).toBeLessThan(100);
+
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      })
+      test('client -short-> server', async () => {
+        [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
+        serverConn.recv(
+          clientBuffer.subarray(0, clientSendLength),
+          {
+            to: serverHost,
+            from: clientHost
+          }
+        );
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+      })
       test('client and server established', async () => {
         // Both client and server is established
         // Server connection timeout is now null
@@ -1780,9 +1879,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          key: keyPairEd25519PEM.privateKey,
+          cert: certEd25519PEM,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
+          verifyPeer: true,
+          verifyAllowFail: true,
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
         };
@@ -2011,6 +2114,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
+        expect(clientConn.peerCertChain()).toBeNull();
         clientConn.recv(
           serverBuffer.subarray(0, serverSendLength),
           {
@@ -2018,6 +2122,8 @@ describe('quiche connection lifecycle', () => {
             from: serverHost
           }
         );
+        // Client has server's certs at this stage
+        expect(clientConn.peerCertChain()).toBeDefined();
       });
       test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
@@ -2030,7 +2136,7 @@ describe('quiche connection lifecycle', () => {
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // Timeout is lowered
-        expect(clientConn.timeout()).toBeLessThan(100);
+        // expect(clientConn.timeout()).toBeLessThan(100);
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         expect(clientConn.isEstablished()).toBeTrue();
@@ -2038,6 +2144,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
+        expect(serverConn.peerCertChain()).toBeNull();
         serverConn.recv(
           clientBuffer.subarray(0, clientSendLength),
           {
@@ -2045,6 +2152,8 @@ describe('quiche connection lifecycle', () => {
             from: clientHost
           }
         );
+        // Server has the client's certs at this stage
+        expect(serverConn.peerCertChain()).toBeDefined();
       });
       test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();

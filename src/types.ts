@@ -165,6 +165,13 @@ type QUICConfig = {
   verifyPeer: boolean;
 
   /**
+   * Allows verification to fail, used with verifyPeer to request certs but
+   * preform manual verification on the application level.
+   * Defaults to false
+   */
+  verifyAllowFail: boolean;
+
+  /**
    * Enables the logging of secret keys to a file path.
    * Use this with wireshark to decrypt the QUIC packets for debugging.
    * This defaults to undefined.
