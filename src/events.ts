@@ -100,6 +100,17 @@ class QUICConnectionErrorEvent extends Event {
     this.detail = options.detail;
   }
 }
+class QUICConnectionRemoteCertEvent extends Event {
+  constructor(options?: EventInit) {
+    super('remoteCert', options);
+  }
+}
+
+class QUICConnectionRemoteSecureEvent extends Event {
+  constructor(options?: EventInit) {
+    super('remoteSecure', options);
+  }
+}
 
 class QUICStreamReadableEvent extends Event {
   constructor(options?: EventInit) {
@@ -148,6 +159,8 @@ export {
   QUICConnectionRecvEvent,
   QUICConnectionDestroyEvent,
   QUICConnectionErrorEvent,
+  QUICConnectionRemoteCertEvent,
+  QUICConnectionRemoteSecureEvent,
   QUICStreamReadableEvent,
   QUICStreamWritableEvent,
   QUICStreamDestroyEvent,

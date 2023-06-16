@@ -15,7 +15,7 @@ import { sleep } from './utils';
 import * as fixtures from './fixtures/certFixtures';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -353,8 +353,7 @@ describe(QUICClient.name, () => {
       },
       { numRuns: 10 },
     );
-    // Fixme: client verification works regardless of certs
-    testProp.skip(
+    testProp(
       'client verification succeeds',
       [tlsConfigWithCaArb, tlsConfigWithCaArb],
       async (tlsConfigProm1, tlsConfigProm2) => {
@@ -482,8 +481,7 @@ describe(QUICClient.name, () => {
       },
       { numRuns: 3 },
     );
-    // Fixme: client verification works regardless of certs
-    testProp.skip(
+    testProp(
       'graceful failure verifying client',
       [tlsConfigWithCaArb, tlsConfigWithCaArb],
       async (tlsConfigProm1, tlsConfigProm2) => {
@@ -499,9 +497,16 @@ describe(QUICClient.name, () => {
         });
         testsUtils.extractSocket(server, sockets);
         const handleConnectionEventProm = promise<any>();
+        const destroyedProm = promise();
         server.addEventListener(
           'connection',
-          handleConnectionEventProm.resolveP,
+          (event: events.QUICServerConnectionEvent) => {
+            handleConnectionEventProm.resolveP(event);
+            const serverConn = event.detail;
+            serverConn.addEventListener('destroy', () => {
+              destroyedProm.resolveP();
+            });
+          },
         );
         await server.start({
           host: '127.0.0.1' as Host,
@@ -521,10 +526,10 @@ describe(QUICClient.name, () => {
           }),
         ).toReject();
         await handleConnectionEventProm.p;
-        // Expect connection on the server to have ended
-        // @ts-ignore: kidnap protected property
-        const connectionMap = server.connectionMap;
-        expect(connectionMap.serverConnections.size).toBe(0);
+        void sleep(5000).then(() => {
+          destroyedProm.rejectP(Error('Timed out waiting for destroy'));
+        });
+        await destroyedProm.p;
         await server.stop();
       },
       { numRuns: 3 },
@@ -1398,5 +1403,231 @@ describe(QUICClient.name, () => {
         errors.ErrorQUICConnectionTimeout,
       );
     });
+  });
+  describe('custom TLS verification', () => {
+    testProp(
+      'server succeeds custom verification',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs = await tlsConfigsProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        testsUtils.extractSocket(server, sockets);
+        const handleConnectionEventProm = promise<any>();
+        server.addEventListener(
+          'connection',
+          handleConnectionEventProm.resolveP,
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        const verifyProm = promise<Array<string> | undefined>();
+        const client = await QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          localHost: '127.0.0.1' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: true,
+            verifyAllowFail: true,
+          },
+          verifyCallback: (certs) => {
+            verifyProm.resolveP(certs);
+          },
+        });
+        testsUtils.extractSocket(client, sockets);
+        await handleConnectionEventProm.p;
+        await expect(verifyProm.p).toResolve();
+        await client.destroy();
+        await server.stop();
+      },
+      { numRuns: 5 },
+    );
+    testProp(
+      'server fails custom verification',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs = await tlsConfigsProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        testsUtils.extractSocket(server, sockets);
+        const handleConnectionEventProm = promise<QUICConnection>();
+        server.addEventListener(
+          'connection',
+          (event: events.QUICServerConnectionEvent) =>
+            handleConnectionEventProm.resolveP(event.detail),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should fail
+        const clientProm = QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          localHost: '127.0.0.1' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: true,
+            verifyAllowFail: true,
+          },
+          verifyCallback: () => {
+            throw Error('SOME ERROR');
+          },
+        });
+        clientProm.catch(() => {});
+
+        const serverConn = await handleConnectionEventProm.p;
+
+        const destroyProm = promise();
+        serverConn.addEventListener('destroy', () => destroyProm.resolveP());
+        const errorProm = promise<never>();
+        errorProm.p.catch(() => {});
+        serverConn.addEventListener(
+          'error',
+          (event: events.QUICConnectionErrorEvent) => {
+            errorProm.rejectP(event.detail);
+          },
+        );
+        await destroyProm.p;
+        // Server connection fails with connection failure
+        await expect(errorProm.p).rejects.toThrow(
+          errors.ErrorQUICConnectionFailure,
+        );
+        await expect(clientProm).rejects.toThrow(
+          errors.ErrorQUICConnectionFailure,
+        );
+
+        await server.stop();
+      },
+      { numRuns: 5 },
+    );
+    testProp(
+      'client succeeds custom verification',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs = await tlsConfigsProm;
+        const verifyProm = promise<Array<string> | undefined>();
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs.tlsConfig,
+            verifyPeer: true,
+            verifyAllowFail: true,
+          },
+          verifyCallback: (certs) => {
+            verifyProm.resolveP(certs);
+          },
+        });
+        testsUtils.extractSocket(server, sockets);
+        const handleConnectionEventProm = promise<any>();
+        server.addEventListener(
+          'connection',
+          handleConnectionEventProm.resolveP,
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should succeed
+        const client = await QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          localHost: '127.0.0.1' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+            tlsConfig: tlsConfigs.tlsConfig,
+          },
+        });
+        testsUtils.extractSocket(client, sockets);
+        await handleConnectionEventProm.p;
+        await expect(verifyProm.p).toResolve();
+        await client.destroy();
+        await server.stop();
+      },
+      { numRuns: 5 },
+    );
+    testProp(
+      'client fails custom verification',
+      [tlsConfigWithCaArb],
+      async (tlsConfigsProm) => {
+        const tlsConfigs = await tlsConfigsProm;
+        const server = new QUICServer({
+          crypto,
+          logger: logger.getChild(QUICServer.name),
+          config: {
+            tlsConfig: tlsConfigs.tlsConfig,
+            verifyPeer: true,
+            verifyAllowFail: true,
+          },
+          verifyCallback: () => {
+            throw Error('SOME ERROR');
+          },
+        });
+        testsUtils.extractSocket(server, sockets);
+        const handleConnectionEventProm = promise<QUICConnection>();
+        server.addEventListener(
+          'connection',
+          (event: events.QUICServerConnectionEvent) =>
+            handleConnectionEventProm.resolveP(event.detail),
+        );
+        await server.start({
+          host: '127.0.0.1' as Host,
+        });
+        // Connection should fail
+        const clientProm = QUICClient.createQUICClient({
+          host: '127.0.0.1' as Host,
+          port: server.port,
+          localHost: '127.0.0.1' as Host,
+          crypto,
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            tlsConfig: tlsConfigs.tlsConfig,
+            verifyPeer: false,
+          },
+        });
+        clientProm.catch(() => {});
+
+        const serverConn = await handleConnectionEventProm.p;
+
+        const destroyProm = promise();
+        serverConn.addEventListener('destroy', () => destroyProm.resolveP());
+        const errorProm = promise<never>();
+        errorProm.p.catch(() => {});
+        serverConn.addEventListener(
+          'error',
+          (event: events.QUICConnectionErrorEvent) => {
+            errorProm.rejectP(event.detail);
+          },
+        );
+        await destroyProm.p;
+        // Server connection fails with connection failure
+        await expect(errorProm.p).rejects.toThrow(
+          errors.ErrorQUICConnectionFailure,
+        );
+        await expect(clientProm).rejects.toThrow(
+          errors.ErrorQUICConnectionFailure,
+        );
+
+        await server.stop();
+      },
+      { numRuns: 5 },
+    );
   });
 });

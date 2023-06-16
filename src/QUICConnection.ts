@@ -3,7 +3,7 @@ import type QUICConnectionMap from './QUICConnectionMap';
 import type QUICConnectionId from './QUICConnectionId';
 // This is specialized type
 import type { QUICConfig } from './config';
-import type { Host, Port, RemoteInfo, StreamId } from './types';
+import type { Host, Port, RemoteInfo, StreamId, VerifyCallback } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
 import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { ConnectionMetadata } from './types';
@@ -21,7 +21,8 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
-import { promise } from './utils';
+import { never, promise } from './utils';
+import { Type } from './native/types';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -94,6 +95,14 @@ class QUICConnection extends EventTarget {
   protected _remoteHost: Host;
   protected _remotePort: Port;
 
+  protected _customVerified = false;
+  protected _shortReceived = false;
+  protected _shortSent = false;
+  protected _secured = false;
+  protected _count = 0;
+  protected _securedP = promise();
+  protected verifyCallback: VerifyCallback | undefined;
+
   /**
    * Create QUICConnection by connecting to a server
    */
@@ -107,6 +116,7 @@ class QUICConnection extends EventTarget {
       new Error(`${type.toString()} ${code.toString()}`),
     maxReadableStreamBytes,
     maxWritableStreamBytes,
+    verifyCallback,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -117,6 +127,7 @@ class QUICConnection extends EventTarget {
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
     maxWritableStreamBytes?: number;
+    verifyCallback: VerifyCallback | undefined;
     logger?: Logger;
   }) {
     logger.info(`Connect ${this.name}`);
@@ -148,6 +159,7 @@ class QUICConnection extends EventTarget {
       codeToReason,
       maxReadableStreamBytes,
       maxWritableStreamBytes,
+      verifyCallback,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -169,6 +181,7 @@ class QUICConnection extends EventTarget {
       new Error(`${type.toString()} ${code.toString()}`),
     maxReadableStreamBytes,
     maxWritableStreamBytes,
+    verifyCallback,
     logger = new Logger(`${this.name} ${scid}`),
   }: {
     scid: QUICConnectionId;
@@ -180,6 +193,7 @@ class QUICConnection extends EventTarget {
     codeToReason?: StreamCodeToReason;
     maxReadableStreamBytes?: number;
     maxWritableStreamBytes?: number;
+    verifyCallback: VerifyCallback | undefined;
     logger?: Logger;
   }): Promise<QUICConnection> {
     logger.info(`Accept ${this.name}`);
@@ -211,6 +225,7 @@ class QUICConnection extends EventTarget {
       codeToReason,
       maxReadableStreamBytes,
       maxWritableStreamBytes,
+      verifyCallback,
       logger,
     });
     socket.connectionMap.set(connection.connectionId, connection);
@@ -228,6 +243,7 @@ class QUICConnection extends EventTarget {
     codeToReason,
     maxReadableStreamBytes,
     maxWritableStreamBytes,
+    verifyCallback,
     logger,
   }: {
     type: 'client' | 'server';
@@ -239,6 +255,7 @@ class QUICConnection extends EventTarget {
     codeToReason: StreamCodeToReason;
     maxReadableStreamBytes: number | undefined;
     maxWritableStreamBytes: number | undefined;
+    verifyCallback: VerifyCallback | undefined;
     logger: Logger;
   }) {
     super();
@@ -254,6 +271,7 @@ class QUICConnection extends EventTarget {
     this.codeToReason = codeToReason;
     this.maxReadableStreamBytes = maxReadableStreamBytes;
     this.maxWritableStreamBytes = maxWritableStreamBytes;
+    this.verifyCallback = verifyCallback;
     // Sets the timeout on the first
     this.checkTimeout();
 
@@ -315,6 +333,10 @@ class QUICConnection extends EventTarget {
     };
   }
 
+  public get securedP() {
+    return this._securedP.p;
+  }
+
   /**
    * This provides the ability to destroy with a specific error. This will wait for the connection to fully drain.
    */
@@ -373,7 +395,7 @@ class QUICConnection extends EventTarget {
     await this.closedP;
     this.logger.debug('closeP resolved');
     this.connectionMap.delete(this.connectionId);
-    // Checking if timed out
+    // Emit error if timed out
     if (this.conn.isTimedOut()) {
       this.logger.error('Connection timed out');
       this.dispatchEvent(
@@ -382,6 +404,43 @@ class QUICConnection extends EventTarget {
         }),
       );
     }
+    // Emit error if peer error
+    const peerError = this.conn.peerError();
+    if (peerError != null) {
+      this.logger.info(
+        `Connection errored out with peerError ${Buffer.from(
+          peerError.reason,
+        ).toString()}(${peerError.errorCode})`,
+      );
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICConnectionFailure(
+            `Connection errored out with peerError ${Buffer.from(
+              peerError.reason,
+            ).toString()}(${peerError.errorCode})`,
+          ),
+        }),
+      );
+    }
+
+    const localError = this.conn.localError();
+    if (localError != null) {
+      this.logger.info(
+        `connection failed with localError ${Buffer.from(
+          localError.reason,
+        ).toString()}(${localError.errorCode})`,
+      );
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICConnectionFailure(
+            `connection failed with localError ${Buffer.from(
+              localError.reason,
+            ).toString()}(${localError.errorCode})`,
+          ),
+        }),
+      );
+    }
+
     this.dispatchEvent(new events.QUICConnectionDestroyEvent());
     // Clean up timeout if it's still running
     if (this.timer != null) {
@@ -450,6 +509,30 @@ class QUICConnection extends EventTarget {
         }
         return;
       }
+
+      // Checking if the packet was a short frame.
+      // Short indicates that the peer has completed TLS verification
+      if (!this._shortReceived) {
+        const header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
+        if (header.ty === Type.Short) {
+          this._shortReceived = true;
+        }
+      }
+
+      if (
+        !this._secured &&
+        this._shortReceived &&
+        this._shortReceived &&
+        !this.conn.isDraining()
+      ) {
+        if (this._count >= 1) {
+          this._secured = true;
+          this._securedP.resolveP();
+          this.dispatchEvent(new events.QUICConnectionRemoteSecureEvent());
+        }
+        this._count += 1;
+      }
+
       this.dispatchEvent(new events.QUICConnectionRecvEvent());
       // Here we can resolve our promises!
       if (this.conn.isEstablished()) {
@@ -607,6 +690,51 @@ class QUICConnection extends EventTarget {
           );
           return;
         }
+
+        // Handling custom TLS verification, this must be done after the following conditions.
+        //  1. Connection established.
+        //  2. Certs available.
+        //  3. Sent after connection has established.
+        if (
+          !this._customVerified &&
+          this.conn.isEstablished() &&
+          this.conn.peerCertChain() != null
+        ) {
+          this._customVerified = true;
+          const peerCerts = this.conn.peerCertChain();
+          if (peerCerts == null) never();
+          const peerCertsPem = peerCerts.map((c) =>
+            utils.certificateDERToPEM(c),
+          );
+          // Dispatching certs available event
+          this.dispatchEvent(new events.QUICConnectionRemoteCertEvent());
+          try {
+            if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
+            this.conn.sendAckEliciting();
+          } catch (e) {
+            // Force the connection to end.
+            // Error 304 indicates cert chain failed verification.
+            // Error 372 indicates cert chain was missing.
+            this.conn.close(
+              false,
+              304,
+              Buffer.from(`Custom TLSFail: ${e.message}`),
+            );
+          }
+        }
+
+        // Check the header type
+        if (!this._shortSent) {
+          const header = quiche.Header.fromSlice(
+            sendBuffer,
+            quiche.MAX_CONN_ID_LEN,
+          );
+          if (header.ty === Type.Short) {
+            // Short was sent, locally secured
+            this._shortSent = true;
+          }
+        }
+
         try {
           this.logger.debug(
             `ATTEMPTING SEND ${sendLength} bytes to ${sendInfo.to.port}:${sendInfo.to.host}`,

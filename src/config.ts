@@ -21,6 +21,7 @@ type QUICConfig = {
   verifyFromPemFile: string | undefined;
   supportedPrivateKeyAlgos: string | undefined;
   verifyPeer: boolean;
+  verifyAllowFail: boolean;
   logKeys: string | undefined;
   grease: boolean;
   maxIdleTimeout: number;
@@ -43,6 +44,7 @@ const clientDefault: QUICConfig = {
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: true,
+  verifyAllowFail: false,
   grease: true,
   maxIdleTimeout: 5000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
@@ -64,6 +66,7 @@ const serverDefault: QUICConfig = {
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: false,
+  verifyAllowFail: false,
   grease: true,
   maxIdleTimeout: 5000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
@@ -95,6 +98,7 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     config.supportedPrivateKeyAlgos ?? null,
     config.verifyPem != null ? Buffer.from(config.verifyPem) : null,
     config.verifyPeer,
+    config.verifyAllowFail,
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {

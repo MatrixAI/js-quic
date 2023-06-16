@@ -53,6 +53,7 @@ impl Config {
     supported_key_algos: Option<String>,
     ca_cert_pem: Option<Uint8Array>,
     verify_peer: bool,
+    verify_allow_fail: bool,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
@@ -61,7 +62,15 @@ impl Config {
     )?;
     let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
     else { boring::ssl::SslVerifyMode::NONE };
-    ssl_ctx_builder.set_verify(verify_value);
+    ssl_ctx_builder.set_verify_callback(verify_value, move |pre_verify, _| {
+      // Override any validation errors, this is needed so we can request certs but validate them
+      //  manually.
+      if verify_allow_fail {
+        true
+      } else {
+        pre_verify
+      }
+    });
     // Processing and adding the cert chain
     if let Some(cert_pem) = cert_pem {
       let x509_cert_chain = boring::x509::X509::stack_from_pem(

@@ -74,6 +74,10 @@ class ErrorQUICConnectionTLSFailure<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC connection had failure with TLS negotiation';
 }
 
+class ErrorQUICConnectionFailure<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC connection failed unexpectedly';
+}
+
 class ErrorQUICStream<T> extends ErrorQUIC<T> {
   static description = 'QUIC Stream error';
 }
@@ -122,6 +126,7 @@ export {
   ErrorQUICConnectionDestroyed,
   ErrorQUICConnectionTimeout,
   ErrorQUICConnectionTLSFailure,
+  ErrorQUICConnectionFailure,
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
   ErrorQUICStreamLocked,

@@ -7,6 +7,7 @@ import type {
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
+  VerifyCallback,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
@@ -52,6 +53,7 @@ class QUICServer extends EventTarget {
   protected maxWritableStreamBytes?: number | undefined;
   protected keepaliveIntervalTime?: number | undefined;
   protected connectionMap: QUICConnectionMap;
+  protected verifyCallback: VerifyCallback | undefined;
 
   /**
    * Handle QUIC socket errors
@@ -78,6 +80,7 @@ class QUICServer extends EventTarget {
     maxReadableStreamBytes,
     maxWritableStreamBytes,
     keepaliveIntervalTime,
+    verifyCallback,
     logger,
   }: {
     crypto: {
@@ -95,6 +98,7 @@ class QUICServer extends EventTarget {
     maxReadableStreamBytes?: number;
     maxWritableStreamBytes?: number;
     keepaliveIntervalTime?: number;
+    verifyCallback?: VerifyCallback;
     logger?: Logger;
   }) {
     super();
@@ -125,6 +129,7 @@ class QUICServer extends EventTarget {
     this.maxReadableStreamBytes = maxReadableStreamBytes;
     this.maxWritableStreamBytes = maxWritableStreamBytes;
     this.keepaliveIntervalTime = keepaliveIntervalTime;
+    this.verifyCallback = verifyCallback;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -304,6 +309,7 @@ class QUICServer extends EventTarget {
       logger: this.logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),
+      verifyCallback: this.verifyCallback,
     });
     connection.setKeepAlive(this.keepaliveIntervalTime);
 

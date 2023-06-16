@@ -96,6 +96,8 @@ type ConnectionMetadata = {
   remotePort: Port;
 };
 
+type VerifyCallback = (certs: Array<string>) => void;
+
 export type {
   Opaque,
   Callback,
@@ -113,4 +115,5 @@ export type {
   StreamReasonToCode,
   StreamCodeToReason,
   ConnectionMetadata,
+  VerifyCallback,
 };

@@ -1,4 +1,4 @@
-import type { Crypto, Host, Hostname, Port } from './types';
+import type { Crypto, Host, Hostname, Port, VerifyCallback } from './types';
 import type { Config } from './native/types';
 import type { QUICConfig } from './config';
 import type QUICConnectionMap from './QUICConnectionMap';
@@ -58,6 +58,7 @@ class QUICClient extends EventTarget {
     maxReadableStreamBytes,
     maxWritableStreamBytes,
     keepaliveIntervalTime,
+    verifyCallback,
     logger = new Logger(`${this.name}`),
     config = {},
   }: {
@@ -76,6 +77,7 @@ class QUICClient extends EventTarget {
     maxReadableStreamBytes?: number;
     maxWritableStreamBytes?: number;
     keepaliveIntervalTime?: number;
+    verifyCallback?: VerifyCallback;
     logger?: Logger;
     config?: Partial<QUICConfig>;
   }) {
@@ -164,17 +166,22 @@ class QUICClient extends EventTarget {
       logger: logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),
+      verifyCallback,
     });
-    connection.addEventListener('error', handleConnectionError, { once: true });
+    connection.addEventListener('error', handleConnectionError, {
+      once: true,
+    });
     logger.debug('CLIENT TRIGGER SEND');
     // This will not raise an error
     await connection.send();
     // This will wait to be established, while also rejecting on error
     try {
-      await Promise.race([connection.establishedP, errorP]);
+      await Promise.race([
+        Promise.all([connection.establishedP, connection.securedP]),
+        errorP,
+      ]);
     } catch (e) {
       logger.error(e.toString());
-      // Console.error(e);
       logger.debug(`Is shared?: ${isSocketShared}`);
       // Waiting for connection to destroy
       if (connection[destroyed] === false) {
@@ -194,6 +201,7 @@ class QUICClient extends EventTarget {
         // Stop our own socket
         await socket.stop();
       }
+      // Error.captureStackTrace(e);
       throw e;
     }
 
