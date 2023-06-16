@@ -61,8 +61,6 @@ impl Config {
     return Ok(Config(config));
   }
 
-
-
   #[napi(factory)]
   pub fn with_boring_ssl_ctx(
     cert_pem: Option<Uint8Array>,
@@ -91,7 +89,7 @@ impl Config {
             let mut js_array = ctx.env.create_array_with_length(chain.len())?;
             for (i, pem) in chain.iter().enumerate() {
               let js_pem = ctx.env.create_string(pem)?.into_unknown();
-              js_array.set_element(u32::try_from(i).unwrap(), js_pem);
+              js_array.set_element(u32::try_from(i).unwrap(), js_pem)?;
             }
             js_array.into_unknown()
           },
@@ -103,12 +101,12 @@ impl Config {
         let js_error_message = ctx.env.create_string(&ctx.value.error_message)?.into_unknown();
         let js_length = ctx.env.create_uint32(ctx.value.length)?.into_unknown();
         let mut js_record = ctx.env.create_object()?;
-        js_record.set_named_property("preSuccess", js_pre_success);
-        js_record.set_named_property("errorMessage", js_error_message);
-        js_record.set_named_property("depth", js_depth);
-        js_record.set_named_property("length", js_length);
-        js_record.set_named_property("cert", js_cert);
-        js_record.set_named_property("chain", js_chain);
+        js_record.set_named_property("preSuccess", js_pre_success)?;
+        js_record.set_named_property("errorMessage", js_error_message)?;
+        js_record.set_named_property("depth", js_depth)?;
+        js_record.set_named_property("length", js_length)?;
+        js_record.set_named_property("cert", js_cert)?;
+        js_record.set_named_property("chain", js_chain)?;
 
         let args = vec![
           js_record.into_unknown(),

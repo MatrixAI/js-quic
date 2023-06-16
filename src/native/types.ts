@@ -50,7 +50,7 @@ interface ConfigConstructor {
     ca_cert_pem: Uint8Array | null,
     verify_peer: boolean,
     verify_allow_fail: boolean,
-    verify_callback: (err: any, preVerify: boolean, cert: string, chain: Array<string>) => void,
+    verify_callback: VerifyCallback,
   ): Config;
 }
 
@@ -314,6 +314,33 @@ type PathStatsIter = {
   [Symbol.iterator](): Iterator<PathStats, void, void>;
 };
 
+/**
+ * This callback is called for each cert in the cert chain.
+ * It is called in order of root to leaf.
+ * The last call in the chain will be the 0th element in the chain.
+ *
+ * @param err - contains any errors when calling the callback
+ * @param data - Object containing data about the verification step
+ * @param data.preSuccess - The result of the verification
+ * @param data.errorMessage - The string message of the error. Is `ok` if succeeded. A full list of messages can be
+ * found at https://github.com/google/boringssl/blob/e1b8685770d0e82e5a4a3c5d24ad1602e05f2e83/crypto/x509/x509_txt.c
+ * @param data.depth - Index of the current cert this was called with
+ * @param data.length - total length of the chain
+ * @param data.cert - The current certificate in PEM format.
+ * @param data.chain - Array of the cert chain in PEM format. In order of leaf to root cert.
+ */
+type VerifyCallback = (
+  err: any,
+  data: {
+    preSuccess: boolean;
+    errorMessage: string;
+    depth: number;
+    length: number;
+    cert: string;
+    chain: Array<string>;
+  },
+) => void;
+
 export type {
   CongestionControlAlgorithm,
   Shutdown,
@@ -335,4 +362,5 @@ export type {
   ConnectionConstructor,
   Header,
   HeaderConstructor,
+  VerifyCallback,
 };

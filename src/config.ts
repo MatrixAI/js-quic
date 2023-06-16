@@ -1,4 +1,4 @@
-import type { Config as QuicheConfig } from './native/types';
+import type { Config as QuicheConfig, VerifyCallback } from './native/types';
 import { quiche } from './native';
 
 // All the algos chrome supports + ed25519
@@ -21,6 +21,8 @@ type QUICConfig = {
   verifyFromPemFile: string | undefined;
   supportedPrivateKeyAlgos: string | undefined;
   verifyPeer: boolean;
+  verifyAllowFail: boolean;
+  verifyCallback: VerifyCallback;
   logKeys: string | undefined;
   grease: boolean;
   maxIdleTimeout: number;
@@ -43,6 +45,8 @@ const clientDefault: QUICConfig = {
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: true,
+  verifyAllowFail: false,
+  verifyCallback: () => {},
   grease: true,
   maxIdleTimeout: 5000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
@@ -64,6 +68,8 @@ const serverDefault: QUICConfig = {
   supportedPrivateKeyAlgos: supportedPrivateKeyAlgosDefault,
   logKeys: undefined,
   verifyPeer: false,
+  verifyAllowFail: false,
+  verifyCallback: () => {},
   grease: true,
   maxIdleTimeout: 5000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE,
@@ -95,10 +101,8 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
     config.supportedPrivateKeyAlgos ?? null,
     config.verifyPem != null ? Buffer.from(config.verifyPem) : null,
     config.verifyPeer,
-    true,
-    (...args): void => {
-      console.log(args);
-    }
+    config.verifyAllowFail,
+    config.verifyCallback,
   );
   if (config.tlsConfig != null && 'certChainFromPemFile' in config.tlsConfig) {
     if (config.tlsConfig?.certChainFromPemFile != null) {

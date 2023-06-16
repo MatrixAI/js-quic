@@ -39,7 +39,9 @@ async function main() {
     config: {
       tlsConfig: tlsConfigs1,
       verifyFromPemFile: verifyPemFile,
-      verifyPeer: true,
+      verifyPeer: false,
+      verifyAllowFail: false,
+      // verifyCallback: (_, data) => console.log(data),
     },
   });
   const handleConnectionEventProm = promise<any>();
@@ -52,37 +54,22 @@ async function main() {
   });
   // Connection should succeed
   const client = await QUICClient.createQUICClient({
-    host: '::ffff:127.0.0.1' as Host,
+    host: '127.0.0.1' as Host,
     port: server.port,
-    localHost: '::' as Host,
+    localHost: '127.0.0.1' as Host,
     crypto,
     logger: logger.getChild(QUICClient.name),
     config: {
       // tlsConfig: tlsConfigs2,
-      verifyFromPemFile: verifyPemFile,
+      // verifyFromPemFile: verifyPemFile,
       verifyPeer: true,
+      verifyAllowFail: true,
+      verifyCallback: (_, data) => console.log(data),
     },
   });
   await handleConnectionEventProm.p;
   await client.destroy();
   await server.stop();
 }
-
-// async function main() {
-//   // @ts-ignore
-//   console.log(quiche.testCallback((...asd) => {
-//     console.log(asd)
-//     return false;
-//   }));
-// }
-
-// async function main() {
-//   console.log(quiche);
-//   // @ts-ignore
-//   console.log(await quiche.callThreadsafeFunction((...args) => {
-//     console.log(args);
-//     return false;
-//   }))
-// }
 
 void main().then(() => {});
