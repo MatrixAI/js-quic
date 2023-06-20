@@ -34,7 +34,7 @@
     "@matrixai/async-cancellable": "^1.1.0",
     "@matrixai/contexts": "^1.0.0",
     "@matrixai/async-init": "^1.8.3",
-    "@matrixai/async-locks": "^3.2.0",
+    "@matrixai/async-locks": "^4.0.0",
     "@matrixai/errors": "^1.1.7",
     "@matrixai/logger": "^3.1.0",
     "@matrixai/resources": "^1.1.3",

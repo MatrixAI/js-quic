@@ -212,14 +212,14 @@ class QUICStream
    * 1. Top-down control flow - means explicit destruction from QUICConnection
    * 2. Bottom-up control flow - means stream events from users of this stream
    */
-  public async destroy() {
+  public async destroy({ force = false }: { force: Boolean } ) {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    if (!this._recvClosed) {
+    if (!this._recvClosed && force) {
       const e = new errors.ErrorQUICStreamClose();
       this.readableController.error(e);
       await this.closeRecv(true, e);
     }
-    if (!this._sendClosed) {
+    if (!this._sendClosed && force) {
       const e = new errors.ErrorQUICStreamClose();
       this.writableController.error(e);
       await this.closeSend(true, e);

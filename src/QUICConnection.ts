@@ -9,7 +9,7 @@ import type { StreamCodeToReason, StreamReasonToCode } from './types';
 import type { QUICConfig, ConnectionMetadata } from './types';
 import { StartStop, ready, status, running } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
-import { Lock, LockBox } from '@matrixai/async-locks';
+import { Lock, LockBox, Monitor, RWLockWriter } from '@matrixai/async-locks';
 import { destroyed } from '@matrixai/async-init';
 import { Timer } from '@matrixai/timer';
 import { buildQuicheConfig } from './config';
@@ -50,14 +50,6 @@ class QUICConnection extends EventTarget {
    * @internal
    */
   public readonly conn: Connection;
-
-  /**
-   * Internal conn state transition lock.
-   * This is used to serialize state transitions to `conn`.
-   * This is also used by `QUICSocket`.
-   * @internal
-   */
-  public readonly connLock: Lock = new Lock();
 
   /**
    * Internal stream map.
@@ -183,7 +175,6 @@ class QUICConnection extends EventTarget {
    */
   protected closedP: Promise<void>;
 
-
   protected wasEstablished: boolean = false;
 
   protected resolveEstablishedP: () => void;
@@ -194,6 +185,9 @@ class QUICConnection extends EventTarget {
   protected rejectClosedP: (reason?: any) => void;
 
   protected lastErrorMessage?: string;
+
+  protected lockbox = new LockBox<RWLockWriter>();
+  protected readonly lockCode = 'Lock';
 
   public constructor({
     type,
@@ -398,27 +392,19 @@ class QUICConnection extends EventTarget {
       errorMessage?: string;
       force?: boolean;
     }= {},
-    lock: Lock = this.connLock
+    mon: Monitor<RWLockWriter>,
   ) {
     this.logger.info(`Stop ${this.constructor.name}`);
+    await mon.withF(this.lockCode, async () => {
+
     const streamDestroyPs: Array<Promise<void>> = [];
     for (const stream of this.streamMap.values()) {
-      // TODO: ensure that `stream.destroy` understands `force`
-      // Without it, it should be graceful
-      // With it, then it should assume the rest of the system could be broken
       streamDestroyPs.push(stream.destroy({ force }));
     }
     await Promise.all(streamDestroyPs);
     // Do we do this afterwards or before?
     this.stopKeepAliveIntervalTimer();
     try {
-      // We need to lock the connLock
-      // Note that this has no timeout
-      // We must have any deadlocks here!
-      // Plus ctx isn't accepted by the async-locks yet
-      // If already closed this will error out
-      // But nothing will happen
-      await this.connLock.withF(async () => {
         // If this is already closed, then `Done` will be thrown
         // Otherwise it can send `CONNECTION_CLOSE` frame
         // This can be 0x1c close at the QUIC layer or no errors
@@ -431,7 +417,6 @@ class QUICConnection extends EventTarget {
         // If we get a `Done` exception we don't bother calling send
         // The send only gets sent if the `Done` is not the case
         await this.send();
-      });
     } catch (e) {
       // If the connection is already closed, `Done` will be thrown
       if (e.message !== 'Done') {
@@ -450,6 +435,7 @@ class QUICConnection extends EventTarget {
     this.socket.connectionMap.delete(this.connectionId);
 
     this.dispatchEvent(new events.QUICConnectionStopEvent());
+    });
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
@@ -656,9 +642,8 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  public async send(lock: Lock = this.connLock): Promise<void> {
-
-    await this.connLock.withF(async () => {
+  public async send(mon: Monitor<RWLockWriter>): Promise<void> {
+    await mon.withF(this.lockCode, async () => {
       const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
       let sendLength: number;
       let sendInfo: SendInfo;
@@ -742,7 +727,7 @@ class QUICConnection extends EventTarget {
         // Note that this may cause the client to attempt
         // to stop the socket and stuff
         // The client should ignore this event error
-        // Becuase it's actually being handled
+        // Because it's actually being handled
         // On the other hand...
         // If we randomly fail here
         // It's correct to properly raise an event
@@ -758,7 +743,7 @@ class QUICConnection extends EventTarget {
       // At the same time, we may in fact be closed too
       if (this.conn.isClosed()) {
         // We actually finally closed here
-        // Actually theq uestion is that this could be an error
+        // Actually the question is that this could be an error
         // The act of closing is an error?
         // That's confusing
         this.resolveClosedP();
@@ -925,7 +910,7 @@ class QUICConnection extends EventTarget {
   //     }, intervalDelay);
   //   }
   // }
-
+  //
   // // Timeout handling, these methods handle time keeping for quiche.
   // // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
   // protected deadline: number = 0;
@@ -973,7 +958,7 @@ class QUICConnection extends EventTarget {
   //   const time = this.conn.timeout();
   //   this.logger.error(`THE TIME (${this.times}): ` + time + ' ' + new Date());
   //   this.times++;
-
+  //
   //   if (time == null) {
   //     // Clear timeout
   //     if (this.timer != null) this.logger.debug('timeout clearing timeout');
@@ -992,9 +977,9 @@ class QUICConnection extends EventTarget {
   //         clearTimeout(this.timer);
   //         delete this.timer;
   //         this.deadline = newDeadline;
-
+  //
   //         this.logger.warn('BEFORE SET TIMEOUT 1: ' + time);
-
+  //
   //         this.timer = setTimeout(this.onTimeout, time);
   //       }
   //     } else {
@@ -1006,9 +991,9 @@ class QUICConnection extends EventTarget {
   //       }
   //       this.logger.debug(`timeout creating timer with ${time} delay`);
   //       this.deadline = newDeadline;
-
+  //
   //       this.logger.warn('BEFORE SET TIMEOUT 2: ' + time);
-
+  //
   //       this.timer = setTimeout(this.onTimeout, time);
   //     }
   //   }
