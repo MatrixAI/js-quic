@@ -1,17 +1,15 @@
 import type {
-  Crypto,
   Host,
   Hostname,
   Port,
-  PromiseDeconstructed,
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
   QUICConfig,
+  ServerCrypto,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { ready, StartStop } from '@matrixai/async-init/dist/StartStop';
@@ -21,7 +19,6 @@ import QUICConnectionId from './QUICConnectionId';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
 import * as utils from './utils';
-import { promise } from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
 
@@ -48,20 +45,12 @@ class QUICServer extends EventTarget {
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
-    ops: {
-      sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-      verify(
-        key: ArrayBuffer,
-        data: ArrayBuffer,
-        sig: ArrayBuffer,
-      ): Promise<boolean>;
-    };
+    ops: ServerCrypto;
   };
   protected config: QUICConfig;
   protected socket: QUICSocket;
   protected reasonToCode: StreamReasonToCode | undefined;
   protected codeToReason: StreamCodeToReason | undefined;
-  protected keepaliveIntervalTime?: number | undefined;
   protected connectionMap: QUICConnectionMap;
 
   protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
@@ -86,7 +75,6 @@ class QUICServer extends EventTarget {
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
-    keepaliveIntervalTime,
     logger,
   }: {
     crypto: {
@@ -108,7 +96,6 @@ class QUICServer extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    keepaliveIntervalTime?: number;
     logger?: Logger;
   }) {
     super();
@@ -135,7 +122,6 @@ class QUICServer extends EventTarget {
     this.config = quicConfig;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-    this.keepaliveIntervalTime = keepaliveIntervalTime;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -179,14 +165,8 @@ class QUICServer extends EventTarget {
     }
 
     // Register on all socket events
-    this.socket.addEventListener(
-      'socketError',
-      this.handleQUICSocketEvents
-    );
-    this.socket.addEventListener(
-      'socketStop',
-      this.handleQUICSocketEvents
-    );
+    this.socket.addEventListener('socketError', this.handleQUICSocketEvents);
+    this.socket.addEventListener('socketStop', this.handleQUICSocketEvents);
 
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
@@ -199,21 +179,29 @@ class QUICServer extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
-    // console.time('destroy conn');
+    // Console.time('destroy conn');
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     const destroyProms: Array<Promise<void>> = [];
     for (const connection of this.connectionMap.serverConnections.values()) {
-      destroyProms.push(connection.destroy({ force }));
+      destroyProms.push(
+        connection.stop({
+          applicationError: true,
+          errorMessage: 'cleaning up connections',
+          errorCode: 42,
+          force,
+        }),
+      ); // TODO: fill in with proper details
     }
     await Promise.all(destroyProms);
-    // console.timeEnd('destroy conn');
+    // Console.timeEnd('destroy conn');
     this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
       await this.socket.stop();
-      this.socket.removeEventListener('error', this.handleQUICSocketError);
     }
+    this.socket.removeEventListener('socketError', this.handleQUICSocketEvents);
+    this.socket.removeEventListener('socketStop', this.handleQUICSocketEvents);
     this.dispatchEvent(new events.QUICServerStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
@@ -233,7 +221,6 @@ class QUICServer extends EventTarget {
     header: Header,
     dcid: QUICConnectionId,
   ): Promise<QUICConnection | undefined> {
-
     // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
     // packet.
     if (
@@ -245,16 +232,12 @@ class QUICServer extends EventTarget {
 
     // Derive the new connection's SCID from the client generated DCID
     const scid = new QUICConnectionId(
-      await this.crypto.ops.sign(
-        this.crypto.key,
-        dcid,
-      ),
+      await this.crypto.ops.sign(this.crypto.key, dcid),
       0,
       quiche.MAX_CONN_ID_LEN,
     );
 
     const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
-
 
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
@@ -337,13 +320,14 @@ class QUICServer extends EventTarget {
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    scid = new QUICConnectionId(header.dcid);
+    const newScid = new QUICConnectionId(header.dcid);
     this.logger.debug(
       `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
     );
     const clientConnRef = Buffer.from(header.scid).toString('hex').slice(32);
-    const connection = await QUICConnection.acceptQUICConnection({
-      scid,
+    const connection = new QUICConnection({
+      type: 'server',
+      scid: newScid,
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
@@ -354,8 +338,7 @@ class QUICServer extends EventTarget {
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),
     });
-    connection.setKeepAlive(this.keepaliveIntervalTime);
-
+    await connection.start(); // TODO: pass ctx
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );
@@ -379,73 +362,6 @@ class QUICServer extends EventTarget {
       ...this.config,
       ...config,
     };
-  }
-
-  /**
-   * This initiates sending UDP packets to a target client to open up a port in the NAT for the client to connect
-   * through. This will return early if the connection already exists or was established while polling.
-   */
-  public async initHolePunch(
-    remoteInfo: RemoteInfo,
-    timeout: number = 5000,
-  ): Promise<boolean> {
-    // Checking existing connections
-    for (const [, connection] of this.connectionMap.serverConnections) {
-      if (
-        remoteInfo.host === connection.remoteHost &&
-        remoteInfo.port === connection.remotePort
-      ) {
-        // Connection exists, return early
-        return true;
-      }
-    }
-    // We need to send a random data packet to the target until the process times out or a connection is established
-    let timedOut = false;
-    const timedOutProm = promise<void>();
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      timedOutProm.resolveP();
-    }, timeout);
-    let delay = 250;
-    let delayTimer: NodeJS.Timer | undefined;
-    let sleepProm: PromiseDeconstructed<void> | undefined;
-    let established = false;
-    const establishedProm = promise<void>();
-    // Setting up established event checking
-    const handleEstablished = (event: QUICServerConnectionEvent) => {
-      const connection = event.detail;
-      if (
-        remoteInfo.host === connection.remoteHost &&
-        remoteInfo.port === connection.remotePort
-      ) {
-        // Clean up and resolve
-        this.removeEventListener('connection', handleEstablished);
-        established = true;
-        establishedProm.resolveP();
-      }
-    };
-    this.addEventListener('connection', handleEstablished);
-    try {
-      while (!established && !timedOut) {
-        const message = new ArrayBuffer(32);
-        await this.crypto.ops.randomBytes(message);
-        await this.socket.send(
-          Buffer.from(message),
-          remoteInfo.port,
-          remoteInfo.host,
-        );
-        sleepProm = promise<void>();
-        delayTimer = setTimeout(() => sleepProm!.resolveP(), delay);
-        delay *= 2;
-        await Promise.race([sleepProm.p, establishedProm.p, timedOutProm.p]);
-      }
-      return established;
-    } finally {
-      clearTimeout(timeoutTimer);
-      if (delayTimer != null) clearTimeout(delayTimer);
-      sleepProm?.resolveP();
-      this.removeEventListener('connection', handleEstablished);
-    }
   }
 
   /**

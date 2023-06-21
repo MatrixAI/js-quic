@@ -6,7 +6,6 @@ import type QUICServer from '@/QUICServer';
 import type QUICStream from '@/QUICStream';
 import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
-import { fc } from '@fast-check/jest';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto

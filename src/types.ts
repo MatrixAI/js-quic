@@ -38,10 +38,10 @@ type ConnectionId = Opaque<'ConnectionId', Buffer>;
 type ConnectionIdString = Opaque<'ConnectionIdString', string>;
 
 /**
- * Crypto utility object
- * Remember ever Node Buffer is an ArrayBuffer
+ * Client crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
  */
-type Crypto = {
+type ClientCrypto = {
   sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
   verify(
     key: ArrayBuffer,
@@ -49,6 +49,19 @@ type Crypto = {
     sig: ArrayBuffer,
   ): Promise<boolean>;
   randomBytes(data: ArrayBuffer): Promise<void>;
+};
+
+/**
+ * Server crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
+ */
+type ServerCrypto = {
+  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+  verify(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+    sig: ArrayBuffer,
+  ): Promise<boolean>;
 };
 
 type StreamId = Opaque<'StreamId', number>;
@@ -298,7 +311,8 @@ export type {
   PromiseDeconstructed,
   ConnectionId,
   ConnectionIdString,
-  Crypto,
+  ClientCrypto,
+  ServerCrypto,
   StreamId,
   Host,
   Hostname,

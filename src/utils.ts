@@ -5,11 +5,11 @@ import type {
   ConnectionIdString,
   Host,
   Hostname,
-  Crypto
+  ServerCrypto,
 } from './types';
-import QUICConnectionId from './QUICConnectionId';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
+import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
 
 /**
@@ -323,17 +323,15 @@ function certificatePEMsToCertChainPem(pems: Array<string>): string {
 async function mintToken(
   dcid: QUICConnectionId,
   peerHost: Host,
-  crypto:{
+  crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
-  }
+    ops: ServerCrypto;
+  },
 ): Promise<Buffer> {
   const msgData = { dcid: dcid.toString(), host: peerHost };
   const msgJSON = JSON.stringify(msgData);
   const msgBuffer = Buffer.from(msgJSON);
-  const msgSig = Buffer.from(
-    await crypto.ops.sign(crypto.key, msgBuffer),
-  );
+  const msgSig = Buffer.from(await crypto.ops.sign(crypto.key, msgBuffer));
   const tokenData = {
     msg: msgBuffer.toString('base64url'),
     sig: msgSig.toString('base64url'),
@@ -347,8 +345,8 @@ async function validateToken(
   peerHost: Host,
   crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
-  }
+    ops: ServerCrypto;
+  },
 ): Promise<QUICConnectionId | undefined> {
   let tokenData;
   try {
@@ -359,10 +357,7 @@ async function validateToken(
   if (typeof tokenData !== 'object' || tokenData == null) {
     return;
   }
-  if (
-    typeof tokenData.msg !== 'string' ||
-    typeof tokenData.sig !== 'string'
-  ) {
+  if (typeof tokenData.msg !== 'string' || typeof tokenData.sig !== 'string') {
     return;
   }
   const msgBuffer = Buffer.from(tokenData.msg, 'base64url');

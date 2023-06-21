@@ -12,7 +12,8 @@ import * as utils from '@/utils';
 import * as testsUtils from './utils';
 
 describe(QUICServer.name, () => {
-  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [ new StreamHandler(
+  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
+    new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
@@ -148,7 +149,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '127.0.0.1' as Host
+        host: '127.0.0.1' as Host,
       });
       expect(quicServer.host).toBe('127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
@@ -164,7 +165,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::1' as Host
+        host: '::1' as Host,
       });
       expect(quicServer.host).toBe('::1');
       expect(typeof quicServer.port).toBe('number');
@@ -180,7 +181,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::' as Host
+        host: '::' as Host,
       });
       expect(quicServer.host).toBe('::');
       expect(typeof quicServer.port).toBe('number');
@@ -198,13 +199,13 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::ffff:127.0.0.1' as Host
+        host: '::ffff:127.0.0.1' as Host,
       });
       expect(quicServer.host).toBe('::ffff:127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
       await quicServer.start({
-        host: '::ffff:7f00:1' as Host
+        host: '::ffff:7f00:1' as Host,
       });
       // Will resolve to dotted-decimal variant
       expect(quicServer.host).toBe('::ffff:127.0.0.1');
@@ -221,7 +222,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: 'localhost' as Hostname
+        host: 'localhost' as Hostname,
       });
       // Default to using dns lookup, which uses the OS DNS resolver
       const host = await utils.resolveHostname('localhost' as Hostname);
@@ -240,7 +241,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: 'abcdef' as Hostname
+        host: 'abcdef' as Hostname,
       });
       expect(quicServer.host).toBe('127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
@@ -253,16 +254,16 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto,
         config: {
-          // key: keyPairRSAPEM.privateKey,
+          // Key: keyPairRSAPEM.privateKey,
           // cert: certRSAPEM,
           key: keyPairECDSAPEM.privateKey,
           cert: certECDSAPEM,
-          verifyPeer: false
+          verifyPeer: false,
         },
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '127.0.0.1' as Host
+        host: '127.0.0.1' as Host,
       });
 
       const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
@@ -278,13 +279,13 @@ describe(QUICServer.name, () => {
         logger: logger.getChild(QUICSocket.name),
       });
       await socket.start({
-        host: '127.0.0.1' as Host
+        host: '127.0.0.1' as Host,
       });
 
       // ???
       const clientConfig: QUICConfig = {
         ...clientDefault,
-        verifyPeer: false
+        verifyPeer: false,
       };
 
       // This creates a connection state
@@ -297,7 +298,7 @@ describe(QUICServer.name, () => {
           port: quicServer.port,
         },
         config: clientConfig,
-        logger: logger.getChild(QUICConnection.name)
+        logger: logger.getChild(QUICConnection.name),
       });
 
       connection.addEventListener('error', (e) => {
@@ -307,7 +308,7 @@ describe(QUICServer.name, () => {
       // Trigger the connection
       await connection.send();
 
-      // wait till it is established
+      // Wait till it is established
       console.log('BEFORE ESTABLISHED P');
       await connection.establishedP;
       console.log('AFTER ESTABLISHED P');
@@ -324,7 +325,7 @@ describe(QUICServer.name, () => {
       console.timeEnd('STOPPED SOCKET');
     });
   });
-  // test('bootstrapping a new connection', async () => {
+  // Test('bootstrapping a new connection', async () => {
   //   const quicServer = new QUICServer({
   //     crypto,
   //     config: {

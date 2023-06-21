@@ -65,25 +65,25 @@ describe('config', () => {
   });
   test('build default client config', () => {
     const config = buildQuicheConfig(clientDefault);
-    expect(config).toBeDefined()
+    expect(config).toBeDefined();
   });
   test('build default server config', () => {
     const config = buildQuicheConfig(serverDefault);
     expect(config).toBeDefined();
   });
   test('build with incorrect configuration', () => {
-    expect(
-      () => buildQuicheConfig({
+    expect(() =>
+      buildQuicheConfig({
         ...serverDefault,
-        sigalgs: 'ed448'
-      })
+        sigalgs: 'ed448',
+      }),
     ).toThrow(errors.ErrorQUICConfig);
-    expect(
-      () => buildQuicheConfig({
+    expect(() =>
+      buildQuicheConfig({
         ...serverDefault,
         key: [keyPairRSAPEM.privateKey, keyPairECDSAPEM.privateKey],
         cert: [certRSAPEM],
-      })
+      }),
     ).toThrow(errors.ErrorQUICConfig);
   });
   test('build with self-signed certificates', () => {
@@ -273,13 +273,9 @@ describe('config', () => {
       key: [
         keyPairPEM1.privateKey,
         keyPairPEM2.privateKey,
-        keyPairPEM3.privateKey
+        keyPairPEM3.privateKey,
       ],
-      cert: [
-        certPEM1,
-        certPEM2,
-        certPEM3
-      ],
+      cert: [certPEM1, certPEM2, certPEM3],
       verifyPeer: true,
     });
     buildQuicheConfig({
@@ -288,13 +284,9 @@ describe('config', () => {
       key: [
         keyPairPEM1.privateKey,
         keyPairPEM2.privateKey,
-        keyPairPEM3.privateKey
+        keyPairPEM3.privateKey,
       ],
-      cert: [
-        certPEM1,
-        certPEM2,
-        certPEM3
-      ],
+      cert: [certPEM1, certPEM2, certPEM3],
       verifyPeer: true,
     });
   });

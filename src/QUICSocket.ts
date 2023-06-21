@@ -1,11 +1,12 @@
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { Crypto, Host, Hostname, Port } from './types';
+import type { Host, Hostname, Port } from './types';
 import type { Header } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import { status, running, destroyed } from '@matrixai/async-init';
+import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
+import { Monitor, RWLockWriter } from '@matrixai/async-locks';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
 import { quiche } from './native';
@@ -37,18 +38,6 @@ class QUICSocket extends EventTarget {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  protected crypto?: {
-    key: ArrayBuffer;
-    ops: {
-      sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-      verify(
-        key: ArrayBuffer,
-        data: ArrayBuffer,
-        sig: ArrayBuffer,
-      ): Promise<boolean>;
-    };
-  };
-
   /**
    * Handle the datagram from UDP socket
    * The `data` buffer could be multiple coalesced QUIC packets.
@@ -71,10 +60,7 @@ class QUICSocket extends EventTarget {
     } catch (e) {
       // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
       // packet. If so, then we just ignore the packet.
-      if (
-        e.message !== 'BufferTooShort' &&
-        e.message !== 'InvalidPacket'
-      ) {
+      if (e.message !== 'BufferTooShort' && e.message !== 'InvalidPacket') {
         // Emit error if it is not a `BufferTooShort` or `InvalidPacket` error.
         // This would indicate something went wrong in header parsing.
         // This is not a critical error, but should be checked.
@@ -119,11 +105,12 @@ class QUICSocket extends EventTarget {
     }
     // Acquire the conn lock, this ensures mutual exclusion
     // for state changes on the internal connection
-    await connection.connLock.withF(async () => {
+    const mon = new Monitor<RWLockWriter>(connection.lockbox, RWLockWriter);
+    await mon.withF(connection.lockCode, async (mon) => {
       // Even if we are `stopping`, the `quiche` library says we need to
       // continue processing any packets.
-      connection.recv(data, remoteInfo_);
-      await connection.send();
+      await connection.recv(data, remoteInfo_, mon);
+      await connection.send(mon);
     });
   };
 
@@ -257,7 +244,9 @@ class QUICSocket extends EventTarget {
    * If force is true, it will skip checking connections and stop the socket.
    * @param force - Will force the socket to end even if there are active connections, used for cleaning up after tests.
    */
-  public async stop({ force = false }: { force?: boolean } = {}): Promise<void> {
+  public async stop({
+    force = false,
+  }: { force?: boolean } = {}): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     if (!force && this.connectionMap.size > 0) {

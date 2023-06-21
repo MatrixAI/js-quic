@@ -7,7 +7,16 @@ import type {
   ConnectionMetadata,
 } from './types';
 import type { Connection } from './native/types';
-import { ReadableStream, WritableStream, ByteLengthQueuingStrategy } from 'stream/web';
+import type {
+  ReadableWritablePair,
+  ReadableStreamDefaultController,
+  WritableStreamDefaultController,
+} from 'stream/web';
+import {
+  ReadableStream,
+  WritableStream,
+  ByteLengthQueuingStrategy,
+} from 'stream/web';
 import Logger from '@matrixai/logger';
 import {
   CreateDestroy,
@@ -134,7 +143,7 @@ class QUICStream
       },
       new ByteLengthQueuingStrategy({
         highWaterMark: 0,
-        // highWaterMark: maxReadableStreamBytes,
+        // HighWaterMark: maxReadableStreamBytes,
       }),
     );
 
@@ -174,7 +183,7 @@ class QUICStream
       },
       new ByteLengthQueuingStrategy({
         highWaterMark: 0,
-        // highWaterMark: maxWritableStreamBytes,
+        // HighWaterMark: maxWritableStreamBytes,
       }),
     );
   }
@@ -195,7 +204,8 @@ class QUICStream
    * Connection information including hosts, ports and cert data.
    */
   public get remoteInfo(): ConnectionMetadata {
-    return this.connection.remoteInfo;
+    throw Error('TMP IMP');
+    // Return this.connection.remoteInfo;
   }
 
   /**
@@ -203,7 +213,8 @@ class QUICStream
    * This strictly exists to work with agnostic RPC stream interface.
    */
   public get meta(): ConnectionMetadata {
-    return this.connection.remoteInfo;
+    throw Error('TMP IMP');
+    // Return this.connection.remoteInfo;
   }
 
   /**
@@ -212,7 +223,7 @@ class QUICStream
    * 1. Top-down control flow - means explicit destruction from QUICConnection
    * 2. Bottom-up control flow - means stream events from users of this stream
    */
-  public async destroy({ force = false }: { force: Boolean } ) {
+  public async destroy({ force = false }: { force?: boolean } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
     if (!this._recvClosed && force) {
       const e = new errors.ErrorQUICStreamClose();

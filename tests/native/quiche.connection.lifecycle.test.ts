@@ -133,7 +133,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.localError()).toEqual({
           isApp: false,
           errorCode: quiche.ConnectionErrorCode.ApplicationError,
-          reason: new Uint8Array()
+          reason: new Uint8Array(),
         });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -151,28 +151,19 @@ describe('quiche connection lifecycle', () => {
         const randomPacket = new Uint8Array(randomPacketBuffer);
         // Random packets are received after the connection is closed
         // However they are just dropped automatically
-        clientConn.recv(
-          randomPacket,
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(randomPacket, {
+          to: clientHost,
+          from: serverHost,
+        });
         // You can receive multiple times without any problems
-        clientConn.recv(
-          randomPacket,
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
-        clientConn.recv(
-          randomPacket,
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(randomPacket, {
+          to: clientHost,
+          from: serverHost,
+        });
+        clientConn.recv(randomPacket, {
+          to: clientHost,
+          from: serverHost,
+        });
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isClosed()).toBeTrue();
@@ -200,13 +191,13 @@ describe('quiche connection lifecycle', () => {
           const clientConfig: QUICConfig = {
             ...clientDefault,
             verifyPeer: false,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           const serverConfig: QUICConfig = {
             ...serverDefault,
             key: keyPairRSAPEM.privateKey,
             cert: certRSAPEM,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           clientQuicheConfig = buildQuicheConfig(clientConfig);
           serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -270,13 +261,13 @@ describe('quiche connection lifecycle', () => {
           const clientConfig: QUICConfig = {
             ...clientDefault,
             verifyPeer: false,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           const serverConfig: QUICConfig = {
             ...serverDefault,
             key: keyPairRSAPEM.privateKey,
             cert: certRSAPEM,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           clientQuicheConfig = buildQuicheConfig(clientConfig);
           serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -300,18 +291,19 @@ describe('quiche connection lifecycle', () => {
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
           serverScid = new QUICConnectionId(
-            await crypto.ops.sign(
-              crypto.key,
-              clientDcid,
-            ),
+            await crypto.ops.sign(crypto.key, clientDcid),
             0,
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
-          const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+          const token = await utils.mintToken(
+            clientDcid,
+            clientHost.host,
+            crypto,
+          );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
           const retryDatagramLength = quiche.retry(
             clientScid,
@@ -319,25 +311,22 @@ describe('quiche connection lifecycle', () => {
             serverScid,
             token,
             clientHeaderInitial.version,
-            retryDatagram
+            retryDatagram,
           );
           // Retry gets sent back to be processed by the client
-          clientConn.recv(
-            retryDatagram.subarray(0, retryDatagramLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+            to: clientHost,
+            from: serverHost,
+          });
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
             clientHost.host,
-            crypto
+            crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
         });
@@ -347,18 +336,15 @@ describe('quiche connection lifecycle', () => {
             clientDcid,
             serverHost,
             clientHost,
-            serverQuicheConfig
+            serverQuicheConfig,
           );
           clientDcid = serverScid;
           serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
           // Once an idle max timeout is set, this timeout is no longer null
           // Either the client or server or both can set the idle timeout
           expect(serverConn.timeout()).not.toBeNull();
@@ -420,13 +406,13 @@ describe('quiche connection lifecycle', () => {
           const clientConfig: QUICConfig = {
             ...clientDefault,
             verifyPeer: false,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           const serverConfig: QUICConfig = {
             ...serverDefault,
             key: keyPairRSAPEM.privateKey,
             cert: certRSAPEM,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           clientQuicheConfig = buildQuicheConfig(clientConfig);
           serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -450,18 +436,19 @@ describe('quiche connection lifecycle', () => {
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
           serverScid = new QUICConnectionId(
-            await crypto.ops.sign(
-              crypto.key,
-              clientDcid,
-            ),
+            await crypto.ops.sign(crypto.key, clientDcid),
             0,
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
-          const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+          const token = await utils.mintToken(
+            clientDcid,
+            clientHost.host,
+            crypto,
+          );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
           const retryDatagramLength = quiche.retry(
             clientScid,
@@ -469,25 +456,22 @@ describe('quiche connection lifecycle', () => {
             serverScid,
             token,
             clientHeaderInitial.version,
-            retryDatagram
+            retryDatagram,
           );
           // Retry gets sent back to be processed by the client
-          clientConn.recv(
-            retryDatagram.subarray(0, retryDatagramLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+            to: clientHost,
+            from: serverHost,
+          });
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
             clientHost.host,
-            crypto
+            crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
         });
@@ -497,41 +481,32 @@ describe('quiche connection lifecycle', () => {
             clientDcid,
             serverHost,
             clientHost,
-            serverQuicheConfig
+            serverQuicheConfig,
           );
           clientDcid = serverScid;
           serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
           // Once an idle max timeout is set, this timeout is no longer null
           // Either the client or server or both can set the idle timeout
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
           [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
-          clientConn.recv(
-            serverBuffer.subarray(0, serverSendLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+            to: clientHost,
+            from: serverHost,
+          });
         });
         test('client -initial-> server', async () => {
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
         });
         test('client <-handshake- server timeout', async () => {
           [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
@@ -589,13 +564,13 @@ describe('quiche connection lifecycle', () => {
           const clientConfig: QUICConfig = {
             ...clientDefault,
             verifyPeer: false,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           const serverConfig: QUICConfig = {
             ...serverDefault,
             key: keyPairRSAPEM.privateKey,
             cert: certRSAPEM,
-            maxIdleTimeout: 2000
+            maxIdleTimeout: 2000,
           };
           clientQuicheConfig = buildQuicheConfig(clientConfig);
           serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -619,18 +594,19 @@ describe('quiche connection lifecycle', () => {
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
           serverScid = new QUICConnectionId(
-            await crypto.ops.sign(
-              crypto.key,
-              clientDcid,
-            ),
+            await crypto.ops.sign(crypto.key, clientDcid),
             0,
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
-          const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+          const token = await utils.mintToken(
+            clientDcid,
+            clientHost.host,
+            crypto,
+          );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
           const retryDatagramLength = quiche.retry(
             clientScid,
@@ -638,25 +614,22 @@ describe('quiche connection lifecycle', () => {
             serverScid,
             token,
             clientHeaderInitial.version,
-            retryDatagram
+            retryDatagram,
           );
           // Retry gets sent back to be processed by the client
-          clientConn.recv(
-            retryDatagram.subarray(0, retryDatagramLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+            to: clientHost,
+            from: serverHost,
+          });
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
-            quiche.MAX_CONN_ID_LEN
+            quiche.MAX_CONN_ID_LEN,
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
             clientHost.host,
-            crypto
+            crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
         });
@@ -666,64 +639,49 @@ describe('quiche connection lifecycle', () => {
             clientDcid,
             serverHost,
             clientHost,
-            serverQuicheConfig
+            serverQuicheConfig,
           );
           clientDcid = serverScid;
           serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
           // Once an idle max timeout is set, this timeout is no longer null
           // Either the client or server or both can set the idle timeout
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
           [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
-          clientConn.recv(
-            serverBuffer.subarray(0, serverSendLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+            to: clientHost,
+            from: serverHost,
+          });
         });
         test('client -initial-> server', async () => {
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
         });
         test('client <-handshake- server', async () => {
           [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
-          clientConn.recv(
-            serverBuffer.subarray(0, serverSendLength),
-            {
-              to: clientHost,
-              from: serverHost
-            }
-          );
+          clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+            to: clientHost,
+            from: serverHost,
+          });
         });
         test('client is established', async () => {
           expect(clientConn.isEstablished()).toBeTrue();
         });
         test('client -handshake-> sever', async () => {
           [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
-          serverConn.recv(
-            clientBuffer.subarray(0, clientSendLength),
-            {
-              to: serverHost,
-              from: clientHost
-            }
-          );
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          });
         });
         test('server is established', async () => {
           expect(serverConn.isEstablished()).toBeTrue();
@@ -870,12 +828,14 @@ describe('quiche connection lifecycle', () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // It will be an initial packet
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // The SCID is what was generated above
-        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is randomly generated by the client
         clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
         expect(clientDcid).not.toEqual(clientScid);
@@ -886,19 +846,22 @@ describe('quiche connection lifecycle', () => {
         expect(clientHeaderInitial.versions).toBeNull();
         // Version negotiation
         // The version is supported, we don't need to change
-        expect(quiche.versionIsSupported(clientHeaderInitial.version)).toBeTrue();
+        expect(
+          quiche.versionIsSupported(clientHeaderInitial.version),
+        ).toBeTrue();
         // Derives a new SCID by signing the client's generated DCID
         // This is only used during the stateless retry
         serverScid = new QUICConnectionId(
-          await crypto.ops.sign(
-            crypto.key,
-            clientDcid,
-          ),
+          await crypto.ops.sign(crypto.key, clientDcid),
           0,
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // Stateless retry
-        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const token = await utils.mintToken(
+          clientDcid,
+          clientHost.host,
+          crypto,
+        );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         const retryDatagramLength = quiche.retry(
           clientScid,
@@ -906,29 +869,26 @@ describe('quiche connection lifecycle', () => {
           serverScid,
           token,
           clientHeaderInitial.version,
-          retryDatagram
+          retryDatagram,
         );
         const timeoutBeforeRecv = clientConn.timeout();
         const serverHeaderRetry = quiche.Header.fromSlice(
           retryDatagram.subarray(0, retryDatagramLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderRetry.ty).toBe(quiche.Type.Retry);
         // Retry packet's SCID is the derived SCID
         expect(new QUICConnectionId(serverHeaderRetry.scid)).toEqual(
-          serverScid
+          serverScid,
         );
         expect(new QUICConnectionId(serverHeaderRetry.dcid)).toEqual(
-          clientScid
+          clientScid,
         );
         // Retry gets sent back to be processed by the client
-        clientConn.recv(
-          retryDatagram.subarray(0, retryDatagramLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         const timeoutAfterRecv = clientConn.timeout();
         // The timeout is only reset after `recv` is called
         expect(timeoutAfterRecv).toBeGreaterThan(timeoutBeforeRecv!);
@@ -943,16 +903,16 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitialRetry.ty).toBe(quiche.Type.Initial);
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.scid)
-        ).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is now updated to the server generated one
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.dcid)
-        ).toEqual(serverScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.dcid)).toEqual(
+          serverScid,
+        );
         // The retried initial packet has the signed token
         expect(Buffer.from(clientHeaderInitialRetry.token!)).toEqual(token);
         expect(clientHeaderInitialRetry.version).toBe(quiche.PROTOCOL_VERSION);
@@ -961,7 +921,7 @@ describe('quiche connection lifecycle', () => {
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
           clientHost.host,
-          crypto
+          crypto,
         );
         // The original randomly generated DCID was embedded in the token
         expect(dcidOriginal).toEqual(clientDcid);
@@ -972,7 +932,7 @@ describe('quiche connection lifecycle', () => {
           clientDcid,
           serverHost,
           clientHost,
-          serverQuicheConfig
+          serverQuicheConfig,
         );
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -991,13 +951,10 @@ describe('quiche connection lifecycle', () => {
         clientDcid = serverScid;
         serverDcid = clientScid;
         // Server receives the retried initial frame
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         // The timeout is still null upon the first recv for the server
         // This is only true because timeout is `0` which is `Infinity`
         expect(serverConn.timeout()).toBeNull();
@@ -1025,27 +982,28 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isDraining()).toBeFalse();
         const serverHeaderInitial = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderInitial.ty).toBe(quiche.Type.Initial);
-        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(serverScid);
-        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(serverDcid);
+        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(
+          serverScid,
+        );
+        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(
+          serverDcid,
+        );
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
       });
       test('client -initial-> server', async () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // Timeout is lowered
@@ -1057,23 +1015,24 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
       });
       test('client <-handshake- server', async () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderHandshake = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderHandshake.ty).toBe(quiche.Type.Handshake);
-        expect(new QUICConnectionId(serverHeaderHandshake.scid)).toEqual(serverScid);
-        expect(new QUICConnectionId(serverHeaderHandshake.dcid)).toEqual(serverDcid);
+        expect(new QUICConnectionId(serverHeaderHandshake.scid)).toEqual(
+          serverScid,
+        );
+        expect(new QUICConnectionId(serverHeaderHandshake.dcid)).toEqual(
+          serverDcid,
+        );
         // Timeout is lowered
         expect(serverConn.timeout()).toBeLessThan(100);
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -1085,13 +1044,10 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isDraining()).toBeFalse();
         expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         // Client receives server's handshake frame
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
         expect(clientConn.isEstablished()).toBeTrue();
@@ -1107,19 +1063,16 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderHandshake = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderHandshake.ty).toBe(quiche.Type.Handshake);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1136,21 +1089,18 @@ describe('quiche connection lifecycle', () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
         // SCID is dropped on the short frame
         expect(serverHeaderShort.scid).toHaveLength(0);
         expect(new QUICConnectionId(serverHeaderShort.dcid)).toEqual(
-          clientScid
+          clientScid,
         );
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         // Client connection timeout is now null
         // Both client and server is established
         // This is due to max idle timeout of 0
@@ -1163,13 +1113,13 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         // SCID is dropped on the short frame
         expect(clientHeaderShort.scid).toHaveLength(0);
         expect(new QUICConnectionId(clientHeaderShort.dcid)).toEqual(
-          serverScid
+          serverScid,
         );
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -1179,13 +1129,10 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1211,7 +1158,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.localError()).toEqual({
           isApp: true,
           errorCode: 0,
-          reason: new Uint8Array(Buffer.from('Application Close'))
+          reason: new Uint8Array(Buffer.from('Application Close')),
         });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -1224,7 +1171,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         // The timeout begins again
@@ -1257,18 +1204,15 @@ describe('quiche connection lifecycle', () => {
         // Connection is left as draining
         expect(clientConn.isDraining()).toBeTrue();
         // -short-> SERVER
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         // The server receives the client's error
         expect(serverConn.peerError()).toEqual({
           isApp: true,
           errorCode: 0,
-          reason: new Uint8Array(Buffer.from('Application Close'))
+          reason: new Uint8Array(Buffer.from('Application Close')),
         });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1412,12 +1356,14 @@ describe('quiche connection lifecycle', () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // It will be an initial packet
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // The SCID is what was generated above
-        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is randomly generated by the client
         clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
         expect(clientDcid).not.toEqual(clientScid);
@@ -1428,19 +1374,22 @@ describe('quiche connection lifecycle', () => {
         expect(clientHeaderInitial.versions).toBeNull();
         // Version negotiation
         // The version is supported, we don't need to change
-        expect(quiche.versionIsSupported(clientHeaderInitial.version)).toBeTrue();
+        expect(
+          quiche.versionIsSupported(clientHeaderInitial.version),
+        ).toBeTrue();
         // Derives a new SCID by signing the client's generated DCID
         // This is only used during the stateless retry
         serverScid = new QUICConnectionId(
-          await crypto.ops.sign(
-            crypto.key,
-            clientDcid,
-          ),
+          await crypto.ops.sign(crypto.key, clientDcid),
           0,
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // Stateless retry
-        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const token = await utils.mintToken(
+          clientDcid,
+          clientHost.host,
+          crypto,
+        );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         const retryDatagramLength = quiche.retry(
           clientScid,
@@ -1448,17 +1397,14 @@ describe('quiche connection lifecycle', () => {
           serverScid,
           token,
           clientHeaderInitial.version,
-          retryDatagram
+          retryDatagram,
         );
         const timeoutBeforeRecv = clientConn.timeout();
         // Retry gets sent back to be processed by the client
-        clientConn.recv(
-          retryDatagram.subarray(0, retryDatagramLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         const timeoutAfterRecv = clientConn.timeout();
         // The timeout is only reset after `recv` is called
         expect(timeoutAfterRecv).toBeGreaterThan(timeoutBeforeRecv!);
@@ -1473,16 +1419,16 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitialRetry.ty).toBe(quiche.Type.Initial);
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.scid)
-        ).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is now updated to the server generated one
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.dcid)
-        ).toEqual(serverScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.dcid)).toEqual(
+          serverScid,
+        );
         // The retried initial packet has the signed token
         expect(Buffer.from(clientHeaderInitialRetry.token!)).toEqual(token);
         expect(clientHeaderInitialRetry.version).toBe(quiche.PROTOCOL_VERSION);
@@ -1491,7 +1437,7 @@ describe('quiche connection lifecycle', () => {
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
           clientHost.host,
-          crypto
+          crypto,
         );
         // The original randomly generated DCID was embedded in the token
         expect(dcidOriginal).toEqual(clientDcid);
@@ -1502,7 +1448,7 @@ describe('quiche connection lifecycle', () => {
           clientDcid,
           serverHost,
           clientHost,
-          serverQuicheConfig
+          serverQuicheConfig,
         );
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -1517,13 +1463,10 @@ describe('quiche connection lifecycle', () => {
         // generated DCID, we can update their respective DCID
         clientDcid = serverScid;
         serverDcid = clientScid;
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         // The timeout is still null upon the first recv for the server
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -1550,21 +1493,22 @@ describe('quiche connection lifecycle', () => {
         // At this point the server connection is still not established
         const serverHeaderInitial = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderInitial.ty).toBe(quiche.Type.Initial);
-        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(serverScid);
-        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(serverDcid);
+        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(
+          serverScid,
+        );
+        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(
+          serverDcid,
+        );
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
       });
       test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
@@ -1573,7 +1517,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // Timeout is lowered
@@ -1585,13 +1529,10 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
       });
       test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();
@@ -1600,16 +1541,13 @@ describe('quiche connection lifecycle', () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         // Client connection timeout is now null
         // Both client and server is established
         // This is due to max idle timeout of 0
@@ -1622,7 +1560,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -1633,13 +1571,10 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1665,7 +1600,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.localError()).toEqual({
           isApp: false,
           errorCode: 2,
-          reason: new Uint8Array()
+          reason: new Uint8Array(),
         });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -1678,7 +1613,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         // The timeout begins again
@@ -1711,17 +1646,14 @@ describe('quiche connection lifecycle', () => {
         // Connection is left as draining
         expect(clientConn.isDraining()).toBeTrue();
         // -short-> SERVER
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(serverConn.peerError()).toEqual({
           isApp: false,
           errorCode: 2,
-          reason: new Uint8Array()
+          reason: new Uint8Array(),
         });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1865,12 +1797,14 @@ describe('quiche connection lifecycle', () => {
         // Process the initial frame
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // It will be an initial packet
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // The SCID is what was generated above
-        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitial.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is randomly generated by the client
         clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
         expect(clientDcid).not.toEqual(clientScid);
@@ -1881,19 +1815,22 @@ describe('quiche connection lifecycle', () => {
         expect(clientHeaderInitial.versions).toBeNull();
         // Version negotiation
         // The version is supported, we don't need to change
-        expect(quiche.versionIsSupported(clientHeaderInitial.version)).toBeTrue();
+        expect(
+          quiche.versionIsSupported(clientHeaderInitial.version),
+        ).toBeTrue();
         // Derives a new SCID by signing the client's generated DCID
         // This is only used during the stateless retry
         serverScid = new QUICConnectionId(
-          await crypto.ops.sign(
-            crypto.key,
-            clientDcid,
-          ),
+          await crypto.ops.sign(crypto.key, clientDcid),
           0,
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         // Stateless retry
-        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const token = await utils.mintToken(
+          clientDcid,
+          clientHost.host,
+          crypto,
+        );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         const retryDatagramLength = quiche.retry(
           clientScid,
@@ -1901,17 +1838,14 @@ describe('quiche connection lifecycle', () => {
           serverScid,
           token,
           clientHeaderInitial.version,
-          retryDatagram
+          retryDatagram,
         );
         const timeoutBeforeRecv = clientConn.timeout();
         // Retry gets sent back to be processed by the client
-        clientConn.recv(
-          retryDatagram.subarray(0, retryDatagramLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         const timeoutAfterRecv = clientConn.timeout();
         // The timeout is only reset after `recv` is called
         expect(timeoutAfterRecv).toBeGreaterThan(timeoutBeforeRecv!);
@@ -1926,16 +1860,16 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitialRetry.ty).toBe(quiche.Type.Initial);
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.scid)
-        ).toEqual(clientScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.scid)).toEqual(
+          clientScid,
+        );
         // The DCID is now updated to the server generated one
-        expect(
-          new QUICConnectionId(clientHeaderInitialRetry.dcid)
-        ).toEqual(serverScid);
+        expect(new QUICConnectionId(clientHeaderInitialRetry.dcid)).toEqual(
+          serverScid,
+        );
         // The retried initial packet has the signed token
         expect(Buffer.from(clientHeaderInitialRetry.token!)).toEqual(token);
         expect(clientHeaderInitialRetry.version).toBe(quiche.PROTOCOL_VERSION);
@@ -1944,7 +1878,7 @@ describe('quiche connection lifecycle', () => {
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
           clientHost.host,
-          crypto
+          crypto,
         );
         // The original randomly generated DCID was embedded in the token
         expect(dcidOriginal).toEqual(clientDcid);
@@ -1955,7 +1889,7 @@ describe('quiche connection lifecycle', () => {
           clientDcid,
           serverHost,
           clientHost,
-          serverQuicheConfig
+          serverQuicheConfig,
         );
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -1970,13 +1904,10 @@ describe('quiche connection lifecycle', () => {
         // generated DCID, we can update their respective DCID
         clientDcid = serverScid;
         serverDcid = clientScid;
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         // The timeout is still null upon the first recv for the server
         expect(serverConn.timeout()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
@@ -2003,21 +1934,22 @@ describe('quiche connection lifecycle', () => {
         // At this point the server connection is still not established
         const serverHeaderInitial = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderInitial.ty).toBe(quiche.Type.Initial);
-        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(serverScid);
-        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(serverDcid);
+        expect(new QUICConnectionId(serverHeaderInitial.scid)).toEqual(
+          serverScid,
+        );
+        expect(new QUICConnectionId(serverHeaderInitial.dcid)).toEqual(
+          serverDcid,
+        );
         expect(serverHeaderInitial.token).toHaveLength(0);
         expect(serverHeaderInitial.version).toBe(quiche.PROTOCOL_VERSION);
         expect(serverHeaderInitial.versions).toBeNull();
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
       });
       test('client is established', async () => {
         expect(clientConn.isEstablished()).toBeTrue();
@@ -2026,7 +1958,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderInitial.ty).toBe(quiche.Type.Initial);
         // Timeout is lowered
@@ -2038,13 +1970,10 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
       });
       test('server is established', async () => {
         expect(serverConn.isEstablished()).toBeTrue();
@@ -2053,16 +1982,13 @@ describe('quiche connection lifecycle', () => {
         [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
-        clientConn.recv(
-          serverBuffer.subarray(0, serverSendLength),
-          {
-            to: clientHost,
-            from: serverHost
-          }
-        );
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
         // Client connection timeout is now null
         // Both client and server is established
         // This is due to max idle timeout of 0
@@ -2075,7 +2001,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -2086,13 +2012,10 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(() => serverConn.send(serverBuffer)).toThrow('Done');
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -2118,7 +2041,7 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.localError()).toEqual({
           isApp: false,
           errorCode: 1,
-          reason: new Uint8Array()
+          reason: new Uint8Array(),
         });
         expect(clientConn.timeout()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
@@ -2131,7 +2054,7 @@ describe('quiche connection lifecycle', () => {
         [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
-          quiche.MAX_CONN_ID_LEN
+          quiche.MAX_CONN_ID_LEN,
         );
         expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
         // The timeout begins again
@@ -2163,17 +2086,14 @@ describe('quiche connection lifecycle', () => {
         expect(clientConn.isClosed()).toBeTrue();
         // Connection is left as draining
         expect(clientConn.isDraining()).toBeTrue();
-        serverConn.recv(
-          clientBuffer.subarray(0, clientSendLength),
-          {
-            to: serverHost,
-            from: clientHost
-          }
-        );
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
         expect(serverConn.peerError()).toEqual({
           isApp: false,
           errorCode: 1,
-          reason: new Uint8Array()
+          reason: new Uint8Array(),
         });
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();

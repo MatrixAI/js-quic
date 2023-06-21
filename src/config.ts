@@ -156,7 +156,7 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   } catch (e) {
     throw new errors.ErrorQUICConfig(
       `Failed to build Quiche config with custom SSL context: ${e.message}`,
-      { cause: e }
+      { cause: e },
     );
   }
   if (config.logKeys != null) {

@@ -5,12 +5,9 @@ describe('quiche', () => {
   test('frame parsing', async () => {
     let frame: Buffer;
     frame = Buffer.from('hello world');
-    expect(() => quiche.Header.fromSlice(
-      frame,
-      quiche.MAX_CONN_ID_LEN)
-    ).toThrow(
-      'BufferTooShort'
-    );
+    expect(() =>
+      quiche.Header.fromSlice(frame, quiche.MAX_CONN_ID_LEN),
+    ).toThrow('BufferTooShort');
     // `InvalidPacket` is also possible but even random bytes can
     // look like a packet, so it's not tested here
   });
@@ -25,11 +22,11 @@ describe('quiche', () => {
     const versionPacketLength = quiche.negotiateVersion(
       scid,
       dcid,
-      versionPacket
+      versionPacket,
     );
     const serverHeaderVersion = quiche.Header.fromSlice(
       versionPacket.subarray(0, versionPacketLength),
-      quiche.MAX_CONN_ID_LEN
+      quiche.MAX_CONN_ID_LEN,
     );
     expect(serverHeaderVersion.ty).toBe(quiche.Type.VersionNegotiation);
   });

@@ -1,14 +1,17 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-import type { ContextTimed } from '@matrixai/contexts'
-import type { Crypto, Host, Hostname, Port } from './types';
+import type { ContextTimed } from '@matrixai/contexts';
+import type { ClientCrypto, Host, Hostname, Port } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig, StreamCodeToReason, StreamReasonToCode } from './types';
+import type {
+  QUICConfig,
+  StreamCodeToReason,
+  StreamReasonToCode,
+} from './types';
 import Logger from '@matrixai/logger';
 import { CreateDestroy, ready } from '@matrixai/async-init/dist/CreateDestroy';
-import { destroyed, running } from '@matrixai/async-init';
+import { running } from '@matrixai/async-init';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
-
 import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -69,9 +72,7 @@ class QUICClient extends EventTarget {
       localHost?: Host | Hostname;
       localPort?: Port;
       crypto: {
-        ops: {
-          randomBytes(data: ArrayBuffer): Promise<void>;
-        };
+        ops: ClientCrypto;
       };
       config?: Partial<QUICConfig>;
       socket?: QUICSocket;
@@ -113,7 +114,7 @@ class QUICClient extends EventTarget {
       codeToReason?: StreamCodeToReason;
       logger?: Logger;
     },
-    @context ctx: ContextTimed
+    @context ctx: ContextTimed,
   ): Promise<QUICClient> {
     let address = utils.buildAddress(host, port);
     logger.info(`Create ${this.name} to ${address}`);
@@ -133,10 +134,8 @@ class QUICClient extends EventTarget {
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
     // This error promise is only used during `connection.start()`.
-    const {
-      p: socketErrorP,
-      rejectP: rejectSocketErrorP
-    } = utils.promise<never>();
+    const { p: socketErrorP, rejectP: rejectSocketErrorP } =
+      utils.promise<never>();
     const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
       rejectSocketErrorP(e.detail);
     };
@@ -157,11 +156,9 @@ class QUICClient extends EventTarget {
       }
       isSocketShared = true;
     }
-    socket.addEventListener(
-      'socketError',
-      handleQUICSocketError,
-      { once: true }
-    );
+    socket.addEventListener('socketError', handleQUICSocketError, {
+      once: true,
+    });
     // Check that the target `host` is compatible with the bound socket host
     if (
       socket.type === 'ipv4' &&
@@ -212,9 +209,7 @@ class QUICClient extends EventTarget {
     });
     try {
       await Promise.race([
-        await connection.start(
-          { ...ctx, signal: abortController.signal }
-        ),
+        await connection.start({ ...ctx, signal: abortController.signal }),
         socketErrorP,
       ]);
     } catch (e) {
@@ -247,18 +242,15 @@ class QUICClient extends EventTarget {
       // QUIC socket errors are re-emitted but a destroy takes place
       this.dispatchEvent(
         new events.QUICClientErrorEvent({
-          detail: new errors.ErrorQUICClient(
-            'Socket error',
-            {
-              cause: e.detail,
-            }
-          )
+          detail: new errors.ErrorQUICClient('Socket error', {
+            cause: e.detail,
+          }),
         }),
       );
       try {
         // Force destroy means don't destroy gracefully
         await this.destroy({
-          force: true
+          force: true,
         });
       } catch (e) {
         this.dispatchEvent(
@@ -273,7 +265,7 @@ class QUICClient extends EventTarget {
       try {
         // Force destroy means don't destroy gracefully
         await this.destroy({
-          force: true
+          force: true,
         });
       } catch (e) {
         this.dispatchEvent(
@@ -290,22 +282,21 @@ class QUICClient extends EventTarget {
   /**
    * This must not throw any exceptions.
    */
-  protected handleQUICConnectionEvents = async (e: events.QUICConnectionEvent) => {
+  protected handleQUICConnectionEvents = async (
+    e: events.QUICConnectionEvent,
+  ) => {
     if (e instanceof events.QUICConnectionErrorEvent) {
       this.dispatchEvent(
         new events.QUICClientErrorEvent({
-          detail: new errors.ErrorQUICClient(
-            'Connection error',
-            {
-              cause: e.detail,
-            }
-          )
+          detail: new errors.ErrorQUICClient('Connection error', {
+            cause: e.detail,
+          }),
         }),
       );
       try {
         // Force destroy means don't destroy gracefully
         await this.destroy({
-          force: true
+          force: true,
         });
       } catch (e) {
         this.dispatchEvent(
@@ -318,7 +309,7 @@ class QUICClient extends EventTarget {
       try {
         // Force destroy means don't destroy gracefully
         await this.destroy({
-          force: true
+          force: true,
         });
       } catch (e) {
         this.dispatchEvent(
@@ -349,30 +340,24 @@ class QUICClient extends EventTarget {
     this.isSocketShared = isSocketShared;
     this._connection = connection;
     // Listen on all socket events
-    socket.addEventListener(
-      'socketError',
-      this.handleQUICSocketEvents
-    );
-    socket.addEventListener(
-      'socketStop',
-      this.handleQUICSocketEvents
-    );
+    socket.addEventListener('socketError', this.handleQUICSocketEvents);
+    socket.addEventListener('socketStop', this.handleQUICSocketEvents);
     // Listen on all connection events
     connection.addEventListener(
       'connectionStream',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     connection.addEventListener(
       'connectionStop',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     connection.addEventListener(
       'connectionError',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     connection.addEventListener(
       'streamDestroy',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
   }
 
@@ -408,30 +393,24 @@ class QUICClient extends EventTarget {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
     // Listen on all socket events
-    this.socket.removeEventListener(
-      'socketError',
-      this.handleQUICSocketEvents
-    );
-    this.socket.removeEventListener(
-      'socketStop',
-      this.handleQUICSocketEvents
-    );
+    this.socket.removeEventListener('socketError', this.handleQUICSocketEvents);
+    this.socket.removeEventListener('socketStop', this.handleQUICSocketEvents);
     // Listen on all connection events
     this.connection.removeEventListener(
       'connectionStream',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     this.connection.removeEventListener(
       'connectionStop',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     this.connection.removeEventListener(
       'connectionError',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     this.connection.removeEventListener(
       'streamDestroy',
-      this.handleQUICConnectionEvents
+      this.handleQUICConnectionEvents,
     );
     await this._connection.stop({ force });
     if (!this.isSocketShared) {
