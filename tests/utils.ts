@@ -610,13 +610,26 @@ const handleStreamProm = async (stream: QUICStream, streamData: StreamData) => {
 async function waitForTimeoutNull(conn: Connection): Promise<void> {
   while (true) {
     const timeout = conn.timeout();
-    if (timeout === 0) {
-      await sleep(timeout);
-      conn.onTimeout();
-    } else if (timeout == null) {
-      return;
-    }
+    if (timeout == null) return;
+    await sleep(timeout + 1);
+    conn.onTimeout();
   }
+}
+
+/**
+ * Creates a formatted string listing the connection state.
+ */
+function connStats(conn: Connection, label: string) {
+  return `
+----${label}----
+established: ${conn.isEstablished()},
+draining: ${conn.isDraining()},
+closed: ${conn.isClosed()},
+resumed: ${conn.isResumed()},
+earlyData: ${conn.isInEarlyData()},
+peerCerts: ${conn.peerCertChain() !== null ? 'Avaliable' : 'Missing'},
+timeout: ${conn.timeout()},
+`;
 }
 
 export {
@@ -636,6 +649,7 @@ export {
   extractSocket,
   handleStreamProm,
   waitForTimeoutNull,
+  connStats,
 };
 
 export type { Messages, StreamData };
