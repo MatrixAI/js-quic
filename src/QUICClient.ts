@@ -1,6 +1,12 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed } from '@matrixai/contexts';
-import type { ClientCrypto, Host, Hostname, Port, VerifyCallback } from './types';
+import type {
+  ClientCrypto,
+  Host,
+  Hostname,
+  Port,
+  VerifyCallback,
+} from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type {
@@ -48,6 +54,8 @@ class QUICClient extends EventTarget {
   protected config: Config;
   protected _connection: QUICConnection;
   protected connectionMap: QUICConnectionMap;
+  // Used to track address string for logging ONLY
+  protected address: string;
 
   /**
    * Creates a QUIC Client
@@ -211,17 +219,12 @@ class QUICClient extends EventTarget {
     ctx.signal.addEventListener('abort', (r) => {
       abortController.abort(r);
     });
-    console.log('bsd');
     try {
       await Promise.race([
         connection.start({ ...ctx, signal: abortController.signal }),
-        socketErrorP.catch(e => {
-          console.error(e);
-          throw e;
-        }),
+        socketErrorP,
       ]);
     } catch (e) {
-      console.error(e);
       // In case the `connection.start` is on-going, we need to abort it
       abortController.abort(e);
       if (!isSocketShared) {
@@ -232,16 +235,14 @@ class QUICClient extends EventTarget {
     } finally {
       socket.removeEventListener('socketError', handleQUICSocketError);
     }
-    console.log('bsd')
+    address = utils.buildAddress(host_, port);
     const client = new this({
       socket,
       connection,
       isSocketShared,
+      address,
       logger,
     });
-    console.log('bsd')
-    address = utils.buildAddress(host_, port);
-    console.log('bsd')
     logger.info(`Created ${this.name} to ${address}`);
     return client;
   }
@@ -339,11 +340,13 @@ class QUICClient extends EventTarget {
     socket,
     isSocketShared,
     connection,
+    address,
     logger,
   }: {
     socket: QUICSocket;
     isSocketShared: boolean;
     connection: QUICConnection;
+    address: string;
     logger: Logger;
   }) {
     super();
@@ -351,6 +354,7 @@ class QUICClient extends EventTarget {
     this.socket = socket;
     this.isSocketShared = isSocketShared;
     this._connection = connection;
+    this.address = address;
     // Listen on all socket events
     socket.addEventListener('socketError', this.handleQUICSocketEvents);
     socket.addEventListener('socketStop', this.handleQUICSocketEvents);
@@ -402,25 +406,25 @@ class QUICClient extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
-    const address = utils.buildAddress(this.socket.host, this.socket.port);
+    const address = this.address;
     this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
     // Listen on all socket events
     this.socket.removeEventListener('socketError', this.handleQUICSocketEvents);
     this.socket.removeEventListener('socketStop', this.handleQUICSocketEvents);
     // Listen on all connection events
-    this.connection.removeEventListener(
+    this._connection.removeEventListener(
       'connectionStream',
       this.handleQUICConnectionEvents,
     );
-    this.connection.removeEventListener(
+    this._connection.removeEventListener(
       'connectionStop',
       this.handleQUICConnectionEvents,
     );
-    this.connection.removeEventListener(
+    this._connection.removeEventListener(
       'connectionError',
       this.handleQUICConnectionEvents,
     );
-    this.connection.removeEventListener(
+    this._connection.removeEventListener(
       'streamDestroy',
       this.handleQUICConnectionEvents,
     );

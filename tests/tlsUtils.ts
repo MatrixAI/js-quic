@@ -111,8 +111,6 @@ type KeyPair = {
   publicKey: Buffer;
 };
 
-
-
 /**
  * Extracts Ed25519 Public Key from Ed25519 Private Key
  * The returned buffers are guaranteed to unpooled.
@@ -155,7 +153,7 @@ const keyPairsArb = (min: number = 1, max?: number) =>
     size: 'xsmall',
   });
 
-// const tlsConfigArb = (keyPairs: fc.Arbitrary<Array<KeyPair>> = keyPairsArb()) =>
+// Const tlsConfigArb = (keyPairs: fc.Arbitrary<Array<KeyPair>> = keyPairsArb()) =>
 //   keyPairs
 //     .map(async (keyPairs) => await createTLSConfigWithChain(keyPairs))
 //     .noShrink();
@@ -207,7 +205,7 @@ export {
   publicKeyArb,
   keyPairArb,
   keyPairsArb,
-  // tlsConfigArb,
+  // TlsConfigArb,
   // tlsConfigWithCaArb,
   // tlsConfigWithCaRSAArb,
   // tlsConfigWithCaOKPArb,

@@ -6,6 +6,7 @@ import type QUICServer from '@/QUICServer';
 import type QUICStream from '@/QUICStream';
 import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
+import { never } from '@/utils';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -684,6 +685,65 @@ timeout: ${conn.timeout()},
 `;
 }
 
+type KeyTypes = 'RSA' | 'ECDSA' | 'ED25519';
+type TLSConfigs = {
+  key: string;
+  cert: string;
+  ca: string;
+};
+
+async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
+  let privateKeyPem: string;
+  let keysLeaf: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  let keysCa: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  switch (type) {
+    case 'RSA':
+    {
+      keysLeaf = await generateKeyPairRSA();
+      keysCa = await generateKeyPairRSA();
+      privateKeyPem = (await keyPairRSAToPEM(keysLeaf)).privateKey;
+    }
+      break;
+    case 'ECDSA':
+    {
+      keysLeaf = await generateKeyPairECDSA();
+      keysCa = await generateKeyPairECDSA();
+      privateKeyPem = (await keyPairECDSAToPEM(keysLeaf))
+        .privateKey;
+    }
+      break;
+    case 'ED25519':
+    {
+      keysLeaf = await generateKeyPairEd25519();
+      keysCa = await generateKeyPairEd25519();
+      privateKeyPem = (await keyPairEd25519ToPEM(keysLeaf))
+        .privateKey;
+    }
+      break;
+    default:
+      never();
+  }
+
+  const certCa = await generateCertificate({
+    certId: '0',
+    duration: 100000,
+    issuerPrivateKey: keysCa.privateKey,
+    subjectKeyPair: keysCa,
+  });
+  const certLeaf = await generateCertificate({
+    certId: '1',
+    duration: 100000,
+    issuerPrivateKey: keysCa.privateKey,
+    subjectKeyPair: keysLeaf,
+  });
+  return {
+    key: privateKeyPem,
+    cert: certToPEM(certLeaf),
+    ca: certToPEM(certCa),
+  };
+}
+
+
 export {
   sleep,
   randomBytes,
@@ -694,7 +754,7 @@ export {
   keyPairECDSAToPEM,
   keyPairEd25519ToPEM,
   generateCertificate,
-  // createTLSConfigWithChain, FIXME
+  // CreateTLSConfigWithChain, FIXME
   certToPEM,
   generateKeyHMAC,
   signHMAC,
@@ -703,6 +763,7 @@ export {
   handleStreamProm,
   waitForTimeoutNull,
   connStats,
+  generateConfig,
 };
 
-export type { Messages, StreamData };
+export type { Messages, StreamData, KeyTypes, TLSConfigs };

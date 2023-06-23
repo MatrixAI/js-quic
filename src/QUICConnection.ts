@@ -2,19 +2,24 @@ import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed } from '@matrixai/contexts';
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionId from './QUICConnectionId';
-import type { Host, Port, RemoteInfo, StreamId } from './types';
+import type {
+  Host,
+  Port,
+  QUICConfig,
+  RemoteInfo,
+  StreamCodeToReason,
+  StreamId,
+  StreamReasonToCode,
+} from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
-import type { StreamCodeToReason, StreamReasonToCode } from './types';
-import type { QUICConfig } from './types';
-import { Monitor, RWLockWriter } from '@matrixai/async-locks';
+import { Lock, LockBox, Monitor, RWLockWriter } from '@matrixai/async-locks';
 import {
-  StartStop,
   ready,
-  status,
   running,
+  StartStop,
+  status,
 } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
-import { Lock, LockBox } from '@matrixai/async-locks';
 import { Timer } from '@matrixai/timer';
 import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig } from './config';
@@ -22,8 +27,8 @@ import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
-import * as errors from './errors';
 import { never } from './utils';
+import * as errors from './errors';
 
 // FIXME
 type VerifyCallback = (certs: Array<string>) => void;
@@ -369,7 +374,45 @@ class QUICConnection extends EventTarget {
     // Waits for the first short packet after establishment
     // This ensures that TLS has been established and verified on both sides
     await this.send();
-    await this.secureEstablishedP;
+    await this.secureEstablishedP.catch((e) => {
+      this.socket.connectionMap.delete(this.connectionId);
+
+      if (this.conn.isTimedOut()) {
+        // We don't dispatch an event here, it was already done in the timeout.
+        throw new errors.ErrorQUICConnectionStartTimeOut();
+      }
+
+      // Emit error if local error
+      const localError = this.conn.localError();
+      if (localError != null) {
+        const message = `connection start failed with localError ${Buffer.from(
+          localError.reason,
+        ).toString()}(${localError.errorCode})`;
+        this.logger.info(message);
+        throw new errors.ErrorQUICConnectionInternal(message, {
+          data: {
+            type: 'local',
+            ...localError,
+          },
+        });
+      }
+      // Emit error if peer error
+      const peerError = this.conn.peerError();
+      if (peerError != null) {
+        const message = `Connection start failed with peerError ${Buffer.from(
+          peerError.reason,
+        ).toString()}(${peerError.errorCode})`;
+        this.logger.info(message);
+        throw new errors.ErrorQUICConnectionInternal(message, {
+          data: {
+            type: 'local',
+            ...peerError,
+          },
+        });
+      }
+      // Throw the default error if none of the above were true, this shouldn't really happen
+      throw e;
+    });
     this.logger.warn('secured');
     // After this is done
     // We need to established the keep alive interval time
@@ -460,6 +503,14 @@ class QUICConnection extends EventTarget {
     // But during `start` we are just waiting
     this.socket.connectionMap.delete(this.connectionId);
 
+    if (this.conn.isTimedOut()) {
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICConnectionIdleTimeOut(),
+        }),
+      );
+    }
+
     // Emit error if peer error
     const peerError = this.conn.peerError();
     if (peerError != null) {
@@ -469,15 +520,12 @@ class QUICConnection extends EventTarget {
       this.logger.info(message);
       this.dispatchEvent(
         new events.QUICConnectionErrorEvent({
-          detail: new errors.ErrorQUICConnectionInternal(
-            message,
-            {
-              data: {
-                type: 'local',
-                ...peerError,
-              }
+          detail: new errors.ErrorQUICConnectionInternal(message, {
+            data: {
+              type: 'local',
+              ...peerError,
             },
-          ),
+          }),
         }),
       );
     }
@@ -490,15 +538,12 @@ class QUICConnection extends EventTarget {
       this.logger.info(message);
       this.dispatchEvent(
         new events.QUICConnectionErrorEvent({
-          detail: new errors.ErrorQUICConnectionInternal(
-            message,
-            {
-              data: {
-                type: 'local',
-                ...localError,
-              }
-            }
-          ),
+          detail: new errors.ErrorQUICConnectionInternal(message, {
+            data: {
+              type: 'local',
+              ...localError,
+            },
+          }),
         }),
       );
     }
@@ -578,7 +623,7 @@ class QUICConnection extends EventTarget {
       // Short indicates that the peer has completed TLS verification
       if (!this.shortReceived) {
         const header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
-        // if short frame
+        // If short frame
         if (header.ty === 5) {
           this.shortReceived = true;
           this.conn.sendAckEliciting();
@@ -594,7 +639,7 @@ class QUICConnection extends EventTarget {
         if (this.count >= 1) {
           this.secured = true;
           this.resolveSecureEstablishedP();
-          // this.dispatchEvent(new events.QUICConnectionRemoteSecureEvent()); TODO
+          // This.dispatchEvent(new events.QUICConnectionRemoteSecureEvent()); TODO
         }
         this.count += 1;
       }
@@ -757,9 +802,7 @@ class QUICConnection extends EventTarget {
         this.customVerified = true;
         const peerCerts = this.conn.peerCertChain();
         if (peerCerts == null) never();
-        const peerCertsPem = peerCerts.map((c) =>
-          utils.certificateDERToPEM(c),
-        );
+        const peerCertsPem = peerCerts.map((c) => utils.certificateDERToPEM(c));
         // Dispatching certs available event
         // this.dispatchEvent(new events.QUICConnectionRemoteCertEvent()); TODO
         try {
@@ -833,6 +876,7 @@ class QUICConnection extends EventTarget {
     const connTimeOutHandler = async () => {
       // This can only be called when the timeout has occurred
       // This transitions the connection state
+      this.logger.debug('CALLING ON TIMEOUT');
       this.conn.onTimeout();
 
       // At this point...
@@ -847,26 +891,16 @@ class QUICConnection extends EventTarget {
       // So if it is timed out, it gets closed too
       // But if it is is timed out due to idle we raise an error
 
-      if (this.conn.isTimedOut()) {
-        // This is just a dispatch on the connection error
-        // Note that this may cause the client to attempt
-        // to stop the socket and stuff
-        // The client should ignore this event error
-        // Because it's actually being handled
-        // On the other hand...
-        // If we randomly fail here
-        // It's correct to properly raise an event
-        // To bubble up....
-
-        this.dispatchEvent(
-          new events.QUICConnectionErrorEvent({
-            detail: new errors.ErrorQUICConnectionIdleTimeOut(),
-          }),
-        );
-      }
-
       // At the same time, we may in fact be closed too
       if (this.conn.isClosed()) {
+        // If it was still starting waiting for the secure event,
+        // we need to reject that promise.
+        if (this[status] === 'starting') {
+          this.rejectSecureEstablishedP(
+            new errors.ErrorQUICConnectionInternal('Connection has closed!'),
+          );
+        }
+
         // We actually finally closed here
         // Actually the question is that this could be an error
         // The act of closing is an error?
@@ -903,8 +937,9 @@ class QUICConnection extends EventTarget {
       const timeout = this.conn.timeout();
       // If this is `null`, then technically there's nothing to do
       if (timeout == null) return;
+      // Allow an extra 1ms for the delay to fully complete so we can avoid a repeated 0ms delay
       this.connTimeOutTimer = new Timer({
-        delay: timeout,
+        delay: timeout + 1,
         handler: connTimeOutHandler,
       });
     };
@@ -916,6 +951,7 @@ class QUICConnection extends EventTarget {
     if (this.connTimeOutTimer != null) {
       this.connTimeOutTimer.cancel();
     }
+    this.logger.debug(`timeout created with delay ${timeout}`);
     this.connTimeOutTimer = new Timer({
       delay: timeout,
       handler: connTimeOutHandler,

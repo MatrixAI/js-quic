@@ -104,7 +104,7 @@ class ErrorQUICConnectionIdleTimeOut<T> extends ErrorQUICConnection<T> {
  */
 class ErrorQUICConnectionInternal<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection internal conn error';
-  public data: {
+  public declare data: {
     type: 'local' | 'remote';
     isApp: boolean;
     errorCode: number;

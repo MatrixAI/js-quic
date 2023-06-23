@@ -6,7 +6,8 @@ import type {
   StreamCodeToReason,
   StreamReasonToCode,
   QUICConfig,
-  ServerCrypto, VerifyCallback
+  ServerCrypto,
+  VerifyCallback,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
@@ -345,8 +346,12 @@ class QUICServer extends EventTarget {
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),
     });
-    await connection.start(); // TODO: pass ctx
-    console.log('dispatching');
+    try {
+      await connection.start(); // TODO: pass ctx
+    } catch (e) {
+      // Ignoring any errors here as a failure to connect
+      return;
+    }
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );

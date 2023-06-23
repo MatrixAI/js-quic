@@ -7,13 +7,13 @@ import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import { Monitor, RWLockWriter } from '@matrixai/async-locks';
+import { status } from '@matrixai/async-init/dist/utils';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
 import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
-import { status } from '@matrixai/async-init/dist/utils';
 
 /**
  * Events:
@@ -85,6 +85,8 @@ class QUICSocket extends EventTarget {
         return;
       }
       // At this point, the connection may not yet be started
+      // FIXME: How can we be awaiting connection secured event WHILE
+      //  processing packets for it?
       const connection_ = await this.server.connectionNew(
         remoteInfo_,
         header,
@@ -102,18 +104,22 @@ class QUICSocket extends EventTarget {
     // If the connection has already stopped running
     // then we discard the packet.
     if (!(connection[running] || connection[status] === 'starting')) {
-      console.log('x');
       return;
     }
     // Acquire the conn lock, this ensures mutual exclusion
     // for state changes on the internal connection
-    const mon = new Monitor<RWLockWriter>(connection.lockbox, RWLockWriter);
-    await mon.withF(connection.lockCode, async (mon) => {
-      // Even if we are `stopping`, the `quiche` library says we need to
-      // continue processing any packets.
-      await connection.recv(data, remoteInfo_, mon);
-      await connection.send(mon);
-    });
+    try {
+      const mon = new Monitor<RWLockWriter>(connection.lockbox, RWLockWriter);
+      await mon.withF(connection.lockCode, async (mon) => {
+        // Even if we are `stopping`, the `quiche` library says we need to
+        // continue processing any packets.
+        await connection.recv(data, remoteInfo_, mon);
+        await connection.send(mon);
+      });
+    } catch (e) {
+      // Race condition with destroying socket, just ignore
+      if (!(e instanceof errors.ErrorQUICSocketNotRunning)) throw e;
+    }
   };
 
   /**
@@ -256,8 +262,8 @@ class QUICSocket extends EventTarget {
         `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
       );
     }
-    this.socket.removeListener('message', this.handleSocketMessage);
-    this.socket.removeListener('error', this.handleSocketError);
+    this.socket.off('message', this.handleSocketMessage);
+    this.socket.off('error', this.handleSocketError);
     await this.socketClose();
     this.dispatchEvent(new events.QUICSocketStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
