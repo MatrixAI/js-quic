@@ -42,12 +42,6 @@ type ConnectionIdString = Opaque<'ConnectionIdString', string>;
  * Remember every Node Buffer is an ArrayBuffer
  */
 type ClientCrypto = {
-  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-  verify(
-    key: ArrayBuffer,
-    data: ArrayBuffer,
-    sig: ArrayBuffer,
-  ): Promise<boolean>;
   randomBytes(data: ArrayBuffer): Promise<void>;
 };
 
