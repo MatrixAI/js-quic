@@ -23,6 +23,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
+import { never } from './utils';
 
 /**
  * Think of this as equivalent to `net.Socket`.
@@ -193,6 +194,12 @@ class QUICConnection extends EventTarget {
   public readonly lockbox = new LockBox<RWLockWriter>();
   public readonly lockCode = 'Lock'; // TODO: more unique code
 
+  protected customVerified = false;
+  protected shortReceived = false;
+  protected shortSent = false;
+  protected secured = false;
+  protected count = 0;
+
   public constructor({
     type,
     scid,
@@ -353,10 +360,8 @@ class QUICConnection extends EventTarget {
     this.socket.connectionMap.set(this.connectionId, this);
     // Waits for the first short packet after establishment
     // This ensures that TLS has been established and verified on both sides
-    console.log('sending');
     await this.send();
-    console.log('waiting secured');
-    // await this.secureEstablishedP;
+    await this.secureEstablishedP;
     this.logger.warn('secured');
     // After this is done
     // We need to established the keep alive interval time
@@ -447,6 +452,49 @@ class QUICConnection extends EventTarget {
     // But during `start` we are just waiting
     this.socket.connectionMap.delete(this.connectionId);
 
+    // Emit error if peer error
+    const peerError = this.conn.peerError();
+    if (peerError != null) {
+      const message = `Connection errored out with peerError ${Buffer.from(
+        peerError.reason,
+      ).toString()}(${peerError.errorCode})`;
+      this.logger.info(message);
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICConnectionInternal(
+            message,
+            {
+              data: {
+                type: 'local',
+                ...peerError,
+              }
+            },
+          ),
+        }),
+      );
+    }
+
+    const localError = this.conn.localError();
+    if (localError != null) {
+      const message = `connection failed with localError ${Buffer.from(
+        localError.reason,
+      ).toString()}(${localError.errorCode})`;
+      this.logger.info(message);
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICConnectionInternal(
+            message,
+            {
+              data: {
+                type: 'local',
+                ...localError,
+              }
+            }
+          ),
+        }),
+      );
+    }
+
     this.dispatchEvent(new events.QUICConnectionStopEvent());
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
@@ -518,39 +566,37 @@ class QUICConnection extends EventTarget {
         this.lastErrorMessage = e.message;
       }
 
+      // Checking if the packet was a short frame.
+      // Short indicates that the peer has completed TLS verification
+      if (!this.shortReceived) {
+        const header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
+        // if short frame
+        if (header.ty === 5) {
+          this.shortReceived = true;
+          this.conn.sendAckEliciting();
+        }
+      }
+
+      if (
+        !this.secured &&
+        this.shortReceived &&
+        this.shortReceived &&
+        !this.conn.isDraining()
+      ) {
+        if (this.count >= 1) {
+          this.secured = true;
+          this.resolveSecureEstablishedP();
+          // this.dispatchEvent(new events.QUICConnectionRemoteSecureEvent()); TODO
+        }
+        this.count += 1;
+      }
+
       // We don't actually "fail"
       // the closedP until we proceed
       // But note that if there's an error
 
       if (this.conn.isEstablished()) {
         this.resolveEstablishedP();
-
-        if (this.type === 'server') {
-          // For server connections, if we are established
-          // we are secure established
-          this.resolveSecureEstablishedP();
-        } else if (this.type === 'client') {
-          // We need a hueristic to indicate whether we are securely established
-          // If we are already established
-          // AND IF, we are getting a packet after establishment
-          // And we didn't result in an error
-          // Neither draining, nor closed, nor timed out
-          // For server connections
-          // If we are already established, then we are secure established
-          // To know if the server is also established
-          // We need to know the NEXT recv after we are already established
-          // So we received something, and that allows us to be established
-          // UPON the next recv
-          // We need to ensure:
-          // 1. No errors
-          // 2. Not draining
-          // 3. No
-          // YES the main thing is that there is no errors
-          // I think that's the KEY
-          // But we must only switch
-          // If were "already" established
-          // That this wasn't the first time we were established
-        }
       }
 
       // We also need to know whether this is our first short frame
@@ -586,7 +632,7 @@ class QUICConnection extends EventTarget {
           }
           readIds.push(quicStream.streamId);
           quicStream.read();
-          // QuicStream.dispatchEvent(new events.QUICStreamReadableEvent()); // TODO: remove?
+          // QuicStream.dispatchEvent(new events.QUICStreamReadablaeEvent()); // TODO: remove?
         }
         if (readIds.length > 0) {
           this.logger.info(`processed reads for ${readIds}`);
@@ -690,6 +736,50 @@ class QUICConnection extends EventTarget {
           sendInfo.to.host,
         );
         this.logger.debug(`sent ${sendLength} bytes`);
+      }
+      // Handling custom TLS verification, this must be done after the following conditions.
+      //  1. Connection established.
+      //  2. Certs available.
+      //  3. Sent after connection has established.
+      if (
+        !this.customVerified &&
+        this.conn.isEstablished() &&
+        this.conn.peerCertChain() != null
+      ) {
+        this.customVerified = true;
+        const peerCerts = this.conn.peerCertChain();
+        if (peerCerts == null) never();
+        const peerCertsPem = peerCerts.map((c) =>
+          utils.certificateDERToPEM(c),
+        );
+        // Dispatching certs available event
+        // this.dispatchEvent(new events.QUICConnectionRemoteCertEvent()); TODO
+        try {
+          // if (this.verifyCallback != null) this.verifyCallback(peerCertsPem); TODO
+          this.conn.sendAckEliciting();
+        } catch (e) {
+          // Force the connection to end.
+          // Error 304 indicates cert chain failed verification.
+          // Error 372 indicates cert chain was missing.
+          this.conn.close(
+            false,
+            304,
+            Buffer.from(`Custom TLSFail: ${e.message}`),
+          );
+        }
+      }
+
+      // Check the header type
+      if (!this.shortSent) {
+        const header = quiche.Header.fromSlice(
+          sendBuffer,
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // If short frame
+        if (header.ty === 5) {
+          // Short was sent, locally secured
+          this.shortSent = true;
+        }
       }
     } catch (e) {
       // If called `stop` due to an error here
