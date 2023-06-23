@@ -1,5 +1,5 @@
 import type { POJO } from '@matrixai/errors';
-import AbstractError from '@matrixai/errors';
+import AbstractError from '@matrixai/errors/dist/AbstractError';
 
 class ErrorQUIC<T> extends AbstractError<T> {
   static description = 'QUIC error';

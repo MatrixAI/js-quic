@@ -11,8 +11,7 @@ import { promise } from '@/utils';
 import QUICSocket from '@/QUICSocket';
 import * as testsUtils from './utils';
 import { tlsConfigWithCaArb, tlsConfigWithCaGENOKPArb } from './tlsUtils';
-import { sleep } from './utils';
-import * as fixtures from './fixtures/certFixtures';
+import { generateCertificate, sleep } from './utils';
 
 // TODO: Planed changes...
 //  1. convert to a describe each and run tests for each kind of cert. Just for better grouping
@@ -61,11 +60,15 @@ describe(QUICClient.name, () => {
     test(
       'to ipv4 server succeeds',
       async () => {
-        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
-        const keyPair = testsUtils.generateKeyPairRSA();
-        const certs = testsUtils.generateCertificate({
-
+        const keys = await testsUtils.generateKeyPairRSA();
+        const privateKeyPem = (await testsUtils.keyPairRSAToPEM(keys)).privateKey;
+        const cert = await testsUtils.generateCertificate({
+          certId: '0',
+          duration: 100000,
+          issuerPrivateKey: keys.privateKey,
+          subjectKeyPair: keys,
         })
+        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
         const server = new QUICServer({
           crypto: {
             key,
@@ -73,9 +76,8 @@ describe(QUICClient.name, () => {
           },
           logger: logger.getChild(QUICServer.name),
           config: {
-            ...{
-              key: tlsConfig.tlsConfig.key
-            },
+            key: privateKeyPem,
+            cert: testsUtils.certToPEM(cert),
             verifyPeer: false,
           },
         });
@@ -108,9 +110,7 @@ describe(QUICClient.name, () => {
         expect(conn.remotePort).toBe(client.port);
         await client.destroy();
         await server.stop();
-      },
-      { numRuns: 10 },
-    );
+      });
     // testProp(
     //   'to ipv6 server succeeds',
     //   [tlsConfigWithCaArb],
