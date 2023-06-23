@@ -207,12 +207,17 @@ class QUICClient extends EventTarget {
     ctx.signal.addEventListener('abort', (r) => {
       abortController.abort(r);
     });
+    console.log('bsd');
     try {
       await Promise.race([
-        await connection.start({ ...ctx, signal: abortController.signal }),
-        socketErrorP,
+        connection.start({ ...ctx, signal: abortController.signal }),
+        socketErrorP.catch(e => {
+          console.error(e);
+          throw e;
+        }),
       ]);
     } catch (e) {
+      console.error(e);
       // In case the `connection.start` is on-going, we need to abort it
       abortController.abort(e);
       if (!isSocketShared) {
@@ -223,13 +228,16 @@ class QUICClient extends EventTarget {
     } finally {
       socket.removeEventListener('socketError', handleQUICSocketError);
     }
+    console.log('bsd')
     const client = new this({
       socket,
       connection,
       isSocketShared,
       logger,
     });
+    console.log('bsd')
     address = utils.buildAddress(host_, port);
+    console.log('bsd')
     logger.info(`Created ${this.name} to ${address}`);
     return client;
   }

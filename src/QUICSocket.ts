@@ -13,6 +13,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
+import { status } from '@matrixai/async-init/dist/utils';
 
 /**
  * Events:
@@ -100,7 +101,8 @@ class QUICSocket extends EventTarget {
     }
     // If the connection has already stopped running
     // then we discard the packet.
-    if (!connection[running]) {
+    if (!(connection[running] || connection[status] === 'starting')) {
+      console.log('x');
       return;
     }
     // Acquire the conn lock, this ensures mutual exclusion
@@ -254,8 +256,8 @@ class QUICSocket extends EventTarget {
         `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
       );
     }
-    this.socket.off('message', this.handleSocketMessage);
-    this.socket.off('error', this.handleSocketError);
+    this.socket.removeListener('message', this.handleSocketMessage);
+    this.socket.removeListener('error', this.handleSocketError);
     await this.socketClose();
     this.dispatchEvent(new events.QUICSocketStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);

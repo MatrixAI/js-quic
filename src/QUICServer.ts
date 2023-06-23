@@ -54,7 +54,9 @@ class QUICServer extends EventTarget {
   protected connectionMap: QUICConnectionMap;
 
   protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
-    this.dispatchEvent(e);
+    const event = new Event('asd');
+    this.dispatchEvent(event);
+    this.dispatchEvent(event);
     if (e instanceof events.QUICSocketErrorEvent) {
       this.dispatchEvent(
         new events.QUICServerErrorEvent({
@@ -339,6 +341,7 @@ class QUICServer extends EventTarget {
       ),
     });
     await connection.start(); // TODO: pass ctx
+    console.log('dispatching');
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );

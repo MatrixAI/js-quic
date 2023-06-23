@@ -353,7 +353,11 @@ class QUICConnection extends EventTarget {
     this.socket.connectionMap.set(this.connectionId, this);
     // Waits for the first short packet after establishment
     // This ensures that TLS has been established and verified on both sides
-    await this.secureEstablishedP;
+    console.log('sending');
+    await this.send();
+    console.log('waiting secured');
+    // await this.secureEstablishedP;
+    this.logger.warn('secured');
     // After this is done
     // We need to established the keep alive interval time
     if (this.config.keepAliveIntervalTime != null) {
@@ -496,6 +500,7 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
+        this.logger.debug(`recv ${data.byteLength} bytes`);
         // This can process concatenated QUIC packets
         // This may mutate `data`
         this.conn.recv(data, recvInfo);
@@ -684,6 +689,7 @@ class QUICConnection extends EventTarget {
           sendInfo.to.port,
           sendInfo.to.host,
         );
+        this.logger.debug(`sent ${sendLength} bytes`);
       }
     } catch (e) {
       // If called `stop` due to an error here

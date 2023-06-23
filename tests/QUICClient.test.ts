@@ -10,7 +10,6 @@ import * as errors from '@/errors';
 import { promise } from '@/utils';
 import QUICSocket from '@/QUICSocket';
 import * as testsUtils from './utils';
-import { tlsConfigWithCaArb, tlsConfigWithCaGENOKPArb } from './tlsUtils';
 import { generateCertificate, sleep } from './utils';
 
 // TODO: Planed changes...
@@ -18,7 +17,7 @@ import { generateCertificate, sleep } from './utils';
 //  2. Almost none of the tests need to be fast check, convert to standard tests.
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -68,7 +67,9 @@ describe(QUICClient.name, () => {
           issuerPrivateKey: keys.privateKey,
           subjectKeyPair: keys,
         })
+        console.log('asd');
         const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        console.log('asd');
         const server = new QUICServer({
           crypto: {
             key,
@@ -81,15 +82,19 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         });
+        console.log('asd');
         testsUtils.extractSocket(server, sockets);
+        console.log('asd');
         server.addEventListener(
-          'connection',
+          'serverConnection',
           (e: events.QUICServerConnectionEvent) =>
             connectionEventProm.resolveP(e),
         );
+        console.log('asd');
         await server.start({
           host: '127.0.0.1' as Host,
         });
+        console.log('asd');
         const client = await QUICClient.createQUICClient({
           host: '::ffff:127.0.0.1' as Host,
           port: server.port,
@@ -100,16 +105,23 @@ describe(QUICClient.name, () => {
           logger: logger.getChild(QUICClient.name),
           config: {
             verifyPeer: false,
+            logKeys: './tmp/key.log'
           },
         });
+        console.log('asd');
         testsUtils.extractSocket(client, sockets);
+        console.log('asd');
         const conn = (await connectionEventProm.p).detail;
+        console.log('asd');
         expect(conn.localHost).toBe('127.0.0.1');
         expect(conn.localPort).toBe(server.port);
         expect(conn.remoteHost).toBe('127.0.0.1');
         expect(conn.remotePort).toBe(client.port);
-        await client.destroy();
-        await server.stop();
+        console.log('asd');
+        // await client.destroy();
+        // console.log('asd');
+        // await server.stop();
+        // console.log('asd');
       });
     // testProp(
     //   'to ipv6 server succeeds',
