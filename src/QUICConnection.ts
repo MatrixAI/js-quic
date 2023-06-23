@@ -25,6 +25,9 @@ import * as utils from './utils';
 import * as errors from './errors';
 import { never } from './utils';
 
+// FIXME
+type VerifyCallback = (certs: Array<string>) => void;
+
 /**
  * Think of this as equivalent to `net.Socket`.
  * Errors here are emitted to the connection only.
@@ -199,6 +202,7 @@ class QUICConnection extends EventTarget {
   protected shortSent = false;
   protected secured = false;
   protected count = 0;
+  protected verifyCallback: VerifyCallback | undefined;
 
   public constructor({
     type,
@@ -209,6 +213,7 @@ class QUICConnection extends EventTarget {
     socket,
     reasonToCode = () => 0,
     codeToReason = (type, code) => new Error(`${type} ${code}`),
+    verifyCallback,
     logger,
   }:
     | {
@@ -220,6 +225,7 @@ class QUICConnection extends EventTarget {
         socket: QUICSocket;
         reasonToCode?: StreamReasonToCode;
         codeToReason?: StreamCodeToReason;
+        verifyCallback?: VerifyCallback;
         logger?: Logger;
       }
     | {
@@ -231,6 +237,7 @@ class QUICConnection extends EventTarget {
         socket: QUICSocket;
         reasonToCode?: StreamReasonToCode;
         codeToReason?: StreamCodeToReason;
+        verifyCallback?: VerifyCallback;
         logger?: Logger;
       }) {
     super();
@@ -281,6 +288,7 @@ class QUICConnection extends EventTarget {
     this.config = config;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
+    this.verifyCallback = verifyCallback;
     this._remoteHost = remoteInfo.host;
     this._remotePort = remoteInfo.port;
     const {
@@ -755,7 +763,7 @@ class QUICConnection extends EventTarget {
         // Dispatching certs available event
         // this.dispatchEvent(new events.QUICConnectionRemoteCertEvent()); TODO
         try {
-          // if (this.verifyCallback != null) this.verifyCallback(peerCertsPem); TODO
+          if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
           this.conn.sendAckEliciting();
         } catch (e) {
           // Force the connection to end.

@@ -168,8 +168,16 @@ type QUICConfig = {
    * Verify the other peer.
    * Clients by default set this to true.
    * Servers by default set this to false.
+   * Servers will not request peer certs unless this is true.
+   * Server certs are always sent
    */
   verifyPeer: boolean;
+
+  /**
+   * Will allow unsecure TLS certs, allowing for certs to be requested
+   * but the verification result is ignored.
+   */
+  verifyAllowFail: boolean;
 
   /**
    * Enables the logging of secret keys to a file path.
@@ -299,6 +307,8 @@ type QUICConfig = {
   enableEarlyData: boolean;
 };
 
+type VerifyCallback = (certs: Array<string>) => void;
+
 export type {
   Opaque,
   Callback,
@@ -320,4 +330,5 @@ export type {
   QUICConfig,
   ContextCancellable,
   ContextTimed,
+  VerifyCallback,
 };

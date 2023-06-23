@@ -1,6 +1,6 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed } from '@matrixai/contexts';
-import type { ClientCrypto, Host, Hostname, Port } from './types';
+import type { ClientCrypto, Host, Hostname, Port, VerifyCallback } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type {
@@ -79,6 +79,7 @@ class QUICClient extends EventTarget {
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
+      verifyCallback?: VerifyCallback;
       logger?: Logger;
     },
     ctx?: Partial<ContextTimed>,
@@ -96,6 +97,7 @@ class QUICClient extends EventTarget {
       resolveHostname = utils.resolveHostname,
       reasonToCode,
       codeToReason,
+      verifyCallback,
       logger = new Logger(`${this.name}`),
     }: {
       host: Host | Hostname;
@@ -112,6 +114,7 @@ class QUICClient extends EventTarget {
       resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
+      verifyCallback?: VerifyCallback;
       logger?: Logger;
     },
     @context ctx: ContextTimed,
@@ -199,6 +202,7 @@ class QUICClient extends EventTarget {
       config: quicConfig,
       reasonToCode,
       codeToReason,
+      verifyCallback,
       logger: logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}`,
       ),

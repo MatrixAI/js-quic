@@ -6,7 +6,7 @@ import type {
   StreamCodeToReason,
   StreamReasonToCode,
   QUICConfig,
-  ServerCrypto,
+  ServerCrypto, VerifyCallback
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
@@ -51,6 +51,7 @@ class QUICServer extends EventTarget {
   protected socket: QUICSocket;
   protected reasonToCode: StreamReasonToCode | undefined;
   protected codeToReason: StreamCodeToReason | undefined;
+  protected verifyCallback: VerifyCallback | undefined;
   protected connectionMap: QUICConnectionMap;
 
   protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
@@ -77,6 +78,7 @@ class QUICServer extends EventTarget {
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
+    verifyCallback,
     logger,
   }: {
     crypto: {
@@ -98,6 +100,7 @@ class QUICServer extends EventTarget {
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
+    verifyCallback?: VerifyCallback;
     logger?: Logger;
   }) {
     super();
@@ -124,6 +127,7 @@ class QUICServer extends EventTarget {
     this.config = quicConfig;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
+    this.verifyCallback = verifyCallback;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -336,6 +340,7 @@ class QUICServer extends EventTarget {
       config: this.config,
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,
+      verifyCallback: this.verifyCallback,
       logger: this.logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),

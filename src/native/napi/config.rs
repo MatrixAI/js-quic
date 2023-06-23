@@ -50,6 +50,7 @@ impl Config {
   #[napi(factory)]
   pub fn with_boring_ssl_ctx(
     verify_peer: bool,
+    verify_allow_fail: bool,
     ca: Option<Uint8Array>,
     key: Option<Vec<Uint8Array>>,
     cert: Option<Vec<Uint8Array>>,
@@ -65,7 +66,15 @@ impl Config {
     } else {
       boring::ssl::SslVerifyMode::NONE
     };
-    ssl_ctx_builder.set_verify(verify_value);
+    ssl_ctx_builder.set_verify_callback(verify_value, move |pre_verify, _| {
+      // Override any validation errors, this is needed so we can request certs but validate them
+      //  manually.
+      if verify_allow_fail {
+        true
+      } else {
+        pre_verify
+      }
+    });
     // Setup all CA certificates
     if let Some(ca) = ca {
       let mut x509_store_builder = boring::x509::store::X509StoreBuilder::new()
