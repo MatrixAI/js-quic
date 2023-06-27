@@ -698,27 +698,25 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
   let keysCa: { publicKey: JsonWebKey; privateKey: JsonWebKey };
   switch (type) {
     case 'RSA':
-    {
-      keysLeaf = await generateKeyPairRSA();
-      keysCa = await generateKeyPairRSA();
-      privateKeyPem = (await keyPairRSAToPEM(keysLeaf)).privateKey;
-    }
+      {
+        keysLeaf = await generateKeyPairRSA();
+        keysCa = await generateKeyPairRSA();
+        privateKeyPem = (await keyPairRSAToPEM(keysLeaf)).privateKey;
+      }
       break;
     case 'ECDSA':
-    {
-      keysLeaf = await generateKeyPairECDSA();
-      keysCa = await generateKeyPairECDSA();
-      privateKeyPem = (await keyPairECDSAToPEM(keysLeaf))
-        .privateKey;
-    }
+      {
+        keysLeaf = await generateKeyPairECDSA();
+        keysCa = await generateKeyPairECDSA();
+        privateKeyPem = (await keyPairECDSAToPEM(keysLeaf)).privateKey;
+      }
       break;
     case 'ED25519':
-    {
-      keysLeaf = await generateKeyPairEd25519();
-      keysCa = await generateKeyPairEd25519();
-      privateKeyPem = (await keyPairEd25519ToPEM(keysLeaf))
-        .privateKey;
-    }
+      {
+        keysLeaf = await generateKeyPairEd25519();
+        keysCa = await generateKeyPairEd25519();
+        privateKeyPem = (await keyPairEd25519ToPEM(keysLeaf)).privateKey;
+      }
       break;
     default:
       never();
@@ -742,7 +740,6 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
     ca: certToPEM(certCa),
   };
 }
-
 
 export {
   sleep,

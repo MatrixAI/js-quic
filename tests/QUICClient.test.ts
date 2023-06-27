@@ -1,6 +1,7 @@
 import type { ClientCrypto, Host, Port, ServerCrypto } from '@/types';
 import type * as events from '@/events';
 import type QUICConnection from '@/QUICConnection';
+import type { KeyTypes, TLSConfigs } from './utils';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
 import { running } from '@matrixai/async-init';
@@ -10,8 +11,7 @@ import QUICServer from '@/QUICServer';
 import * as errors from '@/errors';
 import { promise } from '@/utils';
 import * as testsUtils from './utils';
-import { KeyTypes, sleep, TLSConfigs } from './utils';
-
+import { sleep } from './utils';
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
