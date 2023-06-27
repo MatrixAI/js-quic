@@ -350,6 +350,7 @@ class QUICServer extends EventTarget {
       await connection.start(); // TODO: pass ctx
     } catch (e) {
       // Ignoring any errors here as a failure to connect
+      // FIXME: should we emit a connection error here?
       return;
     }
     this.dispatchEvent(

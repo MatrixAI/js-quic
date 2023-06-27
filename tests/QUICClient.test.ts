@@ -14,7 +14,7 @@ import * as testsUtils from './utils';
 import { sleep } from './utils';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),

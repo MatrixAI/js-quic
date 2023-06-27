@@ -72,6 +72,7 @@ class QUICClient extends EventTarget {
    * @param opts.reasonToCode - optional reason to code map
    * @param opts.codeToReason - optional code to reason map
    * @param opts.logger - optional logger
+   * @param ctx
    */
   public static createQUICClient(
     opts: {
@@ -216,9 +217,10 @@ class QUICClient extends EventTarget {
       ),
     });
     const abortController = new AbortController();
-    ctx.signal.addEventListener('abort', (r) => {
+    const abortHandler = (r) => {
       abortController.abort(r);
-    });
+    };
+    ctx.signal.addEventListener('abort', abortHandler);
     try {
       await Promise.race([
         connection.start({ ...ctx, signal: abortController.signal }),
@@ -234,6 +236,7 @@ class QUICClient extends EventTarget {
       throw e;
     } finally {
       socket.removeEventListener('socketError', handleQUICSocketError);
+      ctx.signal.removeEventListener('abort', abortHandler);
     }
     address = utils.buildAddress(host_, port);
     const client = new this({
