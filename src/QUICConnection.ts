@@ -682,7 +682,6 @@ class QUICConnection extends EventTarget {
         // If short frame
         if (header.ty === 5) {
           this.shortReceived = true;
-          this.conn.sendAckEliciting();
         }
       }
 
@@ -845,34 +844,39 @@ class QUICConnection extends EventTarget {
           sendInfo.to.host,
         );
         this.logger.debug(`sent ${sendLength} bytes`);
-      }
-      // Handling custom TLS verification, this must be done after the following conditions.
-      //  1. Connection established.
-      //  2. Certs available.
-      //  3. Sent after connection has established.
-      if (
-        !this.customVerified &&
-        this.conn.isEstablished() &&
-        this.conn.peerCertChain() != null
-      ) {
-        this.customVerified = true;
-        const peerCerts = this.conn.peerCertChain();
-        if (peerCerts == null) never();
-        const peerCertsPem = peerCerts.map((c) => utils.certificateDERToPEM(c));
-        // Dispatching certs available event
-        // this.dispatchEvent(new events.QUICConnectionRemoteCertEvent()); TODO
-        try {
-          if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
-          this.conn.sendAckEliciting();
-        } catch (e) {
-          // Force the connection to end.
-          // Error 304 indicates cert chain failed verification.
-          // Error 372 indicates cert chain was missing.
-          this.conn.close(
-            false,
-            304,
-            Buffer.from(`Custom TLSFail: ${e.message}`),
+
+        // Handling custom TLS verification, this must be done after the following conditions.
+        //  1. Connection established.
+        //  2. Certs available.
+        //  3. Sent after connection has established.
+        if (
+          !this.customVerified &&
+          this.conn.isEstablished() &&
+          this.conn.peerCertChain() != null
+        ) {
+          this.customVerified = true;
+          const peerCerts = this.conn.peerCertChain();
+          if (peerCerts == null) never();
+          const peerCertsPem = peerCerts.map((c) =>
+            utils.certificateDERToPEM(c),
           );
+          try {
+            if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
+            this.logger.warn('TLS verification succeeded');
+            this.conn.sendAckEliciting();
+          } catch (e) {
+            // Force the connection to end.
+            // Error 304 indicates cert chain failed verification.
+            // Error 372 indicates cert chain was missing.
+            this.logger.warn(
+              `TLS fail due to [${e.message}], closing connection`,
+            );
+            this.conn.close(
+              false,
+              304,
+              Buffer.from(`Custom TLSFail: ${e.message}`),
+            );
+          }
         }
       }
 

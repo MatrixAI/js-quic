@@ -84,14 +84,7 @@ class QUICServer extends EventTarget {
   }: {
     crypto: {
       key: ArrayBuffer;
-      ops: {
-        sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-        verify(
-          key: ArrayBuffer,
-          data: ArrayBuffer,
-          sig: ArrayBuffer,
-        ): Promise<boolean>;
-      };
+      ops: ServerCrypto;
     };
     config: Partial<QUICConfig> & {
       key: string | Array<string> | Uint8Array | Array<Uint8Array>;
