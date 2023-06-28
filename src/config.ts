@@ -28,7 +28,7 @@ const clientDefault: QUICConfig = {
   verifyPeer: true,
   verifyAllowFail: false,
   grease: true,
-  maxIdleTimeout: 0,
+  maxIdleTimeout: 1 * 60 * 1000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
   maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200,
   initialMaxData: 10 * 1024 * 1024,
@@ -48,7 +48,7 @@ const serverDefault: QUICConfig = {
   verifyPeer: false,
   verifyAllowFail: false,
   grease: true,
-  maxIdleTimeout: 0,
+  maxIdleTimeout: 1 * 60 * 1000,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
   maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200
   initialMaxData: 10 * 1024 * 1024,

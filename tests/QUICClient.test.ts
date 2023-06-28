@@ -5,6 +5,7 @@ import type { KeyTypes, TLSConfigs } from './utils';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
 import { running } from '@matrixai/async-init';
+import { Timer } from '@matrixai/timer';
 import QUICSocket from '@/QUICSocket';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
@@ -14,7 +15,7 @@ import * as testsUtils from './utils';
 import { sleep } from './utils';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -208,10 +209,52 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.toThrow(errors.ErrorQUICConnectionStartTimeOut);
     });
-    test.todo('client times out with ctx timer while starting');
-    test.todo('client aborted while starting');
-    test.todo('client times out after connection stops responding');
-    test.todo('server times out after connection stops responding');
+    test('client times out with ctx timer while starting', async () => {
+      // QUICClient repeatedly dials until the connection timeout
+      await expect(
+        QUICClient.createQUICClient(
+          {
+            host: localhost,
+            port: 56666 as Port,
+            localHost: localhost,
+            crypto: {
+              ops: clientCrypto,
+            },
+            logger: logger.getChild(QUICClient.name),
+            config: {
+              // Prevent `maxIdleTimeout` timeout
+              maxIdleTimeout: 100000,
+              verifyPeer: false,
+            },
+          },
+          { timer: new Timer({ delay: 100 }) },
+        ),
+      ).rejects.toThrow(errors.ErrorQUICClientCreateTimeOut);
+    });
+    test('client times out with ctx signal while starting', async () => {
+      // QUICClient repeatedly dials until the connection timeout
+      const abortController = new AbortController();
+      const clientProm = QUICClient.createQUICClient(
+        {
+          host: localhost,
+          port: 56666 as Port,
+          localHost: localhost,
+          crypto: {
+            ops: clientCrypto,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            // Prevent `maxIdleTimeout` timeout
+            maxIdleTimeout: 100000,
+            verifyPeer: false,
+          },
+        },
+        { signal: abortController.signal },
+      );
+      await sleep(100);
+      abortController.abort(Error('abort error'));
+      await expect(clientProm).rejects.toThrow(Error('abort error'));
+    });
     test.todo('server handles socket error');
     test.todo('client handles socket error');
   });

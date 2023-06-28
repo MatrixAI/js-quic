@@ -200,32 +200,32 @@ class QUICClient extends EventTarget {
         `Cannot connect to ${host_} an IPv4 mapped IPv6 QUICClient`,
       );
     }
-    const connection = new QUICConnection({
-      type: 'client',
-      scid,
-      socket,
-      remoteInfo: {
-        host: host_,
-        port,
-      },
-      config: quicConfig,
-      reasonToCode,
-      codeToReason,
-      verifyCallback,
-      logger: logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}`,
-      ),
-    });
     const abortController = new AbortController();
-    const abortHandler = (r) => {
-      abortController.abort(r);
+    const abortHandler = () => {
+      abortController.abort(ctx.signal.reason);
     };
     ctx.signal.addEventListener('abort', abortHandler);
+    const connectionProm = QUICConnection.createQUICConnection(
+      {
+        type: 'client',
+        scid,
+        socket,
+        remoteInfo: {
+          host: host_,
+          port,
+        },
+        config: quicConfig,
+        reasonToCode,
+        codeToReason,
+        verifyCallback,
+        logger: logger.getChild(
+          `${QUICConnection.name} ${scid.toString().slice(32)}`,
+        ),
+      },
+      ctx,
+    );
     try {
-      await Promise.race([
-        connection.start({ ...ctx, signal: abortController.signal }),
-        socketErrorP,
-      ]);
+      await Promise.race([connectionProm, socketErrorP]);
     } catch (e) {
       // In case the `connection.start` is on-going, we need to abort it
       abortController.abort(e);
@@ -238,6 +238,7 @@ class QUICClient extends EventTarget {
       socket.removeEventListener('socketError', handleQUICSocketError);
       ctx.signal.removeEventListener('abort', abortHandler);
     }
+    const connection = await connectionProm;
     address = utils.buildAddress(host_, port);
     const client = new this({
       socket,

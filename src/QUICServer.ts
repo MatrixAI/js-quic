@@ -332,7 +332,7 @@ class QUICServer extends EventTarget {
       `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
     );
     const clientConnRef = Buffer.from(header.scid).toString('hex').slice(32);
-    const connection = new QUICConnection({
+    const connectionProm = QUICConnection.createQUICConnection({
       type: 'server',
       scid: newScid,
       dcid: dcidOriginal,
@@ -347,12 +347,13 @@ class QUICServer extends EventTarget {
       ),
     });
     try {
-      await connection.start(); // TODO: pass ctx
+      await connectionProm; // TODO: pass ctx
     } catch (e) {
       // Ignoring any errors here as a failure to connect
       // FIXME: should we emit a connection error here?
       return;
     }
+    const connection = await connectionProm;
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );
