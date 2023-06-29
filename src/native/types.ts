@@ -313,11 +313,9 @@ type PathStatsIter = {
   [Symbol.iterator](): Iterator<PathStats, void, void>;
 };
 
+export { CongestionControlAlgorithm, Shutdown, Type, ConnectionErrorCode };
+
 export type {
-  CongestionControlAlgorithm,
-  Shutdown,
-  Type,
-  ConnectionErrorCode,
   ConnectionError,
   Stats,
   HostPort as Host,

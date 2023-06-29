@@ -7,6 +7,7 @@ import type {
   Hostname,
   ServerCrypto,
 } from './types';
+import type { Connection } from '@/native';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import QUICConnectionId from './QUICConnectionId';
@@ -387,6 +388,46 @@ async function sleep(ms: number): Promise<void> {
   return await new Promise<void>((r) => setTimeout(r, ms));
 }
 
+/**
+ * Useful for debug printing stream state
+ */
+function streamStats(
+  connection: Connection,
+  streamId: number,
+  label: string,
+): string {
+  let streamWritable: string;
+  try {
+    streamWritable = `${connection.streamWritable(streamId, 0)}`;
+  } catch (e) {
+    streamWritable = `threw ${e.message}`;
+  }
+  let streamCapacity: string;
+  try {
+    streamCapacity = `${connection.streamCapacity(streamId)}`;
+  } catch (e) {
+    streamCapacity = `threw ${e.message}`;
+  }
+  let readableIterator = false;
+  for (const streamIterElement of connection.readable()) {
+    if (streamIterElement === streamId) readableIterator = true;
+  }
+  let writableIterator = false;
+  for (const streamIterElement of connection.writable()) {
+    if (streamIterElement === streamId) writableIterator = true;
+  }
+  return `
+  ---${label}---
+  isReadable: ${connection.isReadable()},
+  readable iterator: ${readableIterator},
+  streamReadable: ${connection.streamReadable(streamId)},
+  streamFinished: ${connection.streamFinished(streamId)},
+  writable iterator: ${writableIterator},
+  streamWritable: ${streamWritable},
+  streamCapacity: ${streamCapacity},
+`;
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -413,4 +454,5 @@ export {
   mintToken,
   validateToken,
   sleep,
+  streamStats,
 };
