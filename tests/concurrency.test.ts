@@ -1,18 +1,21 @@
 import type * as events from '@/events';
-import type { Crypto, Host, Port, StreamReasonToCode } from '@';
-import type { TlsConfig } from '@/config';
-import type { QUICConfig } from '@/config';
+import type {
+  ClientCrypto,
+  Host,
+  Port,
+  ServerCrypto,
+  StreamReasonToCode,
+} from '@';
 import type { Messages, StreamData } from './utils';
+import type { QUICConfig } from '@';
 import { fc, testProp } from '@fast-check/jest';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import { promise } from '@/utils';
 import QUICClient from '@/QUICClient';
 import QUICSocket from '@/QUICSocket';
-import { tlsConfigWithCaArb } from './tlsUtils';
-import { handleStreamProm, sleep } from './utils';
+import { generateConfig, handleStreamProm, sleep } from './utils';
 import * as testsUtils from './utils';
-import * as certFixtures from './fixtures/certFixtures';
 
 describe('Concurrency tests', () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
@@ -21,10 +24,9 @@ describe('Concurrency tests', () => {
     ),
   ]);
   // This has to be setup asynchronously due to key generation
-  let crypto: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
+  let key: ArrayBuffer;
+  let clientCrypto: ClientCrypto;
+  let serverCrypto: ServerCrypto;
 
   // Tracking resources
   let sockets: Array<QUICSocket>;
@@ -36,13 +38,13 @@ describe('Concurrency tests', () => {
   };
 
   beforeEach(async () => {
-    crypto = {
-      key: await testsUtils.generateKey(),
-      ops: {
-        sign: testsUtils.sign,
-        verify: testsUtils.verify,
-        randomBytes: testsUtils.randomBytes,
-      },
+    key = await testsUtils.generateKeyHMAC();
+    clientCrypto = {
+      randomBytes: testsUtils.randomBytes,
+    };
+    serverCrypto = {
+      sign: testsUtils.signHMAC,
+      verify: testsUtils.verifyHMAC,
     };
     sockets = [];
   });
@@ -51,7 +53,7 @@ describe('Concurrency tests', () => {
     logger.info('AFTER EACH');
     const stopProms: Array<Promise<void>> = [];
     for (const socket of sockets) {
-      stopProms.push(socket.stop(true));
+      stopProms.push(socket.stop({ force: true }));
     }
     await Promise.allSettled(stopProms);
   });
@@ -124,16 +126,20 @@ describe('Concurrency tests', () => {
 
   testProp(
     'Multiple clients connecting to a server',
-    [tlsConfigWithCaArb, connectionsArb, streamsArb(3)],
-    async (tlsConfigProm, clientDatas, serverStreams) => {
-      const tlsConfig = await tlsConfigProm;
+    [connectionsArb, streamsArb(3)],
+    async (clientDatas, serverStreams) => {
+      const tlsConfig = await generateConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
-          crypto,
+          crypto: {
+            key,
+            ops: serverCrypto,
+          },
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            key: tlsConfig.key,
+            cert: tlsConfig.cert,
             verifyPeer: false,
           },
         });
@@ -159,7 +165,7 @@ describe('Concurrency tests', () => {
                 await cleanUpHoldProm.p;
                 await Promise.all(serverStreamProms);
               } finally {
-                await conn.destroy({ force: true });
+                await conn.stop({ force: true });
                 logger.info(
                   `server conn result ${JSON.stringify(
                     await Promise.allSettled(serverStreamProms),
@@ -199,7 +205,9 @@ describe('Concurrency tests', () => {
               host: '::ffff:127.0.0.1' as Host,
               port: socketPort1,
               localHost: '::' as Host,
-              crypto,
+              crypto: {
+                ops: clientCrypto,
+              },
               logger: logger.getChild(QUICClient.name),
               config: {
                 verifyPeer: false,
@@ -240,16 +248,20 @@ describe('Concurrency tests', () => {
   );
   testProp(
     'Multiple clients sharing a socket',
-    [tlsConfigWithCaArb, connectionsArb, streamsArb(3)],
-    async (tlsConfigProm, clientDatas, serverStreams) => {
-      const tlsConfig = await tlsConfigProm;
+    [connectionsArb, streamsArb(3)],
+    async (clientDatas, serverStreams) => {
+      const tlsConfig = await generateConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
-          crypto,
+          crypto: {
+            key,
+            ops: serverCrypto,
+          },
           logger: logger.getChild(QUICServer.name),
           config: {
-            tlsConfig: tlsConfig.tlsConfig,
+            key: tlsConfig.key,
+            cert: tlsConfig.cert,
             verifyPeer: false,
           },
         });
@@ -275,7 +287,7 @@ describe('Concurrency tests', () => {
                 await cleanUpHoldProm.p;
                 await Promise.all(serverStreamProms);
               } finally {
-                await conn.destroy({ force: true });
+                await conn.stop({ force: true });
                 logger.info(
                   `server conn result ${JSON.stringify(
                     await Promise.allSettled(serverStreamProms),
@@ -305,7 +317,6 @@ describe('Concurrency tests', () => {
       })();
       // Creating socket
       const socket = new QUICSocket({
-        crypto,
         logger: logger.getChild('socket'),
       });
       await socket.start({
@@ -323,7 +334,9 @@ describe('Concurrency tests', () => {
               host: '127.0.0.1' as Host,
               port: socketPort1,
               socket,
-              crypto,
+              crypto: {
+                ops: clientCrypto,
+              },
               logger: logger.getChild(QUICClient.name),
               config: {
                 verifyPeer: false,
@@ -374,12 +387,18 @@ describe('Concurrency tests', () => {
     socket: QUICSocket | undefined;
     port: Port | undefined;
     cleanUpHoldProm: Promise<void>;
-    config: Partial<QUICConfig> & { tlsConfig: TlsConfig };
+    config: Partial<QUICConfig> & {
+      key: string | Array<string> | Uint8Array | Array<Uint8Array>;
+      cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
+    };
     serverStreams: Array<StreamData>;
     reasonToCode: StreamReasonToCode;
   }) => {
     const server = new QUICServer({
-      crypto,
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
       socket,
       logger: logger.getChild(QUICServer.name),
       config,
@@ -410,7 +429,7 @@ describe('Concurrency tests', () => {
             await cleanUpHoldProm;
             await Promise.all(serverStreamProms);
           } finally {
-            await conn.destroy({ force: true });
+            await conn.stop({ force: true });
             logger.info(
               `server conn result ${JSON.stringify(
                 await Promise.allSettled(serverStreamProms),
@@ -440,6 +459,8 @@ describe('Concurrency tests', () => {
     'Multiple clients sharing a socket with a server',
     [connectionsArb, connectionsArb, streamsArb(3), streamsArb(3)],
     async (clientDatas1, clientDatas2, serverStreams1, serverStreams2) => {
+      const tlsConfig1 = await generateConfig('RSA');
+      const tlsConfig2 = await generateConfig('RSA');
       const clientsInfosA = clientDatas1.map((v) => v.streams.length);
       const clientsInfosB = clientDatas2.map((v) => v.streams.length);
       logger.info(`clientsA: ${clientsInfosA}`);
@@ -447,11 +468,9 @@ describe('Concurrency tests', () => {
       const cleanUpHoldProm = promise<void>();
       // Creating socket
       const socket1 = new QUICSocket({
-        crypto,
         logger: logger.getChild('socket'),
       });
       const socket2 = new QUICSocket({
-        crypto,
         logger: logger.getChild('socket'),
       });
       sockets.push(socket1);
@@ -469,7 +488,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams1,
         socket: socket1,
         config: {
-          tlsConfig: certFixtures.tlsConfigMemRSA1,
+          key: tlsConfig1.key,
+          cert: tlsConfig1.cert,
           verifyPeer: false,
           logKeys: './tmp/key1.log',
           initialMaxStreamsBidi: 10000,
@@ -482,7 +502,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams2,
         socket: socket2,
         config: {
-          tlsConfig: certFixtures.tlsConfigMemRSA2,
+          key: tlsConfig2.key,
+          cert: tlsConfig2.cert,
           verifyPeer: false,
           logKeys: './tmp/key2.log',
           initialMaxStreamsBidi: 10000,
@@ -502,7 +523,9 @@ describe('Concurrency tests', () => {
               host: '127.0.0.1' as Host,
               port: socket2.port,
               socket: socket1,
-              crypto,
+              crypto: {
+                ops: clientCrypto,
+              },
               logger: logger.getChild(QUICClient.name),
               config: {
                 verifyPeer: false,
@@ -523,7 +546,9 @@ describe('Concurrency tests', () => {
               host: '127.0.0.1' as Host,
               port: socket1.port,
               socket: socket2,
-              crypto,
+              crypto: {
+                ops: clientCrypto,
+              },
               logger: logger.getChild(QUICClient.name),
               config: {
                 verifyPeer: false,
@@ -573,8 +598,8 @@ describe('Concurrency tests', () => {
         );
       }
       logger.info('CLOSING SOCKETS');
-      await socket1.stop(true);
-      await socket2.stop(true);
+      await socket1.stop({ force: true });
+      await socket2.stop({ force: true });
       logger.info('TEST FULLY DONE!');
     },
     { numRuns: 1 },

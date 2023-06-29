@@ -1,5 +1,12 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { QUICConfig, Crypto, Host, Hostname, Port } from '@/types';
+import type {
+  QUICConfig,
+  Host,
+  Hostname,
+  Port,
+  ClientCrypto,
+  ServerCrypto,
+} from '@/types';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
@@ -77,24 +84,26 @@ describe(QUICServer.name, () => {
     certEd25519PEM = testsUtils.certToPEM(certEd25519);
   });
   // This has to be setup asynchronously due to key generation
-  let crypto: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
+  let clientCrypto: ClientCrypto;
+  let serverCrypto: ServerCrypto;
+  let key: ArrayBuffer;
   beforeEach(async () => {
-    crypto = {
-      key: await testsUtils.generateKeyHMAC(),
-      ops: {
-        sign: testsUtils.signHMAC,
-        verify: testsUtils.verifyHMAC,
-        randomBytes: testsUtils.randomBytes,
-      },
+    key = await testsUtils.generateKeyHMAC();
+    clientCrypto = {
+      randomBytes: testsUtils.randomBytes,
+    };
+    serverCrypto = {
+      sign: testsUtils.signHMAC,
+      verify: testsUtils.verifyHMAC,
     };
   });
   describe('start and stop', () => {
     test('with RSA', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairRSAPEM.privateKey,
           cert: certRSAPEM,
@@ -109,7 +118,10 @@ describe(QUICServer.name, () => {
     });
     test('with ECDSA', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairECDSAPEM.privateKey,
           cert: certECDSAPEM,
@@ -124,7 +136,10 @@ describe(QUICServer.name, () => {
     });
     test('with Ed25519', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -141,7 +156,10 @@ describe(QUICServer.name, () => {
   describe('binding to host and port', () => {
     test('listen on IPv4', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -157,7 +175,10 @@ describe(QUICServer.name, () => {
     });
     test('listen on IPv6', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -173,7 +194,10 @@ describe(QUICServer.name, () => {
     });
     test('listen on dual stack', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -191,7 +215,10 @@ describe(QUICServer.name, () => {
       // NOT RECOMMENDED, because send addresses will have to be mapped
       // addresses, which means you can ONLY connect to mapped addresses
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -214,7 +241,10 @@ describe(QUICServer.name, () => {
     });
     test('listen on hostname', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -232,7 +262,10 @@ describe(QUICServer.name, () => {
     });
     test('listen on hostname and custom resolver', async () => {
       const quicServer = new QUICServer({
-        crypto,
+        crypto: {
+          key,
+          ops: serverCrypto,
+        },
         config: {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
@@ -248,83 +281,84 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
-  describe.only('connection bootstrap', () => {
-    // Test without peer verification
-    test.only('', async () => {
-      const quicServer = new QUICServer({
-        crypto,
-        config: {
-          // Key: keyPairRSAPEM.privateKey,
-          // cert: certRSAPEM,
-          key: keyPairECDSAPEM.privateKey,
-          cert: certECDSAPEM,
-          verifyPeer: false,
-        },
-        logger: logger.getChild('QUICServer'),
-      });
-      await quicServer.start({
-        host: '127.0.0.1' as Host,
-      });
-
-      const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
-      await crypto.ops.randomBytes(scidBuffer);
-      const scid = new QUICConnectionId(scidBuffer);
-
-      // Verify peer
-      // Note that you cannot send to IPv4 from dual stack socket
-      // It must be sent as IPv4 mapped IPv6
-
-      const socket = new QUICSocket({
-        crypto,
-        logger: logger.getChild(QUICSocket.name),
-      });
-      await socket.start({
-        host: '127.0.0.1' as Host,
-      });
-
-      // ???
-      const clientConfig: QUICConfig = {
-        ...clientDefault,
-        verifyPeer: false,
-      };
-
-      // This creates a connection state
-      // We now need to trigger it
-      const connection = await QUICConnection.connectQUICConnection({
-        scid,
-        socket,
-        remoteInfo: {
-          host: quicServer.host,
-          port: quicServer.port,
-        },
-        config: clientConfig,
-        logger: logger.getChild(QUICConnection.name),
-      });
-
-      connection.addEventListener('error', (e) => {
-        console.log('error', e);
-      });
-
-      // Trigger the connection
-      await connection.send();
-
-      // Wait till it is established
-      console.log('BEFORE ESTABLISHED P');
-      await connection.establishedP;
-      console.log('AFTER ESTABLISHED P');
-
-      // You must destroy the connection
-      console.log('DESTROY CONNECTION');
-      await connection.destroy();
-      console.log('DESTROYED CONNECTION');
-
-      console.log('STOP SOCKET');
-      await socket.stop();
-      console.time('STOPPED SOCKET');
-      await quicServer.stop();
-      console.timeEnd('STOPPED SOCKET');
-    });
-  });
+  // Describe.only('connection bootstrap', () => {
+  //   // Test without peer verification
+  //   test.only('', async () => {
+  //     const quicServer = new QUICServer({
+  //       crypto: {
+  //         key,
+  //         ops: serverCrypto,
+  //       },
+  //       config: {
+  //         key: keyPairECDSAPEM.privateKey,
+  //         cert: certECDSAPEM,
+  //         verifyPeer: false,
+  //       },
+  //       logger: logger.getChild('QUICServer'),
+  //     });
+  //     await quicServer.start({
+  //       host: '127.0.0.1' as Host,
+  //     });
+  //
+  //     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+  //     await clientCrypto.randomBytes(scidBuffer);
+  //     const scid = new QUICConnectionId(scidBuffer);
+  //
+  //     // Verify peer
+  //     // Note that you cannot send to IPv4 from dual stack socket
+  //     // It must be sent as IPv4 mapped IPv6
+  //
+  //     const socket = new QUICSocket({
+  //       logger: logger.getChild(QUICSocket.name),
+  //     });
+  //     await socket.start({
+  //       host: '127.0.0.1' as Host,
+  //     });
+  //
+  //     // ???
+  //     const clientConfig: QUICConfig = {
+  //       ...clientDefault,
+  //       verifyPeer: false,
+  //     };
+  //
+  //     // This creates a connection state
+  //     // We now need to trigger it
+  //     const connection = await QUICConnection.createQUICConnection({
+  //       type: 'client',
+  //       scid,
+  //       socket,
+  //       remoteInfo: {
+  //         host: quicServer.host,
+  //         port: quicServer.port,
+  //       },
+  //       config: clientConfig,
+  //       logger: logger.getChild(QUICConnection.name),
+  //     });
+  //
+  //     connection.addEventListener('error', (e) => {
+  //       console.log('error', e);
+  //     });
+  //
+  //     // Trigger the connection
+  //     await connection.send();
+  //
+  //     // Wait till it is established
+  //     console.log('BEFORE ESTABLISHED P');
+  //     await connection.establishedP;
+  //     console.log('AFTER ESTABLISHED P');
+  //
+  //     // You must destroy the connection
+  //     console.log('DESTROY CONNECTION');
+  //     await connection.stop();
+  //     console.log('DESTROYED CONNECTION');
+  //
+  //     console.log('STOP SOCKET');
+  //     await socket.stop();
+  //     console.time('STOPPED SOCKET');
+  //     await quicServer.stop();
+  //     console.timeEnd('STOPPED SOCKET');
+  //   });
+  // });
   // Test('bootstrapping a new connection', async () => {
   //   const quicServer = new QUICServer({
   //     crypto,
@@ -335,50 +369,50 @@ describe(QUICServer.name, () => {
   //     logger: logger.getChild('QUICServer'),
   //   });
   //   await quicServer.start();
-
+  //
   //   const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
   //   await crypto.ops.randomBytes(scidBuffer);
   //   const scid = new QUICConnectionId(scidBuffer);
-
+  //
   //   const socket = new QUICSocket({
   //     crypto,
   //     resolveHostname: utils.resolveHostname,
   //     logger: logger.getChild(QUICSocket.name),
   //   });
   //   await socket.start();
-
+  //
   //   // Const config = buildQuicheConfig({
   //   //   ...clientDefault
   //   // });
   //   // Here we want to VERIFY the peer
   //   // If we use the same certificate
   //   // then it should be consider as if it is trusted!
-
+  //
   //   const quicConfig: QUICConfig = {
   //     ...clientDefault,
   //     verifyPeer: true,
   //   };
-
+  //
   //   const connection = await QUICConnection.connectQUICConnection({
   //     scid,
   //     socket,
-
+  //
   //     remoteInfo: {
   //       host: utils.resolvesZeroIP(quicServer.host),
   //       port: quicServer.port,
   //     },
-
+  //
   //     config: quicConfig,
   //   });
-
+  //
   //   await socket.stop();
   //   await quicServer.stop();
-
+  //
   //   // We can run with several rsa keypairs and certificates
   // });
-  describe('updating configuration', () => {
-    // We want to test changing the configuration over time
-  });
+  // describe('updating configuration', () => {
+  //   // We want to test changing the configuration over time
+  // });
   // Test hole punching, there's an initiation function
   // We can make it start doing this, but technically it's the socket's duty to do this
   // not just the server side
