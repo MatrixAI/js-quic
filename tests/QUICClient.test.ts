@@ -207,6 +207,58 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.toThrow(errors.ErrorQUICConnectionStartTimeOut);
     });
+    test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
+      // Larger keepAliveIntervalTime throws
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: 56666 as Port,
+          localHost: localhost,
+          crypto: {
+            ops: clientCrypto,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            keepAliveIntervalTime: 1000,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      // Smaller keepAliveIntervalTime doesn't cause a problem
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: 56666 as Port,
+          localHost: localhost,
+          crypto: {
+            ops: clientCrypto,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            keepAliveIntervalTime: 100,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      // Not setting an interval doesn't cause a problem either
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: 56666 as Port,
+          localHost: localhost,
+          crypto: {
+            ops: clientCrypto,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+    });
     test('client times out with ctx timer while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       await expect(
@@ -228,6 +280,62 @@ describe(QUICClient.name, () => {
           { timer: new Timer({ delay: 100 }) },
         ),
       ).rejects.toThrow(errors.ErrorQUICClientCreateTimeOut);
+    });
+    test('ctx timer must be less than maxIdleTimeout', async () => {
+      // Larger timer throws
+      await expect(
+        QUICClient.createQUICClient(
+          {
+            host: localhost,
+            port: 56666 as Port,
+            localHost: localhost,
+            crypto: {
+              ops: clientCrypto,
+            },
+            logger: logger.getChild(QUICClient.name),
+            config: {
+              maxIdleTimeout: 200,
+              verifyPeer: false,
+            },
+          },
+          { timer: new Timer({ delay: 1000 }) },
+        ),
+      ).rejects.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      // Smaller keepAliveIntervalTime doesn't cause a problem
+      await expect(
+        QUICClient.createQUICClient(
+          {
+            host: localhost,
+            port: 56666 as Port,
+            localHost: localhost,
+            crypto: {
+              ops: clientCrypto,
+            },
+            logger: logger.getChild(QUICClient.name),
+            config: {
+              maxIdleTimeout: 200,
+              verifyPeer: false,
+            },
+          },
+          { timer: new Timer({ delay: 100 }) },
+        ),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      // Not setting an interval doesn't cause a problem either
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: 56666 as Port,
+          localHost: localhost,
+          crypto: {
+            ops: clientCrypto,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
     });
     test('client times out with ctx signal while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout

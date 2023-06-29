@@ -264,6 +264,12 @@ class QUICConnection extends EventTarget {
         },
     @context ctx: ContextTimed,
   ): Promise<QUICConnection> {
+    const timeoutTime = ctx.timer.getTimeout();
+    if (timeoutTime !== Infinity && timeoutTime >= args.config.maxIdleTimeout) {
+      throw new errors.ErrorQUICConnectionInvalidConfig(
+        'connection timeout timer must be strictly less than maxIdleTimeout',
+      );
+    }
     ctx.signal.throwIfAborted();
     const abortProm = promise<never>();
     const abortHandler = () => {
@@ -292,7 +298,7 @@ class QUICConnection extends EventTarget {
     } finally {
       ctx.signal.removeEventListener('abort', abortHandler);
     }
-    connection.logger.warn('secured');
+    connection.logger.debug('secureEstablishedP');
     // After this is done
     // We need to establish the keep alive interval time
     if (connection.config.keepAliveIntervalTime != null) {
@@ -342,6 +348,16 @@ class QUICConnection extends EventTarget {
       }) {
     super();
     this.logger = logger ?? new Logger(`${this.constructor.name} ${scid}`);
+    // Checking constraints
+    if (
+      config.keepAliveIntervalTime != null &&
+      config.keepAliveIntervalTime >= config.maxIdleTimeout
+    ) {
+      throw new errors.ErrorQUICConnectionInvalidConfig(
+        'keepAliveIntervalTime must be shorter than maxIdleTimeout',
+      );
+    }
+
     const quicheConfig = buildQuicheConfig(config);
     let conn: Connection;
     if (type === 'client') {
@@ -862,13 +878,13 @@ class QUICConnection extends EventTarget {
           );
           try {
             if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
-            this.logger.warn('TLS verification succeeded');
+            this.logger.debug('TLS verification succeeded');
             this.conn.sendAckEliciting();
           } catch (e) {
             // Force the connection to end.
             // Error 304 indicates cert chain failed verification.
             // Error 372 indicates cert chain was missing.
-            this.logger.warn(
+            this.logger.debug(
               `TLS fail due to [${e.message}], closing connection`,
             );
             this.conn.close(

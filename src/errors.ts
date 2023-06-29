@@ -112,6 +112,10 @@ class ErrorQUICConnectionInternal<T> extends ErrorQUICConnection<T> {
   } & POJO;
 }
 
+class ErrorQUICConnectionInvalidConfig<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC connection invalid configuration';
+}
+
 class ErrorQUICStream<T> extends ErrorQUIC<T> {
   static description = 'QUIC Stream error';
 }
@@ -163,6 +167,7 @@ export {
   ErrorQUICConnectionStartTimeOut,
   ErrorQUICConnectionIdleTimeOut,
   ErrorQUICConnectionInternal,
+  ErrorQUICConnectionInvalidConfig,
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
   ErrorQUICStreamLocked,
