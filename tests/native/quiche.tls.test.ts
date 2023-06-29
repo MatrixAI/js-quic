@@ -1,5 +1,11 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { QUICConfig, Crypto, Host, Hostname, Port } from '@/types';
+import type {
+  QUICConfig,
+  Host,
+  Port,
+  ClientCrypto,
+  ServerCrypto,
+} from '@/types';
 import type { Config, Connection, SendInfo } from '@/native/types';
 import { quiche } from '@/native';
 import { clientDefault, serverDefault, buildQuicheConfig } from '@/config';
@@ -11,7 +17,7 @@ import * as testsUtils from '../utils';
 describe('quiche tls', () => {
   let crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
+    ops: ClientCrypto & ServerCrypto;
   };
   let keyPairRSA: {
     publicKey: JsonWebKey;
@@ -91,16 +97,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -135,7 +141,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -165,7 +171,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -188,28 +194,28 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -219,7 +225,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -handshake-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -229,7 +235,7 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
     });
     test('client <-short- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderShort = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -241,7 +247,7 @@ describe('quiche tls', () => {
       });
     });
     test('client -short-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderShort = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -265,7 +271,7 @@ describe('quiche tls', () => {
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       await testsUtils.sleep(clientConn.timeout()!);
       clientConn.onTimeout();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -293,16 +299,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -336,7 +342,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -366,7 +372,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -389,28 +395,28 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -420,7 +426,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -handshake-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       // Server rejects client handshake
       expect(() =>
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
@@ -444,7 +450,7 @@ describe('quiche tls', () => {
       expect(serverConn.isDraining()).toBeFalse();
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderHandshake = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -495,16 +501,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -538,7 +544,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -568,7 +574,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -591,28 +597,28 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       // Client rejects server handshake
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -638,7 +644,7 @@ describe('quiche tls', () => {
       expect(clientConn.isDraining()).toBeFalse();
     });
     test('client -handshake-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderHandshake = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -696,16 +702,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -740,7 +746,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -770,7 +776,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -793,28 +799,28 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -824,7 +830,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -handshake-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -835,7 +841,7 @@ describe('quiche tls', () => {
     });
     test('server close early', async () => {
       serverConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
 
       expect(serverConn.localError()).toEqual({
         isApp: false,
@@ -902,16 +908,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -946,7 +952,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -976,7 +982,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -999,28 +1005,28 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -1030,7 +1036,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -handshake-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1041,7 +1047,7 @@ describe('quiche tls', () => {
     });
     test('client close early', async () => {
       clientConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
 
       expect(clientConn.localError()).toEqual({
         isApp: false,
@@ -1108,16 +1114,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1152,7 +1158,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1182,7 +1188,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1205,14 +1211,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -1222,7 +1228,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1232,7 +1238,7 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
     });
     test('client <-short- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderShort = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1244,7 +1250,7 @@ describe('quiche tls', () => {
       });
     });
     test('client -short-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderShort = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1268,7 +1274,7 @@ describe('quiche tls', () => {
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       await testsUtils.sleep(clientConn.timeout()!);
       clientConn.onTimeout();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1296,16 +1302,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1339,7 +1345,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1369,7 +1375,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1392,14 +1398,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -1409,7 +1415,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       expect(() =>
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
@@ -1432,7 +1438,7 @@ describe('quiche tls', () => {
       expect(serverConn.isDraining()).toBeFalse();
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderHandshake = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1490,16 +1496,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1533,7 +1539,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1563,7 +1569,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1586,14 +1592,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       // Client rejects server initial
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -1617,7 +1623,7 @@ describe('quiche tls', () => {
       expect(clientConn.isDraining()).toBeFalse();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1675,16 +1681,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1719,7 +1725,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1749,7 +1755,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1772,14 +1778,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -1789,7 +1795,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1801,7 +1807,7 @@ describe('quiche tls', () => {
 
     test('server close early', async () => {
       serverConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
 
       expect(serverConn.localError()).toEqual({
         isApp: false,
@@ -1868,16 +1874,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1912,7 +1918,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1942,7 +1948,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1965,14 +1971,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -1982,7 +1988,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1994,7 +2000,7 @@ describe('quiche tls', () => {
 
     test('client close early', async () => {
       clientConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
 
       expect(clientConn.localError()).toEqual({
         isApp: false,
@@ -2061,16 +2067,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2105,7 +2111,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2135,7 +2141,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2158,14 +2164,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -2175,7 +2181,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2185,7 +2191,7 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
     });
     test('client <-short- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderShort = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2197,7 +2203,7 @@ describe('quiche tls', () => {
       });
     });
     test('client -short-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderShort = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2221,7 +2227,7 @@ describe('quiche tls', () => {
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       await testsUtils.sleep(clientConn.timeout()!);
       clientConn.onTimeout();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -2249,16 +2255,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2292,7 +2298,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2322,7 +2328,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2345,14 +2351,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -2362,7 +2368,7 @@ describe('quiche tls', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       expect(() =>
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
@@ -2385,7 +2391,7 @@ describe('quiche tls', () => {
       expect(serverConn.isDraining()).toBeFalse();
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       const serverHeaderHandshake = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2443,16 +2449,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2486,7 +2492,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2516,7 +2522,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2539,14 +2545,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       // Client rejects server initial
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -2572,7 +2578,7 @@ describe('quiche tls', () => {
       expect(clientConn.isDraining()).toBeFalse();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2632,16 +2638,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2676,7 +2682,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2706,7 +2712,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2729,14 +2735,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       // Client rejects server initial
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -2757,7 +2763,7 @@ describe('quiche tls', () => {
       expect(clientConn.isDraining()).toBeFalse();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2791,7 +2797,7 @@ describe('quiche tls', () => {
     });
     test('server close early', async () => {
       serverConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
 
       expect(serverConn.localError()).toEqual({
         isApp: false,
@@ -2858,16 +2864,16 @@ describe('quiche tls', () => {
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
-    let clientSendLength: number, clientSendInfo: SendInfo;
+    let clientSendLength: number, _clientSendInfo: SendInfo;
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let serverSendLength: number, serverSendInfo: SendInfo;
+    let serverSendLength: number, _serverSendInfo: SendInfo;
     const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
     let clientQuicheConfig: Config;
     let serverQuicheConfig: Config;
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let serverDcid: QUICConnectionId;
+    let _serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2902,7 +2908,7 @@ describe('quiche tls', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2932,7 +2938,7 @@ describe('quiche tls', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -2955,14 +2961,14 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      serverDcid = clientScid;
+      _serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
       // Client rejects server initial
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -2983,7 +2989,7 @@ describe('quiche tls', () => {
       expect(clientConn.isDraining()).toBeFalse();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -3017,7 +3023,7 @@ describe('quiche tls', () => {
     });
     test('client close early', async () => {
       clientConn.close(false, 304, Buffer.from('Custom TLS failed'));
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
 
       expect(clientConn.localError()).toEqual({
         isApp: false,

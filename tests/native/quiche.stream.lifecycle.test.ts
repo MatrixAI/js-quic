@@ -1,8 +1,7 @@
 import type { Connection, StreamIter } from '@/native';
 import type { ClientCrypto, Host, Port, ServerCrypto } from '@';
-import { Host as HostPort, quiche } from '@/native';
+import { quiche } from '@/native';
 import QUICConnectionId from '@/QUICConnectionId';
-import { QUICConfig } from '@';
 import { buildQuicheConfig, clientDefault, serverDefault } from '@/config';
 import * as utils from '@/utils';
 import * as testsUtils from '../utils';
@@ -31,10 +30,10 @@ function iterToArray(iter: StreamIter) {
  * Does all the steps for initiating a stream on both sides.
  * Used as a starting point for a bunch of tests.
  */
-function initStreamState(
+function _initStreamState(
   connectionSource: Connection,
   connectionDestination: Connection,
-  streamId: number,
+  _streamId: number,
 ) {
   const message = Buffer.from('Message');
   connectionSource.streamSend(0, message, false);
@@ -100,7 +99,7 @@ describe('quiche stream lifecycle', () => {
       );
 
       const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      let [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      const [clientSendLength] = clientConn.send(clientBuffer);
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -133,7 +132,7 @@ describe('quiche stream lifecycle', () => {
       });
 
       // Client will retry the initial packet with the token
-      [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+      [clientSendLength] = clientConn.send(clientBuffer);
 
       // Server accept
       serverConn = quiche.Connection.accept(

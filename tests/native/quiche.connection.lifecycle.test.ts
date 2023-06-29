@@ -1,5 +1,11 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { QUICConfig, Crypto, Host, Hostname, Port } from '@/types';
+import type {
+  QUICConfig,
+  Host,
+  Port,
+  ClientCrypto,
+  ServerCrypto,
+} from '@/types';
 import type { Config, Connection, SendInfo } from '@/native/types';
 import { quiche } from '@/native';
 import { clientDefault, serverDefault, buildQuicheConfig } from '@/config';
@@ -10,7 +16,7 @@ import * as testsUtils from '../utils';
 describe('quiche connection lifecycle', () => {
   let crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
+    ops: ClientCrypto & ServerCrypto;
   };
   let keyPairRSA: {
     publicKey: JsonWebKey;
@@ -181,10 +187,10 @@ describe('quiche connection lifecycle', () => {
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
-        let clientSendLength: number, clientSendInfo: SendInfo;
+        let _clientSendLength: number, _clientSendInfo: SendInfo;
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         let clientQuicheConfig: Config;
-        let serverQuicheConfig: Config;
+        let _serverQuicheConfig: Config;
         let clientScid: QUICConnectionId;
         let clientConn: Connection;
         beforeAll(async () => {
@@ -200,7 +206,7 @@ describe('quiche connection lifecycle', () => {
             maxIdleTimeout: 2000,
           };
           clientQuicheConfig = buildQuicheConfig(clientConfig);
-          serverQuicheConfig = buildQuicheConfig(serverConfig);
+          _serverQuicheConfig = buildQuicheConfig(serverConfig);
         });
         test('client connect', async () => {
           // Randomly genrate the client SCID
@@ -216,7 +222,7 @@ describe('quiche connection lifecycle', () => {
           );
         });
         test('client dialing timeout', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [_clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           expect(() => clientConn.send(clientBuffer)).toThrow('Done');
           // Exahust the timeout
           await testsUtils.waitForTimeoutNull(clientConn);
@@ -245,16 +251,16 @@ describe('quiche connection lifecycle', () => {
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
-        let clientSendLength: number, clientSendInfo: SendInfo;
+        let clientSendLength: number, _clientSendInfo: SendInfo;
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-        let serverSendLength: number, serverSendInfo: SendInfo;
+        let _serverSendLength: number, _serverSendInfo: SendInfo;
         const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         let clientQuicheConfig: Config;
         let serverQuicheConfig: Config;
         let clientScid: QUICConnectionId;
         let clientDcid: QUICConnectionId;
         let serverScid: QUICConnectionId;
-        let serverDcid: QUICConnectionId;
+        let _serverDcid: QUICConnectionId;
         let clientConn: Connection;
         let serverConn: Connection;
         beforeAll(async () => {
@@ -286,7 +292,7 @@ describe('quiche connection lifecycle', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -318,7 +324,7 @@ describe('quiche connection lifecycle', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -339,7 +345,7 @@ describe('quiche connection lifecycle', () => {
             serverQuicheConfig,
           );
           clientDcid = serverScid;
-          serverDcid = clientScid;
+          _serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
@@ -351,7 +357,7 @@ describe('quiche connection lifecycle', () => {
         });
         test('client <-initial- server timeout', async () => {
           // Server tries sending the initial frame
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [_serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
@@ -390,16 +396,16 @@ describe('quiche connection lifecycle', () => {
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
-        let clientSendLength: number, clientSendInfo: SendInfo;
+        let clientSendLength: number, _clientSendInfo: SendInfo;
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-        let serverSendLength: number, serverSendInfo: SendInfo;
+        let serverSendLength: number, _serverSendInfo: SendInfo;
         const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         let clientQuicheConfig: Config;
         let serverQuicheConfig: Config;
         let clientScid: QUICConnectionId;
         let clientDcid: QUICConnectionId;
         let serverScid: QUICConnectionId;
-        let serverDcid: QUICConnectionId;
+        let _serverDcid: QUICConnectionId;
         let clientConn: Connection;
         let serverConn: Connection;
         beforeAll(async () => {
@@ -431,7 +437,7 @@ describe('quiche connection lifecycle', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -463,7 +469,7 @@ describe('quiche connection lifecycle', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -484,7 +490,7 @@ describe('quiche connection lifecycle', () => {
             serverQuicheConfig,
           );
           clientDcid = serverScid;
-          serverDcid = clientScid;
+          _serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
@@ -495,21 +501,21 @@ describe('quiche connection lifecycle', () => {
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
           });
         });
         test('client -initial-> server', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
           });
         });
         test('client <-handshake- server timeout', async () => {
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
@@ -548,16 +554,16 @@ describe('quiche connection lifecycle', () => {
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
-        let clientSendLength: number, clientSendInfo: SendInfo;
+        let clientSendLength: number, _clientSendInfo: SendInfo;
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-        let serverSendLength: number, serverSendInfo: SendInfo;
+        let serverSendLength: number, _serverSendInfo: SendInfo;
         const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
         let clientQuicheConfig: Config;
         let serverQuicheConfig: Config;
         let clientScid: QUICConnectionId;
         let clientDcid: QUICConnectionId;
         let serverScid: QUICConnectionId;
-        let serverDcid: QUICConnectionId;
+        let _serverDcid: QUICConnectionId;
         let clientConn: Connection;
         let serverConn: Connection;
         beforeAll(async () => {
@@ -589,7 +595,7 @@ describe('quiche connection lifecycle', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -621,7 +627,7 @@ describe('quiche connection lifecycle', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -642,7 +648,7 @@ describe('quiche connection lifecycle', () => {
             serverQuicheConfig,
           );
           clientDcid = serverScid;
-          serverDcid = clientScid;
+          _serverDcid = clientScid;
           expect(serverConn.timeout()).toBeNull();
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
@@ -653,21 +659,21 @@ describe('quiche connection lifecycle', () => {
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
           });
         });
         test('client -initial-> server', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
           });
         });
         test('client <-handshake- server', async () => {
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
@@ -677,7 +683,7 @@ describe('quiche connection lifecycle', () => {
           expect(clientConn.isEstablished()).toBeTrue();
         });
         test('client -handshake-> sever', async () => {
-          [clientSendLength, clientSendInfo] = clientConn.send(clientBuffer);
+          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
@@ -687,7 +693,7 @@ describe('quiche connection lifecycle', () => {
           expect(serverConn.isEstablished()).toBeTrue();
         });
         test('client <-short- server timeout', async () => {
-          [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
@@ -729,7 +735,7 @@ describe('quiche connection lifecycle', () => {
       // These buffers will be used between the tests and will be mutated
       let clientSendLength: number, clientSendInfo: SendInfo;
       const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      let serverSendLength: number, serverSendInfo: SendInfo;
+      let serverSendLength: number, _serverSendInfo: SendInfo;
       const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       let clientQuicheConfig: Config;
       let serverQuicheConfig: Config;
@@ -967,7 +973,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isDraining()).toBeFalse();
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
         // The server is now setting its timeout to start at 1 second
@@ -1021,7 +1027,7 @@ describe('quiche connection lifecycle', () => {
         });
       });
       test('client <-handshake- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderHandshake = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1086,7 +1092,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isEstablished()).toBeTrue();
       });
       test('client <-short- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1257,7 +1263,7 @@ describe('quiche connection lifecycle', () => {
       // These buffers will be used between the tests and will be mutated
       let clientSendLength: number, clientSendInfo: SendInfo;
       const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      let serverSendLength: number, serverSendInfo: SendInfo;
+      let serverSendLength: number, _serverSendInfo: SendInfo;
       const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       let clientQuicheConfig: Config;
       let serverQuicheConfig: Config;
@@ -1478,7 +1484,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isDraining()).toBeFalse();
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
         // The server is now setting its timeout to start at 1 second
@@ -1538,7 +1544,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isEstablished()).toBeTrue();
       });
       test('client <-short- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1698,7 +1704,7 @@ describe('quiche connection lifecycle', () => {
       // These buffers will be used between the tests and will be mutated
       let clientSendLength: number, clientSendInfo: SendInfo;
       const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      let serverSendLength: number, serverSendInfo: SendInfo;
+      let serverSendLength: number, _serverSendInfo: SendInfo;
       const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       let clientQuicheConfig: Config;
       let serverQuicheConfig: Config;
@@ -1919,7 +1925,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isDraining()).toBeFalse();
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         // Server's responds with an initial frame
         expect(serverSendLength).toBe(1200);
         // The server is now setting its timeout to start at 1 second
@@ -1979,7 +1985,7 @@ describe('quiche connection lifecycle', () => {
         expect(serverConn.isEstablished()).toBeTrue();
       });
       test('client <-short- server', async () => {
-        [serverSendLength, serverSendInfo] = serverConn.send(serverBuffer);
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,

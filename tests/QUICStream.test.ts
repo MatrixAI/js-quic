@@ -8,7 +8,6 @@ import * as utils from '@/utils';
 import QUICServer from '@/QUICServer';
 import QUICClient from '@/QUICClient';
 import QUICStream from '@/QUICStream';
-import { tlsConfigWithCaArb, tlsConfigWithCaGENOKPArb } from './tlsUtils';
 import * as testsUtils from './utils';
 
 describe(QUICStream.name, () => {

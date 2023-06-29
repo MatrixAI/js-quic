@@ -1,20 +1,7 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type {
-  QUICConfig,
-  Host,
-  Hostname,
-  Port,
-  ClientCrypto,
-  ServerCrypto,
-} from '@/types';
-import dgram from 'dgram';
+import type { Host, Hostname, ServerCrypto } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
-import QUICConnectionId from '@/QUICConnectionId';
-import QUICConnection from '@/QUICConnection';
-import QUICSocket from '@/QUICSocket';
-import { clientDefault, buildQuicheConfig } from '@/config';
-import { quiche } from '@/native';
 import * as utils from '@/utils';
 import * as testsUtils from './utils';
 
@@ -84,14 +71,10 @@ describe(QUICServer.name, () => {
     certEd25519PEM = testsUtils.certToPEM(certEd25519);
   });
   // This has to be setup asynchronously due to key generation
-  let clientCrypto: ClientCrypto;
   let serverCrypto: ServerCrypto;
   let key: ArrayBuffer;
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    clientCrypto = {
-      randomBytes: testsUtils.randomBytes,
-    };
     serverCrypto = {
       sign: testsUtils.signHMAC,
       verify: testsUtils.verifyHMAC,
