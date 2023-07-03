@@ -16,15 +16,6 @@ async function main() {
     ),
   ]);
   // Setting up initial state
-  const crypto = {
-    key: await testsUtils.generateKey(),
-    ops: {
-      sign: testsUtils.sign,
-      verify: testsUtils.verify,
-      randomBytes: testsUtils.randomBytes,
-    },
-  };
-
   const data1KiB = Buffer.alloc(1024, 0xf0);
   const host = '127.0.0.1' as Host;
   const certChainPem = await fs.promises.readFile(
@@ -36,14 +27,18 @@ async function main() {
 
   const quicServer = new QUICServer({
     config: {
-      tlsConfig: {
-        privKeyPem: privKeyPem.toString(),
-        certChainPem: certChainPem.toString(),
-      },
+      key: privKeyPem.toString(),
+      cert: certChainPem.toString(),
       verifyPeer: false,
+      keepAliveIntervalTime: 1000,
     },
-    keepaliveIntervalTime: 1000,
-    crypto,
+    crypto: {
+      key: await testsUtils.generateKeyHMAC(),
+      ops: {
+        sign: testsUtils.signHMAC,
+        verify: testsUtils.verifyHMAC,
+      },
+    },
     logger,
   });
   quicServer.addEventListener(
@@ -80,7 +75,11 @@ async function main() {
     host,
     port: quicServer.port,
     localHost: host,
-    crypto,
+    crypto: {
+      ops: {
+        randomBytes: testsUtils.randomBytes,
+      },
+    },
     logger,
   });
 

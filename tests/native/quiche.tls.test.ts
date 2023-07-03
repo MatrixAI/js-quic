@@ -116,6 +116,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -123,6 +124,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -318,12 +320,14 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
         verifyPeer: true,
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -721,6 +725,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -728,6 +733,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -927,6 +933,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -934,6 +941,7 @@ describe('quiche tls', () => {
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
         ca: certRSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1133,6 +1141,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -1140,6 +1149,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1321,12 +1331,14 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
         verifyPeer: true,
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1514,6 +1526,7 @@ describe('quiche tls', () => {
         verifyPeer: true,
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -1521,6 +1534,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1700,6 +1714,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -1707,6 +1722,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1893,6 +1909,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -1900,6 +1917,7 @@ describe('quiche tls', () => {
         key: keyPairECDSAPEM.privateKey,
         cert: certECDSAPEM,
         ca: certECDSAPEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -2086,6 +2104,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -2093,6 +2112,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -2274,12 +2294,14 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
         verifyPeer: true,
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -2467,6 +2489,7 @@ describe('quiche tls', () => {
         verifyPeer: true,
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -2474,6 +2497,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -2657,6 +2681,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -2664,6 +2689,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -2883,6 +2909,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       const serverConfig: QUICConfig = {
         ...serverDefault,
@@ -2890,6 +2917,7 @@ describe('quiche tls', () => {
         key: keyPairEd25519PEM.privateKey,
         cert: certEd25519PEM,
         ca: certEd25519PEM,
+        maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
       serverQuicheConfig = buildQuicheConfig(serverConfig);

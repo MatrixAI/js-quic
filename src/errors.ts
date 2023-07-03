@@ -46,6 +46,10 @@ class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
     'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
+class ErrorQUICServerConnectionFailed<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC server failed to create or accept a connection';
+}
+
 class ErrorQUICClient<T> extends ErrorQUIC<T> {
   static description = 'QUIC Client error';
 }
@@ -124,21 +128,12 @@ class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream is destroyed';
 }
 
-class ErrorQUICStreamLocked<T> extends ErrorQUICStream<T> {
-  static description =
-    'QUIC Stream is locked and is not closed on readable or writable';
-}
-
 class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream force close';
 }
 
 class ErrorQUICStreamCancel<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream was cancelled without a provided reason';
-}
-
-class ErrorQUICStreamUnexpectedClose<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream closed early with no reason given';
 }
 
 class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
@@ -157,6 +152,7 @@ export {
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
+  ErrorQUICServerConnectionFailed,
   ErrorQUICClient,
   ErrorQUICClientCreateTimeOut,
   ErrorQUICClientDestroyed,
@@ -170,9 +166,7 @@ export {
   ErrorQUICConnectionInvalidConfig,
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
-  ErrorQUICStreamLocked,
   ErrorQUICStreamClose,
   ErrorQUICStreamCancel,
-  ErrorQUICStreamUnexpectedClose,
   ErrorQUICUndefinedBehaviour,
 };

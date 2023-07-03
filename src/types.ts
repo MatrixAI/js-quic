@@ -174,7 +174,7 @@ type QUICConfig = {
   verifyPeer: boolean;
 
   /**
-   * Will allow unsecure TLS certs, allowing for certs to be requested
+   * Will allow insecure TLS certs, allowing for certs to be requested
    * but the verification result is ignored.
    */
   verifyAllowFail: boolean;

@@ -85,8 +85,6 @@ class QUICSocket extends EventTarget {
         return;
       }
       // At this point, the connection may not yet be started
-      // FIXME: How can we be awaiting connection secured event WHILE
-      //  processing packets for it?
       const connection_ = await this.server.connectionNew(
         remoteInfo_,
         header,

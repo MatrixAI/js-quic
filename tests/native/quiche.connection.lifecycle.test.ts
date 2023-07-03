@@ -103,6 +103,7 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          maxIdleTimeout: 0,
         };
         clientQuicheConfig = buildQuicheConfig(clientConfig);
       });
@@ -749,11 +750,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          maxIdleTimeout: 0,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
           key: keyPairRSAPEM.privateKey,
           cert: certRSAPEM,
+          maxIdleTimeout: 0,
         };
         clientQuicheConfig = buildQuicheConfig(clientConfig);
         serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1277,11 +1280,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          maxIdleTimeout: 0,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
           key: keyPairECDSAPEM.privateKey,
           cert: certECDSAPEM,
+          maxIdleTimeout: 0,
         };
         clientQuicheConfig = buildQuicheConfig(clientConfig);
         serverQuicheConfig = buildQuicheConfig(serverConfig);
@@ -1718,11 +1723,13 @@ describe('quiche connection lifecycle', () => {
         const clientConfig: QUICConfig = {
           ...clientDefault,
           verifyPeer: false,
+          maxIdleTimeout: 0,
         };
         const serverConfig: QUICConfig = {
           ...serverDefault,
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
+          maxIdleTimeout: 0,
         };
         clientQuicheConfig = buildQuicheConfig(clientConfig);
         serverQuicheConfig = buildQuicheConfig(serverConfig);

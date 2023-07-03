@@ -31,6 +31,8 @@ import * as utils from './utils';
 import { never, promise } from './utils';
 import * as errors from './errors';
 
+const timerCleanupReasonSymbol = Symbol('timerCleanupReasonSymbol');
+
 /**
  * Think of this as equivalent to `net.Socket`.
  * Errors here are emitted to the connection only.
@@ -112,18 +114,20 @@ class QUICConnection extends EventTarget {
   /**
    * Client initiated unidirectional stream starts at 2.
    * Increment by 4 to get the next ID.
+   * Currently unsupported.
    */
-  protected streamIdClientUni: StreamId = 0b10 as StreamId;
+  protected _streamIdClientUni: StreamId = 0b10 as StreamId;
 
   /**
    * Server initiated unidirectional stream starts at 3.
    * Increment by 4 to get the next ID.
+   * Currently unsupported.
    */
-  protected streamIdServerUni: StreamId = 0b11 as StreamId;
+  protected _streamIdServerUni: StreamId = 0b11 as StreamId;
 
   /**
    * Internal conn timer. This is used to tick the state transitions on the
-   * conn.
+   * connection.
    */
   protected connTimeOutTimer?: Timer;
 
@@ -136,7 +140,7 @@ class QUICConnection extends EventTarget {
    * connection alive if there is no activity. This keep alive mechanism will
    * trigger ping frames to ensure that there is connection activity.
    * If the max idle time is set to 0, the connection never times out on idleness.
-   * However this keep alive mechanism will continue to work in case you need
+   * However, this keep alive mechanism will continue to work in case you need
    * activity on the connection for some reason.
    * Note that the timer used for the `ContextTimed` in `QUICClient.createQUICClient`
    * is independent of the max idle time. This keep alive mechanism will only
@@ -154,12 +158,11 @@ class QUICConnection extends EventTarget {
    */
   protected _remotePort: Port;
 
-  // TODO: use it or loose it?
   /**
-   * Bubble up all QUIC stream events.
+   * Bubble up stream destroy event
    */
-  protected handleQUICStreamEvents = (e: events.QUICStreamEvent) => {
-    this.dispatchEvent(e);
+  protected handleQUICStreamDestroyEvent = () => {
+    this.dispatchEvent(new events.QUICStreamDestroyEvent());
   };
 
   /**
@@ -186,8 +189,6 @@ class QUICConnection extends EventTarget {
    */
   protected closedP: Promise<void>;
 
-  protected wasEstablished: boolean = false;
-
   protected resolveEstablishedP: () => void;
   protected rejectEstablishedP: (reason?: any) => void;
   protected resolveSecureEstablishedP: () => void;
@@ -195,14 +196,11 @@ class QUICConnection extends EventTarget {
   protected resolveClosedP: () => void;
   protected rejectClosedP: (reason?: any) => void;
 
-  protected lastErrorMessage?: string;
-
   public readonly lockbox = new LockBox<RWLockWriter>();
-  public readonly lockCode = 'Lock'; // TODO: more unique code
+  public readonly lockCode = 'ConnectionEventLockId';
 
   protected customVerified = false;
   protected shortReceived = false;
-  protected shortSent = false;
   protected secured = false;
   protected count = 0;
   protected verifyCallback: VerifyCallback | undefined;
@@ -288,9 +286,11 @@ class QUICConnection extends EventTarget {
         abortProm.p,
       ]);
     } catch (e) {
+      const code =
+        args.reasonToCode != null ? (await args.reasonToCode(e)) ?? 0 : 0;
       await connection.stop({
         applicationError: false,
-        errorCode: 42, // FIXME: use a proper code
+        errorCode: code,
         errorMessage: e.message,
         force: true,
       });
@@ -413,21 +413,8 @@ class QUICConnection extends EventTarget {
       rejectP: rejectEstablishedP,
     } = utils.promise();
     this.establishedP = establishedP;
-    this.resolveEstablishedP = () => {
-      // Upon the first time you call this, it is now true
-      // But prior to this
-
-      this.wasEstablished = true;
-      resolveEstablishedP();
-    };
+    this.resolveEstablishedP = resolveEstablishedP;
     this.rejectEstablishedP = rejectEstablishedP;
-
-    // We can do something where, once you "resolve"
-    // Then it is in fact established
-    // Alternatively, we can just bind into the `establishedP` here
-    // Does this become a dangling promsie?
-    // Cause it is `void` here
-    // I think it's better to use the `resolveEstablishedP`
 
     const {
       p: secureEstablishedP,
@@ -483,8 +470,12 @@ class QUICConnection extends EventTarget {
    * `ConnectionErrorCode`.
    * The default `applicationError` is true because a normal graceful close
    * is an application error.
-   * The default `errorCode` of 0 means no error or general error.
+   * The default `errorCode` of 0 means general error.
    * This is the same as basically waiting for `closedP`.
+   *
+   * Providing error details is only used if the connection still needs to be
+   * closed. If stop was triggered internally then the error details are obtained
+   * by the connection.
    */
   public async stop(
     {
@@ -509,60 +500,61 @@ class QUICConnection extends EventTarget {
   ) {
     this.logger.info(`Stop ${this.constructor.name}`);
     // Cleaning up existing streams
-    const streamDestroyPs: Array<Promise<void>> = [];
+    const streamsDestroyP: Array<Promise<void>> = [];
+    this.logger.debug('triggering stream destruction');
     for (const stream of this.streamMap.values()) {
-      streamDestroyPs.push(stream.destroy({ force }));
-    }
-    await Promise.all(streamDestroyPs);
-    // Do we do this afterward or before?
-    // FIXME: not sure it really matters, don't really need a keep alive while stopping.
-    this.stopKeepAliveIntervalTimer();
-    try {
-      mon = mon ?? new Monitor<RWLockWriter>(this.lockbox, RWLockWriter);
-      // Trigger closing connection in the background and await close later.
-      void mon.withF(this.lockCode, async (mon) => {
-        // If this is already closed, then `Done` will be thrown
-        // Otherwise it can send `CONNECTION_CLOSE` frame
-        // This can be 0x1c close at the QUIC layer or no errors
-        // Or it can be 0x1d for application close with an error
-        // Upon receiving a `CONNECTION_CLOSE`, you can send back
-        // 1 packet containing a `CONNECTION_CLOSE` frame too
-        // (with `NO_ERROR` code if appropriate)
-        // It must enter into a draining state, and no other packets can be sent
-        try {
-          this.conn.close(
-            applicationError,
-            errorCode,
-            Buffer.from(errorMessage),
-          );
-          // If we get a `Done` exception we don't bother calling send
-          // The send only gets sent if the `Done` is not the case
-          await this.send(mon);
-        } catch (e) {
-          // Ignore 'Done' if already closed
-          if (e.message !== 'Done') throw e;
-        }
-      });
-    } catch (e) {
-      // If the connection is already closed, `Done` will be thrown
-      if (e.message !== 'Done') {
-        // No other exceptions are expected
-        utils.never();
+      // If we're draining then streams will never end on their own.
+      // We must force them to end.
+      if (this.conn.isDraining() || this.conn.isClosed() || force) {
+        await stream.destroy();
       }
+      streamsDestroyP.push(stream.destroyedP);
     }
+    this.logger.debug('waiting for streams to destroy');
+    await Promise.all(streamsDestroyP);
+    this.logger.debug('streams destroyed');
+    this.stopKeepAliveIntervalTimer();
+
+    mon = mon ?? new Monitor<RWLockWriter>(this.lockbox, RWLockWriter);
+    // Trigger closing connection in the background and await close later.
+    void mon.withF(this.lockCode, async (mon) => {
+      // If this is already closed, then `Done` will be thrown
+      // Otherwise it can send `CONNECTION_CLOSE` frame
+      // This can be 0x1c close at the QUIC layer or no errors
+      // Or it can be 0x1d for application close with an error
+      // Upon receiving a `CONNECTION_CLOSE`, you can send back
+      // 1 packet containing a `CONNECTION_CLOSE` frame too
+      // (with `NO_ERROR` code if appropriate)
+      // It must enter into a draining state, and no other packets can be sent
+      try {
+        this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
+        // If we get a `Done` exception we don't bother calling send
+        // The send only gets sent if the `Done` is not the case
+        await this.send(mon);
+      } catch (e) {
+        // Ignore 'Done' if already closed
+        if (e.message !== 'Done') {
+          // No other exceptions are expected
+          never();
+        }
+      }
+    });
 
     if (this.conn.isClosed()) {
       this.resolveClosedP();
     }
+    this.setConnTimeOutTimer();
     // Now we await for the closedP
+    this.logger.debug('awaiting closedP');
     await this.closedP;
+    this.logger.debug('closedP');
+    this.connTimeOutTimer?.cancel(timerCleanupReasonSymbol);
 
-    // The reason we only delete afterwards
-    // Is because we do it before we are opened (or just constructed)
-    // Techincally it was constructed, and then we added ourselves to it
-    // But during `start` we are just waiting
+    // Removing the connection from the socket's connection map
     this.socket.connectionMap.delete(this.connectionId);
 
+    // Checking for errors and emitting them as events
+    // Emit error if connection timed out
     if (this.conn.isTimedOut()) {
       const error = this.secured
         ? new errors.ErrorQUICConnectionIdleTimeOut()
@@ -599,6 +591,7 @@ class QUICConnection extends EventTarget {
       );
     }
 
+    // Emit error if local error
     const localError = this.conn.localError();
     if (localError != null) {
       const message = `connection failed with localError ${Buffer.from(
@@ -678,17 +671,12 @@ class QUICConnection extends EventTarget {
         // This may mutate `data`
         this.conn.recv(data, recvInfo);
       } catch (e) {
+        // Should only be a `TLSFail` if we fail here.
+        // The error details will be available as a local error.
         if (e.message !== 'TlsFail') {
           // No other exceptions are expected
           utils.never();
         }
-        // Do note that if we get a TlsFail
-        // We must proceed without throwing any exceptions
-        // But we must "save" the error here
-        // We don't need the save the localError or remoteError
-        // Cause that will be "saved"
-        // Only this e.message <- this will be whatever is the last message
-        this.lastErrorMessage = e.message;
       }
 
       // Checking if the packet was a short frame.
@@ -700,17 +688,13 @@ class QUICConnection extends EventTarget {
           this.shortReceived = true;
         }
       }
-
-      if (
-        !this.secured &&
-        this.shortReceived &&
-        this.shortReceived &&
-        !this.conn.isDraining()
-      ) {
+      // Checks if `secureEstablishedP` should be resolved. The condition for
+      //  this is if a short frame has been received and 1 extra frame has been
+      //  received. This allows for the remote to close the connection.
+      if (!this.secured && this.shortReceived && !this.conn.isDraining()) {
         if (this.count >= 1) {
           this.secured = true;
           this.resolveSecureEstablishedP();
-          // This.dispatchEvent(new events.QUICConnectionRemoteSecureEvent()); TODO
         }
         this.count += 1;
       }
@@ -723,84 +707,24 @@ class QUICConnection extends EventTarget {
         this.resolveEstablishedP();
       }
 
-      // We also need to know whether this is our first short frame
-      // After we are already established
-      // This may not be robust
-      // Cause technically
-      // What if we were "concatenated" packet
-      // Then it could be a problem right?
-
       if (this.conn.isClosed()) {
         this.resolveClosedP();
         return;
       }
 
       if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
-        const readIds: Array<number> = [];
-        for (const streamId of this.conn.readable() as Iterable<StreamId>) {
-          let quicStream = this.streamMap.get(streamId);
-          if (quicStream == null) {
-            // The creation will set itself to the stream map
-            quicStream = await QUICStream.createQUICStream({
-              streamId,
-              connection: this,
-              codeToReason: this.codeToReason,
-              reasonToCode: this.reasonToCode,
-              // MaxReadableStreamBytes: this.maxReadableStreamBytes,
-              // maxWritableStreamBytes: this.maxWritableStreamBytes,
-              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
-            });
-            this.dispatchEvent(
-              new events.QUICConnectionStreamEvent({ detail: quicStream }),
-            );
-          }
-          readIds.push(quicStream.streamId);
-          quicStream.read();
-          // QuicStream.dispatchEvent(new events.QUICStreamReadablaeEvent()); // TODO: remove?
-        }
-        if (readIds.length > 0) {
-          this.logger.info(`processed reads for ${readIds}`);
-        }
-        const writeIds: Array<number> = [];
-        for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-          let quicStream = this.streamMap.get(streamId);
-          if (quicStream == null) {
-            // The creation will set itself to the stream map
-            quicStream = await QUICStream.createQUICStream({
-              streamId,
-              connection: this,
-              codeToReason: this.codeToReason,
-              reasonToCode: this.reasonToCode,
-              // MaxReadableStreamBytes: this.maxReadableStreamBytes,
-              logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
-            });
-            this.dispatchEvent(
-              new events.QUICConnectionStreamEvent({ detail: quicStream }),
-            );
-          }
-          // QuicStream.dispatchEvent(new events.QUICStreamWritableEvent()); // TODO: remove?
-          writeIds.push(quicStream.streamId);
-          quicStream.write();
-        }
-        if (writeIds.length > 0) {
-          this.logger.info(`processed writes for ${writeIds}`);
-        }
+        await this.processStreams();
       }
     } finally {
-      // This.garbageCollectStreams('recv'); // FIXME: this was removed? How is this handled now?
       this.logger.debug('RECV FINALLY');
-      // Set the timeout
-      this.setConnTimeOutTimer(); // FIXME: Might not be needed here, Only need it after calling send
-      // If this call wasn't executed in the midst of a destroy
-      // and yet the connection is closed or is draining, then
-      // we need to destroy this connection
       if (
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
-        this.logger.debug('CALLING DESTROY 2');
-        // Destroy in the background, we still need to process packets
-        void this.stop({}, mon).catch(() => {});
+        this.logger.debug('calling stop due to closed or draining');
+        // Destroy in the background, we still need to process packets.
+        // Draining means no more packets are sent, so streams must be force closed.
+        void this.stop({ force: true }, mon).catch(() => {});
       }
     }
   }
@@ -877,8 +801,10 @@ class QUICConnection extends EventTarget {
             utils.certificateDERToPEM(c),
           );
           try {
+            // Running verify callback if available
             if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
             this.logger.debug('TLS verification succeeded');
+            // Generate ack frame to satisfy the short + 1 condition of secure establishment
             this.conn.sendAckEliciting();
           } catch (e) {
             // Force the connection to end.
@@ -895,124 +821,120 @@ class QUICConnection extends EventTarget {
           }
         }
       }
-
-      // Check the header type
-      if (!this.shortSent) {
-        const header = quiche.Header.fromSlice(
-          sendBuffer,
-          quiche.MAX_CONN_ID_LEN,
-        );
-        // If short frame
-        if (header.ty === 5) {
-          // Short was sent, locally secured
-          this.shortSent = true;
-        }
-      }
     } catch (e) {
-      // If called `stop` due to an error here
-      // we MUST not call `this.send` again
-      // in fact, we do a hard-stop
-      // There's no need to even have a timeout at all
-      // Remember this exception COULD be due to `e`
-      // It could be due to `localError` or `remoteError`
-      // All of this is possible
-      // Generally at least one of them is the reason
-
-      // the error has to be one or the other
-
+      // An error here means a hard failure in sending, we must force clean up
+      //  since any further communication is expected to fail.
+      this.logger.debug(`Calling stop due to sending error [${e.message}]`);
+      const code = await this.reasonToCode('send', e);
       await this.stop(
         {
-          applicationError: true,
-          errorCode: 0, // TODO: actual code? use code mapping?
+          applicationError: false,
+          errorCode: code,
           errorMessage: e.message,
+          force: true,
         },
         mon,
       );
-
       // We need to finish without any exceptions
       return;
     }
     if (this.conn.isClosed()) {
-      // But if it is closed with no error
-      // Then we just have to proceed!
-      // Plus if we are called here
+      // Handle stream clean up if closed
       this.resolveClosedP();
       await this.stop(
         this.conn.localError() ?? this.conn.peerError() ?? {},
         mon,
       );
-    } else {
-      // In all other cases, reset the conn timer
-      this.setConnTimeOutTimer();
+    }
+    this.setConnTimeOutTimer();
+  }
+
+  /**
+   * Keeps stream processing logic all in one place.
+   */
+  protected async processStreams() {
+    for (const streamId of this.conn.readable() as Iterable<StreamId>) {
+      let quicStream = this.streamMap.get(streamId);
+      if (quicStream == null) {
+        // The creation will set itself to the stream map
+        quicStream = await QUICStream.createQUICStream({
+          streamId,
+          connection: this,
+          codeToReason: this.codeToReason,
+          reasonToCode: this.reasonToCode,
+          logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
+        });
+        quicStream.addEventListener(
+          'streamDestroy',
+          this.handleQUICStreamDestroyEvent,
+          { once: true },
+        );
+        this.dispatchEvent(
+          new events.QUICConnectionStreamEvent({ detail: quicStream }),
+        );
+      }
+      quicStream.read();
+    }
+    for (const streamId of this.conn.writable() as Iterable<StreamId>) {
+      const quicStream = this.streamMap.get(streamId);
+      if (quicStream == null) {
+        // This is a dead case, there are only two ways streams are created.
+        //  The QUICStream will always exist before processing it's writable.
+        //  1. First time it is seen in the readable iterator
+        //  2. created using `streamNew()`
+        never();
+      }
+      quicStream.write();
     }
   }
 
   protected setConnTimeOutTimer(): void {
+    const logger = this.logger.getChild('timer');
     const connTimeOutHandler = async () => {
-      // This can only be called when the timeout has occurred
-      // This transitions the connection state
-      this.logger.debug('CALLING ON TIMEOUT');
+      // This can only be called when the timeout has occurred.
+      // This transitions the connection state.
+      // `conn.timeout()` is time aware, so calling `conn.onTimeout` will only
+      //  trigger state transitions after the time has passed.
+      logger.debug('CALLING ON TIMEOUT');
       this.conn.onTimeout();
 
-      // At this point...
-      // we check the conditions on the connection
-      // This way we can RESOLVE things like
-      // conn closed or established or other things
-      // or if we are draining
-      // if we have timed out... etc
-      // All state changes need to result in reaction
-      // Is established is not required
-      // But we can have a bunch of things that check and react accordingly
-      // So if it is timed out, it gets closed too
-      // But if it is is timed out due to idle we raise an error
-
-      // At the same time, we may in fact be closed too
+      // Connection may have closed after timing out
       if (this.conn.isClosed()) {
-        // If it was still starting waiting for the secure event,
-        // we need to reject that promise.
+        // If it was still starting waiting for the secure event, we need to
+        //  reject the `secureEstablishedP` promise.
         if (this[status] === 'starting') {
           this.rejectSecureEstablishedP(
             new errors.ErrorQUICConnectionInternal('Connection has closed!'),
           );
         }
 
-        // We actually finally closed here
-        // Actually the question is that this could be an error
-        // The act of closing is an error?
-        // That's confusing
+        logger.debug('resolving closedP');
+        // We resolve closing here, stop checks if the connection has timed out
+        //  and handles it.
         this.resolveClosedP();
-        // If we are not stopping nor are we stopped
-        // And we are not running, call await this stop
-
-        // We need to trigger this as well by calling stop
-        // What happens if we are starting too?
+        // If we are still running and not stopping then we need to stop
         if (this[running] && this[status] !== 'stopping') {
-          // If we are already stopping, stop multiple times is idempotent
-          // Wait if we call stop multiple times
-          // Actually we may already be stopping
-          // But also that if the status is starting
-          // But also if we are starting
-          // Resolve the closeP
-          // is technically an error!
           const mon = new Monitor(this.lockbox, RWLockWriter);
-          await this.stop(
-            this.conn.localError() ?? this.conn.peerError() ?? {},
-            mon,
-          );
+          // Background stopping, we don't want to block the timer resolving
+          void this.stop({ force: true }, mon);
         }
-
-        // Finish
+        logger.debug('CLEANING UP TIMER');
         return;
       }
 
       const mon = new Monitor(this.lockbox, RWLockWriter);
-      await this.send(mon);
+      // There may be data to send after timing out
+      void this.send(mon);
 
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
-      // If this is `null`, then technically there's nothing to do
-      if (timeout == null) return;
+      // If this is `null`, then quiche is requesting the timer to be cleaned up
+      if (timeout == null) {
+        logger.debug('CLEANING UP TIMER');
+        return;
+      }
       // Allow an extra 1ms for the delay to fully complete, so we can avoid a repeated 0ms delay
+      logger.debug(`Recreating timer with ${timeout + 1} delay`);
       this.connTimeOutTimer = new Timer({
         delay: timeout + 1,
         handler: connTimeOutHandler,
@@ -1020,16 +942,27 @@ class QUICConnection extends EventTarget {
     };
     // Note that a `0` timeout is still a valid timeout
     const timeout = this.conn.timeout();
-    // If this is `null` there's nothing to do
-    if (timeout == null) return;
+    // If this is `null`, then quiche is requesting the timer to be cleaned up
+    if (timeout == null) {
+      // Clean up timer if it is running
+      if (
+        this.connTimeOutTimer != null &&
+        this.connTimeOutTimer.status === null
+      ) {
+        logger.debug('CLEANING UP TIMER');
+        this.connTimeOutTimer.cancel(timerCleanupReasonSymbol);
+      }
+      return;
+    }
     // If there was an existing timer, we cancel it and set a new one
     if (
       this.connTimeOutTimer != null &&
       this.connTimeOutTimer.status === null
     ) {
-      this.connTimeOutTimer.reset(timeout);
+      logger.debug(`resetting timer with ${timeout + 1} delay`);
+      this.connTimeOutTimer.reset(timeout + 1);
     } else {
-      this.logger.debug(`timeout created with delay ${timeout}`);
+      logger.debug(`timeout created with delay ${timeout}`);
       this.connTimeOutTimer = new Timer({
         delay: timeout + 1,
         handler: connTimeOutHandler,
@@ -1042,7 +975,7 @@ class QUICConnection extends EventTarget {
    * Make sure to set the interval to be less than then the `maxIdleTime` unless
    * if the `maxIdleTime` is `0`.
    * If the `maxIdleTime` is `0`, then this is not needed to keep the connection
-   * open. However it can still be useful to maintain liveness for NAT purposes.
+   * open. However, it can still be useful to maintain liveliness for NAT purposes.
    */
   protected startKeepAliveIntervalTimer(ms: number): void {
     const keepAliveHandler = async () => {
@@ -1067,7 +1000,7 @@ class QUICConnection extends EventTarget {
    * Stops the keep alive interval timer
    */
   protected stopKeepAliveIntervalTimer(): void {
-    this.keepAliveIntervalTimer?.cancel();
+    this.keepAliveIntervalTimer?.cancel(timerCleanupReasonSymbol);
   }
 
   /**
@@ -1077,12 +1010,7 @@ class QUICConnection extends EventTarget {
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
   public async streamNew(streamType: 'bidi' = 'bidi'): Promise<QUICStream> {
-    // You wouldn't want AsyncMonitor here
-    // The problem is that we want re-entrant contexts
-
-    // Technically you can do concurrent bidi and uni style streams
-    // but no support for uni streams yet
-    // So we don't bother with it
+    // Using a lock on stream ID to prevent racing updates
     return await this.streamIdLock.withF(async () => {
       let streamId: StreamId;
       if (this.type === 'client' && streamType === 'bidi') {
@@ -1091,30 +1019,18 @@ class QUICConnection extends EventTarget {
         streamId = this.streamIdServerBidi;
       }
 
-      // If you call this again
-      // you will get another stream ID
-      // but the problem is that
-      // if you call it multiple times concurrently
-      // you'll have an issue
-      // this can only be called one at a time
-      // This is not allowed to be concurrent
-      // You cannot open many streams all concurrently
-      // since stream creations are serialised
-
-      // If we are in draining state
-      // we cannot call this anymore
-      // Hre ewe send the stream id
-      // with stream capacity will fail
-      // We send a 0-length buffer first
       const quicStream = await QUICStream.createQUICStream({
         streamId: streamId!,
         connection: this,
         codeToReason: this.codeToReason,
         reasonToCode: this.reasonToCode,
-        // MaxReadableStreamBytes: this.maxReadableStreamBytes,
-        // maxWritableStreamBytes: this.maxWritableStreamBytes,
         logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
       });
+      quicStream.addEventListener(
+        'streamDestroy',
+        this.handleQUICStreamDestroyEvent,
+        { once: true },
+      );
       // Ok the stream is opened and working
       if (this.type === 'client' && streamType === 'bidi') {
         this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
@@ -1124,128 +1040,6 @@ class QUICConnection extends EventTarget {
       return quicStream;
     });
   }
-
-  // /**
-  //  * Used to update or disable the keep alive interval.
-  //  * Calling this will reset the delay before the next keep alive.
-  //  */
-  // @ready(new errors.ErrorQUICConnectionNotRunning())
-  // public setKeepAlive(intervalDelay?: number) {
-  //   // Clearing timeout prior to update
-  //   if (this.keepAliveInterval != null) {
-  //     clearTimeout(this.keepAliveInterval);
-  //     delete this.keepAliveInterval;
-  //   }
-  //   // Setting up keep alive interval
-  //   if (intervalDelay != null) {
-  //     this.keepAliveInterval = setInterval(async () => {
-  //       // Trigger an ping frame and send
-  //       this.conn.sendAckEliciting();
-  //       await this.send();
-  //     }, intervalDelay);
-  //   }
-  // }
-  //
-  // // Timeout handling, these methods handle time keeping for quiche.
-  // // Quiche will request an amount of time, We then call `onTimeout()` after that time has passed.
-  // protected deadline: number = 0;
-  // protected onTimeout = async () => {
-  //   this.logger.warn('ON TIMEOUT CALLED ' + new Date());
-  //   this.logger.debug('timeout on timeout');
-  //   // Clearing timeout
-  //   clearTimeout(this.timer);
-  //   delete this.timer;
-  //   this.deadline = Infinity;
-  //   // Doing timeout actions
-  //   // console.time('INTERNAL ON TIMEOUT');
-  //   this.conn.onTimeout();
-  //   // console.timeEnd('INTERNAL ON TIMEOUT');
-  //   this.logger.warn('BEFORE CALLING SEND' + new Date());
-  //   if (this[destroyed] === false) await this.send();
-  //   this.logger.warn('AFTER CALLING SEND ' + new Date());
-  //   if (
-  //     this[status] !== 'destroying' &&
-  //     (this.conn.isClosed() || this.conn.isDraining())
-  //   ) {
-  //     this.logger.debug('CALLING DESTROY 3');
-  //     // Destroy in the background, we still need to process packets
-  //     void this.destroy().catch(() => {});
-  //   }
-  //   this.logger.warn('BEFORE CHECK TIMEOUT' + new Date());
-  //   this.checkTimeout();
-  //   this.logger.warn('AFTER CHECK TIMEOUT' + new Date());
-  // };
-
-  /**
-   * Checks the timeout event, should be called whenever the following events happen.
-   * 1. `send()` is called
-   * 2. `recv()` is called
-   * 3. timer times out.
-   *
-   * This needs to do 3 things.
-   * 1. Create a timer if none exists
-   * 2. Update the timer if `conn.timeout()` is less than current timeout.
-   * 3. clean up timer if `conn.timeout()` is null.
-   */
-  // protected checkTimeout = () => {
-  //   this.logger.debug('timeout checking timeout');
-  //   // During construction, this ends up being null
-  //   const time = this.conn.timeout();
-  //   this.logger.error(`THE TIME (${this.times}): ` + time + ' ' + new Date());
-  //   this.times++;
-  //
-  //   if (time == null) {
-  //     // Clear timeout
-  //     if (this.timer != null) this.logger.debug('timeout clearing timeout');
-  //     clearTimeout(this.timer);
-  //     delete this.timer;
-  //     this.deadline = Infinity;
-  //   } else {
-  //     const newDeadline = Date.now() + time;
-  //     if (this.timer != null) {
-  //       if (time === 0) {
-  //         this.logger.debug('timeout triggering instant timeout');
-  //         // Skip timer and call onTimeout
-  //         setImmediate(this.onTimeout);
-  //       } else if (newDeadline < this.deadline) {
-  //         this.logger.debug(`timeout updating timer with ${time} delay`);
-  //         clearTimeout(this.timer);
-  //         delete this.timer;
-  //         this.deadline = newDeadline;
-  //
-  //         this.logger.warn('BEFORE SET TIMEOUT 1: ' + time);
-  //
-  //         this.timer = setTimeout(this.onTimeout, time);
-  //       }
-  //     } else {
-  //       if (time === 0) {
-  //         this.logger.debug('timeout triggering instant timeout');
-  //         // Skip timer and call onTimeout
-  //         setImmediate(this.onTimeout);
-  //         return;
-  //       }
-  //       this.logger.debug(`timeout creating timer with ${time} delay`);
-  //       this.deadline = newDeadline;
-  //
-  //       this.logger.warn('BEFORE SET TIMEOUT 2: ' + time);
-  //
-  //       this.timer = setTimeout(this.onTimeout, time);
-  //     }
-  //   }
-  // };
-
-  // protected garbageCollectStreams(where: string) {
-  //   const nums: Array<number> = [];
-  //   // Only check if packets were sent
-  //   for (const [streamId, quicStream] of this.streamMap) {
-  //     // Stream sending can finish after a packet is sent
-  //     nums.push(streamId);
-  //     quicStream.read();
-  //   }
-  //   if (nums.length > 0) {
-  //     this.logger.info(`checking read finally ${where} for ${nums}`);
-  //   }
-  // }
 }
 
 export default QUICConnection;

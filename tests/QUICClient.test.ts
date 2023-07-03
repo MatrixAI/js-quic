@@ -715,8 +715,7 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
   });
-  // FIXME: These tests are failing pending the stream changes.
-  describe.skip('handles random packets', () => {
+  describe('handles random packets', () => {
     testProp(
       'client handles random noise from server',
       [

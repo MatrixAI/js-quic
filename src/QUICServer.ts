@@ -22,10 +22,11 @@ import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
+import { never } from './utils';
 
 /**
- * You must provide a error handler `addEventListener('error')`.
- * Otherwise errors will just be ignored.
+ * You must provide an error handler `addEventListener('error')`.
+ * Otherwise, errors will just be ignored.
  *
  * Events:
  * - serverStop
@@ -54,22 +55,52 @@ class QUICServer extends EventTarget {
   protected codeToReason: StreamCodeToReason | undefined;
   protected verifyCallback: VerifyCallback | undefined;
   protected connectionMap: QUICConnectionMap;
+  // Used to track address string for logging ONLY
+  protected address: string;
 
   protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
-    const event = new Event('asd');
-    this.dispatchEvent(event);
-    this.dispatchEvent(event);
     if (e instanceof events.QUICSocketErrorEvent) {
       this.dispatchEvent(
         new events.QUICServerErrorEvent({
           detail: e.detail,
         }),
       );
+      // Trigger clean up
+      this.logger.debug('calling stop due to socket error');
+      void this.stop({ force: true });
+    } else if (e instanceof events.QUICSocketStopEvent) {
+      this.dispatchEvent(new events.QUICSocketStopEvent());
+      // Trigger clean up
+      this.logger.debug('calling stop due to socket stop');
+      void this.stop({ force: true });
+    } else if (e instanceof events.QUICSocketStartEvent) {
+      this.dispatchEvent(new events.QUICSocketStartEvent());
+    } else {
+      // Should never happen, all cases should be covered
+      never();
     }
   };
 
-  protected handleQUICConnectionEvents = (e: events.QUICConnectionEvent) => {
-    this.dispatchEvent(e);
+  protected handleQUICConnectionEvents = (
+    event: events.QUICConnectionEvent,
+  ) => {
+    if (event instanceof events.QUICConnectionErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: event.detail,
+        }),
+      );
+    } else if (event instanceof events.QUICConnectionStopEvent) {
+      this.dispatchEvent(new events.QUICConnectionStopEvent());
+    } else if (event instanceof events.QUICConnectionStreamEvent) {
+      this.dispatchEvent(
+        new events.QUICConnectionStreamEvent({ detail: event.detail }),
+      );
+    } else if (event instanceof events.QUICStreamDestroyEvent) {
+      this.dispatchEvent(new events.QUICStreamDestroyEvent());
+    } else {
+      utils.never();
+    }
   };
 
   public constructor({
@@ -152,6 +183,7 @@ class QUICServer extends EventTarget {
     let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
+      this.address = address;
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
       await this.socket.start({ host, port, reuseAddr });
       address = utils.buildAddress(this.socket.host, this.socket.port);
@@ -179,8 +211,7 @@ class QUICServer extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
-    // Console.time('destroy conn');
-    const address = utils.buildAddress(this.socket.host, this.socket.port);
+    const address = this.address;
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     const destroyProms: Array<Promise<void>> = [];
     for (const connection of this.connectionMap.serverConnections.values()) {
@@ -188,13 +219,13 @@ class QUICServer extends EventTarget {
         connection.stop({
           applicationError: true,
           errorMessage: 'cleaning up connections',
-          errorCode: 42,
           force,
         }),
-      ); // TODO: fill in with proper details
+      );
     }
+    this.logger.debug('Awaiting connections to destroy');
     await Promise.all(destroyProms);
-    // Console.timeEnd('destroy conn');
+    this.logger.debug('All connections destroyed');
     this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
@@ -340,22 +371,54 @@ class QUICServer extends EventTarget {
       ),
     });
     try {
-      await connectionProm; // TODO: pass ctx
+      await connectionProm;
     } catch (e) {
       // Ignoring any errors here as a failure to connect
-      // FIXME: should we emit a connection error here?
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICServerConnectionFailed(undefined, {
+            cause: e,
+          }),
+        }),
+      );
       return;
     }
     const connection = await connectionProm;
+    // Handling connection events
+    connection.addEventListener(
+      'connectionError',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'connectionStream',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'streamDestroy',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'connectionStop',
+      (event) => {
+        connection.removeEventListener(
+          'connectionError',
+          this.handleQUICConnectionEvents,
+        );
+        connection.removeEventListener(
+          'connectionStream',
+          this.handleQUICConnectionEvents,
+        );
+        connection.removeEventListener(
+          'streamDestroy',
+          this.handleQUICConnectionEvents,
+        );
+        this.handleQUICConnectionEvents(event);
+      },
+      { once: true },
+    );
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );
-
-    // A new conn ID means a new connection
-    // the old connection gets removed
-    // so one has to be aware of this
-    // Either that, or there is a seamless migration to a new connection ID
-    // In which case we need to manage it somehow
 
     return connection;
   }

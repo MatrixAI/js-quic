@@ -28,11 +28,11 @@ import QUICConnection from './QUICConnection';
 import QUICConnectionId from './QUICConnectionId';
 
 /**
- * You must provide a error handler `addEventListener('error')`.
- * Otherwise errors will just be ignored.
+ * You must provide an error handler `addEventListener('error')`.
+ * Otherwise, errors will just be ignored.
  *
  * Use the same event names.
- * However it needs to bubble up.
+ * However, it needs to bubble up.
  * And the right target needs to be used.
  *
  * Events:
@@ -63,7 +63,7 @@ class QUICClient extends EventTarget {
    * @param opts
    * @param opts.host - peer host where `0.0.0.0` becomes `127.0.0.1` and `::` becomes `::1`
    * @param opts.port
-   * @param opts.localHost - defaults to `::` (dualstack)
+   * @param opts.localHost - defaults to `::` (dual-stack)
    * @param opts.localPort - defaults 0
    * @param opts.crypto - client only needs the ability to generate random bytes
    * @param opts.config - optional config
@@ -140,7 +140,7 @@ class QUICClient extends EventTarget {
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
     let [host_] = await utils.resolveHost(host, resolveHostname);
-    // If the target host is in fact an zero IP, it cannot be used
+    // If the target host is in fact a zero IP, it cannot be used
     // as a target host, so we need to resolve it to a non-zero IP
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
@@ -227,7 +227,7 @@ class QUICClient extends EventTarget {
     try {
       await Promise.race([connectionProm, socketErrorP]);
     } catch (e) {
-      // In case the `connection.start` is on-going, we need to abort it
+      // In case the `connection.start` is ongoing, we need to abort it
       abortController.abort(e);
       if (!isSocketShared) {
         // Stop is idempotent
@@ -254,13 +254,13 @@ class QUICClient extends EventTarget {
   /**
    * This must not throw any exceptions.
    */
-  protected handleQUICSocketEvents = async (e: events.QUICSocketEvent) => {
-    if (e instanceof events.QUICSocketErrorEvent) {
+  protected handleQUICSocketEvents = async (event: events.QUICSocketEvent) => {
+    if (event instanceof events.QUICSocketErrorEvent) {
       // QUIC socket errors are re-emitted but a destroy takes place
       this.dispatchEvent(
         new events.QUICClientErrorEvent({
           detail: new errors.ErrorQUICClient('Socket error', {
-            cause: e.detail,
+            cause: event.detail,
           }),
         }),
       );
@@ -276,7 +276,7 @@ class QUICClient extends EventTarget {
           }),
         );
       }
-    } else if (e instanceof events.QUICSocketStopEvent) {
+    } else if (event instanceof events.QUICSocketStopEvent) {
       // If a QUIC socket stopped, we immediately destroy
       // However, the stop will have its own constraints
       try {
@@ -292,7 +292,7 @@ class QUICClient extends EventTarget {
         );
       }
     } else {
-      this.dispatchEvent(e);
+      this.dispatchEvent(event);
     }
   };
 
@@ -300,13 +300,13 @@ class QUICClient extends EventTarget {
    * This must not throw any exceptions.
    */
   protected handleQUICConnectionEvents = async (
-    e: events.QUICConnectionEvent,
+    event: events.QUICConnectionEvent,
   ) => {
-    if (e instanceof events.QUICConnectionErrorEvent) {
+    if (event instanceof events.QUICConnectionErrorEvent) {
       this.dispatchEvent(
         new events.QUICClientErrorEvent({
           detail: new errors.ErrorQUICClient('Connection error', {
-            cause: e.detail,
+            cause: event.detail,
           }),
         }),
       );
@@ -322,7 +322,7 @@ class QUICClient extends EventTarget {
           }),
         );
       }
-    } else if (e instanceof events.QUICConnectionStopEvent) {
+    } else if (event instanceof events.QUICConnectionStopEvent) {
       try {
         // Force destroy means don't destroy gracefully
         await this.destroy({
@@ -335,13 +335,14 @@ class QUICClient extends EventTarget {
           }),
         );
       }
-    }
-    if (e instanceof events.QUICConnectionStreamEvent) {
+    } else if (event instanceof events.QUICConnectionStreamEvent) {
       this.dispatchEvent(
-        new events.QUICConnectionStreamEvent({ detail: e.detail }),
+        new events.QUICConnectionStreamEvent({ detail: event.detail }),
       );
+    } else if (event instanceof events.QUICStreamDestroyEvent) {
+      this.dispatchEvent(new events.QUICStreamDestroyEvent());
     } else {
-      throw Error('TMP MUST RETHROW EVENTS');
+      utils.never();
     }
   };
 

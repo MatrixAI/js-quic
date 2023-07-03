@@ -145,13 +145,13 @@ describe('Concurrency tests', () => {
         });
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'connection',
+          'serverConnection',
           async (e: events.QUICServerConnectionEvent) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'stream',
+                'connectionStream',
                 (streamEvent: events.QUICConnectionStreamEvent) => {
                   const stream = streamEvent.detail;
                   const streamData =
@@ -267,13 +267,13 @@ describe('Concurrency tests', () => {
         });
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'connection',
+          'serverConnection',
           async (e: events.QUICServerConnectionEvent) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'stream',
+                'connectionStream',
                 (streamEvent: events.QUICConnectionStreamEvent) => {
                   const stream = streamEvent.detail;
                   const streamData =
@@ -406,13 +406,13 @@ describe('Concurrency tests', () => {
     });
     const connProms: Array<Promise<void>> = [];
     server.addEventListener(
-      'connection',
+      'serverConnection',
       async (e: events.QUICServerConnectionEvent) => {
         const conn = e.detail;
         const connProm = (async () => {
           const serverStreamProms: Array<Promise<void>> = [];
           conn.addEventListener(
-            'stream',
+            'connectionStream',
             (streamEvent: events.QUICConnectionStreamEvent) => {
               const stream = streamEvent.detail;
               const streamData =

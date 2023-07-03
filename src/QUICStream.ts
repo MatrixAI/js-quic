@@ -27,6 +27,7 @@ import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
+import { never } from './utils';
 
 /**
  * Events:
@@ -58,6 +59,7 @@ class QUICStream
   protected _recvClosed: boolean = false;
   protected resolveReadableP?: () => void;
   protected resolveWritableP?: () => void;
+  protected destroyProm = utils.promise();
 
   /**
    * For `reasonToCode`, return 0 means "unknown reason"
@@ -83,11 +85,11 @@ class QUICStream
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
     // 'send' a 0-len message to initialize stream state in Quiche. No 0-len data is actually sent so this does not
-    //  create remote state.
+    //  create Peer state.
     try {
       connection.conn.streamSend(streamId, new Uint8Array(0), false);
     } catch {
-      // Ignore errors, we only want to initialize local state here.
+      // FIXME: If there is an error here then stream will not create? Maybe we should abort?
     }
     const stream = new this({
       streamId,
@@ -125,38 +127,34 @@ class QUICStream
 
     this.readable = new ReadableStream(
       {
-        // Type: 'bytes',
         start: (controller) => {
           this.readableController = controller;
         },
         pull: async (controller) => {
-          this.logger.warn('attempting data pull');
           // If nothing to read then we wait
           if (!this.conn.streamReadable(this.streamId)) {
             const readProm = utils.promise();
             this.resolveReadableP = readProm.resolveP;
-            this.logger.warn('waiting for readable');
+            this.logger.debug('readable waiting for more data');
             await readProm.p;
+            if (!this.conn.streamReadable(this.streamId)) {
+              // If there is nothing to read then we are tying up loose ends,
+              // do nothing and return. I don't think this will even happen though.
+              return;
+            }
+            this.logger.debug('readable resuming');
           }
 
           const buf = Buffer.alloc(1024);
           let recvLength: number, fin: boolean;
-          try {
-            [recvLength, fin] = this.conn.streamRecv(this.streamId, buf);
-          } catch (e) {
-            if (e.message === 'Done') {
-              // When it is reported to be `Done`, it just means that there is no data to read
-              // it does not mean that the stream is closed or finished
-              // In such a case, we just ignore and continue
-              // However after the stream is closed, then it would continue to return `Done`
-              // This can only occur in 2 ways, either via the `fin`
-              // or through an exception here where the stream reports an error
-              // Since we don't call this method unless it is readable
-              // This should never be reported... (this branch should be dead code)
-              return;
-            } else {
+          // Read messages until buffer is empty
+          while (true) {
+            try {
+              [recvLength, fin] = this.conn.streamRecv(this.streamId, buf);
+            } catch (e) {
               this.logger.debug(`Stream recv reported: error ${e.message}`);
-              if (!this._recvClosed) {
+              // Done means there is no more data to read
+              if (!this._recvClosed && e.message !== 'Done') {
                 const reason =
                   (await this.processSendStreamError(e, 'recv')) ?? e;
                 // If it is `StreamReset(u64)` error, then the peer has closed
@@ -166,24 +164,22 @@ class QUICStream
                 controller.error(reason);
                 await this.closeRecv(true, reason);
               }
-              return;
+              break;
             }
-          }
-          this.logger.debug(`stream read ${recvLength} bytes with fin(${fin})`);
-          // If fin is true, then that means, the stream is CLOSED
-          if (!fin) {
-            // Send the data normally
-            if (!this._recvClosed) {
+            this.logger.debug(
+              `stream read ${recvLength} bytes with fin(${fin})`,
+            );
+            // Check and drop if we're already closed or message is 0-length message
+            if (!this._recvClosed && recvLength > 0) {
               this.readableController.enqueue(buf.subarray(0, recvLength));
             }
-          } else {
-            // Strip the end message, removing the null byte
-            if (!this._recvClosed && recvLength > 1) {
-              this.readableController.enqueue(buf.subarray(0, recvLength - 1));
+            // If fin is true, then that means, the stream is CLOSED
+            if (fin) {
+              await this.closeRecv();
+              controller.close();
+              // Return out of the loop
+              break;
             }
-            await this.closeRecv();
-            controller.close();
-            return;
           }
         },
         cancel: async (reason) => {
@@ -192,6 +188,7 @@ class QUICStream
         },
       },
       new CountQueuingStrategy({
+        // Allow 1 buffered message, so we can know when data is desired, and we can know when to un-pause.
         highWaterMark: 1,
       }),
     );
@@ -206,28 +203,20 @@ class QUICStream
           await this.connection.send();
         },
         close: async () => {
-          // This gracefully closes, by sending a message at the end
-          // If there wasn't an error, we will send an empty frame
-          // with the `fin` set to true
-          // If this itself results in an error, we can continue
-          // But continue to do the below
+          // Gracefully ends the stream with a 0-length fin frame
           this.logger.debug('sending fin frame');
-          // This.sendFinishedProm.resolveP();
-          await this.streamSend(Buffer.from([0]), true);
+          await this.streamSend(new Uint8Array(0), true);
           // Close without error
           await this.closeSend();
         },
         abort: async (reason?: any) => {
-          // Abort can be called even if there are writes are queued up
-          // The chunks are meant to be thrown away
-          // We could tell it to shut down
-          // This sends a `RESET_STREAM` frame, this abruptly terminates the writing part of a stream
-          // The receiver can discard any data it already received on that stream
-          // We don't have "unidirectional" streams so that's not important...
+          // Forces the stream to immediately close with an error. Will trigger a `RESET_STREAM` frame to be sent to
+          //  the peer. Any buffered data is discarded.
           await this.closeSend(true, reason);
         },
       },
       {
+        // Allow 1 buffered 'message', Buffering is handled via quiche
         highWaterMark: 1,
       },
     );
@@ -241,12 +230,22 @@ class QUICStream
     return this._recvClosed;
   }
 
+  public get destroyedP() {
+    return this.destroyProm.p;
+  }
+
   /**
    * Connection information including hosts, ports and cert data.
    */
+  @ready(new errors.ErrorQUICStreamDestroyed())
   public get remoteInfo(): ConnectionMetadata {
-    throw Error('TMP IMP');
-    // Return this.connection.remoteInfo;
+    return {
+      localHost: this.connection.localHost,
+      localPort: this.connection.localPort,
+      remoteCertificates: this.connection.getRemoteCertsChain(),
+      remoteHost: this.connection.remoteHost,
+      remotePort: this.connection.remotePort,
+    };
   }
 
   /**
@@ -254,8 +253,7 @@ class QUICStream
    * This strictly exists to work with agnostic RPC stream interface.
    */
   public get meta(): ConnectionMetadata {
-    throw Error('TMP IMP');
-    // Return this.connection.remoteInfo;
+    return this.remoteInfo;
   }
 
   /**
@@ -268,26 +266,19 @@ class QUICStream
    * directions have closed. Or when force closing the connection which does not
    * require waiting.
    */
-  public async destroy({ force = false }: { force?: boolean } = {}) {
+  public async destroy() {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    if (!this._recvClosed && force) {
-      const e = new errors.ErrorQUICStreamClose();
-      this.readableController.error(e);
-      await this.closeRecv(true, e);
-    }
-    if (!this._sendClosed && force) {
-      const e = new errors.ErrorQUICStreamClose();
-      this.writableController.error(e);
-      await this.closeSend(true, e);
-    }
-    await this.connection.send();
+    // Force close any open streams
+    this.cancel(new errors.ErrorQUICStreamClose());
+    // Removing stream from the connection's stream map
     this.streamMap.delete(this.streamId);
     this.dispatchEvent(new events.QUICStreamDestroyEvent());
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
   /**
-   * Used to cancel the streams. This function is synchronous but triggers some asynchronous events.
+   * Used to cancel the streams. This function is synchronous and will immediately close the stream and not await any
+   * response.
    */
   public cancel(reason?: any): void {
     reason = reason ?? new errors.ErrorQUICStreamCancel();
@@ -307,15 +298,50 @@ class QUICStream
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public read(): void {
-    // If we're readable and the readable stream is still waiting, then we need to push some data.
-    // Or if the stream has finished we need to read and clean up.
-    this.logger.warn(`desired size ${this.readableController.desiredSize}`);
+    // If we're readable then we need to un-pause the readable stream.
+    // We also need to check for an early end condition here.
+    this.logger.debug(`desired size ${this.readableController.desiredSize}`);
+    if (this.conn.streamFinished(this.streamId)) {
+      this.logger.debug(
+        'stream is finished and readable, processing end condition',
+      );
+      // If we're finished and read was called then we need to read out the last message
+      // to check if it's a fin frame or an error.
+      // This duplicates some of the pull logic for processing an error or a fin frame.
+      // No actual data is expected in this case.
+      const buf = Buffer.alloc(1024);
+      let fin: boolean;
+      try {
+        [, fin] = this.conn.streamRecv(this.streamId, buf);
+        if (fin) {
+          // Closing the readable stream
+          void this.closeRecv();
+          this.readableController.close();
+        }
+      } catch (e) {
+        if (e.message === 'Done') {
+          never();
+        } else {
+          this.logger.debug(`Stream recv reported: error ${e.message}`);
+          if (!this._recvClosed) {
+            // Close stream in background
+            void (async () => {
+              const reason =
+                (await this.processSendStreamError(e, 'recv')) ?? e;
+              this.readableController.error(reason);
+              await this.closeRecv(true, reason);
+            })();
+          }
+        }
+      }
+      // Clean up the readable block so any waiting read can finish
+      if (this.resolveReadableP != null) this.resolveReadableP();
+    }
+    // Check if the readable is waiting for data and resolve the block
     if (
-      (this.readableController.desiredSize != null &&
-        this.readableController.desiredSize > 0) ||
-      this.conn.streamFinished(this.streamId)
+      this.readableController.desiredSize != null &&
+      this.readableController.desiredSize > 0
     ) {
-      // We resolve the read block
       if (this.resolveReadableP != null) this.resolveReadableP();
     }
   }
@@ -326,68 +352,45 @@ class QUICStream
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public write(): void {
-    // Checking if the writable had an error
     try {
+      // Checking if the writable had an error
       this.conn.streamWritable(this.streamId, 0);
     } catch (e) {
       // If it threw an error, then the stream was closed with an error
       // We need to attempt a write to trigger state change and remove stream from writable iterator
       void this.streamSend(Buffer.from('dummy data'), true).catch(() => {});
     }
+    // Resolve the write blocking promise
     if (this.resolveWritableP != null) {
       this.resolveWritableP();
     }
   }
 
   protected async streamSend(chunk: Uint8Array, fin = false): Promise<void> {
-    // This means that the number of written bytes returned can be lower
-    // than the length of the input buffer when the stream doesn't have
-    // enough capacity for the operation to complete. The application
-    // should retry the operation once the stream is reported as writable again.
-    let sentLength: number;
+    // Check if we have capacity to send. Doing so will signal to quiche how many bytes are waiting and the stream will
+    //  not become writable until there is room. So we can wait for the space before sending.
     try {
-      sentLength = this.conn.streamSend(this.streamId, chunk, fin);
+      // Checking if stream has capacity and wait for room.
+      if (!this.conn.streamWritable(this.streamId, chunk.byteLength)) {
+        this.logger.debug(
+          `stream does not have capacity for ${chunk.byteLength} bytes, waiting for capacity`,
+        );
+        const { p: writableP, resolveP: resolveWritableP } = utils.promise();
+        this.resolveWritableP = resolveWritableP;
+        await writableP;
+      }
+
+      const sentLength = this.conn.streamSend(this.streamId, chunk, fin);
+      // Since we are checking beforehand, we never not send the whole message
+      if (sentLength < chunk.byteLength) never();
       this.logger.debug(`stream wrote ${sentLength} bytes with fin(${fin})`);
     } catch (e) {
-      // If the Done is returned
-      // then no data was sent
-      // because the stream has no capacity
-      if (e.message === 'Done') {
-        // If the chunk size itself is 0,
-        // it is still possible to have no capacity
-        // to send a 0-length buffer.
-        // To indicate this we set the sentLength to -1.
-        // This ensures that we are always blocked below.
-        sentLength = -1;
-      } else {
-        // Signal sending has ended
-        // We may receive a `StreamStopped(u64)` exception
-        // meaning the peer has signalled for us to stop writing
-        // If this occurs, we need to go back to the writable stream
-        // and indicate that there was an error now
-        // Actually it's sufficient to simply throw an exception I think
-        // That would essentially do it
-        const reason = (await this.processSendStreamError(e, 'send')) ?? e;
-        // We have to close the send side (but the stream is already closed)
-        await this.closeSend(true, reason);
-        // Throws the exception back to the writer
-        throw reason;
-      }
-    }
-    if (sentLength < chunk.length) {
-      const { p: writableP, resolveP: resolveWritableP } = utils.promise();
-      this.resolveWritableP = resolveWritableP;
-      this.logger.debug(
-        `stream wrote only ${sentLength}/${chunk.byteLength} bytes, waiting for capacity`,
-      );
-      await writableP;
-      // If the `sentLength` is -1, then it will be raised to `0`
-      const remainingMessage = chunk.subarray(Math.max(sentLength, 0));
-      await this.streamSend(remainingMessage, fin);
-      this.logger.debug(
-        `stream wrote remaining ${remainingMessage.byteLength} bytes with fin(${fin})`,
-      );
-      return;
+      // We can fail with an error. Likely a `StreamStopped(u64)` exception indicating the stream has
+      //  failed in some way. We need to process the error and propagate it to the web-stream.
+      const reason = (await this.processSendStreamError(e, 'send')) ?? e;
+      await this.closeSend(true, reason);
+      // Throws the exception back to the writer
+      throw reason;
     }
   }
 
@@ -406,11 +409,11 @@ class QUICStream
     this.logger.debug(`Close Recv`);
     // Indicate that the receiving side is closed
     this._recvClosed = true;
-    const code = isError ? await this.reasonToCode('send', reason) : 0;
-    // This will send a `STOP_SENDING` frame with the code
-    // When the other peer sends, they will get a `StreamStopped(u64)` exception
     if (isError) {
       try {
+        const code = isError ? await this.reasonToCode('send', reason) : 0;
+        // This will send a `STOP_SENDING` frame with the code
+        // When the other peer sends, they will get a `StreamStopped(u64)` exception
         this.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
       } catch (e) {
         // Ignore if already shutdown
@@ -418,11 +421,13 @@ class QUICStream
       }
       this.readableController.error(reason);
     }
-    await this.connection.send();
-    if (this[status] !== 'destroying' && this._recvClosed && this._sendClosed) {
+    // Background the send to avoid deadlock
+    void this.connection.send();
+    if (this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
-      void this.destroy();
+      this.destroyProm.resolveP();
+      if (this[status] !== 'destroying') void this.destroy();
     }
     this.logger.debug(`Closed Recv`);
   }
@@ -445,8 +450,6 @@ class QUICStream
     this._sendClosed = true;
     if (isError) {
       try {
-        // If the QUIC stream is already closed
-        // there's nothing to do on the QUIC stream
         const code = await this.reasonToCode('send', reason);
         // This will send a `RESET_STREAM` frame with the code
         // When the other peer receives, they will get a `StreamReset(u64)` exception
@@ -457,11 +460,13 @@ class QUICStream
       }
       this.writableController.error(reason);
     }
-    await this.connection.send();
-    if (this[status] !== 'destroying' && this._recvClosed && this._sendClosed) {
+    // Background the send to avoid deadlock
+    void this.connection.send();
+    if (this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
-      void this.destroy();
+      this.destroyProm.resolveP();
+      if (this[status] !== 'destroying') void this.destroy();
     }
     this.logger.debug(`Closed Send`);
   }

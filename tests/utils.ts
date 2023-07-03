@@ -470,7 +470,6 @@ async function generateCertificate({
   return await x509.X509CertificateGenerator.create(certConfig);
 }
 
-// FIXME:
 // async function createTLSConfigWithChain(
 //   keyPairs: Array<{
 //     publicKey: JsonWebKey;
@@ -751,7 +750,7 @@ export {
   keyPairECDSAToPEM,
   keyPairEd25519ToPEM,
   generateCertificate,
-  // CreateTLSConfigWithChain, FIXME
+  // CreateTLSConfigWithChain
   certToPEM,
   generateKeyHMAC,
   signHMAC,

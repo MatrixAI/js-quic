@@ -68,7 +68,7 @@ impl Config {
     };
     ssl_ctx_builder.set_verify_callback(verify_value, move |pre_verify, _| {
       // Override any validation errors, this is needed so we can request certs but validate them
-      //  manually.
+      //  manually. It's essentially allowing insecure certificates
       if verify_allow_fail {
         true
       } else {

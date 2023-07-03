@@ -107,12 +107,6 @@ class QUICConnectionStreamEvent extends QUICConnectionEvent {
   }
 }
 
-class QUICConnectionStartEvent extends QUICConnectionEvent {
-  constructor(options?: EventInit) {
-    super('connectionStart', options);
-  }
-}
-
 class QUICConnectionStopEvent extends QUICConnectionEvent {
   constructor(options?: EventInit) {
     super('connectionStop', options);
@@ -156,7 +150,6 @@ export {
   QUICServerErrorEvent,
   QUICConnectionEvent,
   QUICConnectionStreamEvent,
-  QUICConnectionStartEvent,
   QUICConnectionStopEvent,
   QUICConnectionErrorEvent,
   QUICStreamEvent,

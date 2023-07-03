@@ -4,11 +4,14 @@ import type { Host, Port } from '../types';
 import type * as events from '../events';
 import process from 'process';
 import { webcrypto } from 'crypto';
+import fs from 'fs';
 import Logger from '@matrixai/logger';
 import QUICServer from '../QUICServer';
 
-async function main(_argv = process.argv): Promise<number> {
-  _argv = _argv.slice(2); // Removing prepended file paths
+async function main(argv = process.argv): Promise<number> {
+  argv = argv.slice(2); // Removing prepended file paths
+  const privateKeyPem = await fs.promises.readFile(argv[0]);
+  const certPem = await fs.promises.readFile(argv[1]);
 
   const cryptoKey = await webcrypto.subtle.generateKey(
     {
@@ -51,10 +54,8 @@ async function main(_argv = process.argv): Promise<number> {
     crypto,
     logger: logger.getChild(QUICServer.name),
     config: {
-      tlsConfig: {
-        privKeyFromPemFile: './tests/fixtures/certs/okp1.key',
-        certChainFromPemFile: './tests/fixtures/certs/okp1.crt',
-      },
+      key: privateKeyPem,
+      cert: certPem,
     },
   });
 
