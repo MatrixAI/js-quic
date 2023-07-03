@@ -335,8 +335,13 @@ class QUICClient extends EventTarget {
           }),
         );
       }
+    }
+    if (e instanceof events.QUICConnectionStreamEvent) {
+      this.dispatchEvent(
+        new events.QUICConnectionStreamEvent({ detail: e.detail }),
+      );
     } else {
-      this.dispatchEvent(e);
+      throw Error('TMP MUST RETHROW EVENTS');
     }
   };
 
