@@ -79,6 +79,19 @@ async function main() {
       encoding: 'utf-8',
       shell: platform === 'win32' ? true : false,
     });
+    console.error('Running npm install again to update the package-lock.json:');
+    const installArgs_ = [
+      'install',
+      '--ignore-scripts',
+      '--silent',
+      '--package-lock-only'
+    ];
+    childProcess.execFileSync('npm', installArgs_, {
+      stdio: ['inherit', 'inherit', 'inherit'],
+      windowsHide: true,
+      encoding: 'utf-8',
+      shell: platform === 'win32' ? true : false,
+    });
   }
 }
 /* eslint-enable no-console */
