@@ -1,4 +1,4 @@
-import type { Crypto, Host } from '@/types';
+import type { Host } from '@/types';
 import type QUICConnection from '@/QUICConnection';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
@@ -6,17 +6,12 @@ import QUICSocket from '@/QUICSocket';
 import * as utils from '@/utils';
 import * as errors from '@/errors';
 import QUICConnectionId from '@/QUICConnectionId';
-import * as testsUtils from './utils';
 
 describe(QUICSocket.name, () => {
   const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
     new StreamHandler(),
   ]);
   // This has to be setup asynchronously due to key generation
-  let crypto: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
   let ipv4Socket: dgram.Socket;
   let ipv6Socket: dgram.Socket;
   let dualStackSocket: dgram.Socket;
@@ -63,14 +58,6 @@ describe(QUICSocket.name, () => {
     dualStackSocketMessageResolveP = resolveP;
   };
   beforeEach(async () => {
-    crypto = {
-      key: await testsUtils.generateKey(),
-      ops: {
-        sign: testsUtils.sign,
-        verify: testsUtils.verify,
-        randomBytes: testsUtils.randomBytes,
-      },
-    };
     ipv4Socket = dgram.createSocket({
       type: 'udp4',
     });
@@ -117,7 +104,6 @@ describe(QUICSocket.name, () => {
   });
   describe('ipv4', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -164,7 +150,6 @@ describe(QUICSocket.name, () => {
   });
   describe('ipv6', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -219,7 +204,6 @@ describe(QUICSocket.name, () => {
   });
   describe('ipv6 only when using `::`', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -270,7 +254,6 @@ describe(QUICSocket.name, () => {
   });
   describe('dual stack', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -342,7 +325,6 @@ describe(QUICSocket.name, () => {
   });
   test('enabling ipv6 only prevents binding to ipv4 hosts', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await expect(
@@ -355,7 +337,6 @@ describe(QUICSocket.name, () => {
   });
   test('disabling ipv6 only does not prevent binding to ipv6 hosts', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await socket.start({
@@ -366,7 +347,6 @@ describe(QUICSocket.name, () => {
   });
   test('ipv4 wildcard to ipv4 succeeds', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await socket.start({
@@ -387,7 +367,6 @@ describe(QUICSocket.name, () => {
   });
   test('ipv6 wildcard to ipv6 succeeds', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await socket.start({
@@ -408,7 +387,6 @@ describe(QUICSocket.name, () => {
   });
   describe('ipv4 mapped ipv6 - dotted decimal variant', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -458,7 +436,6 @@ describe(QUICSocket.name, () => {
   });
   describe('ipv4 mapped ipv6 - hex variant', () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     const msg = Buffer.from('Hello World');
@@ -510,7 +487,6 @@ describe(QUICSocket.name, () => {
   });
   test('socket should throw if stopped with active connections', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await socket.start({
@@ -530,7 +506,6 @@ describe(QUICSocket.name, () => {
   });
   test('socket should stop when forced with active connections', async () => {
     const socket = new QUICSocket({
-      crypto,
       logger,
     });
     await socket.start({
@@ -542,6 +517,6 @@ describe(QUICSocket.name, () => {
     socket.connectionMap.set(connectionId, {
       type: 'client',
     } as QUICConnection);
-    await expect(socket.stop(true)).toResolve();
+    await expect(socket.stop({ force: true })).toResolve();
   });
 });

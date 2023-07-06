@@ -5,9 +5,14 @@ import type {
   ConnectionIdString,
   Host,
   Hostname,
+  ServerCrypto,
 } from './types';
+import type { Connection } from '@/native';
+import type { LockBox, RWLockWriter } from '@matrixai/async-locks';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
+import { Monitor } from '@matrixai/async-locks';
+import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
 
 /**
@@ -318,6 +323,126 @@ function certificatePEMsToCertChainPem(pems: Array<string>): string {
   return certChainPEM;
 }
 
+async function mintToken(
+  dcid: QUICConnectionId,
+  peerHost: Host,
+  crypto: {
+    key: ArrayBuffer;
+    ops: ServerCrypto;
+  },
+): Promise<Buffer> {
+  const msgData = { dcid: dcid.toString(), host: peerHost };
+  const msgJSON = JSON.stringify(msgData);
+  const msgBuffer = Buffer.from(msgJSON);
+  const msgSig = Buffer.from(await crypto.ops.sign(crypto.key, msgBuffer));
+  const tokenData = {
+    msg: msgBuffer.toString('base64url'),
+    sig: msgSig.toString('base64url'),
+  };
+  const tokenJSON = JSON.stringify(tokenData);
+  return Buffer.from(tokenJSON);
+}
+
+async function validateToken(
+  tokenBuffer: Buffer,
+  peerHost: Host,
+  crypto: {
+    key: ArrayBuffer;
+    ops: ServerCrypto;
+  },
+): Promise<QUICConnectionId | undefined> {
+  let tokenData;
+  try {
+    tokenData = JSON.parse(tokenBuffer.toString());
+  } catch {
+    return;
+  }
+  if (typeof tokenData !== 'object' || tokenData == null) {
+    return;
+  }
+  if (typeof tokenData.msg !== 'string' || typeof tokenData.sig !== 'string') {
+    return;
+  }
+  const msgBuffer = Buffer.from(tokenData.msg, 'base64url');
+  const msgSig = Buffer.from(tokenData.sig, 'base64url');
+  if (!(await crypto.ops.verify(crypto.key, msgBuffer, msgSig))) {
+    return;
+  }
+  let msgData;
+  try {
+    msgData = JSON.parse(msgBuffer.toString());
+  } catch {
+    return;
+  }
+  if (typeof msgData !== 'object' || msgData == null) {
+    return;
+  }
+  if (typeof msgData.dcid !== 'string' || typeof msgData.host !== 'string') {
+    return;
+  }
+  if (msgData.host !== peerHost) {
+    return;
+  }
+  return QUICConnectionId.fromString(msgData.dcid);
+}
+
+async function sleep(ms: number): Promise<void> {
+  return await new Promise<void>((r) => setTimeout(r, ms));
+}
+
+/**
+ * Useful for debug printing stream state
+ */
+function streamStats(
+  connection: Connection,
+  streamId: number,
+  label: string,
+): string {
+  let streamWritable: string;
+  try {
+    streamWritable = `${connection.streamWritable(streamId, 0)}`;
+  } catch (e) {
+    streamWritable = `threw ${e.message}`;
+  }
+  let streamCapacity: string;
+  try {
+    streamCapacity = `${connection.streamCapacity(streamId)}`;
+  } catch (e) {
+    streamCapacity = `threw ${e.message}`;
+  }
+  let readableIterator = false;
+  for (const streamIterElement of connection.readable()) {
+    if (streamIterElement === streamId) readableIterator = true;
+  }
+  let writableIterator = false;
+  for (const streamIterElement of connection.writable()) {
+    if (streamIterElement === streamId) writableIterator = true;
+  }
+  return `
+  ---${label}---
+  isReadable: ${connection.isReadable()},
+  readable iterator: ${readableIterator},
+  streamReadable: ${connection.streamReadable(streamId)},
+  streamFinished: ${connection.streamFinished(streamId)},
+  writable iterator: ${writableIterator},
+  streamWritable: ${streamWritable},
+  streamCapacity: ${streamCapacity},
+`;
+}
+
+async function withMonitor<T>(
+  mon: Monitor<RWLockWriter> | undefined,
+  lockBox: LockBox<RWLockWriter>,
+  lockConstructor: { new (): RWLockWriter },
+  fun: (mon: Monitor<RWLockWriter>) => Promise<T>,
+  locksPending?: Map<string, { count: number }>,
+): Promise<T> {
+  const _mon = mon ?? new Monitor(lockBox, lockConstructor, locksPending);
+  const result = await fun(_mon);
+  if (mon != null) await _mon.unlockAll();
+  return result;
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -341,4 +466,9 @@ export {
   never,
   certificateDERToPEM,
   certificatePEMsToCertChainPem,
+  mintToken,
+  validateToken,
+  sleep,
+  streamStats,
+  withMonitor,
 };

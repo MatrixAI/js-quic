@@ -33,8 +33,21 @@ module.exports = {
   roots: ['<rootDir>/tests'],
   testMatch: ['**/?(*.)+(spec|test|unit.test).+(ts|tsx|js|jsx)'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.jsx?$': 'babel-jest',
+    "^.+\\.(t|j)sx?$": [
+      "@swc/jest",
+      {
+        jsc: {
+          parser: {
+            syntax: "typescript",
+            tsx: true,
+            decorators: compilerOptions.experimentalDecorators,
+            dynamicImport: true,
+          },
+          target: compilerOptions.target.toLowerCase(),
+          keepClassNames: true,
+        },
+      }
+    ],
   },
   reporters: [
     'default',

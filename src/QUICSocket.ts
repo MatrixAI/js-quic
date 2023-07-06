@@ -1,11 +1,13 @@
 import type QUICServer from './QUICServer';
 import type QUICConnection from './QUICConnection';
-import type { Crypto, Host, Hostname, Port } from './types';
+import type { Host, Hostname, Port } from './types';
 import type { Header } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
-import { running, destroyed } from '@matrixai/async-init';
+import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
+import { RWLockWriter } from '@matrixai/async-locks';
+import { status } from '@matrixai/async-init/dist/utils';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
 import { quiche } from './native';
@@ -15,8 +17,8 @@ import * as errors from './errors';
 
 /**
  * Events:
- * - error
- * - stop
+ * - socketError
+ * - socketStop
  */
 interface QUICSocket extends StartStop {}
 @StartStop()
@@ -36,11 +38,6 @@ class QUICSocket extends EventTarget {
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
-
-  protected crypto: {
-    key: ArrayBuffer;
-    ops: Crypto;
-  };
 
   /**
    * Handle the datagram from UDP socket
@@ -62,83 +59,70 @@ class QUICSocket extends EventTarget {
     try {
       header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
     } catch (e) {
-      // `InvalidPacket` means that this is not a QUIC packet.
-      // If so, then we just ignore the packet.
-      if (e.message !== 'InvalidPacket') {
-        // Only emit an error if it is not an `InvalidPacket` error.
-        // Do note, that this kind of error is a peer error.
-        // The error is not due to us.
+      // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
+      // packet. If so, then we just ignore the packet.
+      if (e.message !== 'BufferTooShort' && e.message !== 'InvalidPacket') {
+        // Emit error if it is not a `BufferTooShort` or `InvalidPacket` error.
+        // This would indicate something went wrong in header parsing.
+        // This is not a critical error, but should be checked.
         this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
       }
       return;
     }
-
-    // Apparently if it is a UDP datagram
-    // it could be a QUIC datagram, and not part of any connection
-    // However I don't know how the DCID would work in a QUIC dgram
-    // We have not explored this yet
-
-    // Destination Connection ID is the ID the remote peer chose for us.
+    // All QUIC packets will have the `dcid` header property
+    // However short packets will not have the `scid` property
+    // The destination connection ID is supposed to be our connection ID
     const dcid = new QUICConnectionId(header.dcid);
-
-    // Derive our SCID using HMAC signing.
-    const scid = new QUICConnectionId(
-      await this.crypto.ops.sign(
-        this.crypto.key,
-        dcid, // <- use DCID (which is a copy), otherwise it will cause memory problems later in the NAPI
-      ),
-      0,
-      quiche.MAX_CONN_ID_LEN,
-    );
-
     const remoteInfo_ = {
       host: remoteInfo.address as Host,
       port: remoteInfo.port as Port,
     };
-
-    // Now both must be checked
-    let conn: QUICConnection;
-    if (!this.connectionMap.has(dcid) && !this.connectionMap.has(scid)) {
-      // If a server is not registered
-      // then this packet is useless, and we can discard it
+    let connection: QUICConnection;
+    if (!this.connectionMap.has(dcid)) {
+      // If the DCID is not known, and the server has not been registered then
+      // we discard the packet>
       if (this.server == null) {
         return;
       }
-      const conn_ = await this.server.connectionNew(
-        data,
+      // At this point, the connection may not yet be started
+      const connection_ = await this.server.connectionNew(
         remoteInfo_,
         header,
         dcid,
-        scid,
       );
       // If there's no connection yet
-      // Then the server is in the middle of the version negotiation/stateless retry
-      // or the handshake process
-      if (conn_ == null) {
+      // then the server is middle of version negotiation or stateless retry
+      if (connection_ == null) {
         return;
       }
-      conn = conn_;
+      connection = connection_;
     } else {
-      conn = this.connectionMap.get(dcid) ?? this.connectionMap.get(scid)!;
-
-      // The connection may be a client or server connection
-      // When we register a client, we have to put the connection in our
-      // connection map
+      connection = this.connectionMap.get(dcid)!;
     }
-    await conn.recv(data, remoteInfo_);
-
-    // The `conn.recv` now may actually destroy the connection
-    // In that sense, there's nothing to send
-    // That's the `conn.destroy` might call `conn.send`
-    // So it's all sent
-    // So we should only send things if it isn't already destroyed
-    // Remember that there is 3 possible events to the QUICConnection
-    // send, recv, timeout
-    // That's it.
-    // Each send/recv/timeout may result in a destruction
-    if (!conn[destroyed]) {
-      // Ignore any errors, concurrent with destruction
-      await conn.send().catch(() => {});
+    // If the connection has already stopped running
+    // then we discard the packet.
+    if (!(connection[running] || connection[status] === 'starting')) {
+      return;
+    }
+    // Acquire the conn lock, this ensures mutual exclusion
+    // for state changes on the internal connection
+    try {
+      await utils.withMonitor(
+        undefined,
+        connection.lockbox,
+        RWLockWriter,
+        async (mon) => {
+          await mon.withF(connection.lockCode, async (mon) => {
+            // Even if we are `stopping`, the `quiche` library says we need to
+            // continue processing any packets.
+            await connection.recv(data, remoteInfo_, mon);
+            await connection.send(mon);
+          });
+        },
+      );
+    } catch (e) {
+      // Race condition with destroying socket, just ignore
+      if (!(e instanceof errors.ErrorQUICSocketNotRunning)) throw e;
     }
   };
 
@@ -150,20 +134,14 @@ class QUICSocket extends EventTarget {
   };
 
   public constructor({
-    crypto,
     resolveHostname = utils.resolveHostname,
     logger,
   }: {
-    crypto: {
-      key: ArrayBuffer;
-      ops: Crypto;
-    };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
     this.logger = logger ?? new Logger(this.constructor.name);
-    this.crypto = crypto;
     this.resolveHostname = resolveHostname;
   }
 
@@ -207,10 +185,12 @@ class QUICSocket extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
+    reuseAddr = false,
     ipv6Only = false,
   }: {
     host?: Host | Hostname;
     port?: Port;
+    reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
     let address = utils.buildAddress(host, port);
@@ -223,7 +203,7 @@ class QUICSocket extends EventTarget {
     );
     this.socket = dgram.createSocket({
       type: udpType,
-      reuseAddr: false,
+      reuseAddr,
       ipv6Only,
     });
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
@@ -276,7 +256,9 @@ class QUICSocket extends EventTarget {
    * If force is true, it will skip checking connections and stop the socket.
    * @param force - Will force the socket to end even if there are active connections, used for cleaning up after tests.
    */
-  public async stop(force = false): Promise<void> {
+  public async stop({
+    force = false,
+  }: { force?: boolean } = {}): Promise<void> {
     const address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     if (!force && this.connectionMap.size > 0) {

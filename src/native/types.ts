@@ -44,11 +44,12 @@ interface Config {
 interface ConfigConstructor {
   new (): Config;
   withBoringSslCtx(
-    certPem: Uint8Array | null,
-    keyPem: Uint8Array | null,
-    supportedKeyAlgos: string | null,
-    ca_cert_pem: Uint8Array | null,
-    verify_peer: boolean,
+    verifyPeer: boolean,
+    verifyAllowFail: boolean,
+    ca?: Uint8Array | undefined | null,
+    key?: Array<Uint8Array> | undefined | null,
+    cert?: Array<Uint8Array> | undefined | null,
+    sigalgs?: string | undefined | null,
   ): Config;
 }
 
@@ -205,7 +206,7 @@ enum ConnectionErrorCode {
 type ConnectionError = {
   isApp: boolean;
   errorCode: number;
-  reason: Array<number>;
+  reason: Uint8Array;
 };
 
 type Stats = {
@@ -312,11 +313,9 @@ type PathStatsIter = {
   [Symbol.iterator](): Iterator<PathStats, void, void>;
 };
 
+export { CongestionControlAlgorithm, Shutdown, Type, ConnectionErrorCode };
+
 export type {
-  CongestionControlAlgorithm,
-  Shutdown,
-  Type,
-  ConnectionErrorCode,
   ConnectionError,
   Stats,
   HostPort as Host,

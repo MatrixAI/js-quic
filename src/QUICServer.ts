@@ -1,17 +1,16 @@
 import type {
-  Crypto,
   Host,
   Hostname,
   Port,
-  PromiseDeconstructed,
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
+  QUICConfig,
+  ServerCrypto,
+  VerifyCallback,
 } from './types';
 import type { Header } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
-import type { QUICConfig, TlsConfig } from './config';
-import type { QUICServerConnectionEvent } from './events';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { ready, StartStop } from '@matrixai/async-init/dist/StartStop';
@@ -21,18 +20,24 @@ import QUICConnectionId from './QUICConnectionId';
 import QUICConnection from './QUICConnection';
 import { quiche } from './native';
 import * as utils from './utils';
-import { promise } from './utils';
 import * as errors from './errors';
 import QUICSocket from './QUICSocket';
+import { never } from './utils';
 
 /**
- * You must provide a error handler `addEventListener('error')`.
- * Otherwise errors will just be ignored.
+ * You must provide an error handler `addEventListener('error')`.
+ * Otherwise, errors will just be ignored.
  *
  * Events:
- * - connection
- * - error - (could be a QUICSocketErrorEvent OR QUICServerErrorEvent)
- * - stop
+ * - serverStop
+ * - serverError - (could be a QUICSocketErrorEvent OR QUICServerErrorEvent)
+ * - serverConnection
+ * - connectionStream - when new stream is created from a connection
+ * - connectionError - connection error event
+ * - connectionDestroy - when connection is destroyed
+ * - streamDestroy - when stream is destroyed
+ * - socketError - this also results in a server error
+ * - socketStop
  */
 interface QUICServer extends StartStop {}
 @StartStop()
@@ -42,59 +47,85 @@ class QUICServer extends EventTarget {
   protected logger: Logger;
   protected crypto: {
     key: ArrayBuffer;
-    ops: Crypto;
+    ops: ServerCrypto;
   };
   protected config: QUICConfig;
   protected socket: QUICSocket;
   protected reasonToCode: StreamReasonToCode | undefined;
   protected codeToReason: StreamCodeToReason | undefined;
-  protected maxReadableStreamBytes?: number | undefined;
-  protected maxWritableStreamBytes?: number | undefined;
-  protected keepaliveIntervalTime?: number | undefined;
+  protected verifyCallback: VerifyCallback | undefined;
   protected connectionMap: QUICConnectionMap;
+  // Used to track address string for logging ONLY
+  protected address: string;
 
-  /**
-   * Handle QUIC socket errors
-   * This is only used if the socket is not shared
-   * If the socket is shared, then it is expected that the user
-   * would listen on error events on the socket itself
-   * Otherwise this will propagate such errors to the server
-   */
-  protected handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
-    this.dispatchEvent(
-      new events.QUICServerErrorEvent({
-        detail: e,
-      }),
-    );
+  protected handleQUICSocketEvents = (e: events.QUICSocketEvent) => {
+    if (e instanceof events.QUICSocketErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICServerErrorEvent({
+          detail: e.detail,
+        }),
+      );
+      // Trigger clean up
+      this.logger.debug('calling stop due to socket error');
+      void this.stop({ force: true });
+    } else if (e instanceof events.QUICSocketStopEvent) {
+      this.dispatchEvent(new events.QUICSocketStopEvent());
+      // Trigger clean up
+      this.logger.debug('calling stop due to socket stop');
+      void this.stop({ force: true });
+    } else if (e instanceof events.QUICSocketStartEvent) {
+      this.dispatchEvent(new events.QUICSocketStartEvent());
+    } else {
+      // Should never happen, all cases should be covered
+      never();
+    }
+  };
+
+  protected handleQUICConnectionEvents = (
+    event: events.QUICConnectionEvent,
+  ) => {
+    if (event instanceof events.QUICConnectionErrorEvent) {
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: event.detail,
+        }),
+      );
+    } else if (event instanceof events.QUICConnectionStopEvent) {
+      this.dispatchEvent(new events.QUICConnectionStopEvent());
+    } else if (event instanceof events.QUICConnectionStreamEvent) {
+      this.dispatchEvent(
+        new events.QUICConnectionStreamEvent({ detail: event.detail }),
+      );
+    } else if (event instanceof events.QUICStreamDestroyEvent) {
+      this.dispatchEvent(new events.QUICStreamDestroyEvent());
+    } else {
+      utils.never();
+    }
   };
 
   public constructor({
     crypto,
-    socket,
     config,
+    socket,
     resolveHostname = utils.resolveHostname,
     reasonToCode,
     codeToReason,
-    maxReadableStreamBytes,
-    maxWritableStreamBytes,
-    keepaliveIntervalTime,
+    verifyCallback,
     logger,
   }: {
     crypto: {
       key: ArrayBuffer;
-      ops: Crypto;
+      ops: ServerCrypto;
+    };
+    config: Partial<QUICConfig> & {
+      key: string | Array<string> | Uint8Array | Array<Uint8Array>;
+      cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
     };
     socket?: QUICSocket;
-    // This actually requires TLS
-    // You have to specify these some how
-    // We can force it
-    config: Partial<QUICConfig> & { tlsConfig: TlsConfig };
     resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
-    maxReadableStreamBytes?: number;
-    maxWritableStreamBytes?: number;
-    keepaliveIntervalTime?: number;
+    verifyCallback?: VerifyCallback;
     logger?: Logger;
   }) {
     super();
@@ -106,7 +137,6 @@ class QUICServer extends EventTarget {
     this.crypto = crypto;
     if (socket == null) {
       this.socket = new QUICSocket({
-        crypto,
         resolveHostname,
         logger: this.logger.getChild(QUICSocket.name),
       });
@@ -122,9 +152,7 @@ class QUICServer extends EventTarget {
     this.config = quicConfig;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-    this.maxReadableStreamBytes = maxReadableStreamBytes;
-    this.maxWritableStreamBytes = maxWritableStreamBytes;
-    this.keepaliveIntervalTime = keepaliveIntervalTime;
+    this.verifyCallback = verifyCallback;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -146,16 +174,18 @@ class QUICServer extends EventTarget {
   public async start({
     host = '::' as Host,
     port = 0 as Port,
+    reuseAddr,
   }: {
     host?: Host | Hostname;
     port?: Port;
+    reuseAddr?: boolean;
   } = {}) {
     let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
+      this.address = address;
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
-      await this.socket.start({ host, port });
-      this.socket.addEventListener('error', this.handleQUICSocketError);
+      await this.socket.start({ host, port, reuseAddr });
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
       // If the socket is shared, it must already be started
@@ -165,6 +195,11 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(this.socket.host, this.socket.port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
     }
+
+    // Register on all socket events
+    this.socket.addEventListener('socketError', this.handleQUICSocketEvents);
+    this.socket.addEventListener('socketStop', this.handleQUICSocketEvents);
+
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
@@ -176,35 +211,65 @@ class QUICServer extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
-    const address = utils.buildAddress(this.socket.host, this.socket.port);
+    const address = this.address;
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
     const destroyProms: Array<Promise<void>> = [];
     for (const connection of this.connectionMap.serverConnections.values()) {
-      destroyProms.push(connection.destroy({ force }));
+      destroyProms.push(
+        connection.stop({
+          applicationError: true,
+          errorMessage: 'cleaning up connections',
+          force,
+        }),
+      );
     }
+    this.logger.debug('Awaiting connections to destroy');
     await Promise.all(destroyProms);
+    this.logger.debug('All connections destroyed');
     this.socket.deregisterServer(this);
     if (!this.isSocketShared) {
       // If the socket is not shared, then it can be stopped
       await this.socket.stop();
-      this.socket.removeEventListener('error', this.handleQUICSocketError);
     }
+    this.socket.removeEventListener('socketError', this.handleQUICSocketEvents);
+    this.socket.removeEventListener('socketStop', this.handleQUICSocketEvents);
     this.dispatchEvent(new events.QUICServerStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
+  // Because the `ctx` is not passed in from the outside
+  // It makes sense that this is only done during construction
+  // And importantly we just enable the cancellation of this
+  // Nothing else really
+
+  /**
+   * This method must not throw any exceptions.
+   * Any errors must be emitted as events.
+   * @internal
+   */
   public async connectionNew(
-    data: Buffer,
     remoteInfo: RemoteInfo,
     header: Header,
     dcid: QUICConnectionId,
-    scid: QUICConnectionId,
   ): Promise<QUICConnection | undefined> {
-    const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
-    if (header.ty !== quiche.Type.Initial) {
-      this.logger.debug(`QUIC packet must be Initial for new connections`);
+    // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
+    // packet.
+    if (
+      header.ty !== quiche.Type.Initial &&
+      header.ty !== quiche.Type.ZeroRTT
+    ) {
       return;
     }
+
+    // Derive the new connection's SCID from the client generated DCID
+    const scid = new QUICConnectionId(
+      await this.crypto.ops.sign(this.crypto.key, dcid),
+      0,
+      quiche.MAX_CONN_ID_LEN,
+    );
+
+    const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
+
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
       this.logger.debug(
@@ -286,36 +351,74 @@ class QUICServer extends EventTarget {
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    scid = new QUICConnectionId(header.dcid);
+    const newScid = new QUICConnectionId(header.dcid);
     this.logger.debug(
       `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
     );
     const clientConnRef = Buffer.from(header.scid).toString('hex').slice(32);
-    const connection = await QUICConnection.acceptQUICConnection({
-      scid,
+    const connectionProm = QUICConnection.createQUICConnection({
+      type: 'server',
+      scid: newScid,
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
       config: this.config,
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,
-      maxReadableStreamBytes: this.maxReadableStreamBytes,
-      maxWritableStreamBytes: this.maxWritableStreamBytes,
+      verifyCallback: this.verifyCallback,
       logger: this.logger.getChild(
         `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
       ),
     });
-    connection.setKeepAlive(this.keepaliveIntervalTime);
-
+    try {
+      await connectionProm;
+    } catch (e) {
+      // Ignoring any errors here as a failure to connect
+      this.dispatchEvent(
+        new events.QUICConnectionErrorEvent({
+          detail: new errors.ErrorQUICServerConnectionFailed(undefined, {
+            cause: e,
+          }),
+        }),
+      );
+      return;
+    }
+    const connection = await connectionProm;
+    // Handling connection events
+    connection.addEventListener(
+      'connectionError',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'connectionStream',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'streamDestroy',
+      this.handleQUICConnectionEvents,
+    );
+    connection.addEventListener(
+      'connectionStop',
+      (event) => {
+        connection.removeEventListener(
+          'connectionError',
+          this.handleQUICConnectionEvents,
+        );
+        connection.removeEventListener(
+          'connectionStream',
+          this.handleQUICConnectionEvents,
+        );
+        connection.removeEventListener(
+          'streamDestroy',
+          this.handleQUICConnectionEvents,
+        );
+        this.handleQUICConnectionEvents(event);
+      },
+      { once: true },
+    );
     this.dispatchEvent(
       new events.QUICServerConnectionEvent({ detail: connection }),
     );
-
-    // A new conn ID means a new connection
-    // the old connection gets removed
-    // so one has to be aware of this
-    // Either that, or there is a seamless migration to a new connection ID
-    // In which case we need to manage it somehow
 
     return connection;
   }
@@ -333,73 +436,6 @@ class QUICServer extends EventTarget {
   }
 
   /**
-   * This initiates sending UDP packets to a target client to open up a port in the NAT for the client to connect
-   * through. This will return early if the connection already exists or was established while polling.
-   */
-  public async initHolePunch(
-    remoteInfo: RemoteInfo,
-    timeout: number = 5000,
-  ): Promise<boolean> {
-    // Checking existing connections
-    for (const [, connection] of this.connectionMap.serverConnections) {
-      if (
-        remoteInfo.host === connection.remoteHost &&
-        remoteInfo.port === connection.remotePort
-      ) {
-        // Connection exists, return early
-        return true;
-      }
-    }
-    // We need to send a random data packet to the target until the process times out or a connection is established
-    let timedOut = false;
-    const timedOutProm = promise<void>();
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      timedOutProm.resolveP();
-    }, timeout);
-    let delay = 250;
-    let delayTimer: NodeJS.Timer | undefined;
-    let sleepProm: PromiseDeconstructed<void> | undefined;
-    let established = false;
-    const establishedProm = promise<void>();
-    // Setting up established event checking
-    const handleEstablished = (event: QUICServerConnectionEvent) => {
-      const connection = event.detail;
-      if (
-        remoteInfo.host === connection.remoteHost &&
-        remoteInfo.port === connection.remotePort
-      ) {
-        // Clean up and resolve
-        this.removeEventListener('connection', handleEstablished);
-        established = true;
-        establishedProm.resolveP();
-      }
-    };
-    this.addEventListener('connection', handleEstablished);
-    try {
-      while (!established && !timedOut) {
-        const message = new ArrayBuffer(32);
-        await this.crypto.ops.randomBytes(message);
-        await this.socket.send(
-          Buffer.from(message),
-          remoteInfo.port,
-          remoteInfo.host,
-        );
-        sleepProm = promise<void>();
-        delayTimer = setTimeout(() => sleepProm!.resolveP(), delay);
-        delay *= 2;
-        await Promise.race([sleepProm.p, establishedProm.p, timedOutProm.p]);
-      }
-      return established;
-    } finally {
-      clearTimeout(timeoutTimer);
-      if (delayTimer != null) clearTimeout(delayTimer);
-      sleepProm?.resolveP();
-      this.removeEventListener('connection', handleEstablished);
-    }
-  }
-
-  /**
    * Creates a retry token.
    * This will embed peer host IP and DCID into the token.
    * It will authenticate the data by providing a signature signed by our key.
@@ -408,18 +444,7 @@ class QUICServer extends EventTarget {
     dcid: QUICConnectionId,
     peerHost: Host,
   ): Promise<Buffer> {
-    const msgData = { dcid: dcid.toString(), host: peerHost };
-    const msgJSON = JSON.stringify(msgData);
-    const msgBuffer = Buffer.from(msgJSON);
-    const msgSig = Buffer.from(
-      await this.crypto.ops.sign(this.crypto.key, msgBuffer),
-    );
-    const tokenData = {
-      msg: msgBuffer.toString('base64url'),
-      sig: msgSig.toString('base64url'),
-    };
-    const tokenJSON = JSON.stringify(tokenData);
-    return Buffer.from(tokenJSON);
+    return utils.mintToken(dcid, peerHost, this.crypto);
   }
 
   /**
@@ -433,42 +458,7 @@ class QUICServer extends EventTarget {
     tokenBuffer: Buffer,
     peerHost: Host,
   ): Promise<QUICConnectionId | undefined> {
-    let tokenData;
-    try {
-      tokenData = JSON.parse(tokenBuffer.toString());
-    } catch {
-      return;
-    }
-    if (typeof tokenData !== 'object' || tokenData == null) {
-      return;
-    }
-    if (
-      typeof tokenData.msg !== 'string' ||
-      typeof tokenData.sig !== 'string'
-    ) {
-      return;
-    }
-    const msgBuffer = Buffer.from(tokenData.msg, 'base64url');
-    const msgSig = Buffer.from(tokenData.sig, 'base64url');
-    if (!(await this.crypto.ops.verify(this.crypto.key, msgBuffer, msgSig))) {
-      return;
-    }
-    let msgData;
-    try {
-      msgData = JSON.parse(msgBuffer.toString());
-    } catch {
-      return;
-    }
-    if (typeof msgData !== 'object' || msgData == null) {
-      return;
-    }
-    if (typeof msgData.dcid !== 'string' || typeof msgData.host !== 'string') {
-      return;
-    }
-    if (msgData.host !== peerHost) {
-      return;
-    }
-    return QUICConnectionId.fromString(msgData.dcid);
+    return utils.validateToken(tokenBuffer, peerHost, this.crypto);
   }
 }
 

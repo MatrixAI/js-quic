@@ -1,4 +1,3 @@
-// use core::panicking::panic;
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
 
@@ -41,39 +40,85 @@ impl Config {
     let config = quiche::Config::new(
       quiche::PROTOCOL_VERSION
     ).or_else(
-      |err| Err(Error::from_reason(err.to_string()))
+      |err| Err(napi::Error::from_reason(err.to_string()))
     )?;
     return Ok(Config(config));
   }
 
+  /// Creates configuration with custom TLS context
+  /// Servers must be setup with a key and cert
   #[napi(factory)]
   pub fn with_boring_ssl_ctx(
-    cert_pem: Option<Uint8Array>,
-    key_pem: Option<Uint8Array>,
-    supported_key_algos: Option<String>,
-    ca_cert_pem: Option<Uint8Array>,
     verify_peer: bool,
+    verify_allow_fail: bool,
+    ca: Option<Uint8Array>,
+    key: Option<Vec<Uint8Array>>,
+    cert: Option<Vec<Uint8Array>>,
+    sigalgs: Option<String>,
   ) -> Result<Self> {
     let mut ssl_ctx_builder = boring::ssl::SslContextBuilder::new(
       boring::ssl::SslMethod::tls(),
     ).or_else(
-      |err| Err(Error::from_reason(err.to_string()))
+      |e| Err(napi::Error::from_reason(e.to_string()))
     )?;
-    let verify_value = if verify_peer {boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT }
-    else { boring::ssl::SslVerifyMode::NONE };
-    ssl_ctx_builder.set_verify(verify_value);
-    // Processing and adding the cert chain
-    if let Some(cert_pem) = cert_pem {
-      let x509_cert_chain = boring::x509::X509::stack_from_pem(
-        &cert_pem.to_vec()
+    let verify_value = if verify_peer {
+      boring::ssl::SslVerifyMode::PEER | boring::ssl::SslVerifyMode::FAIL_IF_NO_PEER_CERT
+    } else {
+      boring::ssl::SslVerifyMode::NONE
+    };
+    ssl_ctx_builder.set_verify_callback(verify_value, move |pre_verify, _| {
+      // Override any validation errors, this is needed so we can request certs but validate them
+      //  manually. It's essentially allowing insecure certificates
+      if verify_allow_fail {
+        true
+      } else {
+        pre_verify
+      }
+    });
+    // Setup all CA certificates
+    if let Some(ca) = ca {
+      let mut x509_store_builder = boring::x509::store::X509StoreBuilder::new()
+        .or_else(
+          |e| Err(napi::Error::from_reason(e.to_string()))
+        )?;
+      let x509_certs = boring::x509::X509::stack_from_pem(
+        &ca.to_vec()
       ).or_else(
+        |e| Err(napi::Error::from_reason(e.to_string()))
+      )?;
+      for x509 in x509_certs.into_iter() {
+        x509_store_builder.add_cert(x509)
+          .or_else(
+            |e| Err(napi::Error::from_reason(e.to_string()))
+          )?;
+      }
+      let x509_store = x509_store_builder.build();
+      ssl_ctx_builder.set_verify_cert_store(x509_store)
+        .or_else(
+          |e| Err(napi::Error::from_reason(e.to_string()))
+        )?;
+    }
+    // Setup all certificates and keys
+    if let (Some(key), Some(cert)) = (key, cert) {
+      // Right now the boring crate does not provide a straight forward way of
+      // setting multiple independent certificate chains. So we are just picking
+      // the first key and cert pair.
+      let (k, c) = (key[0].to_vec(), cert[0].to_vec());
+      let private_key = boring::pkey::PKey::private_key_from_pem(&k)
+        .or_else(
         |err| Err(Error::from_reason(err.to_string()))
+      )?;
+      ssl_ctx_builder.set_private_key(&private_key).or_else(
+        |e| Err(napi::Error::from_reason(e.to_string()))
+      )?;
+      let x509_cert_chain = boring::x509::X509::stack_from_pem(
+        &c
+      ).or_else(
+        |err| Err(napi::Error::from_reason(err.to_string()))
       )?;
       for (i, cert) in x509_cert_chain.iter().enumerate() {
         if i == 0 {
-          ssl_ctx_builder.set_certificate(
-            cert,
-          ).or_else(
+          ssl_ctx_builder.set_certificate(cert,).or_else(
             |err| Err(Error::from_reason(err.to_string()))
           )?;
         } else {
@@ -85,53 +130,18 @@ impl Config {
         }
       }
     }
-    // Processing and adding the private key
-    if let Some(key_pem) = key_pem {
-      let private_key = boring::pkey::PKey::private_key_from_pem(&key_pem)
-        .or_else(
-        |err| Err(Error::from_reason(err.to_string()))
+    // Setup supported signature algorithms
+    if let Some(sigalgs) = sigalgs {
+      ssl_ctx_builder.set_sigalgs_list(&sigalgs).or_else(
+        |e| Err(napi::Error::from_reason(e.to_string()))
       )?;
-      ssl_ctx_builder.set_private_key(&private_key)
-        .or_else(
-          |err| Err(Error::from_reason(err.to_string()))
-        )?;
-    }
-    // Adding supported private key algorithms
-    if let Some(supported_key_algos) = supported_key_algos {
-      ssl_ctx_builder.set_sigalgs_list(&supported_key_algos)
-        .or_else(
-          |err| Err(Error::from_reason(err.to_string()))
-        )?;
-    }
-    // Processing CA certificate
-    if let Some(ca_cert_pem) = ca_cert_pem {
-      let x509_certs = boring::x509::X509::stack_from_pem(
-        &ca_cert_pem.to_vec()
-      ).or_else(
-        |err| Err(Error::from_reason(err.to_string()))
-      )?;
-      let mut x509_store_builder = boring::x509::store::X509StoreBuilder::new()
-        .or_else(
-          |err| Err(Error::from_reason(err.to_string()))
-        )?;
-      for x509 in x509_certs.into_iter() {
-        x509_store_builder.add_cert(x509)
-          .or_else(
-            |err| Err(Error::from_reason(err.to_string()))
-          )?;
-      }
-      let x509_store = x509_store_builder.build();
-      ssl_ctx_builder.set_verify_cert_store(x509_store)
-        .or_else(
-          |err| Err(Error::from_reason(err.to_string()))
-        )?;
     }
     let ssl_ctx= ssl_ctx_builder.build();
     let config = quiche::Config::with_boring_ssl_ctx(
       quiche::PROTOCOL_VERSION,
       ssl_ctx,
     ).or_else(
-      |err| Err(Error::from_reason(err.to_string()))
+      |e| Err(Error::from_reason(e.to_string()))
     )?;
     return Ok(Config(config));
   }
