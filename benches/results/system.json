@@ -1,41 +1,41 @@
 {
   "cpu": {
-    "manufacturer": "Intel",
-    "brand": "Xeon® E3-1241 v3",
-    "vendor": "Intel",
-    "family": "6",
-    "model": "60",
-    "stepping": "3",
+    "manufacturer": "AMD",
+    "brand": "Ryzen 7 5800X 8-Core Processor",
+    "vendor": "AMD",
+    "family": "25",
+    "model": "33",
+    "stepping": "0",
     "revision": "",
     "voltage": "",
-    "speed": 3.5,
-    "speedMin": 0.8,
-    "speedMax": 3.9,
-    "governor": "performance",
-    "cores": 8,
-    "physicalCores": 4,
-    "performanceCores": 4,
+    "speed": 3.8,
+    "speedMin": null,
+    "speedMax": null,
+    "governor": "",
+    "cores": 16,
+    "physicalCores": 8,
+    "performanceCores": 8,
     "efficiencyCores": 0,
     "processors": 1,
     "socket": "",
-    "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm cpuid_fault epb invpcid_single pti ssbd ibrs ibpb stibp tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid xsaveopt dtherm ida arat pln pts md_clear flush_l1d",
-    "virtualization": true,
+    "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm rep_good nopl cpuid extd_apicid pni pclmulqdq ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves xsaveerptr arat vaes vpclmulqdq rdpid",
+    "virtualization": false,
     "cache": {
-      "l1d": 131072,
-      "l1i": 131072,
-      "l2": 1048576,
-      "l3": 8388608
+      "l1d": 262144,
+      "l1i": 262144,
+      "l2": 4194304,
+      "l3": 33554432
     }
   },
   "osInfo": {
     "platform": "linux",
-    "distro": "nixos",
-    "release": "22.11",
-    "kernel": "5.10.177",
+    "distro": "Faulkes-Work",
+    "release": "unknown",
+    "kernel": "4.19.190",
     "arch": "x64"
   },
   "system": {
-    "model": "P7 Pro SE",
-    "manufacturer": "EUROCOM"
+    "model": "Virtual Machine",
+    "manufacturer": "Microsoft Corporation"
   }
 }

@@ -1,26 +1,8 @@
-# TYPE dummy_ops gauge
-dummy_ops{name="add 1 + 1"} 11776647
-dummy_ops{name="subtract 1 - 1"} 11685857
-dummy_ops{name="multiply 1 * 1"} 12000931
-dummy_ops{name="divide 1 / 1"} 11857267
-
-# TYPE dummy_margin gauge
-dummy_margin{name="add 1 + 1"} 0.55
-dummy_margin{name="subtract 1 - 1"} 0.95
-dummy_margin{name="multiply 1 * 1"} 0.48
-dummy_margin{name="divide 1 / 1"} 0.58
-
-# TYPE dummy_samples counter
-dummy_samples{name="add 1 + 1"} 84
-dummy_samples{name="subtract 1 - 1"} 84
-dummy_samples{name="multiply 1 * 1"} 85
-dummy_samples{name="divide 1 / 1"} 83
-
 # TYPE stream_1KB_ops gauge
-stream_1KB_ops{name="send 1Kib of data"} 176
+stream_1KB_ops{name="send 1Kib of data"} 214
 
 # TYPE stream_1KB_margin gauge
-stream_1KB_margin{name="send 1Kib of data"} 2.68
+stream_1KB_margin{name="send 1Kib of data"} 0.95
 
 # TYPE stream_1KB_samples counter
-stream_1KB_samples{name="send 1Kib of data"} 76
+stream_1KB_samples{name="send 1Kib of data"} 84
