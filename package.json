@@ -1,10 +1,15 @@
 {
   "name": "@matrixai/quic",
   "version": "0.0.7",
-  "bin": {
-    "server": "dist/bin/server.js"
-  },
-  "author": "Roger Qiu",
+  "author": "Matrix AI",
+  "contributors": [
+    {
+      "name": "Roger Qiu"
+    },
+    {
+      "name": "Brian Botha"
+    }
+  ],
   "description": "QUIC",
   "license": "Apache-2.0",
   "repository": {
