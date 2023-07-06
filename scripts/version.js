@@ -84,7 +84,7 @@ async function main() {
       'install',
       '--ignore-scripts',
       '--silent',
-      '--package-lock-only'
+      '--package-lock-only',
     ];
     childProcess.execFileSync('npm', installArgs_, {
       stdio: ['inherit', 'inherit', 'inherit'],
