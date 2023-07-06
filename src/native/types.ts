@@ -316,6 +316,7 @@ type PathStatsIter = {
 export { CongestionControlAlgorithm, Shutdown, Type, ConnectionErrorCode };
 
 export type {
+  QuicheTimeInstant,
   ConnectionError,
   Stats,
   HostPort as Host,

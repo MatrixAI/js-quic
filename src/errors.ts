@@ -99,7 +99,6 @@ class ErrorQUICConnectionIdleTimeOut<T> extends ErrorQUICConnection<T> {
  * You may want a "cause" though?
  * But it's not always a cause
  * Plus it might be useless
- * New ErrorQUICConnectionInternal('TlsFail', { data: {})
  * Note that the reason can be buffer.
  * Which means it does not need to be a reason
  *

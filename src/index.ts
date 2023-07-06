@@ -6,6 +6,7 @@ export { default as QUICConnection } from './QUICConnection';
 export { default as QUICConnectionId } from './QUICConnectionId';
 export { default as QUICStream } from './QUICStream';
 export * as utils from './utils';
+export * as events from './events';
 export * as errors from './errors';
 export * as native from './native';
 export * from './types';
