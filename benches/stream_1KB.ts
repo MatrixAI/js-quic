@@ -1,7 +1,6 @@
 import type * as events from '../src/events';
 import type { Host } from '../src/types';
 import path from 'path';
-import fs from 'fs';
 import b from 'benny';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import { suiteCommon } from './utils';
@@ -18,17 +17,12 @@ async function main() {
   // Setting up initial state
   const data1KiB = Buffer.alloc(1024, 0xf0);
   const host = '127.0.0.1' as Host;
-  const certChainPem = await fs.promises.readFile(
-    path.resolve(path.join(__dirname), '../tests/fixtures/certs/rsa1.crt'),
-  );
-  const privKeyPem = await fs.promises.readFile(
-    path.resolve(path.join(__dirname), '../tests/fixtures/certs/rsa1.key'),
-  );
+  const tlsConfig = await testsUtils.generateConfig('RSA');
 
   const quicServer = new QUICServer({
     config: {
-      key: privKeyPem.toString(),
-      cert: certChainPem.toString(),
+      key: tlsConfig.key,
+      cert: tlsConfig.cert,
       verifyPeer: false,
       keepAliveIntervalTime: 1000,
     },
@@ -42,11 +36,11 @@ async function main() {
     logger,
   });
   quicServer.addEventListener(
-    'connection',
+    'serverConnection',
     async (e: events.QUICServerConnectionEvent) => {
       const conn = e.detail;
       conn.addEventListener(
-        'stream',
+        'connectionStream',
         (streamEvent: events.QUICConnectionStreamEvent) => {
           const stream = streamEvent.detail;
           void Promise.allSettled([
