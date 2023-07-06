@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "quic"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "boring",
  "napi",
