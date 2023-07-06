@@ -470,7 +470,7 @@ async function generateCertificate({
   return await x509.X509CertificateGenerator.create(certConfig);
 }
 
-// async function createTLSConfigWithChain(
+// Async function createTLSConfigWithChain(
 //   keyPairs: Array<{
 //     publicKey: JsonWebKey;
 //     privateKey: JsonWebKey;

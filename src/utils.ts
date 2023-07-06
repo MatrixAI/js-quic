@@ -8,8 +8,10 @@ import type {
   ServerCrypto,
 } from './types';
 import type { Connection } from '@/native';
+import type { LockBox, RWLockWriter } from '@matrixai/async-locks';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
+import { Monitor } from '@matrixai/async-locks';
 import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
 
@@ -428,6 +430,19 @@ function streamStats(
 `;
 }
 
+async function withMonitor<T>(
+  mon: Monitor<RWLockWriter> | undefined,
+  lockBox: LockBox<RWLockWriter>,
+  lockConstructor: { new (): RWLockWriter },
+  fun: (mon: Monitor<RWLockWriter>) => Promise<T>,
+  locksPending?: Map<string, { count: number }>,
+): Promise<T> {
+  const _mon = mon ?? new Monitor(lockBox, lockConstructor, locksPending);
+  const result = await fun(_mon);
+  if (mon != null) await _mon.unlockAll();
+  return result;
+}
+
 export {
   isIPv4,
   isIPv6,
@@ -455,4 +470,5 @@ export {
   validateToken,
   sleep,
   streamStats,
+  withMonitor,
 };

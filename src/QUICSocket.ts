@@ -6,7 +6,7 @@ import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
-import { Monitor, RWLockWriter } from '@matrixai/async-locks';
+import { RWLockWriter } from '@matrixai/async-locks';
 import { status } from '@matrixai/async-init/dist/utils';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
@@ -107,13 +107,19 @@ class QUICSocket extends EventTarget {
     // Acquire the conn lock, this ensures mutual exclusion
     // for state changes on the internal connection
     try {
-      const mon = new Monitor<RWLockWriter>(connection.lockbox, RWLockWriter);
-      await mon.withF(connection.lockCode, async (mon) => {
-        // Even if we are `stopping`, the `quiche` library says we need to
-        // continue processing any packets.
-        await connection.recv(data, remoteInfo_, mon);
-        await connection.send(mon);
-      });
+      await utils.withMonitor(
+        undefined,
+        connection.lockbox,
+        RWLockWriter,
+        async (mon) => {
+          await mon.withF(connection.lockCode, async (mon) => {
+            // Even if we are `stopping`, the `quiche` library says we need to
+            // continue processing any packets.
+            await connection.recv(data, remoteInfo_, mon);
+            await connection.send(mon);
+          });
+        },
+      );
     } catch (e) {
       // Race condition with destroying socket, just ignore
       if (!(e instanceof errors.ErrorQUICSocketNotRunning)) throw e;

@@ -13,7 +13,8 @@ import type {
   VerifyCallback,
 } from './types';
 import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
-import { Lock, LockBox, Monitor, RWLockWriter } from '@matrixai/async-locks';
+import type { Monitor } from '@matrixai/async-locks';
+import { Lock, LockBox, RWLockWriter } from '@matrixai/async-locks';
 import {
   ready,
   running,
@@ -515,29 +516,34 @@ class QUICConnection extends EventTarget {
     this.logger.debug('streams destroyed');
     this.stopKeepAliveIntervalTimer();
 
-    mon = mon ?? new Monitor<RWLockWriter>(this.lockbox, RWLockWriter);
     // Trigger closing connection in the background and await close later.
-    void mon.withF(this.lockCode, async (mon) => {
-      // If this is already closed, then `Done` will be thrown
-      // Otherwise it can send `CONNECTION_CLOSE` frame
-      // This can be 0x1c close at the QUIC layer or no errors
-      // Or it can be 0x1d for application close with an error
-      // Upon receiving a `CONNECTION_CLOSE`, you can send back
-      // 1 packet containing a `CONNECTION_CLOSE` frame too
-      // (with `NO_ERROR` code if appropriate)
-      // It must enter into a draining state, and no other packets can be sent
-      try {
-        this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
-        // If we get a `Done` exception we don't bother calling send
-        // The send only gets sent if the `Done` is not the case
-        await this.send(mon);
-      } catch (e) {
-        // Ignore 'Done' if already closed
-        if (e.message !== 'Done') {
-          // No other exceptions are expected
-          never();
+    void utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+      await mon.withF(this.lockCode, async (mon) => {
+        // If this is already closed, then `Done` will be thrown
+        // Otherwise it can send `CONNECTION_CLOSE` frame
+        // This can be 0x1c close at the QUIC layer or no errors
+        // Or it can be 0x1d for application close with an error
+        // Upon receiving a `CONNECTION_CLOSE`, you can send back
+        // 1 packet containing a `CONNECTION_CLOSE` frame too
+        // (with `NO_ERROR` code if appropriate)
+        // It must enter into a draining state, and no other packets can be sent
+        try {
+          this.conn.close(
+            applicationError,
+            errorCode,
+            Buffer.from(errorMessage),
+          );
+          // If we get a `Done` exception we don't bother calling send
+          // The send only gets sent if the `Done` is not the case
+          await this.send(mon);
+        } catch (e) {
+          // Ignore 'Done' if already closed
+          if (e.message !== 'Done') {
+            // No other exceptions are expected
+            never();
+          }
         }
-      }
+      });
     });
 
     if (this.conn.isClosed()) {
@@ -750,17 +756,14 @@ class QUICConnection extends EventTarget {
    * Any errors must be emitted as events.
    * @internal
    */
-  public async send(
-    mon: Monitor<RWLockWriter> = new Monitor<RWLockWriter>(
-      this.lockbox,
-      RWLockWriter,
-    ),
-  ): Promise<void> {
-    if (!mon.isLocked(this.lockCode)) {
-      return mon.withF(this.lockCode, async (mon) => {
-        return this.send(mon);
-      });
-    }
+  public async send(mon?: Monitor<RWLockWriter>): Promise<void> {
+    await utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+      if (!mon.isLocked(this.lockCode)) {
+        return mon.withF(this.lockCode, async (mon) => {
+          return this.send(mon);
+        });
+      }
+    });
 
     const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
     let sendLength: number;
@@ -914,17 +917,15 @@ class QUICConnection extends EventTarget {
         this.resolveClosedP();
         // If we are still running and not stopping then we need to stop
         if (this[running] && this[status] !== 'stopping') {
-          const mon = new Monitor(this.lockbox, RWLockWriter);
           // Background stopping, we don't want to block the timer resolving
-          void this.stop({ force: true }, mon);
+          void this.stop({ force: true });
         }
         logger.debug('CLEANING UP TIMER');
         return;
       }
 
-      const mon = new Monitor(this.lockbox, RWLockWriter);
       // There may be data to send after timing out
-      void this.send(mon);
+      void this.send();
 
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
@@ -982,9 +983,8 @@ class QUICConnection extends EventTarget {
       // Intelligently schedule a PING frame.
       // If the connection has already sent ack-eliciting frames
       // then this is a noop.
-      const mon = new Monitor(this.lockbox, RWLockWriter);
       this.conn.sendAckEliciting();
-      await this.send(mon);
+      await this.send();
       this.keepAliveIntervalTimer = new Timer({
         delay: ms,
         handler: keepAliveHandler,
