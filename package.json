@@ -1,6 +1,6 @@
 {
   "name": "@matrixai/quic",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "author": "Matrix AI",
   "contributors": [
     {
@@ -47,10 +47,10 @@
     "ip-num": "^1.5.0"
   },
   "optionalDependencies": {
-    "@matrixai/quic-darwin-arm64": "0.0.11",
-    "@matrixai/quic-darwin-x64": "0.0.11",
-    "@matrixai/quic-linux-x64": "0.0.11",
-    "@matrixai/quic-win32-x64": "0.0.11"
+    "@matrixai/quic-darwin-arm64": "0.0.12",
+    "@matrixai/quic-darwin-x64": "0.0.12",
+    "@matrixai/quic-linux-x64": "0.0.12",
+    "@matrixai/quic-win32-x64": "0.0.12"
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
