@@ -307,7 +307,7 @@ type QUICConfig = {
   enableEarlyData: boolean;
 };
 
-type VerifyCallback = (certs: Array<string>) => void;
+type VerifyCallback = (certs: Array<string>) => Promise<void> | void;
 
 export type {
   Opaque,

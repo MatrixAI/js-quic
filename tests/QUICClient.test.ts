@@ -1327,7 +1327,7 @@ describe(QUICClient.name, () => {
         },
       );
       await connectionEventProm.p;
-      // Connection would timeout after 100ms if keep alive didn't work
+      // Connection would time out after 100ms if keep alive didn't work
       await Promise.race([
         sleep(300),
         clientTimeoutProm.p.then(() => {
@@ -1517,7 +1517,7 @@ describe(QUICClient.name, () => {
           verifyPeer: true,
           verifyAllowFail: true,
         },
-        verifyCallback: (certs) => {
+        verifyCallback: async (certs) => {
           verifyProm.resolveP(certs);
         },
       });
@@ -1600,7 +1600,7 @@ describe(QUICClient.name, () => {
           verifyPeer: true,
           verifyAllowFail: true,
         },
-        verifyCallback: (certs) => {
+        verifyCallback: async (certs) => {
           verifyProm.resolveP(certs);
         },
       });
@@ -1722,7 +1722,7 @@ describe(QUICClient.name, () => {
       port: 55555 as Port,
     });
     // If the server is slow to respond then this will time out.
-    //  Then main cause of this was the server not processing the inititial packet
+    //  Then main cause of this was the server not processing the initial packet
     //  that creates the `QUICConnection`, as a result, the whole creation waited
     //  an extra 1 second for the client to retry the initial packet.
     const client = await QUICClient.createQUICClient(

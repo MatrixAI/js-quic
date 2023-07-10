@@ -823,7 +823,9 @@ class QUICConnection extends EventTarget {
           );
           try {
             // Running verify callback if available
-            if (this.verifyCallback != null) this.verifyCallback(peerCertsPem);
+            if (this.verifyCallback != null) {
+              await this.verifyCallback(peerCertsPem);
+            }
             this.logger.debug('TLS verification succeeded');
             // Generate ack frame to satisfy the short + 1 condition of secure establishment
             this.conn.sendAckEliciting();
