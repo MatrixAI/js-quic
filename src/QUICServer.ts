@@ -251,6 +251,7 @@ class QUICServer extends EventTarget {
     remoteInfo: RemoteInfo,
     header: Header,
     dcid: QUICConnectionId,
+    data: Uint8Array,
   ): Promise<QUICConnection | undefined> {
     // If the packet is not an `Initial` nor `ZeroRTT` then we discard the
     // packet.
@@ -362,6 +363,7 @@ class QUICServer extends EventTarget {
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
+      data,
       config: this.config,
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,

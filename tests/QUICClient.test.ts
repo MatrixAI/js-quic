@@ -1696,4 +1696,52 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
   });
+  test('Connections are established and secured quickly', async () => {
+    const tlsConfigServer = await testsUtils.generateConfig(defaultType);
+
+    const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfigServer.key,
+        cert: tlsConfigServer.cert,
+        verifyPeer: false,
+      },
+    });
+    testsUtils.extractSocket(server, sockets);
+    server.addEventListener(
+      'serverConnection',
+      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+      port: 55555 as Port,
+    });
+    // If the server is slow to respond then this will time out.
+    //  Then main cause of this was the server not processing the inititial packet
+    //  that creates the `QUICConnection`, as a result, the whole creation waited
+    //  an extra 1 second for the client to retry the initial packet.
+    const client = await QUICClient.createQUICClient(
+      {
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: clientCrypto,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+        },
+      },
+      { timer: new Timer({ delay: 500 }) },
+    );
+    testsUtils.extractSocket(client, sockets);
+    await connectionEventProm.p;
+    await server.stop();
+  });
 });

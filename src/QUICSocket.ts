@@ -89,6 +89,7 @@ class QUICSocket extends EventTarget {
         remoteInfo_,
         header,
         dcid,
+        data,
       );
       // If there's no connection yet
       // then the server is middle of version negotiation or stateless retry

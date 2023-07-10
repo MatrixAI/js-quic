@@ -225,6 +225,7 @@ class QUICConnection extends EventTarget {
           scid: QUICConnectionId;
           dcid: QUICConnectionId;
           remoteInfo: RemoteInfo;
+          data: Uint8Array;
           config: QUICConfig;
           socket: QUICSocket;
           reasonToCode?: StreamReasonToCode;
@@ -254,6 +255,7 @@ class QUICConnection extends EventTarget {
           scid: QUICConnectionId;
           dcid: QUICConnectionId;
           remoteInfo: RemoteInfo;
+          data: Uint8Array;
           config: QUICConfig;
           socket: QUICSocket;
           reasonToCode?: StreamReasonToCode;
@@ -276,11 +278,27 @@ class QUICConnection extends EventTarget {
     };
     ctx.signal.addEventListener('abort', abortHandler);
     const connection = new this(args);
+    const startProm = connection.start().then(async () => {
+      // If this is a server connection, we need to process the packet that created it
+      if (args.type === 'server') {
+        await utils.withMonitor(
+          undefined,
+          connection.lockbox,
+          RWLockWriter,
+          async (mon) => {
+            await mon.withF(connection.lockCode, async (mon) => {
+              await connection.recv(args.data, args.remoteInfo, mon);
+              await connection.send(mon);
+            });
+          },
+        );
+      }
+    });
     // This ensures that TLS has been established and verified on both sides
     try {
       await Promise.race([
         Promise.all([
-          connection.start(),
+          startProm,
           connection.establishedP,
           connection.secureEstablishedP,
         ]),
@@ -648,7 +666,7 @@ class QUICConnection extends EventTarget {
     data: Uint8Array,
     remoteInfo: RemoteInfo,
     mon: Monitor<RWLockWriter>,
-  ) {
+  ): Promise<void> {
     if (!mon.isLocked(this.lockCode)) {
       return mon.withF(this.lockCode, async (mon) => {
         return this.recv(data, remoteInfo, mon);
