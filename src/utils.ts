@@ -7,7 +7,7 @@ import type {
   Hostname,
   ServerCrypto,
 } from './types';
-import type { Connection } from '@/native';
+import type { Connection } from './native';
 import type { LockBox, RWLockWriter } from '@matrixai/async-locks';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
