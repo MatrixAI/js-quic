@@ -4,7 +4,6 @@ import type {
   ConnectionId,
   ConnectionIdString,
   Host,
-  Hostname,
   Port,
   ServerCrypto,
 } from './types';

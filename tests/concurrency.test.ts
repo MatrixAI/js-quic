@@ -1,9 +1,5 @@
 import type * as events from '@/events';
-import type {
-  ClientCrypto,
-  ServerCrypto,
-  StreamReasonToCode,
-} from '@';
+import type { ClientCrypto, ServerCrypto, StreamReasonToCode } from '@';
 import type { Messages, StreamData } from './utils';
 import type { QUICConfig } from '@';
 import { fc, testProp } from '@fast-check/jest';

@@ -202,7 +202,6 @@ class QUICSocket extends EventTarget {
       host,
       this.resolveHostname,
     );
-    if (!utils.isPort(port)) throw Error('TMP invalid port');
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr,

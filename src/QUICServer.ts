@@ -1,7 +1,5 @@
 import type {
   Host,
-  Hostname,
-  Port,
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
