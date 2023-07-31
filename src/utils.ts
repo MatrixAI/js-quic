@@ -5,6 +5,7 @@ import type {
   ConnectionIdString,
   Host,
   Hostname,
+  Port,
   ServerCrypto,
 } from './types';
 import type { Connection } from './native';
@@ -146,7 +147,7 @@ function toCanonicalIp(host: string) {
  * It could be an IPv6 address or IPv4 address.
  * This uses the OS's DNS resolution system.
  */
-async function resolveHostname(hostname: Hostname): Promise<Host> {
+async function resolveHostname(hostname: string): Promise<Host> {
   const result = await dns.promises.lookup(hostname, {
     family: 0,
     all: false,
@@ -160,17 +161,25 @@ async function resolveHostname(hostname: Hostname): Promise<Host> {
  * The `resolveHostname` can be overridden.
  */
 async function resolveHost(
-  host: Host | Hostname,
-  resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>,
+  host: string,
+  resolveHostname: (hostname: string) => Host | PromiseLike<Host>,
 ): Promise<[Host, 'udp4' | 'udp6']> {
   if (isIPv4(host)) {
     return [host as Host, 'udp4'];
   } else if (isIPv6(host)) {
     return [host as Host, 'udp6'];
   } else {
-    host = await resolveHostname(host as Hostname);
+    host = await resolveHostname(host);
     return resolveHost(host, resolveHostname);
   }
+}
+
+/**
+ * Is it a valid Port?
+ */
+function isPort(port: any): port is Port {
+  if (typeof port !== 'number') return false;
+  return port >= 0 && port <= 65535;
 }
 
 /**
@@ -455,6 +464,7 @@ export {
   toCanonicalIp,
   resolveHostname,
   resolveHost,
+  isPort,
   promisify,
   promise,
   bufferWrap,

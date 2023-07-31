@@ -1,5 +1,4 @@
 import type * as events from '@/events';
-import type { Host, Port } from '@';
 import type { ClientCrypto, ServerCrypto } from '@';
 import type QUICSocket from '@/QUICSocket';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
@@ -18,7 +17,7 @@ describe(QUICStream.name, () => {
     ),
   ]);
   const defaultType = 'RSA';
-  const localhost = '127.0.0.1' as Host;
+  const localhost = '127.0.0.1';
   // This has to be setup asynchronously due to key generation
   const serverCrypto: ServerCrypto = {
     sign: testsUtils.signHMAC,
@@ -223,7 +222,7 @@ describe(QUICStream.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 58888 as Port,
+      port: 58888,
     });
     const client = await QUICClient.createQUICClient({
       host: localhost,
@@ -317,7 +316,7 @@ describe(QUICStream.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 59999 as Port,
+      port: 59999,
     });
     const client = await QUICClient.createQUICClient({
       host: localhost,
@@ -419,7 +418,7 @@ describe(QUICStream.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 60000 as Port,
+      port: 60000,
     });
     const client = await QUICClient.createQUICClient({
       host: localhost,

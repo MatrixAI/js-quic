@@ -1,4 +1,4 @@
-import type { ClientCrypto, Host, Port, ServerCrypto } from '@/types';
+import type { ClientCrypto, ServerCrypto } from '@/types';
 import type * as events from '@/events';
 import type QUICConnection from '@/QUICConnection';
 import type { KeyTypes, TLSConfigs } from './utils';
@@ -20,7 +20,7 @@ describe(QUICClient.name, () => {
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
-  const localhost = '127.0.0.1' as Host;
+  const localhost = '127.0.0.1';
   // This has to be setup asynchronously due to key generation
   const serverCrypto: ServerCrypto = {
     sign: testsUtils.signHMAC,
@@ -75,9 +75,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1',
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::',
         crypto: {
           ops: clientCrypto,
         },
@@ -117,13 +117,13 @@ describe(QUICClient.name, () => {
           connectionEventProm.resolveP(e),
       );
       await server.start({
-        host: '::1' as Host,
-        port: 0 as Port,
+        host: '::1',
+        port: 0,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::1' as Host,
+        host: '::1',
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::',
         crypto: {
           ops: clientCrypto,
         },
@@ -163,13 +163,13 @@ describe(QUICClient.name, () => {
           connectionEventProm.resolveP(e),
       );
       await server.start({
-        host: '::' as Host,
-        port: 0 as Port,
+        host: '::' ,
+        port: 0 ,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::' as Host, // Will resolve to ::1
+        host: '::' , // Will resolve to ::1
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -194,7 +194,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -212,7 +212,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -229,7 +229,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -246,7 +246,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -265,7 +265,7 @@ describe(QUICClient.name, () => {
         QUICClient.createQUICClient(
           {
             host: localhost,
-            port: 56666 as Port,
+            port: 56666 ,
             localHost: localhost,
             crypto: {
               ops: clientCrypto,
@@ -287,7 +287,7 @@ describe(QUICClient.name, () => {
         QUICClient.createQUICClient(
           {
             host: localhost,
-            port: 56666 as Port,
+            port: 56666 ,
             localHost: localhost,
             crypto: {
               ops: clientCrypto,
@@ -306,7 +306,7 @@ describe(QUICClient.name, () => {
         QUICClient.createQUICClient(
           {
             host: localhost,
-            port: 56666 as Port,
+            port: 56666 ,
             localHost: localhost,
             crypto: {
               ops: clientCrypto,
@@ -324,7 +324,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -343,7 +343,7 @@ describe(QUICClient.name, () => {
       const clientProm = QUICClient.createQUICClient(
         {
           host: localhost,
-          port: 56666 as Port,
+          port: 56666 ,
           localHost: localhost,
           crypto: {
             ops: clientCrypto,
@@ -754,9 +754,9 @@ describe(QUICClient.name, () => {
           host: localhost,
         });
         const client = await QUICClient.createQUICClient({
-          host: '::ffff:127.0.0.1' as Host,
+          host: '::ffff:127.0.0.1' ,
           port: server.port,
-          localHost: '::' as Host,
+          localHost: '::' ,
           crypto: {
             ops: clientCrypto,
           },
@@ -862,9 +862,9 @@ describe(QUICClient.name, () => {
           host: localhost,
         });
         const client = await QUICClient.createQUICClient({
-          host: '::ffff:127.0.0.1' as Host,
+          host: '::ffff:127.0.0.1' ,
           port: server.port,
-          localHost: '::' as Host,
+          localHost: '::' ,
           crypto: {
             ops: clientCrypto,
           },
@@ -1180,9 +1180,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1' ,
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1240,9 +1240,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1' ,
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1300,9 +1300,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1' ,
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1363,9 +1363,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1' ,
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1423,9 +1423,9 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       const client = await QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1' ,
         port: server.port,
-        localHost: '::' as Host,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1461,9 +1461,9 @@ describe(QUICClient.name, () => {
     });
     test('Keep alive does not prevent connection timeout', async () => {
       const clientProm = QUICClient.createQUICClient({
-        host: '::ffff:127.0.0.1' as Host,
-        port: 54444 as Port,
-        localHost: '::' as Host,
+        host: '::ffff:127.0.0.1' ,
+        port: 54444 ,
+        localHost: '::' ,
         crypto: {
           ops: clientCrypto,
         },
@@ -1661,7 +1661,7 @@ describe(QUICClient.name, () => {
       );
       await server.start({
         host: localhost,
-        port: 55555 as Port,
+        port: 55555 ,
       });
       // Connection should fail
       const clientProm = QUICClient.createQUICClient({
@@ -1719,7 +1719,7 @@ describe(QUICClient.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 55555 as Port,
+      port: 55555 ,
     });
     // If the server is slow to respond then this will time out.
     //  Then main cause of this was the server not processing the initial packet

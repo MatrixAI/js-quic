@@ -33,7 +33,7 @@ class QUICSocket extends EventTarget {
   protected logger: Logger;
   protected server?: QUICServer;
 
-  protected resolveHostname: (hostname: Hostname) => Host | PromiseLike<Host>;
+  protected resolveHostname: (hostname: string) => Host | PromiseLike<Host>;
 
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
@@ -138,7 +138,7 @@ class QUICSocket extends EventTarget {
     resolveHostname = utils.resolveHostname,
     logger,
   }: {
-    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+    resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
     super();
@@ -184,13 +184,13 @@ class QUICSocket extends EventTarget {
    * If the host is a hostname such as `localhost`, this will perform do local resolution.
    */
   public async start({
-    host = '::' as Host,
-    port = 0 as Port,
+    host = '::',
+    port = 0,
     reuseAddr = false,
     ipv6Only = false,
   }: {
-    host?: Host | Hostname;
-    port?: Port;
+    host?: string;
+    port?: number;
     reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
@@ -202,6 +202,7 @@ class QUICSocket extends EventTarget {
       host,
       this.resolveHostname,
     );
+    if (!utils.isPort(port)) throw Error('TMP invalid port');
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr,

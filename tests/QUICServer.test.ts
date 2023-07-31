@@ -1,5 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Host, Hostname, ServerCrypto } from '@/types';
+import type { Hostname, ServerCrypto } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import * as utils from '@/utils';
@@ -150,7 +150,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
       });
       expect(quicServer.host).toBe('127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
@@ -169,7 +169,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::1' as Host,
+        host: '::1',
       });
       expect(quicServer.host).toBe('::1');
       expect(typeof quicServer.port).toBe('number');
@@ -188,7 +188,7 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::' as Host,
+        host: '::',
       });
       expect(quicServer.host).toBe('::');
       expect(typeof quicServer.port).toBe('number');
@@ -209,13 +209,13 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1',
       });
       expect(quicServer.host).toBe('::ffff:127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
       await quicServer.start({
-        host: '::ffff:7f00:1' as Host,
+        host: '::ffff:7f00:1',
       });
       // Will resolve to dotted-decimal variant
       expect(quicServer.host).toBe('::ffff:127.0.0.1');
@@ -235,10 +235,10 @@ describe(QUICServer.name, () => {
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: 'localhost' as Hostname,
+        host: 'localhost',
       });
       // Default to using dns lookup, which uses the OS DNS resolver
-      const host = await utils.resolveHostname('localhost' as Hostname);
+      const host = await utils.resolveHostname('localhost');
       expect(quicServer.host).toBe(host);
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
@@ -253,11 +253,11 @@ describe(QUICServer.name, () => {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
         },
-        resolveHostname: () => '127.0.0.1' as Host,
+        resolveHostname: () => '127.0.0.1' as Hostname,
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
-        host: 'abcdef' as Hostname,
+        host: 'abcdef',
       });
       expect(quicServer.host).toBe('127.0.0.1');
       expect(typeof quicServer.port).toBe('number');
@@ -280,7 +280,7 @@ describe(QUICServer.name, () => {
   //       logger: logger.getChild('QUICServer'),
   //     });
   //     await quicServer.start({
-  //       host: '127.0.0.1' as Host,
+  //       host: '127.0.0.1',
   //     });
   //
   //     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
@@ -295,7 +295,7 @@ describe(QUICServer.name, () => {
   //       logger: logger.getChild(QUICSocket.name),
   //     });
   //     await socket.start({
-  //       host: '127.0.0.1' as Host,
+  //       host: '127.0.0.1',
   //     });
   //
   //     // ???

@@ -122,7 +122,7 @@ class QUICServer extends EventTarget {
       cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
     };
     socket?: QUICSocket;
-    resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+    resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     verifyCallback?: VerifyCallback;
@@ -156,12 +156,12 @@ class QUICServer extends EventTarget {
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
-  public get host() {
+  public get host(): string {
     return this.socket.host;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
-  public get port() {
+  public get port(): number {
     return this.socket.port;
   }
 
@@ -172,12 +172,12 @@ class QUICServer extends EventTarget {
    * In which case, the `host` and `port` parameters here are ignored.
    */
   public async start({
-    host = '::' as Host,
-    port = 0 as Port,
+    host = '::',
+    port = 0,
     reuseAddr,
   }: {
-    host?: Host | Hostname;
-    port?: Port;
+    host?: string;
+    port?: number;
     reuseAddr?: boolean;
   } = {}) {
     let address: string;

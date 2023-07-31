@@ -1,8 +1,6 @@
 import type * as events from '@/events';
 import type {
   ClientCrypto,
-  Host,
-  Port,
   ServerCrypto,
   StreamReasonToCode,
 } from '@';
@@ -30,7 +28,7 @@ describe('Concurrency tests', () => {
 
   // Tracking resources
   let sockets: Array<QUICSocket>;
-  const socketPort1 = 50001 as Port;
+  const socketPort1 = 50001;
 
   const reasonToCode = (type: 'recv' | 'send', reason?: any) => {
     logger.error(type, reason);
@@ -178,7 +176,7 @@ describe('Concurrency tests', () => {
         );
         await sleep(100);
         await server.start({
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: socketPort1,
         });
         try {
@@ -202,9 +200,9 @@ describe('Concurrency tests', () => {
           .then(() => {
             logger.info('STARTING CLIENT');
             return QUICClient.createQUICClient({
-              host: '::ffff:127.0.0.1' as Host,
+              host: '::ffff:127.0.0.1',
               port: socketPort1,
-              localHost: '::' as Host,
+              localHost: '::',
               crypto: {
                 ops: clientCrypto,
               },
@@ -300,7 +298,7 @@ describe('Concurrency tests', () => {
         );
         await sleep(100);
         await server.start({
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: socketPort1,
         });
         try {
@@ -320,7 +318,7 @@ describe('Concurrency tests', () => {
         logger: logger.getChild('socket'),
       });
       await socket.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
       });
 
       // Creating client activity
@@ -331,7 +329,7 @@ describe('Concurrency tests', () => {
           .then(() => {
             logger.info('STARTING CLIENT');
             return QUICClient.createQUICClient({
-              host: '127.0.0.1' as Host,
+              host: '127.0.0.1',
               port: socketPort1,
               socket,
               crypto: {
@@ -385,7 +383,7 @@ describe('Concurrency tests', () => {
     reasonToCode,
   }: {
     socket: QUICSocket | undefined;
-    port: Port | undefined;
+    port: number | undefined;
     cleanUpHoldProm: Promise<void>;
     config: Partial<QUICConfig> & {
       key: string | Array<string> | Uint8Array | Array<Uint8Array>;
@@ -442,7 +440,7 @@ describe('Concurrency tests', () => {
     );
     await sleep(100);
     await server.start({
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port,
     });
     try {
@@ -476,10 +474,10 @@ describe('Concurrency tests', () => {
       sockets.push(socket1);
       sockets.push(socket2);
       await socket1.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
       });
       await socket2.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
       });
 
       const serverProm1 = spawnServer({
@@ -520,7 +518,7 @@ describe('Concurrency tests', () => {
           .then(() => {
             logger.info('STARTING CLIENT');
             return QUICClient.createQUICClient({
-              host: '127.0.0.1' as Host,
+              host: '127.0.0.1',
               port: socket2.port,
               socket: socket1,
               crypto: {
@@ -543,7 +541,7 @@ describe('Concurrency tests', () => {
           .then(() => {
             logger.info('STARTING CLIENT');
             return QUICClient.createQUICClient({
-              host: '127.0.0.1' as Host,
+              host: '127.0.0.1',
               port: socket1.port,
               socket: socket2,
               crypto: {

@@ -1,4 +1,3 @@
-import type { Host } from '@/types';
 import type QUICConnection from '@/QUICConnection';
 import dgram from 'dgram';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
@@ -109,7 +108,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
       });
     });
     afterAll(async () => {
@@ -155,7 +154,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '::1' as Host,
+        host: '::1',
       });
     });
     afterAll(async () => {
@@ -209,7 +208,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '::' as Host,
+        host: '::',
         ipv6Only: true,
       });
     });
@@ -259,7 +258,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '::' as Host,
+        host: '::',
       });
     });
     afterAll(async () => {
@@ -329,7 +328,7 @@ describe(QUICSocket.name, () => {
     });
     await expect(
       socket.start({
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         ipv6Only: true,
       }),
     ).rejects.toThrow(errors.ErrorQUICSocketInvalidBindAddress);
@@ -340,7 +339,7 @@ describe(QUICSocket.name, () => {
       logger,
     });
     await socket.start({
-      host: '::1' as Host,
+      host: '::1',
       ipv6Only: false,
     });
     await socket.stop();
@@ -350,7 +349,7 @@ describe(QUICSocket.name, () => {
       logger,
     });
     await socket.start({
-      host: '0.0.0.0' as Host,
+      host: '0.0.0.0',
     });
     const msg = Buffer.from('Hello World');
     await socket.send(msg, ipv4SocketPort, '127.0.0.1');
@@ -370,7 +369,7 @@ describe(QUICSocket.name, () => {
       logger,
     });
     await socket.start({
-      host: '::0' as Host,
+      host: '::0',
     });
     const msg = Buffer.from('Hello World');
     await socket.send(msg, ipv6SocketPort, '::1');
@@ -392,7 +391,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '::ffff:127.0.0.1' as Host,
+        host: '::ffff:127.0.0.1',
       });
     });
     afterAll(async () => {
@@ -441,7 +440,7 @@ describe(QUICSocket.name, () => {
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
       await socket.start({
-        host: '::ffff:7f00:1' as Host,
+        host: '::ffff:7f00:1',
       });
     });
     afterAll(async () => {
@@ -490,7 +489,7 @@ describe(QUICSocket.name, () => {
       logger,
     });
     await socket.start({
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
     });
     const connectionId = QUICConnectionId.fromBuffer(
       Buffer.from('SomeRandomId'),
@@ -509,7 +508,7 @@ describe(QUICSocket.name, () => {
       logger,
     });
     await socket.start({
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
     });
     const connectionId = QUICConnectionId.fromBuffer(
       Buffer.from('SomeRandomId'),

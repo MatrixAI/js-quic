@@ -106,10 +106,10 @@ type StreamCodeToReason = (
 
 type ConnectionMetadata = {
   remoteCertificates: Array<string> | null;
-  localHost: Host;
-  localPort: Port;
-  remoteHost: Host;
-  remotePort: Port;
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
 };
 
 type QUICConfig = {

@@ -3,8 +3,6 @@ import type { ContextTimed } from '@matrixai/contexts';
 import type {
   ClientCrypto,
   Host,
-  Hostname,
-  Port,
   VerifyCallback,
 } from './types';
 import type { Config } from './native/types';
@@ -76,16 +74,16 @@ class QUICClient extends EventTarget {
    */
   public static createQUICClient(
     opts: {
-      host: Host | Hostname;
-      port: Port;
-      localHost?: Host | Hostname;
-      localPort?: Port;
+      host: string;
+      port: number;
+      localHost?: string;
+      localPort?: number;
       crypto: {
         ops: ClientCrypto;
       };
       config?: Partial<QUICConfig>;
       socket?: QUICSocket;
-      resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+      resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
       verifyCallback?: VerifyCallback;
@@ -98,8 +96,8 @@ class QUICClient extends EventTarget {
     {
       host,
       port,
-      localHost = '::' as Host,
-      localPort = 0 as Port,
+      localHost = '::',
+      localPort = 0,
       crypto,
       config = {},
       socket,
@@ -109,10 +107,10 @@ class QUICClient extends EventTarget {
       verifyCallback,
       logger = new Logger(`${this.name}`),
     }: {
-      host: Host | Hostname;
-      port: Port;
-      localHost?: Host | Hostname;
-      localPort?: Port;
+      host: string;
+      port: number;
+      localHost?: string;
+      localPort?: number;
       crypto: {
         ops: {
           randomBytes(data: ArrayBuffer): Promise<void>;
@@ -120,7 +118,7 @@ class QUICClient extends EventTarget {
       };
       config?: Partial<QUICConfig>;
       socket?: QUICSocket;
-      resolveHostname?: (hostname: Hostname) => Host | PromiseLike<Host>;
+      resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
       verifyCallback?: VerifyCallback;
@@ -139,7 +137,12 @@ class QUICClient extends EventTarget {
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
+    // validating host and port types
     let [host_] = await utils.resolveHost(host, resolveHostname);
+    let [localHost_] = await utils.resolveHost(host, resolveHostname);
+    if (!utils.isPort(port) || !utils.isPort(localPort)) {
+      throw Error('TMP Not a valid port number');
+    }
     // If the target host is in fact a zero IP, it cannot be used
     // as a target host, so we need to resolve it to a non-zero IP
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
@@ -159,7 +162,7 @@ class QUICClient extends EventTarget {
       });
       isSocketShared = false;
       await socket.start({
-        host: localHost,
+        host: localHost_,
         port: localPort,
       });
     } else {
@@ -388,12 +391,12 @@ class QUICClient extends EventTarget {
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
-  public get host() {
+  public get host(): string {
     return this.socket.host;
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
-  public get port() {
+  public get port(): number {
     return this.socket.port;
   }
 

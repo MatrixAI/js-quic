@@ -453,19 +453,19 @@ class QUICConnection extends EventTarget {
     this.rejectClosedP = rejectClosedP;
   }
 
-  public get remoteHost() {
+  public get remoteHost(): string {
     return this._remoteHost;
   }
 
-  public get remotePort() {
+  public get remotePort(): number {
     return this._remotePort;
   }
 
-  public get localHost() {
+  public get localHost(): string {
     return this.socket.host;
   }
 
-  public get localPort() {
+  public get localPort(): number {
     return this.socket.port;
   }
 
