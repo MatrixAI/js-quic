@@ -5,6 +5,14 @@ class ErrorQUIC<T> extends AbstractError<T> {
   static description = 'QUIC error';
 }
 
+class ErrorQUICHostInvalid<T> extends AbstractError<T> {
+  static description = 'Host provided was not valid';
+}
+
+class ErrorQUICPortInvalid<T> extends AbstractError<T> {
+  static description = 'Port provided was not valid';
+}
+
 class ErrorQUICConfig<T> extends ErrorQUIC<T> {
   static description = 'QUIC config error';
 }
@@ -141,6 +149,8 @@ class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
 
 export {
   ErrorQUIC,
+  ErrorQUICHostInvalid,
+  ErrorQUICPortInvalid,
   ErrorQUICConfig,
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,

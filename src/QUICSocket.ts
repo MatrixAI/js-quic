@@ -154,8 +154,8 @@ class QUICSocket extends EventTarget {
    * Whereas `0.0.0.0` means only all IPv4.
    */
   @ready(new errors.ErrorQUICSocketNotRunning())
-  public get host() {
-    return this._host;
+  public get host(): string {
+    return utils.fromHost(this._host);
   }
 
   /**
@@ -164,8 +164,8 @@ class QUICSocket extends EventTarget {
    * Because `0` is always resolved to a specific port.
    */
   @ready(new errors.ErrorQUICSocketNotRunning())
-  public get port() {
-    return this._port;
+  public get port(): number {
+    return utils.fromPort(this._port);
   }
 
   /**
@@ -202,6 +202,7 @@ class QUICSocket extends EventTarget {
       host,
       this.resolveHostname,
     );
+    const port_ = utils.toPort(port);
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr,
@@ -215,7 +216,7 @@ class QUICSocket extends EventTarget {
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
     // This makes it equivalent to `dns.lookup`.
-    const socketBindP = this.socketBind(port, host_);
+    const socketBindP = this.socketBind(port_, host_);
     try {
       await Promise.race([socketBindP, errorP]);
     } catch (e) {

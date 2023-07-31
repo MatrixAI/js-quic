@@ -454,11 +454,11 @@ class QUICConnection extends EventTarget {
   }
 
   public get remoteHost(): string {
-    return this._remoteHost;
+    return utils.fromHost(this._remoteHost);
   }
 
   public get remotePort(): number {
-    return this._remotePort;
+    return utils.fromPort(this._remotePort);
   }
 
   public get localHost(): string {

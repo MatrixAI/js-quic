@@ -1,6 +1,6 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed } from '@matrixai/contexts';
-import type { ClientCrypto, Host, Port, VerifyCallback } from './types';
+import type { ClientCrypto, Host, VerifyCallback } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
 import type {
@@ -136,6 +136,8 @@ class QUICClient extends EventTarget {
     // Validating host and port types
     let [host_] = await utils.resolveHost(host, resolveHostname);
     const [localHost_] = await utils.resolveHost(localHost, resolveHostname);
+    const port_ = utils.toPort(port);
+    const localPort_ = utils.toPort(localPort);
     // If the target host is in fact a zero IP, it cannot be used
     // as a target host, so we need to resolve it to a non-zero IP
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
@@ -156,7 +158,7 @@ class QUICClient extends EventTarget {
       isSocketShared = false;
       await socket.start({
         host: localHost_,
-        port: localPort,
+        port: localPort_,
       });
     } else {
       if (!socket[running]) {
@@ -208,7 +210,7 @@ class QUICClient extends EventTarget {
         socket,
         remoteInfo: {
           host: host_,
-          port: port as Port,
+          port: port_,
         },
         config: quicConfig,
         reasonToCode,

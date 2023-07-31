@@ -168,9 +168,20 @@ async function resolveHost(
   } else if (isIPv6(host)) {
     return [host as Host, 'udp6'];
   } else {
-    host = await resolveHostname(host);
-    return resolveHost(host, resolveHostname);
+    try {
+      host = await resolveHostname(host);
+      return resolveHost(host, resolveHostname);
+    } catch {
+      throw new errors.ErrorQUICHostInvalid();
+    }
   }
+}
+
+/**
+ * Converts a Host back to a string.
+ */
+function fromHost(host: Host): string {
+  return host;
 }
 
 /**
@@ -179,6 +190,21 @@ async function resolveHost(
 function isPort(port: any): port is Port {
   if (typeof port !== 'number') return false;
   return port >= 0 && port <= 65535;
+}
+
+/**
+ * Throws if port is invalid, otherwise returns port as Port.
+ */
+function toPort(port: any): Port {
+  if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
+  return port;
+}
+
+/**
+ * Converts a Port back to a number.
+ */
+function fromPort(port: Port): number {
+  return port;
 }
 
 /**
@@ -463,7 +489,10 @@ export {
   toCanonicalIp,
   resolveHostname,
   resolveHost,
+  fromHost,
   isPort,
+  toPort,
+  fromPort,
   promisify,
   promise,
   bufferWrap,
