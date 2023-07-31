@@ -1,5 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Hostname, ServerCrypto } from '@/types';
+import type { Host, ServerCrypto } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import * as utils from '@/utils';
@@ -253,7 +253,7 @@ describe(QUICServer.name, () => {
           key: keyPairEd25519PEM.privateKey,
           cert: certEd25519PEM,
         },
-        resolveHostname: () => '127.0.0.1' as Hostname,
+        resolveHostname: () => '127.0.0.1' as Host,
         logger: logger.getChild('QUICServer'),
       });
       await quicServer.start({
