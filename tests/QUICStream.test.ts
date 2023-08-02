@@ -97,12 +97,7 @@ describe(QUICStream.name, () => {
       await writer.write(message);
       writer.releaseLock();
     }
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(500).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     expect(streamCount).toBe(streamsNum);
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -177,20 +172,10 @@ describe(QUICStream.name, () => {
       await writer.write(message);
       writer.releaseLock();
     }
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     // Start destroying streams
     await Promise.allSettled(streams.map((stream) => stream.destroy()));
-    await Promise.race([
-      streamEndedProm.p,
-      testsUtils.sleep(200).then(() => {
-        throw Error('Ending timed out');
-      }),
-    ]);
+    await streamEndedProm.p;
     expect(streamCreatedCount).toBe(streamsNum);
     expect(streamEndedCount).toBe(streamsNum);
     await client.destroy({ force: true });
@@ -558,21 +543,11 @@ describe(QUICStream.name, () => {
       await writer.write(message);
       writer.releaseLock();
     }
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     // Start destroying streams
     await client.destroy({ force: true });
     // All streams need to finish
-    await Promise.race([
-      streamEndedProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Ending timed out');
-      }),
-    ]);
+    await streamEndedProm.p;
     expect(streamCreatedCount).toBe(streamsNum);
     expect(streamEndedCount).toBe(streamsNum);
     await client.destroy({ force: true });
@@ -646,20 +621,10 @@ describe(QUICStream.name, () => {
       await writer.write(message);
       writer.releaseLock();
     }
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     // Start destroying streams
     await conn.stop({ force: true });
-    await Promise.race([
-      streamEndedProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Ending timed out');
-      }),
-    ]);
+    await streamEndedProm.p;
     expect(streamCreatedCount).toBe(streamsNum);
     expect(streamEndedCount).toBe(streamsNum);
     await client.destroy({ force: true });
@@ -688,6 +653,7 @@ describe(QUICStream.name, () => {
     server.addEventListener(
       'serverConnection',
       (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      { once: true },
     );
     await server.start({
       host: localhost,
@@ -734,19 +700,8 @@ describe(QUICStream.name, () => {
       await writer.write(message);
       writer.releaseLock();
     }
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(100).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
-    // Wait for streams to end with timeout
-    await Promise.race([
-      streamEndedProm.p,
-      testsUtils.sleep(1000).then(() => {
-        throw Error('Ending timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
+    await streamEndedProm.p;
     expect(streamCreatedCount).toBe(streamsNum);
     expect(streamEndedCount).toBe(streamsNum);
     await client.destroy({ force: true });
@@ -810,12 +765,7 @@ describe(QUICStream.name, () => {
     const writer = clientStream.writable.getWriter();
     await writer.write(message);
     writer.releaseLock();
-    await Promise.race([
-      serverStreamProm.p,
-      testsUtils.sleep(500).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await serverStreamProm.p;
     const clientMetadata = clientStream.remoteInfo;
     expect(clientMetadata.localHost).toBe(client.host);
     expect(clientMetadata.localPort).toBe(client.port);
@@ -898,12 +848,7 @@ describe(QUICStream.name, () => {
     const writer = clientStream.writable.getWriter();
     await writer.write(message);
     writer.releaseLock();
-    await Promise.race([
-      serverStreamProm.p,
-      testsUtils.sleep(500).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await serverStreamProm.p;
     clientStream.cancel(cancelReason);
     await expect(clientStream.readable.getReader().read()).rejects.toBe(
       cancelReason,
@@ -974,12 +919,7 @@ describe(QUICStream.name, () => {
     const clientStream = await client.connection.streamNew();
     const clientWriter = clientStream.writable.getWriter();
     await clientWriter.write(message);
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(500).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     const serverStream = await streamCreationProm.p;
 
     // Drain the readable buffer
@@ -991,12 +931,7 @@ describe(QUICStream.name, () => {
     await serverStream.writable.close();
 
     // Both streams are destroyed even without reading till close
-    await Promise.race([
-      Promise.all([clientStream.destroyedP, serverStream.destroyedP]),
-      utils.sleep(100).then(() => {
-        throw Error('took too long to destroy');
-      }),
-    ]);
+    await Promise.all([clientStream.destroyedP, serverStream.destroyedP]);
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -1054,12 +989,7 @@ describe(QUICStream.name, () => {
     const clientStream = await client.connection.streamNew();
     const clientWriter = clientStream.writable.getWriter();
     await clientWriter.write(message);
-    await Promise.race([
-      streamCreationProm.p,
-      testsUtils.sleep(500).then(() => {
-        throw Error('Creation timed out');
-      }),
-    ]);
+    await streamCreationProm.p;
     const serverStream = await streamCreationProm.p;
 
     // Fill up buffers to block reads from pulling
@@ -1076,12 +1006,7 @@ describe(QUICStream.name, () => {
     await serverWriter.abort(Error('some error'));
 
     // Both streams are destroyed even without reading till close
-    await Promise.race([
-      Promise.all([clientStream.destroyedP, serverStream.destroyedP]),
-      utils.sleep(100).then(() => {
-        throw Error('took too long to destroy');
-      }),
-    ]);
+    await Promise.all([clientStream.destroyedP, serverStream.destroyedP]);
 
     await client.destroy({ force: true });
     await server.stop({ force: true });

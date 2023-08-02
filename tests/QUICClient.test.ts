@@ -1741,6 +1741,7 @@ describe(QUICClient.name, () => {
     );
     testsUtils.extractSocket(client, sockets);
     await connectionEventProm.p;
-    await server.stop();
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
   });
 });
