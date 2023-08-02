@@ -1,5 +1,5 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-import type { ContextTimed } from '@matrixai/contexts';
+import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
 import type { ClientCrypto, Host, VerifyCallback } from './types';
 import type { Config } from './native/types';
 import type QUICConnectionMap from './QUICConnectionMap';
@@ -85,7 +85,7 @@ class QUICClient extends EventTarget {
       verifyCallback?: VerifyCallback;
       logger?: Logger;
     },
-    ctx?: Partial<ContextTimed>,
+    ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<QUICClient>;
   @timedCancellable(true, Infinity, errors.ErrorQUICClientCreateTimeOut)
   public static async createQUICClient(

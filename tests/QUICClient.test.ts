@@ -5,7 +5,6 @@ import type { KeyTypes, TLSConfigs } from './utils';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { fc, testProp } from '@fast-check/jest';
 import { running } from '@matrixai/async-init';
-import { Timer } from '@matrixai/timer';
 import QUICSocket from '@/QUICSocket';
 import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
@@ -277,7 +276,7 @@ describe(QUICClient.name, () => {
               verifyPeer: false,
             },
           },
-          { timer: new Timer({ delay: 100 }) },
+          { timer: 100 },
         ),
       ).rejects.toThrow(errors.ErrorQUICClientCreateTimeOut);
     });
@@ -298,7 +297,7 @@ describe(QUICClient.name, () => {
               verifyPeer: false,
             },
           },
-          { timer: new Timer({ delay: 1000 }) },
+          { timer: 1000 },
         ),
       ).rejects.toThrow(errors.ErrorQUICConnectionInvalidConfig);
       // Smaller keepAliveIntervalTime doesn't cause a problem
@@ -317,7 +316,7 @@ describe(QUICClient.name, () => {
               verifyPeer: false,
             },
           },
-          { timer: new Timer({ delay: 100 }) },
+          { timer: 100 },
         ),
       ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
       // Not setting an interval doesn't cause a problem either
@@ -1738,7 +1737,7 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
         },
       },
-      { timer: new Timer({ delay: 500 }) },
+      { timer: 500 },
     );
     testsUtils.extractSocket(client, sockets);
     await connectionEventProm.p;

@@ -1,13 +1,4 @@
-import type { Timer } from '@matrixai/timer';
 import type QUICStream from './QUICStream';
-
-type ContextCancellable = {
-  signal: AbortSignal;
-};
-
-type ContextTimed = ContextCancellable & {
-  timer: Timer;
-};
 
 /**
  * Opaque types are wrappers of existing types
@@ -328,7 +319,5 @@ export type {
   StreamCodeToReason,
   ConnectionMetadata,
   QUICConfig,
-  ContextCancellable,
-  ContextTimed,
   VerifyCallback,
 };
