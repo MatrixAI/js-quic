@@ -699,7 +699,7 @@ class QUICConnection extends EventTarget {
         // The error details will be available as a local error.
         if (e.message !== 'TlsFail') {
           // No other exceptions are expected
-          utils.never();
+          never();
         }
       }
 

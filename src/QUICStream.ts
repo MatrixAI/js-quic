@@ -319,9 +319,8 @@ class QUICStream
           this.readableController.close();
         }
       } catch (e) {
-        if (e.message === 'Done') {
-          never();
-        } else {
+        // Ignore if done, not normally meant to happen but possible in rare cases
+        if (e.message !== 'Done') {
           this.logger.debug(`Stream recv reported: error ${e.message}`);
           if (!this._recvClosed) {
             // Close stream in background
