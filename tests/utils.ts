@@ -471,58 +471,6 @@ async function generateCertificate({
   return await x509.X509CertificateGenerator.create(certConfig);
 }
 
-// Async function createTLSConfigWithChain(
-//   keyPairs: Array<{
-//     publicKey: JsonWebKey;
-//     privateKey: JsonWebKey;
-//   }>,
-//   generateCertId?: () => string,
-// ): Promise<{
-//   certChainPem: string;
-//   privKeyPem: string;
-//   caPem: string;
-// }> {
-//   if (keyPairs.length === 0) throw Error('Must have at least 1 keypair');
-//   let num = -1;
-//   const defaultNumGen = () => {
-//     num += 1;
-//     return `${num}`;
-//   };
-//   generateCertId = generateCertId ?? defaultNumGen;
-//   let previousCert: X509Certificate | null = null;
-//   let previousKeyPair: {
-//     publicKey: JsonWebKey;
-//     privateKey: JsonWebKey;
-//   }  | null = null;
-//   const certChain: Array<X509Certificate> = [];
-//   for (const keyPair of keyPairs) {
-//     const certId = generateCertId();
-//     const newCert = await generateCertificate({
-//       certId,
-//       duration: 31536000,
-//       issuerPrivateKey: previousKeyPair?.privateKey ?? keyPair.privateKey,
-//       subjectKeyPair: keyPair,
-//       issuerAttrsExtra: previousCert?.subjectName.toJSON(),
-//     });
-//     certChain.unshift(newCert);
-//     previousCert = newCert;
-//     previousKeyPair = keyPair;
-//   }
-//   let certChainPEM = '';
-//   let caPem: string | null = null;
-//   for (const certificate of certChain) {
-//     const pem = certToPEM(certificate);
-//     caPem = pem;
-//     certChainPEM += pem;
-//   }
-//
-//   return {
-//     privKeyPem: privateKeyToPEM(previousKeyPair!.privateKey),
-//     certChainPem: certChainPEM,
-//     caPem: caPem!,
-//   };
-// }
-
 function certToPEM(cert: X509Certificate): string {
   return cert.toString('pem') + '\n';
 }
