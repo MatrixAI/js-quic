@@ -895,8 +895,10 @@ class QUICConnection extends EventTarget {
         this.dispatchEvent(
           new events.QUICConnectionStreamEvent({ detail: quicStream }),
         );
+        // No need to read after creation, doing so will throw during early cancellation
+      } else {
+        quicStream.read();
       }
-      quicStream.read();
     }
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
       const quicStream = this.streamMap.get(streamId);

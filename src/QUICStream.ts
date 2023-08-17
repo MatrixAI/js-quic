@@ -88,8 +88,10 @@ class QUICStream
     //  create Peer state.
     try {
       connection.conn.streamSend(streamId, new Uint8Array(0), false);
-    } catch {
-      // FIXME: If there is an error here then stream will not create? Maybe we should abort?
+    } catch (e) {
+      // We ignore any errors here, if this is a server side stream then state already exists.
+      // But it's possible for the stream to already be closed or have an error here.
+      // These errors will be handled by the QUICStream and not here.
     }
     const stream = new this({
       streamId,
@@ -163,6 +165,18 @@ class QUICStream
                 // and we need to propagate the error up and down the stream
                 controller.error(reason);
                 await this.closeRecv(true, reason);
+                // It is possible the stream was cancelled, let's check the writable state;
+                try {
+                  this.conn.streamWritable(this.streamId, 0);
+                } catch (e) {
+                  const match = e.message.match(/InvalidStreamState\((.+)\)/);
+                  if (match == null) {
+                    return never(
+                      'Errors besides [InvalidStreamState(StreamId)] are not expected here',
+                    );
+                  }
+                  this.writableController.error(reason);
+                }
               }
               break;
             }
@@ -319,8 +333,9 @@ class QUICStream
           this.readableController.close();
         }
       } catch (e) {
-        // Ignore if done, not normally meant to happen but possible in rare cases
-        if (e.message !== 'Done') {
+        if (e.message === 'Done') {
+          never();
+        } else {
           this.logger.debug(`Stream recv reported: error ${e.message}`);
           if (!this._recvClosed) {
             // Close stream in background
@@ -329,6 +344,18 @@ class QUICStream
                 (await this.processSendStreamError(e, 'recv')) ?? e;
               this.readableController.error(reason);
               await this.closeRecv(true, reason);
+              // It is possible the stream was cancelled, let's check the writable state;
+              try {
+                this.conn.streamWritable(this.streamId, 0);
+              } catch (e) {
+                const match = e.message.match(/InvalidStreamState\((.+)\)/);
+                if (match == null) {
+                  return never(
+                    'Errors besides [InvalidStreamState(StreamId)] are not expected here',
+                  );
+                }
+                this.writableController.error(reason);
+              }
             })();
           }
         }
@@ -488,7 +515,7 @@ class QUICStream
     match = e.message.match(/InvalidStreamState\((.+)\)/);
     if (match != null) {
       // `InvalidStreamState()` returns the stream ID and not any actual error code
-      return await this.codeToReason(type, 0);
+      return never('Should never reach an [InvalidState(StreamId)] error');
     }
     return null;
   }

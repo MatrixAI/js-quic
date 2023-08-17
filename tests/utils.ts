@@ -4,6 +4,7 @@ import type QUICSocket from '@/QUICSocket';
 import type QUICClient from '@/QUICClient';
 import type QUICServer from '@/QUICServer';
 import type QUICStream from '@/QUICStream';
+import type { StreamCodeToReason, StreamReasonToCode } from '@';
 import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { never } from '@/utils';
@@ -740,6 +741,35 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
   };
 }
 
+/**
+ * This will create a `reasonToCode` and `CodeToReason` function that will
+ * allow errors to "jump" the network boundary. It does this by mapping the
+ * errors to an incrementing code and returning them on the other end of the
+ * connection.
+ *
+ * Note: this should ONLY be used for testing as it requires the client and
+ * server to share the same instance of `reasonToCode` and `codeToReason`.
+ */
+function createReasonConverters() {
+  const reasonMap = new Map<number, any>();
+  let code = 0;
+
+  const reasonToCode: StreamReasonToCode = (_type, reason) => {
+    code++;
+    reasonMap.set(code, reason);
+    return code;
+  };
+
+  const codeToReason: StreamCodeToReason = (_type, code) => {
+    return reasonMap.get(code) ?? new Error('Reason not found');
+  };
+
+  return {
+    reasonToCode,
+    codeToReason,
+  };
+}
+
 export {
   sleep,
   randomBytes,
@@ -760,6 +790,7 @@ export {
   waitForTimeoutNull,
   connStats,
   generateConfig,
+  createReasonConverters,
 };
 
 export type { Messages, StreamData, KeyTypes, TLSConfigs };

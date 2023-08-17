@@ -335,8 +335,8 @@ function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
   return Buffer.from(connIdString, 'hex') as ConnectionId;
 }
 
-function never(): never {
-  throw new errors.ErrorQUICUndefinedBehaviour();
+function never(message?: string): never {
+  throw new errors.ErrorQUICUndefinedBehaviour(message);
 }
 
 function certificateDERToPEM(der: Uint8Array): string {
