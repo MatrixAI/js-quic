@@ -150,50 +150,44 @@ class QUICStream
           const buf = Buffer.alloc(1024);
           let recvLength: number, fin: boolean;
           // Read messages until buffer is empty
-          while (true) {
-            try {
-              [recvLength, fin] = this.conn.streamRecv(this.streamId, buf);
-            } catch (e) {
-              this.logger.debug(`Stream recv reported: error ${e.message}`);
-              // Done means there is no more data to read
-              if (!this._recvClosed && e.message !== 'Done') {
-                const reason =
-                  (await this.processSendStreamError(e, 'recv')) ?? e;
-                // If it is `StreamReset(u64)` error, then the peer has closed
-                // the stream, and we are receiving the error code
-                // If it is not a `StreamReset(u64)`, then something else broke,
-                // and we need to propagate the error up and down the stream
-                controller.error(reason);
-                await this.closeRecv(true, reason);
-                // It is possible the stream was cancelled, let's check the writable state;
-                try {
-                  this.conn.streamWritable(this.streamId, 0);
-                } catch (e) {
-                  const match = e.message.match(/InvalidStreamState\((.+)\)/);
-                  if (match == null) {
-                    return never(
-                      'Errors besides [InvalidStreamState(StreamId)] are not expected here',
-                    );
-                  }
-                  this.writableController.error(reason);
+          try {
+            [recvLength, fin] = this.conn.streamRecv(this.streamId, buf);
+          } catch (e) {
+            this.logger.debug(`Stream recv reported: error ${e.message}`);
+            // Done means there is no more data to read
+            if (!this._recvClosed && e.message !== 'Done') {
+              const reason =
+                (await this.processSendStreamError(e, 'recv')) ?? e;
+              // If it is `StreamReset(u64)` error, then the peer has closed
+              // the stream, and we are receiving the error code
+              // If it is not a `StreamReset(u64)`, then something else broke,
+              // and we need to propagate the error up and down the stream
+              controller.error(reason);
+              await this.closeRecv(true, reason);
+              // It is possible the stream was cancelled, let's check the writable state;
+              try {
+                this.conn.streamWritable(this.streamId, 0);
+              } catch (e) {
+                const match = e.message.match(/InvalidStreamState\((.+)\)/);
+                if (match == null) {
+                  return never(
+                    'Errors besides [InvalidStreamState(StreamId)] are not expected here',
+                  );
                 }
+                this.writableController.error(reason);
               }
-              break;
             }
-            this.logger.debug(
-              `stream read ${recvLength} bytes with fin(${fin})`,
-            );
-            // Check and drop if we're already closed or message is 0-length message
-            if (!this._recvClosed && recvLength > 0) {
-              this.readableController.enqueue(buf.subarray(0, recvLength));
-            }
-            // If fin is true, then that means, the stream is CLOSED
-            if (fin) {
-              await this.closeRecv();
-              controller.close();
-              // Return out of the loop
-              break;
-            }
+            return;
+          }
+          this.logger.debug(`stream read ${recvLength} bytes with fin(${fin})`);
+          // Check and drop if we're already closed or message is 0-length message
+          if (!this._recvClosed && recvLength > 0) {
+            controller.enqueue(buf.subarray(0, recvLength));
+          }
+          // If fin is true, then that means, the stream is CLOSED
+          if (fin) {
+            await this.closeRecv();
+            controller.close();
           }
         },
         cancel: async (reason) => {
