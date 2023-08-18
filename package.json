@@ -76,7 +76,6 @@
     "jest-extended": "^3.0.1",
     "jest-junit": "^14.0.0",
     "prettier": "^2.6.2",
-    "pvtsutils": "1.3.2",
     "semver": "^7.3.7",
     "shx": "^0.3.4",
     "sodium-native": "^3.4.1",
