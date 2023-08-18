@@ -1,6 +1,6 @@
 {
   "name": "@matrixai/quic",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "author": "Matrix AI",
   "contributors": [
     {
@@ -47,10 +47,10 @@
     "ip-num": "^1.5.0"
   },
   "optionalDependencies": {
-    "@matrixai/quic-darwin-arm64": "0.0.16",
-    "@matrixai/quic-darwin-x64": "0.0.16",
-    "@matrixai/quic-linux-x64": "0.0.16",
-    "@matrixai/quic-win32-x64": "0.0.16"
+    "@matrixai/quic-darwin-arm64": "0.0.17",
+    "@matrixai/quic-darwin-x64": "0.0.17",
+    "@matrixai/quic-linux-x64": "0.0.17",
+    "@matrixai/quic-win32-x64": "0.0.17"
   },
   "devDependencies": {
     "@fast-check/jest": "^1.1.0",
@@ -60,7 +60,6 @@
     "@peculiar/asn1-x509": "^2.3.0",
     "@peculiar/webcrypto": "^1.4.0",
     "@peculiar/x509": "^1.8.3",
-    "pvtsutils": "1.3.2",
     "@swc/core": "^1.3.62",
     "@swc/jest": "^0.2.26",
     "@types/jest": "^28.1.3",
@@ -77,6 +76,7 @@
     "jest-extended": "^3.0.1",
     "jest-junit": "^14.0.0",
     "prettier": "^2.6.2",
+    "pvtsutils": "1.3.2",
     "semver": "^7.3.7",
     "shx": "^0.3.4",
     "sodium-native": "^3.4.1",
