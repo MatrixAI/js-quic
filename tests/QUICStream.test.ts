@@ -963,6 +963,90 @@ describe(QUICStream.name, () => {
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
+  test('streams can be cancelled concurrently after data sent', async () => {
+    const cancelReason = Symbol('CancelReason');
+    const connectionEventProm =
+      utils.promise<events.QUICServerConnectionEvent>();
+    const tlsConfig1 = await generateConfig(defaultType);
+    const tlsConfig2 = await generateConfig(defaultType);
+    const reasonConverters = testsUtils.createReasonConverters();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig1.key,
+        cert: tlsConfig1.cert,
+        verifyPeer: true,
+        ca: tlsConfig2.ca,
+      },
+      ...reasonConverters,
+    });
+    testsUtils.extractSocket(server, sockets);
+    server.addEventListener(
+      'serverConnection',
+      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+        key: tlsConfig2.key,
+        cert: tlsConfig2.cert,
+      },
+      ...reasonConverters,
+    });
+    testsUtils.extractSocket(client, sockets);
+    const conn = (await connectionEventProm.p).detail;
+    // Do the test
+    const serverStreamProm = utils.promise<QUICStream>();
+    conn.addEventListener(
+      'connectionStream',
+      (event: events.QUICConnectionStreamEvent) => {
+        serverStreamProm.resolveP(event.detail);
+      },
+    );
+    // Let's make a new streams.
+    const message = Buffer.from('Hello!');
+    const clientStream = await client.connection.streamNew();
+    const writer = clientStream.writable.getWriter();
+    await writer.write(message);
+    writer.releaseLock();
+    const serverStream = await serverStreamProm.p;
+    serverStream.cancel(cancelReason);
+    clientStream.cancel(cancelReason);
+
+    // Checking stream states
+    await expect(clientStream.readable.getReader().read()).rejects.toBe(
+      cancelReason,
+    );
+    await expect(clientStream.writable.getWriter().write()).rejects.toBe(
+      cancelReason,
+    );
+    await expect(serverStream.readable.getReader().read()).rejects.toBe(
+      cancelReason,
+    );
+    await expect(serverStream.writable.getWriter().write()).rejects.toBe(
+      cancelReason,
+    );
+
+    // And client stream should've cleaned up
+    await testsUtils.sleep(100);
+    expect(clientStream[destroyed]).toBeTrue();
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
   test('stream will end when waiting for more data', async () => {
     // Needed to check that the pull based reading of data doesn't break when we
     // temporarily run out of data to read

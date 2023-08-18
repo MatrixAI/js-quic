@@ -907,9 +907,22 @@ class QUICConnection extends EventTarget {
         //  The QUICStream will always exist before processing it's writable.
         //  1. First time it is seen in the readable iterator
         //  2. created using `streamNew()`
-        never();
+
+        // There is one condition where this can happen. That is when both sides of the stream cancel concurrently.
+        // Local state is cleaned up while the remote side still sends a closing frame.
+        try {
+          this.conn.streamWritable(streamId, 0);
+          this.logger.debug(
+            `streamId ${streamId} was writable without an existing stream`,
+          );
+        } catch (e) {
+          this.logger.debug(
+            `streamId ${streamId} was writable without an existing stream and error ${e.message}`,
+          );
+        }
+      } else {
+        quicStream.write();
       }
-      quicStream.write();
     }
   }
 
