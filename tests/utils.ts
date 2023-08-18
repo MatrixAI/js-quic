@@ -728,7 +728,6 @@ export {
   keyPairECDSAToPEM,
   keyPairEd25519ToPEM,
   generateCertificate,
-  // CreateTLSConfigWithChain
   certToPEM,
   generateKeyHMAC,
   signHMAC,

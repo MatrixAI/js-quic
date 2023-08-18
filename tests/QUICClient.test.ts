@@ -360,8 +360,6 @@ describe(QUICClient.name, () => {
       abortController.abort(Error('abort error'));
       await expect(clientProm).rejects.toThrow(Error('abort error'));
     });
-    test.todo('server handles socket error');
-    test.todo('client handles socket error');
   });
   describe.each(types)('TLS rotation with %s', (type) => {
     test('existing connections config is unchanged and still function', async () => {
