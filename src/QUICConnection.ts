@@ -911,13 +911,21 @@ class QUICConnection extends EventTarget {
         // There is one condition where this can happen. That is when both sides of the stream cancel concurrently.
         // Local state is cleaned up while the remote side still sends a closing frame.
         try {
+          // Check if the stream can write 0 bytes, should throw if the stream has ended.
+          // We need to check if it's writable to trigger any state change for the stream.
           this.conn.streamWritable(streamId, 0);
-          this.logger.debug(
-            `streamId ${streamId} was writable without an existing stream`,
+          never(
+            'The stream should never be writable if a QUICStream does not exist for it',
           );
         } catch (e) {
+          // Stream should be stopped here, any other error is a never
+          if (e.message.match(/StreamStopped\((.+)\)/) == null) {
+            // We only expect a StreamStopped error here
+            throw e;
+          }
+          // If stopped we just ignore it, `streamWritable` should've cleaned up the native state
           this.logger.debug(
-            `streamId ${streamId} was writable without an existing stream and error ${e.message}`,
+            `StreamId ${streamId} was writable without an existing stream and error ${e.message}`,
           );
         }
       } else {
