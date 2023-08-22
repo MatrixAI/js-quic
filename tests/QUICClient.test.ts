@@ -280,62 +280,6 @@ describe(QUICClient.name, () => {
         ),
       ).rejects.toThrow(errors.ErrorQUICClientCreateTimeOut);
     });
-    test('ctx timer must be less than maxIdleTimeout', async () => {
-      // Larger timer throws
-      await expect(
-        QUICClient.createQUICClient(
-          {
-            host: localhost,
-            port: 56666,
-            localHost: localhost,
-            crypto: {
-              ops: clientCrypto,
-            },
-            logger: logger.getChild(QUICClient.name),
-            config: {
-              maxIdleTimeout: 200,
-              verifyPeer: false,
-            },
-          },
-          { timer: 1000 },
-        ),
-      ).rejects.toThrow(errors.ErrorQUICConnectionInvalidConfig);
-      // Smaller keepAliveIntervalTime doesn't cause a problem
-      await expect(
-        QUICClient.createQUICClient(
-          {
-            host: localhost,
-            port: 56666,
-            localHost: localhost,
-            crypto: {
-              ops: clientCrypto,
-            },
-            logger: logger.getChild(QUICClient.name),
-            config: {
-              maxIdleTimeout: 200,
-              verifyPeer: false,
-            },
-          },
-          { timer: 100 },
-        ),
-      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
-      // Not setting an interval doesn't cause a problem either
-      await expect(
-        QUICClient.createQUICClient({
-          host: localhost,
-          port: 56666,
-          localHost: localhost,
-          crypto: {
-            ops: clientCrypto,
-          },
-          logger: logger.getChild(QUICClient.name),
-          config: {
-            maxIdleTimeout: 200,
-            verifyPeer: false,
-          },
-        }),
-      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
-    });
     test('client times out with ctx signal while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       const abortController = new AbortController();

@@ -53,6 +53,7 @@ class QUICServer extends EventTarget {
   protected codeToReason: StreamCodeToReason | undefined;
   protected verifyCallback: VerifyCallback | undefined;
   protected connectionMap: QUICConnectionMap;
+  protected minIdleTimeout: number | undefined;
   // Used to track address string for logging ONLY
   protected address: string;
 
@@ -109,6 +110,7 @@ class QUICServer extends EventTarget {
     reasonToCode,
     codeToReason,
     verifyCallback,
+    minIdleTimeout,
     logger,
   }: {
     crypto: {
@@ -124,6 +126,7 @@ class QUICServer extends EventTarget {
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     verifyCallback?: VerifyCallback;
+    minIdleTimeout?: number;
     logger?: Logger;
   }) {
     super();
@@ -151,6 +154,7 @@ class QUICServer extends EventTarget {
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this.verifyCallback = verifyCallback;
+    this.minIdleTimeout = minIdleTimeout;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -355,23 +359,28 @@ class QUICServer extends EventTarget {
       `Accepting new connection from QUIC packet from ${remoteInfo.host}:${remoteInfo.port}`,
     );
     const clientConnRef = Buffer.from(header.scid).toString('hex').slice(32);
-    const connectionProm = QUICConnection.createQUICConnection({
-      type: 'server',
-      scid: newScid,
-      dcid: dcidOriginal,
-      socket: this.socket,
-      remoteInfo,
-      data,
-      config: this.config,
-      reasonToCode: this.reasonToCode,
-      codeToReason: this.codeToReason,
-      verifyCallback: this.verifyCallback,
-      logger: this.logger.getChild(
-        `${QUICConnection.name} ${scid.toString().slice(32)}-${clientConnRef}`,
-      ),
-    });
+    let connection: QUICConnection;
     try {
-      await connectionProm;
+      connection = await QUICConnection.createQUICConnection(
+        {
+          type: 'server',
+          scid: newScid,
+          dcid: dcidOriginal,
+          socket: this.socket,
+          remoteInfo,
+          data,
+          config: this.config,
+          reasonToCode: this.reasonToCode,
+          codeToReason: this.codeToReason,
+          verifyCallback: this.verifyCallback,
+          logger: this.logger.getChild(
+            `${QUICConnection.name} ${scid
+              .toString()
+              .slice(32)}-${clientConnRef}`,
+          ),
+        },
+        { timer: this.minIdleTimeout },
+      );
     } catch (e) {
       // Ignoring any errors here as a failure to connect
       this.dispatchEvent(
@@ -383,7 +392,6 @@ class QUICServer extends EventTarget {
       );
       return;
     }
-    const connection = await connectionProm;
     // Handling connection events
     connection.addEventListener(
       'connectionError',

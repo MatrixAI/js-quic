@@ -24,7 +24,9 @@ import {
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
 import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
-import { buildQuicheConfig } from './config';
+import { withF } from '@matrixai/resources';
+import { utils as contextsUtils } from '@matrixai/contexts';
+import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as events from './events';
@@ -235,7 +237,11 @@ class QUICConnection extends EventTarget {
         },
     ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<QUICConnection>;
-  @timedCancellable(true, Infinity, errors.ErrorQUICConnectionStartTimeOut)
+  @timedCancellable(
+    true,
+    minIdleTimeout,
+    errors.ErrorQUICConnectionStartTimeOut,
+  )
   public static async createQUICConnection(
     args:
       | {
@@ -265,12 +271,6 @@ class QUICConnection extends EventTarget {
         },
     @context ctx: ContextTimed,
   ): Promise<QUICConnection> {
-    const timeoutTime = ctx.timer.getTimeout();
-    if (timeoutTime !== Infinity && timeoutTime >= args.config.maxIdleTimeout) {
-      throw new errors.ErrorQUICConnectionInvalidConfig(
-        'connection timeout timer must be strictly less than maxIdleTimeout',
-      );
-    }
     ctx.signal.throwIfAborted();
     const abortProm = promise<never>();
     const abortHandler = () => {
@@ -278,27 +278,13 @@ class QUICConnection extends EventTarget {
     };
     ctx.signal.addEventListener('abort', abortHandler);
     const connection = new this(args);
-    const startProm = connection.start().then(async () => {
-      // If this is a server connection, we need to process the packet that created it
-      if (args.type === 'server') {
-        await utils.withMonitor(
-          undefined,
-          connection.lockbox,
-          RWLockWriter,
-          async (mon) => {
-            await mon.withF(connection.lockCode, async (mon) => {
-              await connection.recv(args.data, args.remoteInfo, mon);
-              await connection.send(mon);
-            });
-          },
-        );
-      }
-    });
+    // If it's a server connection we want to pass the initial packet
+    const data = args.type === 'server' ? args.data : undefined;
     // This ensures that TLS has been established and verified on both sides
     try {
       await Promise.race([
         Promise.all([
-          startProm,
+          connection.start(data),
           connection.establishedP,
           connection.secureEstablishedP,
         ]),
@@ -471,12 +457,25 @@ class QUICConnection extends EventTarget {
 
   /**
    * This will set up the connection initiate sending
+   * @param data - the initial packet that triggered the creation of the connection.
    */
-  public async start(): Promise<void> {
+  public async start(data?: Uint8Array): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
     // Set the connection up
     this.socket.connectionMap.set(this.connectionId, this);
-    await this.send();
+    await withF(
+      [contextsUtils.monitor(this.lockbox, RWLockWriter)],
+      async ([mon]) => {
+        if (data != null) {
+          await this.recv(
+            data,
+            { host: this._remoteHost, port: this._remotePort },
+            mon,
+          );
+        }
+        await this.send(mon);
+      },
+    );
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
@@ -535,7 +534,7 @@ class QUICConnection extends EventTarget {
     this.stopKeepAliveIntervalTimer();
 
     // Trigger closing connection in the background and await close later.
-    void utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+    void this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
       await mon.withF(this.lockCode, async (mon) => {
         // If this is already closed, then `Done` will be thrown
         // Otherwise it can send `CONNECTION_CLOSE` frame
@@ -665,13 +664,15 @@ class QUICConnection extends EventTarget {
   public async recv(
     data: Uint8Array,
     remoteInfo: RemoteInfo,
-    mon: Monitor<RWLockWriter>,
+    mon?: Monitor<RWLockWriter>,
   ): Promise<void> {
-    if (!mon.isLocked(this.lockCode)) {
-      return mon.withF(this.lockCode, async (mon) => {
-        return this.recv(data, remoteInfo, mon);
-      });
-    }
+    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+      if (!mon.isLocked(this.lockCode)) {
+        return mon.withF(this.lockCode, async (mon) => {
+          return this.recv(data, remoteInfo, mon);
+        });
+      }
+    });
 
     try {
       // The remote information may be changed on each receive
@@ -775,7 +776,7 @@ class QUICConnection extends EventTarget {
    * @internal
    */
   public async send(mon?: Monitor<RWLockWriter>): Promise<void> {
-    await utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
       if (!mon.isLocked(this.lockCode)) {
         return mon.withF(this.lockCode, async (mon) => {
           return this.send(mon);
@@ -1082,6 +1083,26 @@ class QUICConnection extends EventTarget {
       }
       return quicStream;
     });
+  }
+
+  /**
+   * Used as a clean way to create a new monitor if it doesn't exist, otherwise uses the existing one.
+   */
+  protected async withMonitor<T>(
+    mon: Monitor<RWLockWriter> | undefined,
+    lockBox: LockBox<RWLockWriter>,
+    lockConstructor: { new (): RWLockWriter },
+    f: (mon: Monitor<RWLockWriter>) => Promise<T>,
+    locksPending?: Map<string, { count: number }>,
+  ): Promise<T> {
+    if (mon == null) {
+      return await withF(
+        [contextsUtils.monitor(lockBox, lockConstructor, locksPending)],
+        ([mon]) => f(mon),
+      );
+    } else {
+      return f(mon);
+    }
   }
 }
 
