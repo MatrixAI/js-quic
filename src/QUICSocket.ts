@@ -8,6 +8,8 @@ import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import { RWLockWriter } from '@matrixai/async-locks';
 import { status } from '@matrixai/async-init/dist/utils';
+import { withF } from '@matrixai/resources';
+import { utils as contextsUtils } from '@matrixai/contexts';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
 import { quiche } from './native';
@@ -108,11 +110,9 @@ class QUICSocket extends EventTarget {
     // Acquire the conn lock, this ensures mutual exclusion
     // for state changes on the internal connection
     try {
-      await utils.withMonitor(
-        undefined,
-        connection.lockbox,
-        RWLockWriter,
-        async (mon) => {
+      await withF(
+        [contextsUtils.monitor(connection.lockbox, RWLockWriter)],
+        async ([mon]) => {
           await mon.withF(connection.lockCode, async (mon) => {
             // Even if we are `stopping`, the `quiche` library says we need to
             // continue processing any packets.

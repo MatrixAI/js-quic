@@ -9,9 +9,11 @@ import type {
 } from './types';
 import type { Connection } from './native';
 import type { LockBox, RWLockWriter } from '@matrixai/async-locks';
+import type { Monitor } from '@matrixai/async-locks';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
-import { Monitor } from '@matrixai/async-locks';
+import { withF } from '@matrixai/resources';
+import { utils as contextsUtils } from '@matrixai/contexts';
 import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
 
@@ -464,6 +466,9 @@ function streamStats(
 `;
 }
 
+/**
+ * Used as a clean way to create a new monitor if it doesn't exist, otherwise uses the existing one.
+ */
 async function withMonitor<T>(
   mon: Monitor<RWLockWriter> | undefined,
   lockBox: LockBox<RWLockWriter>,
@@ -471,10 +476,16 @@ async function withMonitor<T>(
   fun: (mon: Monitor<RWLockWriter>) => Promise<T>,
   locksPending?: Map<string, { count: number }>,
 ): Promise<T> {
-  const _mon = mon ?? new Monitor(lockBox, lockConstructor, locksPending);
-  const result = await fun(_mon);
-  if (mon != null) await _mon.unlockAll();
-  return result;
+  if (mon == null) {
+    return await withF(
+      [contextsUtils.monitor(lockBox, lockConstructor, locksPending)],
+      async ([mon]) => {
+        return await fun(mon);
+      },
+    );
+  } else {
+    return await fun(mon);
+  }
 }
 
 export {

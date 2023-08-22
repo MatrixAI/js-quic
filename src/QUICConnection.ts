@@ -24,6 +24,8 @@ import {
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
 import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
+import { withF } from '@matrixai/resources';
+import { utils as contextsUtils } from '@matrixai/contexts';
 import { buildQuicheConfig } from './config';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
@@ -278,27 +280,15 @@ class QUICConnection extends EventTarget {
     };
     ctx.signal.addEventListener('abort', abortHandler);
     const connection = new this(args);
-    const startProm = connection.start().then(async () => {
-      // If this is a server connection, we need to process the packet that created it
-      if (args.type === 'server') {
-        await utils.withMonitor(
-          undefined,
-          connection.lockbox,
-          RWLockWriter,
-          async (mon) => {
-            await mon.withF(connection.lockCode, async (mon) => {
-              await connection.recv(args.data, args.remoteInfo, mon);
-              await connection.send(mon);
-            });
-          },
-        );
-      }
-    });
+    const initialData =
+      args.type === 'server'
+        ? { data: args.data, remoteInfo: args.remoteInfo }
+        : undefined;
     // This ensures that TLS has been established and verified on both sides
     try {
       await Promise.race([
         Promise.all([
-          startProm,
+          connection.start(initialData),
           connection.establishedP,
           connection.secureEstablishedP,
         ]),
@@ -471,12 +461,24 @@ class QUICConnection extends EventTarget {
 
   /**
    * This will set up the connection initiate sending
+   * @param initialData - If the connection is server initiated then the data that initiated it needs to be provided here
    */
-  public async start(): Promise<void> {
+  public async start(initialData?: {
+    data: Uint8Array;
+    remoteInfo: RemoteInfo;
+  }): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
     // Set the connection up
     this.socket.connectionMap.set(this.connectionId, this);
-    await this.send();
+    await withF(
+      [contextsUtils.monitor(this.lockbox, RWLockWriter)],
+      async ([mon]) => {
+        if (initialData != null) {
+          await this.recv(initialData.data, initialData.remoteInfo, mon);
+        }
+        await this.send(mon);
+      },
+    );
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
@@ -665,13 +667,15 @@ class QUICConnection extends EventTarget {
   public async recv(
     data: Uint8Array,
     remoteInfo: RemoteInfo,
-    mon: Monitor<RWLockWriter>,
+    mon?: Monitor<RWLockWriter>,
   ): Promise<void> {
-    if (!mon.isLocked(this.lockCode)) {
-      return mon.withF(this.lockCode, async (mon) => {
-        return this.recv(data, remoteInfo, mon);
-      });
-    }
+    await utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+      if (!mon.isLocked(this.lockCode)) {
+        return mon.withF(this.lockCode, async (mon) => {
+          return this.recv(data, remoteInfo, mon);
+        });
+      }
+    });
 
     try {
       // The remote information may be changed on each receive
