@@ -23,12 +23,26 @@ const sigalgs = [
   'ed25519',
 ].join(':');
 
+/**
+ * Usually we would create separate timeouts for connecting vs idling.
+ * Unfortunately quiche only has 1 config option that controls both.
+ * And it is not possible to mutate this option after connecting.
+ * Therefore, this option is just a way to set a shorter connecting timeout
+ * compared to the idling timeout.
+ * If this is the larger than the `maxIdleTimeout` (remember that `0` is `Infinity`) for `maxIdleTimeout`, then this has no effect.
+ * This only has an effect if this is set to a number less than `maxIdleTimeout`.
+ * Thus, it is the "minimum boundary" of the timeout during connecting.
+ * While the `maxIdleTimeout` is still the "maximum boundary" during connecting.
+ */
+const minIdleTimeout = Infinity;
+
 const clientDefault: QUICConfig = {
   sigalgs,
   verifyPeer: true,
   verifyAllowFail: false,
   grease: true,
-  maxIdleTimeout: 1 * 60 * 1000,
+  keepAliveIntervalTime: undefined,
+  maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
   maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200,
   initialMaxData: 10 * 1024 * 1024,
@@ -48,7 +62,8 @@ const serverDefault: QUICConfig = {
   verifyPeer: false,
   verifyAllowFail: false,
   grease: true,
-  maxIdleTimeout: 1 * 60 * 1000,
+  keepAliveIntervalTime: undefined,
+  maxIdleTimeout: 0,
   maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
   maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200
   initialMaxData: 10 * 1024 * 1024,
@@ -188,4 +203,4 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   return quicheConfig;
 }
 
-export { clientDefault, serverDefault, buildQuicheConfig };
+export { minIdleTimeout, clientDefault, serverDefault, buildQuicheConfig };

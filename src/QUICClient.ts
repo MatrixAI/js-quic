@@ -16,7 +16,7 @@ import { quiche } from './native';
 import * as utils from './utils';
 import * as errors from './errors';
 import * as events from './events';
-import { clientDefault } from './config';
+import { clientDefault, minIdleTimeout } from './config';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
 import QUICConnectionId from './QUICConnectionId';
@@ -87,7 +87,7 @@ class QUICClient extends EventTarget {
     },
     ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<QUICClient>;
-  @timedCancellable(true, Infinity, errors.ErrorQUICClientCreateTimeOut)
+  @timedCancellable(true, minIdleTimeout, errors.ErrorQUICClientCreateTimeOut)
   public static async createQUICClient(
     {
       host,

@@ -26,7 +26,7 @@ import { Timer } from '@matrixai/timer';
 import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
 import { withF } from '@matrixai/resources';
 import { utils as contextsUtils } from '@matrixai/contexts';
-import { buildQuicheConfig } from './config';
+import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
 import { quiche } from './native';
 import * as events from './events';
@@ -237,7 +237,11 @@ class QUICConnection extends EventTarget {
         },
     ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<QUICConnection>;
-  @timedCancellable(true, Infinity, errors.ErrorQUICConnectionStartTimeOut)
+  @timedCancellable(
+    true,
+    minIdleTimeout,
+    errors.ErrorQUICConnectionStartTimeOut,
+  )
   public static async createQUICConnection(
     args:
       | {
