@@ -53,7 +53,7 @@ class QUICServer extends EventTarget {
   protected codeToReason: StreamCodeToReason | undefined;
   protected verifyCallback: VerifyCallback | undefined;
   protected connectionMap: QUICConnectionMap;
-  protected connectionConnectTime: number;
+  protected connectTimeoutTime: number;
   // Used to track address string for logging ONLY
   protected address: string;
 
@@ -110,7 +110,7 @@ class QUICServer extends EventTarget {
     reasonToCode,
     codeToReason,
     verifyCallback,
-    connectionConnectTime = 2000,
+    connectTimeoutTime = 15000,
     logger,
   }: {
     crypto: {
@@ -126,7 +126,7 @@ class QUICServer extends EventTarget {
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     verifyCallback?: VerifyCallback;
-    connectionConnectTime?: number;
+    connectTimeoutTime?: number;
     logger?: Logger;
   }) {
     super();
@@ -154,7 +154,7 @@ class QUICServer extends EventTarget {
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this.verifyCallback = verifyCallback;
-    this.connectionConnectTime = connectionConnectTime;
+    this.connectTimeoutTime = connectTimeoutTime;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -379,7 +379,7 @@ class QUICServer extends EventTarget {
               .slice(32)}-${clientConnRef}`,
           ),
         },
-        { timer: this.connectionConnectTime },
+        { timer: this.connectTimeoutTime },
       );
     } catch (e) {
       // Ignoring any errors here as a failure to connect

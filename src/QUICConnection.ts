@@ -531,7 +531,7 @@ class QUICConnection extends EventTarget {
     this.stopKeepAliveIntervalTimer();
 
     // Trigger closing connection in the background and await close later.
-    void utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+    void this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
       await mon.withF(this.lockCode, async (mon) => {
         // If this is already closed, then `Done` will be thrown
         // Otherwise it can send `CONNECTION_CLOSE` frame
@@ -663,7 +663,7 @@ class QUICConnection extends EventTarget {
     remoteInfo: RemoteInfo,
     mon?: Monitor<RWLockWriter>,
   ): Promise<void> {
-    await utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
       if (!mon.isLocked(this.lockCode)) {
         return mon.withF(this.lockCode, async (mon) => {
           return this.recv(data, remoteInfo, mon);
@@ -773,7 +773,7 @@ class QUICConnection extends EventTarget {
    * @internal
    */
   public async send(mon?: Monitor<RWLockWriter>): Promise<void> {
-    await utils.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
+    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
       if (!mon.isLocked(this.lockCode)) {
         return mon.withF(this.lockCode, async (mon) => {
           return this.send(mon);
@@ -1080,6 +1080,26 @@ class QUICConnection extends EventTarget {
       }
       return quicStream;
     });
+  }
+
+  /**
+   * Used as a clean way to create a new monitor if it doesn't exist, otherwise uses the existing one.
+   */
+  protected async withMonitor<T>(
+    mon: Monitor<RWLockWriter> | undefined,
+    lockBox: LockBox<RWLockWriter>,
+    lockConstructor: { new (): RWLockWriter },
+    f: (mon: Monitor<RWLockWriter>) => Promise<T>,
+    locksPending?: Map<string, { count: number }>,
+  ): Promise<T> {
+    if (mon == null) {
+      return await withF(
+        [contextsUtils.monitor(lockBox, lockConstructor, locksPending)],
+        ([mon]) => f(mon),
+      );
+    } else {
+      return f(mon);
+    }
   }
 }
 
