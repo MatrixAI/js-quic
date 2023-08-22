@@ -267,12 +267,6 @@ class QUICConnection extends EventTarget {
         },
     @context ctx: ContextTimed,
   ): Promise<QUICConnection> {
-    const timeoutTime = ctx.timer.getTimeout();
-    if (timeoutTime !== Infinity && timeoutTime >= args.config.maxIdleTimeout) {
-      throw new errors.ErrorQUICConnectionInvalidConfig(
-        'connection timeout timer must be strictly less than maxIdleTimeout',
-      );
-    }
     ctx.signal.throwIfAborted();
     const abortProm = promise<never>();
     const abortHandler = () => {
