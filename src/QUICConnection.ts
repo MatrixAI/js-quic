@@ -278,15 +278,13 @@ class QUICConnection extends EventTarget {
     };
     ctx.signal.addEventListener('abort', abortHandler);
     const connection = new this(args);
-    const initialData =
-      args.type === 'server'
-        ? { data: args.data, remoteInfo: args.remoteInfo }
-        : undefined;
+    // If it's a server connection we want to pass the initial packet
+    const data = args.type === 'server' ? args.data : undefined;
     // This ensures that TLS has been established and verified on both sides
     try {
       await Promise.race([
         Promise.all([
-          connection.start(initialData),
+          connection.start(data),
           connection.establishedP,
           connection.secureEstablishedP,
         ]),
@@ -459,20 +457,21 @@ class QUICConnection extends EventTarget {
 
   /**
    * This will set up the connection initiate sending
-   * @param initialData - If the connection is server initiated then the data that initiated it needs to be provided here
+   * @param data - the initial packet that triggered the creation of the connection.
    */
-  public async start(initialData?: {
-    data: Uint8Array;
-    remoteInfo: RemoteInfo;
-  }): Promise<void> {
+  public async start(data?: Uint8Array): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
     // Set the connection up
     this.socket.connectionMap.set(this.connectionId, this);
     await withF(
       [contextsUtils.monitor(this.lockbox, RWLockWriter)],
       async ([mon]) => {
-        if (initialData != null) {
-          await this.recv(initialData.data, initialData.remoteInfo, mon);
+        if (data != null) {
+          await this.recv(
+            data,
+            { host: this._remoteHost, port: this._remotePort },
+            mon,
+          );
         }
         await this.send(mon);
       },
