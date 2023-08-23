@@ -353,6 +353,16 @@ class QUICConnection extends EventTarget {
       }) {
     super();
     this.logger = logger ?? new Logger(`${this.constructor.name} ${scid}`);
+    // Checking constraints
+    if (
+      config.keepAliveIntervalTime != null &&
+      config.maxIdleTimeout !== 0 &&
+      config.keepAliveIntervalTime >= config.maxIdleTimeout
+    ) {
+      throw new errors.ErrorQUICConnectionInvalidConfig(
+        'keepAliveIntervalTime must be shorter than maxIdleTimeout',
+      );
+    }
 
     const quicheConfig = buildQuicheConfig(config);
     let conn: Connection;
