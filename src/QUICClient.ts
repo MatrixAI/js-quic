@@ -80,6 +80,8 @@ class QUICClient extends EventTarget {
       config?: Partial<QUICConfig>;
       socket?: QUICSocket;
       resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
+      reuseAddr?: boolean;
+      ipv6Only?: boolean;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
       verifyCallback?: VerifyCallback;
@@ -98,6 +100,8 @@ class QUICClient extends EventTarget {
       config = {},
       socket,
       resolveHostname = utils.resolveHostname,
+      reuseAddr,
+      ipv6Only,
       reasonToCode,
       codeToReason,
       verifyCallback,
@@ -115,6 +119,8 @@ class QUICClient extends EventTarget {
       config?: Partial<QUICConfig>;
       socket?: QUICSocket;
       resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
+      reuseAddr?: boolean;
+      ipv6Only?: boolean;
       reasonToCode?: StreamReasonToCode;
       codeToReason?: StreamCodeToReason;
       verifyCallback?: VerifyCallback;
@@ -159,6 +165,8 @@ class QUICClient extends EventTarget {
       await socket.start({
         host: localHost_,
         port: localPort_,
+        reuseAddr,
+        ipv6Only,
       });
     } else {
       if (!socket[running]) {

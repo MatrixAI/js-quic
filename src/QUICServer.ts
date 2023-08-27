@@ -177,17 +177,19 @@ class QUICServer extends EventTarget {
     host = '::',
     port = 0,
     reuseAddr,
+    ipv6Only,
   }: {
     host?: string;
     port?: number;
     reuseAddr?: boolean;
+    ipv6Only?: boolean;
   } = {}) {
     let address: string;
     if (!this.isSocketShared) {
       address = utils.buildAddress(host, port);
       this.address = address;
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
-      await this.socket.start({ host, port, reuseAddr });
+      await this.socket.start({ host, port, reuseAddr, ipv6Only });
       address = utils.buildAddress(this.socket.host, this.socket.port);
     } else {
       // If the socket is shared, it must already be started
@@ -197,11 +199,9 @@ class QUICServer extends EventTarget {
       address = utils.buildAddress(this.socket.host, this.socket.port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
     }
-
     // Register on all socket events
     this.socket.addEventListener('socketError', this.handleQUICSocketEvents);
     this.socket.addEventListener('socketStop', this.handleQUICSocketEvents);
-
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
