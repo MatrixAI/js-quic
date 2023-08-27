@@ -106,7 +106,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -196,7 +196,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -225,6 +225,10 @@ describe('quiche tls', () => {
     });
     test('client is established', async () => {
       expect(clientConn.isEstablished()).toBeTrue();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
     });
     test('client -handshake-> server', async () => {
       [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
@@ -235,6 +239,10 @@ describe('quiche tls', () => {
     });
     test('server is established', async () => {
       expect(serverConn.isEstablished()).toBeTrue();
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client <-short- server', async () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -270,6 +278,14 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
       expect(clientConn.timeout()).toBeNull();
       expect(serverConn.timeout()).toBeNull();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
@@ -310,7 +326,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -399,7 +415,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -514,7 +530,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -601,7 +617,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -715,7 +731,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -805,7 +821,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -923,7 +939,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1013,7 +1029,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1131,7 +1147,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1221,7 +1237,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1236,6 +1252,10 @@ describe('quiche tls', () => {
     });
     test('client is established', async () => {
       expect(clientConn.isEstablished()).toBeTrue();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
     });
     test('client -initial-> server', async () => {
       [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
@@ -1246,6 +1266,10 @@ describe('quiche tls', () => {
     });
     test('server is established', async () => {
       expect(serverConn.isEstablished()).toBeTrue();
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client <-short- server', async () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -1281,6 +1305,14 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
       expect(clientConn.timeout()).toBeNull();
       expect(serverConn.timeout()).toBeNull();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
@@ -1321,7 +1353,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1410,7 +1442,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1517,7 +1549,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1606,7 +1638,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1704,7 +1736,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1794,7 +1826,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -1899,7 +1931,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -1989,7 +2021,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2094,7 +2126,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2184,7 +2216,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2199,6 +2231,10 @@ describe('quiche tls', () => {
     });
     test('client is established', async () => {
       expect(clientConn.isEstablished()).toBeTrue();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
     });
     test('client -initial-> server', async () => {
       [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
@@ -2209,6 +2245,10 @@ describe('quiche tls', () => {
     });
     test('server is established', async () => {
       expect(serverConn.isEstablished()).toBeTrue();
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client <-short- server', async () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -2244,6 +2284,14 @@ describe('quiche tls', () => {
       expect(serverConn.isEstablished()).toBeTrue();
       expect(clientConn.timeout()).toBeNull();
       expect(serverConn.timeout()).toBeNull();
+      const clientPeerCertChain = clientConn.peerCertChain()!;
+      expect(clientPeerCertChain).not.toBeNull();
+      expect(clientPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(clientPeerCertChain[0])).toBe('string');
+      const serverPeerCertChain = serverConn.peerCertChain()!;
+      expect(serverPeerCertChain).not.toBeNull();
+      expect(serverPeerCertChain).toHaveLength(1);
+      expect(typeof utils.certificateDERToPEM(serverPeerCertChain[0])).toBe('string');
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
@@ -2284,7 +2332,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2373,7 +2421,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2480,7 +2528,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2569,7 +2617,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2671,7 +2719,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2761,7 +2809,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -2899,7 +2947,7 @@ describe('quiche tls', () => {
     let clientScid: QUICConnectionId;
     let clientDcid: QUICConnectionId;
     let serverScid: QUICConnectionId;
-    let _serverDcid: QUICConnectionId;
+    let serverDcid: QUICConnectionId;
     let clientConn: Connection;
     let serverConn: Connection;
     beforeAll(async () => {
@@ -2989,7 +3037,7 @@ describe('quiche tls', () => {
         serverQuicheConfig,
       );
       clientDcid = serverScid;
-      _serverDcid = clientScid;
+      serverDcid = clientScid;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,

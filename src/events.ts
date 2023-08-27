@@ -1,157 +1,104 @@
 import type QUICConnection from './QUICConnection';
 import type QUICStream from './QUICStream';
+import { AbstractEvent } from '@matrixai/events';
+
+abstract class EventQUIC<T = null> extends AbstractEvent<T> {}
 
 // Socket events
 
-abstract class QUICSocketEvent extends Event {}
+abstract class EventQUICSocket<T = null> extends EventQUIC<T> {}
 
-class QUICSocketStartEvent extends Event {
-  constructor(options?: EventInit) {
-    super('socketStart', options);
-  }
-}
+class EventQUICSocketStart extends EventQUICSocket {}
 
-class QUICSocketStopEvent extends Event {
-  constructor(options?: EventInit) {
-    super('socketStop', options);
-  }
-}
+class EventQUICSocketStarted extends EventQUICSocket {}
 
-class QUICSocketErrorEvent extends Event {
-  public detail: Error;
-  constructor(
-    options: EventInit & {
-      detail: Error;
-    },
-  ) {
-    super('socketError', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICSocketStop extends EventQUICSocket {}
+
+class EventQUICSocketStopped extends EventQUICSocket {}
+
+class EventQUICSocketError extends EventQUICSocket<Error> {}
 
 // Client events
 
-abstract class QUICClientEvent extends Event {}
+abstract class EventQUICClient<T = null> extends EventQUIC<T> {}
 
-class QUICClientDestroyEvent extends Event {
-  constructor(options?: EventInit) {
-    super('clientDestroy', options);
-  }
-}
+class EventQUICClientDestroy extends EventQUICClient {}
 
-class QUICClientErrorEvent extends Event {
-  public detail: Error;
-  constructor(
-    options: EventInit & {
-      detail: Error;
-    },
-  ) {
-    super('clientError', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICClientError extends EventQUICClient<Error | EventQUICConnectionError> {}
 
 // Server events
 
-abstract class QUICServerEvent extends Event {}
+abstract class EventQUICServer<T = null> extends EventQUIC<T> {}
 
-class QUICServerConnectionEvent extends Event {
-  public detail: QUICConnection;
-  constructor(
-    options: EventInit & {
-      detail: QUICConnection;
-    },
-  ) {
-    super('serverConnection', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICServerConnection extends EventQUICServer<QUICConnection> {}
 
-class QUICServerStartEvent extends Event {
-  constructor(options?: EventInit) {
-    super('serverStart', options);
-  }
-}
+class EventQUICServerStart extends EventQUICServer {}
 
-class QUICServerStopEvent extends Event {
-  constructor(options?: EventInit) {
-    super('serverStop', options);
-  }
-}
+class EventQUICServerStarted extends EventQUICServer {}
 
-class QUICServerErrorEvent extends Event {
-  public detail: QUICSocketErrorEvent | Error;
-  constructor(
-    options: EventInit & {
-      detail: QUICSocketErrorEvent | Error;
-    },
-  ) {
-    super('serverError', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICServerStop extends EventQUICServer {}
+
+class EventQUICServerStopped extends EventQUICServer {}
+
+class EventQUICServerError extends EventQUICServer<Error | EventQUIC<any>> {}
 
 // Connection events
 
-abstract class QUICConnectionEvent extends Event {}
+abstract class EventQUICConnection<T = null> extends EventQUIC<T> {}
 
-class QUICConnectionStreamEvent extends QUICConnectionEvent {
-  public detail: QUICStream;
-  constructor(
-    options: EventInit & {
-      detail: QUICStream;
-    },
-  ) {
-    super('connectionStream', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICConnectionStream extends EventQUICConnection<QUICStream> {}
 
-class QUICConnectionStopEvent extends QUICConnectionEvent {
-  constructor(options?: EventInit) {
-    super('connectionStop', options);
-  }
-}
+class EventQUICConnectionStart extends EventQUICConnection {}
 
-class QUICConnectionErrorEvent extends QUICConnectionEvent {
-  public detail: Error;
-  constructor(
-    options: EventInit & {
-      detail: Error;
-    },
-  ) {
-    super('connectionError', options);
-    this.detail = options.detail;
-  }
-}
+class EventQUICConnectionStarted extends EventQUICConnection {}
+
+class EventQUICConnectionStop extends EventQUICConnection {}
+
+class EventQUICConnectionStopped extends EventQUICConnection<Error | null> {}
+
+
+// If this represents a terminal state, then we must not emit stop
+// Then we would transition to calling `this.stop({ error })
+// rather than dispatching at the error
+// cause there's no "error state", it is only stopped state
+// And in this case stopped with an error!
+// Ok so we get rid of `stop` then
+class EventQUICConnectionError extends EventQUICConnection<Error> {}
 
 // Stream events
 
-abstract class QUICStreamEvent extends Event {}
+abstract class EventQUICStream<T = null> extends EventQUIC<T> {}
 
-class QUICStreamDestroyEvent extends QUICStreamEvent {
-  constructor(options?: EventInit) {
-    super('streamDestroy', options);
-  }
-}
+class EventQUICStreamDestroy extends EventQUICStream {}
+
+class EventQUICStreamDestroyed extends EventQUICStream {}
 
 export {
-  QUICSocketEvent,
-  QUICSocketStartEvent,
-  QUICSocketStopEvent,
-  QUICSocketErrorEvent,
-  QUICClientEvent,
-  QUICClientDestroyEvent,
-  QUICClientErrorEvent,
-  QUICServerEvent,
-  QUICServerConnectionEvent,
-  QUICServerStartEvent,
-  QUICServerStopEvent,
-  QUICServerErrorEvent,
-  QUICConnectionEvent,
-  QUICConnectionStreamEvent,
-  QUICConnectionStopEvent,
-  QUICConnectionErrorEvent,
-  QUICStreamEvent,
-  QUICStreamDestroyEvent,
+  EventQUIC,
+  EventQUICSocket,
+  EventQUICSocketStart,
+  EventQUICSocketStarted,
+  EventQUICSocketStop,
+  EventQUICSocketStopped,
+  EventQUICSocketError,
+  EventQUICClient,
+  EventQUICClientDestroy,
+  EventQUICClientError,
+  EventQUICServer,
+  EventQUICServerConnection,
+  EventQUICServerStart,
+  EventQUICServerStarted,
+  EventQUICServerStop,
+  EventQUICServerStopped,
+  EventQUICServerError,
+  EventQUICConnection,
+  EventQUICConnectionStream,
+  EventQUICConnectionStart,
+  EventQUICConnectionStarted,
+  EventQUICConnectionStop,
+  EventQUICConnectionStopped,
+  EventQUICConnectionError,
+  EventQUICStream,
+  EventQUICStreamDestroy,
+  EventQUICStreamDestroyed,
 };

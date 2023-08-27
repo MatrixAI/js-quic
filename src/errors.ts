@@ -54,7 +54,11 @@ class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
     'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
-class ErrorQUICServerConnectionFailed<T> extends ErrorQUICServer<T> {
+class ErrorQUICServerConnectionNegotiation<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC server failed to negotiate a connection';
+}
+
+class ErrorQUICServerConnectionCreation<T> extends ErrorQUICServer<T> {
   static description = 'QUIC server failed to create or accept a connection';
 }
 
@@ -81,6 +85,10 @@ class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
 
 class ErrorQUICConnection<T> extends ErrorQUIC<T> {
   static description = 'QUIC Connection error';
+}
+
+class ErrorQUICConnectionStartData<T> extends ErrorQUIC<T> {
+  static description = 'QUIC Connection start data error';
 }
 
 class ErrorQUICConnectionNotRunning<T> extends ErrorQUICConnection<T> {
@@ -161,13 +169,17 @@ export {
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
-  ErrorQUICServerConnectionFailed,
+
+  ErrorQUICServerConnectionNegotiation,
+  ErrorQUICServerConnectionCreation,
+
   ErrorQUICClient,
   ErrorQUICClientCreateTimeOut,
   ErrorQUICClientDestroyed,
   ErrorQUICClientSocketNotRunning,
   ErrorQUICClientInvalidHost,
   ErrorQUICConnection,
+  ErrorQUICConnectionStartData,
   ErrorQUICConnectionNotRunning,
   ErrorQUICConnectionStartTimeOut,
   ErrorQUICConnectionIdleTimeOut,

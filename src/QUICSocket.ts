@@ -4,6 +4,7 @@ import type { Host, Hostname, Port } from './types';
 import type { Header } from './native/types';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
+import { utils as errorsUtils } from '@matrixai/errors';
 import { running } from '@matrixai/async-init';
 import { StartStop, ready } from '@matrixai/async-init/dist/StartStop';
 import { RWLockWriter } from '@matrixai/async-locks';
@@ -19,12 +20,16 @@ import * as errors from './errors';
 
 /**
  * Events:
- * - socketError
- * - socketStop
+ * - EventQUICSocket
  */
 interface QUICSocket extends StartStop {}
-@StartStop()
-class QUICSocket extends EventTarget {
+@StartStop({
+  eventStart: events.EventQUICSocketStart,
+  eventStarted: events.EventQUICSocketStarted,
+  eventStop: events.EventQUICSocketStop,
+  eventStopped: events.EventQUICSocketStopped,
+})
+class QUICSocket {
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
   protected socket: dgram.Socket;
@@ -67,7 +72,7 @@ class QUICSocket extends EventTarget {
         // Emit error if it is not a `BufferTooShort` or `InvalidPacket` error.
         // This would indicate something went wrong in header parsing.
         // This is not a critical error, but should be checked.
-        this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
+        this.dispatchEvent(new events.EventQUICSocketError({ detail: e }));
       }
       return;
     }
@@ -87,12 +92,33 @@ class QUICSocket extends EventTarget {
         return;
       }
       // At this point, the connection may not yet be started
-      const connection_ = await this.server.connectionNew(
-        remoteInfo_,
-        header,
-        dcid,
-        data,
-      );
+      let connection_: QUICConnection | undefined;
+      try {
+        connection_ = await this.server.newConnection(
+          remoteInfo_,
+          header,
+          dcid,
+          data
+        );
+      } catch (e) {
+        if (errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICConnectionStartTimeOut)) {
+          // If the connection failed due to connection timeout, then it's not an error
+          return;
+        }
+        if (errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)) {
+          // If the error is fundamentally due to this socket
+          // then we must dispatch an error
+          // And we are in an error state
+          this.dispatchEvent(
+            new events.EventQUICSocketError({
+              detail: e
+            }),
+          );
+          return;
+        }
+        // All other exceptions are software errors
+        throw e;
+      }
       // If there's no connection yet
       // then the server is middle of version negotiation or stateless retry
       if (connection_ == null) {
@@ -111,17 +137,20 @@ class QUICSocket extends EventTarget {
     // for state changes on the internal connection
     try {
       await withF(
-        [contextsUtils.monitor(connection.lockbox, RWLockWriter)],
+        [contextsUtils.monitor(connection.lockBox, RWLockWriter)],
         async ([mon]) => {
-          await mon.withF(connection.lockCode, async (mon) => {
-            // Even if we are `stopping`, the `quiche` library says we need to
-            // continue processing any packets.
-            await connection.recv(data, remoteInfo_, mon);
-            await connection.send(mon);
-          });
+          await mon.lock(connection.lockingKey)();
+          // Even if we are `stopping`, the `quiche` library says we need to
+          // continue processing any packets.
+          await connection.recv(data, remoteInfo_, mon);
+          await connection.send(mon);
         },
       );
     } catch (e) {
+
+      // FIX THIS
+
+
       // Race condition with destroying socket, just ignore
       if (!(e instanceof errors.ErrorQUICSocketNotRunning)) throw e;
     }
@@ -131,7 +160,7 @@ class QUICSocket extends EventTarget {
    * Handle error on the DGRAM socket
    */
   protected handleSocketError = (e: Error) => {
-    this.dispatchEvent(new events.QUICSocketErrorEvent({ detail: e }));
+    this.dispatchEvent(new events.EventQUICSocketError({ detail: e }));
   };
 
   public constructor({
@@ -141,7 +170,6 @@ class QUICSocket extends EventTarget {
     resolveHostname?: (hostname: string) => Host | PromiseLike<Host>;
     logger?: Logger;
   }) {
-    super();
     this.logger = logger ?? new Logger(this.constructor.name);
     this.resolveHostname = resolveHostname;
   }
@@ -271,7 +299,6 @@ class QUICSocket extends EventTarget {
     this.socket.off('message', this.handleSocketMessage);
     this.socket.off('error', this.handleSocketError);
     await this.socketClose();
-    this.dispatchEvent(new events.QUICSocketStopEvent());
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
@@ -342,34 +369,16 @@ class QUICSocket extends EventTarget {
   }
 
   /**
-   * Sets a single server to the socket
-   * You can only have 1 server for the socket
-   * The socket message handling can dispatch new connections to the new server
-   * Consider it is an event... therefore a new connection
-   * Although that would be if there's an event being emitted
-   * One way is to make QUICSocket an EventTarget
-   * Then for server to add a handler to it, by doing addEventListener('connection', ...)
-   * Or something else
-   * But why bother with this pub/sub system
-   * Just go straight to calling a thing
-   * We can call this.server.handleConnection()
-   * Why `handleConnection` because technically it's built on top of the handleMessage
-   * That becomes the key idea there
-   * handleNewConnection
-   * And all sorts of other stuff!
-   * Or whatever it needs to be
+   * Sets a single server to the socket.
+   * You can only have 1 server for the socket.
+   * If the socket is injected, and you want to change the `QUICServer`.
+   * Stop the `QUICServer` first, then inject the socket to the new `QUICServer`.
    */
   public registerServer(server: QUICServer) {
     if (this.server != null && this.server[running]) {
       throw new errors.ErrorQUICSocketServerDuplicate();
     }
     this.server = server;
-  }
-
-  public deregisterServer(server: QUICServer) {
-    if (this.server === server) {
-      delete this.server;
-    }
   }
 }
 

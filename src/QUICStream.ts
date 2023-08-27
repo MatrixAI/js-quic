@@ -23,6 +23,7 @@ import {
   ready,
   status,
 } from '@matrixai/async-init/dist/CreateDestroy';
+import { Evented } from '@matrixai/events';
 import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
@@ -38,11 +39,11 @@ import { never } from './utils';
  * is readable/writable. Rather than creating events for it.
  */
 interface QUICStream extends CreateDestroy {}
-@CreateDestroy()
-class QUICStream
-  extends EventTarget
-  implements ReadableWritablePair<Uint8Array, Uint8Array>
-{
+@CreateDestroy({
+  eventDestroy: events.EventQUICStreamDestroy,
+  eventDestroyed: events.EventQUICStreamDestroyed,
+})
+class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   public streamId: StreamId;
   public readable: ReadableStream<Uint8Array>;
   public writable: WritableStream<Uint8Array>;
@@ -84,15 +85,6 @@ class QUICStream
     logger?: Logger;
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
-    // 'send' a 0-len message to initialize stream state in Quiche. No 0-len data is actually sent so this does not
-    //  create Peer state.
-    try {
-      connection.conn.streamSend(streamId, new Uint8Array(0), false);
-    } catch (e) {
-      // We ignore any errors here, if this is a server side stream then state already exists.
-      // But it's possible for the stream to already be closed or have an error here.
-      // These errors will be handled by the QUICStream and not here.
-    }
     const stream = new this({
       streamId,
       connection,
@@ -100,7 +92,6 @@ class QUICStream
       codeToReason,
       logger,
     });
-    connection.streamMap.set(stream.streamId, stream);
     logger.info(`Created ${this.name}`);
     return stream;
   }
@@ -118,7 +109,6 @@ class QUICStream
     codeToReason: StreamCodeToReason;
     logger: Logger;
   }) {
-    super();
     this.logger = logger;
     this.streamId = streamId;
     this.connection = connection;
@@ -126,6 +116,16 @@ class QUICStream
     this.streamMap = connection.streamMap;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
+
+    // 'send' a 0-len message to initialize stream state in Quiche. No 0-len data is actually sent so this does not
+    //  create Peer state.
+    try {
+      connection.conn.streamSend(streamId, new Uint8Array(0), false);
+    } catch (e) {
+      // We ignore any errors here, if this is a server side stream then state already exists.
+      // But it's possible for the stream to already be closed or have an error here.
+      // These errors will be handled by the QUICStream and not here.
+    }
 
     this.readable = new ReadableStream(
       {
@@ -278,9 +278,12 @@ class QUICStream
     this.logger.info(`Destroy ${this.constructor.name}`);
     // Force close any open streams
     this.cancel(new errors.ErrorQUICStreamClose());
+
+    // Don't need this anymore
     // Removing stream from the connection's stream map
-    this.streamMap.delete(this.streamId);
-    this.dispatchEvent(new events.QUICStreamDestroyEvent());
+    // this.streamMap.delete(this.streamId);
+    // this.dispatchEvent(new events.EventQUICStreamDestroy());
+
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 
