@@ -108,6 +108,40 @@ x86_64-apple-darwin
 
 The available target list is in `rustc --print target-list`.
 
+### Structure
+
+It is possible to structure the QUIC system in the encapsulated way or the injected way.
+
+When using the encapsulated way, the `QUICSocket` is separated between client and server.
+
+When using the injected way, the `QUICSocket` is shared between client and server.
+
+![](/images/quic_structure_encapsulated.svg)
+
+If you are building a peer to peer network, you must use the injected way. This is the only way to ensure that hole-punching works because both the client and server for any given peer must share the same UDP socket and thus share the `QUICSocket`. When done in this way, the `QUICSocket` lifecycle is managed outside of both the `QUICClient` and `QUICServer`.
+
+![](/images/quic_structure_injected.svg)
+
+This also means both `QUICClient` and `QUICServer` must share the same connection map.  In order to allow the `QUICSocket` to dispatch data into the correct connection, the connection map is constructed in the `QUICSocket`, however setting and unsetting connections is managed by `QUICClient` and `QUICServer`.
+
+## Dataflow
+
+The data flow of the QUIC system is a bidirectional graph.
+
+Data received from the outside world is received on the UDP socket. It is parsed and then dispatched to each `QUICConnection`. Each connection further parses the data and then dispatches to the `QUICStream`. Each `QUICStream` presents the data on the `ReadableStream` interface, which can be read by a caller.
+
+Data sent to the outside world is written to a `WritableStream` interface of a `QUICStream`. This data is buffered up in the underlying Quiche stream. A send procedure is triggered on the associated `QUICConnection` which takes all the buffered data to be sent for that connection, and sends it to the `QUICSocket`, which then sends it to the underlying UDP socket.
+
+![](/images/quic_dataflow.svg)
+
+### Connection Negotiation
+
+The connection negotiation process involves several exchanges of QUIC packets before the `QUICConnection` is constructed.
+
+The primary reason to do this is for both sides to determine their respective connection IDs.
+
+![](/images/quic_connection_negotiation.svg)
+
 ## Benchmarks
 
 ```sh
