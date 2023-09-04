@@ -274,16 +274,15 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * directions have closed. Or when force closing the connection which does not
    * require waiting.
    */
-  public async destroy() {
+  public async destroy({
+    force = false,
+  }: {
+    force?: boolean;
+  } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
     // Force close any open streams
-    this.cancel(new errors.ErrorQUICStreamClose());
-
-    // Don't need this anymore
-    // Removing stream from the connection's stream map
-    // this.streamMap.delete(this.streamId);
-    // this.dispatchEvent(new events.EventQUICStreamDestroy());
-
+    if (force) this.cancel(new errors.ErrorQUICStreamClose());
+    await this.destroyProm.p;
     this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 

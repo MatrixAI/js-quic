@@ -1,5 +1,5 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-// import type { Monitor } from '@matrixai/async-init';
+// Import type { Monitor } from '@matrixai/async-init';
 import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionId from './QUICConnectionId';
@@ -206,7 +206,6 @@ class QUICConnection {
   protected resolveClosedP: () => void;
   protected rejectClosedP: (reason?: any) => void;
 
-
   protected customVerified = false;
   protected shortReceived = false;
   protected secured = false;
@@ -358,12 +357,12 @@ class QUICConnection {
    */
   public start(
     args: { data?: Uint8Array },
-    ctx?: Partial<ContextTimedInput>
+    ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<void>;
   @timedCancellable(
     true,
     minIdleTimeout,
-    errors.ErrorQUICConnectionStartTimeOut
+    errors.ErrorQUICConnectionStartTimeOut,
   )
   public async start(
     {
@@ -371,22 +370,22 @@ class QUICConnection {
     }: {
       data?: Uint8Array;
     },
-    @context ctx: ContextTimed
+    @context ctx: ContextTimed,
   ): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
     ctx.signal.throwIfAborted();
-    const { p: abortP, rejectP: rejectAbortP }= promise<never>();
+    const { p: abortP, rejectP: rejectAbortP } = promise<never>();
     const abortHandler = () => {
       rejectAbortP(ctx.signal.reason);
     };
     ctx.signal.addEventListener('abort', abortHandler);
     if (this.type === 'client' && data != null) {
       throw new errors.ErrorQUICConnectionStartData(
-        'Starting a client connection does not require initial data'
+        'Starting a client connection does not require initial data',
       );
     } else if (this.type === 'server' && data == null) {
       throw new errors.ErrorQUICConnectionStartData(
-        'Starting a server connection requires initial data'
+        'Starting a server connection requires initial data',
       );
     }
     try {
@@ -404,15 +403,14 @@ class QUICConnection {
                 );
               }
               await this.send(mon);
-            }
+            },
           ),
           this.establishedP,
           this.secureEstablishedP,
         ]),
-        abortP
+        abortP,
       ]);
     } catch (e) {
-
       // Oh yea so if the connection hasn't started
       // You actually need to "stop" it?
 
@@ -426,11 +424,7 @@ class QUICConnection {
       // Well it depends, it's a timeout
       // This makes no sense
 
-      this.conn.close(
-        false,
-        0,
-        e.message,
-      );
+      this.conn.close(false, 0, e.message);
 
       // We may need to stop everything
       // Consider all of it
@@ -442,9 +436,7 @@ class QUICConnection {
     }
 
     if (this.config.keepAliveIntervalTime != null) {
-      this.startKeepAliveIntervalTimer(
-        this.config.keepAliveIntervalTime,
-      );
+      this.startKeepAliveIntervalTimer(this.config.keepAliveIntervalTime);
     }
     this.logger.info(`Started ${this.constructor.name}`);
 
@@ -489,7 +481,7 @@ class QUICConnection {
           errorMessage?: string;
           force?: boolean;
         } = {},
-    // mon?: Monitor<RWLockWriter>,
+    // Mon?: Monitor<RWLockWriter>,
   ) {
     this.logger.info(`Stop ${this.constructor.name}`);
 
@@ -497,19 +489,13 @@ class QUICConnection {
     const streamsDestroyP: Array<Promise<void>> = [];
 
     for (const stream of this.streamMap.values()) {
-
-      // THIS IS WRONG
-
-      // If we're draining then streams will never end on their own.
-      // We must force them to end.
-      if (this.conn.isDraining() || this.conn.isClosed() || force) {
-        await stream.destroy();
-      }
-
-      streamsDestroyP.push(stream.destroyedP);
-
+      // A quiche connection closing will not clean up any stream state, so they need to be cleaned up here
+      streamsDestroyP.push(
+        stream.destroy({
+          force: this.conn.isDraining() || this.conn.isClosed() || force,
+        }),
+      );
     }
-
     await Promise.all(streamsDestroyP);
 
     this.stopKeepAliveIntervalTimer();
@@ -522,11 +508,7 @@ class QUICConnection {
     // 1 packet containing a `CONNECTION_CLOSE` frame too
     // (with `NO_ERROR` code if appropriate)
     // It must enter into a draining state, and no other packets can be sent
-    this.conn.close(
-      applicationError,
-      errorCode,
-      Buffer.from(errorMessage),
-    );
+    this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
     try {
       // I don't know if this requires `mon` at all
       await this.send();
@@ -554,10 +536,8 @@ class QUICConnection {
     // is it because we need to dispatch an error from the connection
     // I think it doesn't make sense to do this
 
-
     // Checking for errors and emitting them as events
     // Emit error if connection timed out
-
 
     // THIS part tries to decide if it is because we timed out
     // Again does not make sense
@@ -662,11 +642,7 @@ class QUICConnection {
   ): Promise<void> {
     if (mon == null) {
       return this.withMonitor((mon) => {
-        return this.recv(
-          data,
-          remoteInfo,
-          mon
-        );
+        return this.recv(data, remoteInfo, mon);
       });
     }
     await mon.lock(this.lockingKey)();
@@ -692,7 +668,6 @@ class QUICConnection {
         // This may mutate `data`
         this.conn.recv(data, recvInfo);
       } catch (e) {
-
         // NEED EXPLANATION ABOUT THIS
         // I don't understand why this matters here
         // if we have a TLS failure
@@ -731,8 +706,6 @@ class QUICConnection {
         this.count += 1;
       }
 
-
-
       // We don't actually "fail"
       // the closedP until we proceed
       // But note that if there's an error
@@ -754,21 +727,15 @@ class QUICConnection {
         this[status] !== 'destroying' &&
         (this.conn.isClosed() || this.conn.isDraining())
       ) {
-
         // When processing a `recv`
         // We may process into a closed state
         // We have to then "complete" the call
         // I don't believe this makes sense either
-
         // this.logger.debug('calling stop due to closed or draining');
-
-
-
         // Destroy in the background, we still need to process packets.
         // Draining means no more packets are sent, so streams must be force closed.
         // TODO: check if this catch is needed.
         // void this.stop({ force: true }, mon).catch(() => {});
-
       }
     }
   }
@@ -919,7 +886,7 @@ class QUICConnection {
         quicStream.addEventListener(
           events.EventQUICStreamDestroyed.name,
           handleEventQUICStreamDestroyed,
-          { once: true }
+          { once: true },
         );
         this.dispatchEvent(
           new events.EventQUICConnectionStream({ detail: quicStream }),
@@ -1121,10 +1088,11 @@ class QUICConnection {
     this.keepAliveIntervalTimer?.cancel(timerCleanupReasonSymbol);
   }
 
-  protected withMonitor<T>(f: (mon: Monitor<RWLockWriter>) => Promise<T>): Promise<T> {
-    return withF(
-      [contextsUtils.monitor(this.lockBox, RWLockWriter)],
-      ([mon]) => f(mon),
+  protected withMonitor<T>(
+    f: (mon: Monitor<RWLockWriter>) => Promise<T>,
+  ): Promise<T> {
+    return withF([contextsUtils.monitor(this.lockBox, RWLockWriter)], ([mon]) =>
+      f(mon),
     );
   }
 }
