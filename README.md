@@ -134,6 +134,8 @@ Data sent to the outside world is written to a `WritableStream` interface of a `
 
 ![](/images/quic_dataflow.svg)
 
+Buffering occurs at the connection level and at the stream level. Each connection has a global buffer for all streams, and each stream has its own buffer. Note that connection buffering and stream buffering all occur within the Quiche library. The web streams `ReadableStream` and `WritableStream` do not do any buffering at all.
+
 ### Connection Negotiation
 
 The connection negotiation process involves several exchanges of QUIC packets before the `QUICConnection` is constructed.
@@ -141,6 +143,25 @@ The connection negotiation process involves several exchanges of QUIC packets be
 The primary reason to do this is for both sides to determine their respective connection IDs.
 
 ![](/images/quic_connection_negotiation.svg)
+
+### Push & Pull
+
+The `QUICSocket`, `QUICClient`, `QUICServer`, `QUICConnection` and `QUICStream` are independent state machines that exposes methods that can be called as well as events that may be emitted between them.
+
+This creates a concurrent decentralised state machine system where there are multiple entrypoints of change.
+
+Users may call methods which causes state transitions internally that trigger event emissions. However some methods are considered internal to the library, this means these methods are not intended to be called by the end user. They are however public relative to the other components in the system. These methods should be marked with `@internal` documentation annotation.
+
+External events may also trigger event handlers that will call methods which perform state transitions and event emission.
+
+Keeping track of how the system works is therefore quite complex and must follow a set of rules.
+
+* Pull methods - these are either synchronous or asynchronous methods that may throw exceptions.
+* Push handlers - these are event handlers that can initiate pull methods, if these pull handlers throw exceptions, these exceptions must be caught, and expected runtime exceptions are to be converted to error events, all other exceptions will be considered to be software bugs and will be bubbled up to the program boundary as unhandled exceptions or unhandled promise rejections. Generally the only exceptions that are expected runtime exceptions are those that arise from perform IO with the operating system.
+
+Some pull methods are synchronous event though execute asynchronous operations. In these cases, the asynchronous function call must be chained with a catch handler that handles the exception as if it was a push handler. It would need to decide whether to ignore, emit as an error event, or bubble up to become an unhandled promise rejection.
+
+Exceptions should only be ignored if they are considered an acceptable resolution of a certain operations. For example connection timeout. Error events should only be emitted if it represents an error transition for that component. For example the `QUICSocket` message event handler may end up calling pull methods that eventually call `QUICSocket.send`, which may throw an exception due to failing to write to the UDP socket. When catching such an exception it would emit this exception as an `EventQUICSocketError` event. Such an event would be listened for by `QUICServer` and `QUICClient`, as they may need to react as well.
 
 ## Benchmarks
 

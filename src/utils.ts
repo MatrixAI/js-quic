@@ -5,13 +5,16 @@ import type {
   ConnectionIdString,
   Host,
   Port,
-  ServerCrypto,
+  QUICServerCrypto,
 } from './types';
 import type { Connection } from './native';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder('utf-8');
 
 /**
  * Is it an IPv4 address?
@@ -159,7 +162,7 @@ async function resolveHostname(hostname: string): Promise<Host> {
  */
 async function resolveHost(
   host: string,
-  resolveHostname: (hostname: string) => Host | PromiseLike<Host>,
+  resolveHostname: (hostname: string) => string | PromiseLike<string>,
 ): Promise<[Host, 'udp4' | 'udp6']> {
   if (isIPv4(host)) {
     return [host as Host, 'udp4'];
@@ -337,31 +340,10 @@ function never(message?: string): never {
   throw new errors.ErrorQUICUndefinedBehaviour(message);
 }
 
-function certificateDERToPEM(der: Uint8Array): string {
-  const data = Buffer.from(der);
-  const contents =
-    data
-      .toString('base64')
-      .replace(/(.{64})/g, '$1\n')
-      .trimEnd() + '\n';
-  return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
-}
-
-function certificatePEMsToCertChainPem(pems: Array<string>): string {
-  let certChainPEM = '';
-  for (const pem of pems) {
-    certChainPEM += pem;
-  }
-  return certChainPEM;
-}
-
 async function mintToken(
   dcid: QUICConnectionId,
   peerHost: Host,
-  crypto: {
-    key: ArrayBuffer;
-    ops: ServerCrypto;
-  },
+  crypto: QUICServerCrypto,
 ): Promise<Buffer> {
   const msgData = { dcid: dcid.toString(), host: peerHost };
   const msgJSON = JSON.stringify(msgData);
@@ -378,10 +360,7 @@ async function mintToken(
 async function validateToken(
   tokenBuffer: Buffer,
   peerHost: Host,
-  crypto: {
-    key: ArrayBuffer;
-    ops: ServerCrypto;
-  },
+  crypto: QUICServerCrypto,
 ): Promise<QUICConnectionId | undefined> {
   let tokenData;
   try {
@@ -462,7 +441,44 @@ function streamStats(
 `;
 }
 
+/**
+ * Collects PEMs into a PEM chain array.
+ * This can be used for keys, certs and ca.
+ */
+function concatPEMs(
+  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>
+): Array<string> {
+  const pemsChain: Array<string> = [];
+  if (typeof pems === 'string') {
+    pemsChain.push(pems.trim() + '\n');
+  } else if (pems instanceof Uint8Array) {
+    pemsChain.push(textDecoder.decode(pems).trim() + '\n');
+  } else if (Array.isArray(pems)) {
+    for (const c of pems) {
+      if (typeof c === 'string') {
+        pemsChain.push(c.trim() + '\n');
+      } else {
+        pemsChain.push(textDecoder.decode(c).trim() + '\n');
+      }
+    }
+  }
+  return pemsChain;
+}
+
+/**
+ * QUIC produces DER encoded certificates when requesting for peer certificates
+ */
+function derToPEM(der: Uint8Array): string {
+  const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
+  const contents = data.toString('base64')
+    .replace(/(.{64})/g, '$1\n')
+    .trimEnd() + '\n';
+  return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
+}
+
 export {
+  textEncoder,
+  textDecoder,
   isIPv4,
   isIPv6,
   isIPv4MappedIPv6,
@@ -487,10 +503,10 @@ export {
   encodeConnectionId,
   decodeConnectionId,
   never,
-  certificateDERToPEM,
-  certificatePEMsToCertChainPem,
   mintToken,
   validateToken,
   sleep,
   streamStats,
+  concatPEMs,
+  derToPEM,
 };

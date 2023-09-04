@@ -1,5 +1,5 @@
 import type * as events from '@/events';
-import type { ClientCrypto, ServerCrypto, StreamReasonToCode } from '@';
+import type { ClientCryptoOps, ServerCryptoOps, StreamReasonToCode } from '@';
 import type { Messages, StreamData } from './utils';
 import type { QUICConfig } from '@';
 import { fc, testProp } from '@fast-check/jest';
@@ -19,8 +19,8 @@ describe('Concurrency tests', () => {
   ]);
   // This has to be setup asynchronously due to key generation
   let key: ArrayBuffer;
-  let clientCrypto: ClientCrypto;
-  let serverCrypto: ServerCrypto;
+  let ClientCryptoOps: ClientCryptoOps;
+  let ServerCryptoOps: ServerCryptoOps;
 
   // Tracking resources
   let sockets: Array<QUICSocket>;
@@ -33,10 +33,10 @@ describe('Concurrency tests', () => {
 
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    clientCrypto = {
+    ClientCryptoOps = {
       randomBytes: testsUtils.randomBytes,
     };
-    serverCrypto = {
+    ServerCryptoOps = {
       sign: testsUtils.signHMAC,
       verify: testsUtils.verifyHMAC,
     };
@@ -128,7 +128,7 @@ describe('Concurrency tests', () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -140,13 +140,13 @@ describe('Concurrency tests', () => {
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
           'serverConnection',
-          async (e: events.QUICServerConnectionEvent) => {
+          async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
                 'connectionStream',
-                (streamEvent: events.QUICConnectionStreamEvent) => {
+                (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
                     serverStreams[
@@ -200,7 +200,7 @@ describe('Concurrency tests', () => {
               port: socketPort1,
               localHost: '::',
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -250,7 +250,7 @@ describe('Concurrency tests', () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -262,13 +262,13 @@ describe('Concurrency tests', () => {
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
           'serverConnection',
-          async (e: events.QUICServerConnectionEvent) => {
+          async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
                 'connectionStream',
-                (streamEvent: events.QUICConnectionStreamEvent) => {
+                (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
                     serverStreams[
@@ -329,7 +329,7 @@ describe('Concurrency tests', () => {
               port: socketPort1,
               socket,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -391,7 +391,7 @@ describe('Concurrency tests', () => {
     const server = new QUICServer({
       crypto: {
         key,
-        ops: serverCrypto,
+        ops: ServerCryptoOps,
       },
       socket,
       logger: logger.getChild(QUICServer.name),
@@ -401,13 +401,13 @@ describe('Concurrency tests', () => {
     const connProms: Array<Promise<void>> = [];
     server.addEventListener(
       'serverConnection',
-      async (e: events.QUICServerConnectionEvent) => {
+      async (e: events.EventQUICServerConnection) => {
         const conn = e.detail;
         const connProm = (async () => {
           const serverStreamProms: Array<Promise<void>> = [];
           conn.addEventListener(
             'connectionStream',
-            (streamEvent: events.QUICConnectionStreamEvent) => {
+            (streamEvent: events.EventQUICConnectionStream) => {
               const stream = streamEvent.detail;
               const streamData =
                 serverStreams[serverStreamProms.length % serverStreams.length];
@@ -518,7 +518,7 @@ describe('Concurrency tests', () => {
               port: socket2.port,
               socket: socket1,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -541,7 +541,7 @@ describe('Concurrency tests', () => {
               port: socket1.port,
               socket: socket2,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {

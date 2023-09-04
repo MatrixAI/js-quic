@@ -54,12 +54,8 @@ class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
     'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
-class ErrorQUICServerConnectionNegotiation<T> extends ErrorQUICServer<T> {
-  static description = 'QUIC server failed to negotiate a connection';
-}
-
-class ErrorQUICServerConnectionCreation<T> extends ErrorQUICServer<T> {
-  static description = 'QUIC server failed to create or accept a connection';
+class ErrorQUICServerNewConnection<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Server creating a new connection';
 }
 
 class ErrorQUICClient<T> extends ErrorQUIC<T> {
@@ -67,7 +63,7 @@ class ErrorQUICClient<T> extends ErrorQUIC<T> {
 }
 
 class ErrorQUICClientCreateTimeOut<T> extends ErrorQUICClient<T> {
-  static description = 'QUICC Client create timeout';
+  static description = 'QUIC Client create timeout';
 }
 
 class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
@@ -151,6 +147,10 @@ class ErrorQUICStreamCancel<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream was cancelled without a provided reason';
 }
 
+class ErrorQUICStreamCreationFailed<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream failed to create';
+}
+
 class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
   static description = 'This should never happen';
 }
@@ -169,10 +169,7 @@ export {
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
-
-  ErrorQUICServerConnectionNegotiation,
-  ErrorQUICServerConnectionCreation,
-
+  ErrorQUICServerNewConnection,
   ErrorQUICClient,
   ErrorQUICClientCreateTimeOut,
   ErrorQUICClientDestroyed,
@@ -189,5 +186,6 @@ export {
   ErrorQUICStreamDestroyed,
   ErrorQUICStreamClose,
   ErrorQUICStreamCancel,
+  ErrorQUICStreamCreationFailed,
   ErrorQUICUndefinedBehaviour,
 };

@@ -1,4 +1,4 @@
-import type { ClientCrypto, ServerCrypto } from '@/types';
+import type { ClientCryptoOps, ServerCryptoOps } from '@/types';
 import type * as events from '@/events';
 import type QUICConnection from '@/QUICConnection';
 import type { KeyTypes, TLSConfigs } from './utils';
@@ -21,12 +21,12 @@ describe(QUICClient.name, () => {
   ]);
   const localhost = '127.0.0.1';
   // This has to be setup asynchronously due to key generation
-  const serverCrypto: ServerCrypto = {
+  const ServerCryptoOps: ServerCryptoOps = {
     sign: testsUtils.signHMAC,
     verify: testsUtils.verifyHMAC,
   };
   let key: ArrayBuffer;
-  const clientCrypto: ClientCrypto = {
+  const ClientCryptoOps: ClientCryptoOps = {
     randomBytes: testsUtils.randomBytes,
   };
   let sockets: Set<QUICSocket>;
@@ -51,11 +51,11 @@ describe(QUICClient.name, () => {
     test('to ipv4 server succeeds', async () => {
       const tlsConfigServer = await testsUtils.generateConfig(defaultType);
 
-      const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+      const connectionEventProm = promise<events.EventQUICServerConnection>();
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -67,7 +67,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
       await server.start({
@@ -78,7 +78,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -95,12 +95,12 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
     test('to ipv6 server succeeds', async () => {
-      const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+      const connectionEventProm = promise<events.EventQUICServerConnection>();
       const tlsConfigServer = await testsUtils.generateConfig(defaultType);
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -112,7 +112,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
       await server.start({
@@ -124,7 +124,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -141,12 +141,12 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
     test('to dual stack server succeeds', async () => {
-      const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+      const connectionEventProm = promise<events.EventQUICServerConnection>();
       const tlsConfigServer = await testsUtils.generateConfig(defaultType);
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -158,7 +158,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
       await server.start({
@@ -170,7 +170,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -196,7 +196,7 @@ describe(QUICClient.name, () => {
           port: 56666,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -214,7 +214,7 @@ describe(QUICClient.name, () => {
           port: 56666,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -231,7 +231,7 @@ describe(QUICClient.name, () => {
           port: 56666,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -248,7 +248,7 @@ describe(QUICClient.name, () => {
           port: 56666,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -267,7 +267,7 @@ describe(QUICClient.name, () => {
             port: 56666,
             localHost: localhost,
             crypto: {
-              ops: clientCrypto,
+              ops: ClientCryptoOps,
             },
             logger: logger.getChild(QUICClient.name),
             config: {
@@ -289,7 +289,7 @@ describe(QUICClient.name, () => {
           port: 56666,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -312,7 +312,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -329,12 +329,12 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyAllowFail: true,
+          verifyCallback: () => {},
         },
       });
       testsUtils.extractSocket(client1, sockets);
@@ -357,7 +357,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -374,12 +374,12 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyAllowFail: true,
+          verifyCallback: () => {},
         },
       });
       testsUtils.extractSocket(client1, sockets);
@@ -394,12 +394,12 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyAllowFail: true,
+          verifyCallback: () => {},
         },
       });
       testsUtils.extractSocket(client2, sockets);
@@ -418,7 +418,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -442,7 +442,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -461,7 +461,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -485,7 +485,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -503,7 +503,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -528,7 +528,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -548,7 +548,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -568,7 +568,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -584,7 +584,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -604,7 +604,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -622,7 +622,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -642,7 +642,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -674,7 +674,7 @@ describe(QUICClient.name, () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -685,10 +685,10 @@ describe(QUICClient.name, () => {
           socket,
         });
         testsUtils.extractSocket(server, sockets);
-        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
           'serverConnection',
-          (e: events.QUICServerConnectionEvent) =>
+          (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
         await server.start({
@@ -699,7 +699,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: '::',
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -712,7 +712,7 @@ describe(QUICClient.name, () => {
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
           'connectionStream',
-          (streamEvent: events.QUICConnectionStreamEvent) => {
+          (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
             serverStreamProms.push(streamProm);
@@ -783,7 +783,7 @@ describe(QUICClient.name, () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -793,10 +793,10 @@ describe(QUICClient.name, () => {
           },
         });
         testsUtils.extractSocket(server, sockets);
-        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
           'serverConnection',
-          (e: events.QUICServerConnectionEvent) =>
+          (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
         await server.start({
@@ -807,7 +807,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: '::',
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -820,7 +820,7 @@ describe(QUICClient.name, () => {
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
           'connectionStream',
-          (streamEvent: events.QUICConnectionStreamEvent) => {
+          (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
             serverStreamProms.push(streamProm);
@@ -891,7 +891,7 @@ describe(QUICClient.name, () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -901,10 +901,10 @@ describe(QUICClient.name, () => {
           },
         });
         testsUtils.extractSocket(server, sockets);
-        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
           'serverConnection',
-          (e: events.QUICServerConnectionEvent) =>
+          (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
         await server.start({
@@ -915,7 +915,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           socket,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -928,7 +928,7 @@ describe(QUICClient.name, () => {
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
           'connectionStream',
-          (streamEvent: events.QUICConnectionStreamEvent) => {
+          (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
             serverStreamProms.push(streamProm);
@@ -999,7 +999,7 @@ describe(QUICClient.name, () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
@@ -1009,10 +1009,10 @@ describe(QUICClient.name, () => {
           },
         });
         testsUtils.extractSocket(server, sockets);
-        const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+        const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
           'serverConnection',
-          (e: events.QUICServerConnectionEvent) =>
+          (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
         await server.start({
@@ -1023,7 +1023,7 @@ describe(QUICClient.name, () => {
           port: server.port,
           localHost: localhost,
           crypto: {
-            ops: clientCrypto,
+            ops: ClientCryptoOps,
           },
           logger: logger.getChild(QUICClient.name),
           config: {
@@ -1036,7 +1036,7 @@ describe(QUICClient.name, () => {
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
           'connectionStream',
-          (streamEvent: events.QUICConnectionStreamEvent) => {
+          (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
             serverStreamProms.push(streamProm);
@@ -1101,7 +1101,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1114,7 +1114,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
       await server.start({
@@ -1125,7 +1125,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1140,7 +1140,7 @@ describe(QUICClient.name, () => {
       const clientTimeoutProm = promise<void>();
       clientConnection.addEventListener(
         'connectionError',
-        (event: events.QUICConnectionErrorEvent) => {
+        (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             clientTimeoutProm.resolveP();
           }
@@ -1161,7 +1161,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1174,7 +1174,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
       await server.start({
@@ -1185,7 +1185,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1201,7 +1201,7 @@ describe(QUICClient.name, () => {
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
         'connectionError',
-        (event: events.QUICConnectionErrorEvent) => {
+        (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
           }
@@ -1221,7 +1221,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1234,7 +1234,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
       await server.start({
@@ -1245,7 +1245,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1261,7 +1261,7 @@ describe(QUICClient.name, () => {
       const clientTimeoutProm = promise<void>();
       clientConnection.addEventListener(
         'connectionError',
-        (event: events.QUICConnectionErrorEvent) => {
+        (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             clientTimeoutProm.resolveP();
           }
@@ -1283,7 +1283,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1297,7 +1297,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
       await server.start({
@@ -1308,7 +1308,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1323,7 +1323,7 @@ describe(QUICClient.name, () => {
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
         'connectionError',
-        (event: events.QUICConnectionErrorEvent) => {
+        (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
           }
@@ -1344,7 +1344,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1357,7 +1357,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
         'serverConnection',
-        (e: events.QUICServerConnectionEvent) =>
+        (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
       await server.start({
@@ -1368,7 +1368,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1384,7 +1384,7 @@ describe(QUICClient.name, () => {
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
         'connectionError',
-        (event: events.QUICConnectionErrorEvent) => {
+        (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
           }
@@ -1406,7 +1406,7 @@ describe(QUICClient.name, () => {
         port: 54444,
         localHost: '::',
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1426,7 +1426,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1451,15 +1451,14 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyAllowFail: true,
-        },
-        verifyCallback: async (certs) => {
-          verifyProm.resolveP(certs);
+          verifyCallback: async (certs) => {
+            verifyProm.resolveP(certs);
+          },
         },
       });
       testsUtils.extractSocket(client, sockets);
@@ -1473,7 +1472,7 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
@@ -1486,7 +1485,7 @@ describe(QUICClient.name, () => {
       const handleConnectionEventProm = promise<QUICConnection>();
       server.addEventListener(
         'serverConnection',
-        (event: events.QUICServerConnectionEvent) =>
+        (event: events.EventQUICServerConnection) =>
           handleConnectionEventProm.resolveP(event.detail),
       );
       await server.start({
@@ -1498,15 +1497,14 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyAllowFail: true,
-        },
-        verifyCallback: () => {
-          throw Error('SOME ERROR');
+          verifyCallback: () => {
+            throw Error('SOME ERROR');
+          },
         },
       });
       clientProm.catch(() => {});
@@ -1532,17 +1530,16 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
           key: tlsConfigs.key,
           cert: tlsConfigs.cert,
           verifyPeer: true,
-          verifyAllowFail: true,
-        },
-        verifyCallback: async (certs) => {
-          verifyProm.resolveP(certs);
+          verifyCallback: async (certs) => {
+            verifyProm.resolveP(certs);
+          },
         },
       });
       testsUtils.extractSocket(server, sockets);
@@ -1560,7 +1557,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1580,24 +1577,23 @@ describe(QUICClient.name, () => {
       const server = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: ServerCryptoOps,
         },
         logger: logger.getChild(QUICServer.name),
         config: {
           key: tlsConfigs.key,
           cert: tlsConfigs.cert,
           verifyPeer: true,
-          verifyAllowFail: true,
-        },
-        verifyCallback: () => {
-          throw Error('SOME ERROR');
+          verifyCallback: () => {
+            throw Error('SOME ERROR');
+          },
         },
       });
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<QUICConnection>();
       server.addEventListener(
         'serverConnection',
-        (event: events.QUICServerConnectionEvent) =>
+        (event: events.EventQUICServerConnection) =>
           handleConnectionEventProm.resolveP(event.detail),
       );
       await server.start({
@@ -1610,7 +1606,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {
@@ -1640,11 +1636,11 @@ describe(QUICClient.name, () => {
   test('Connections are established and secured quickly', async () => {
     const tlsConfigServer = await testsUtils.generateConfig(defaultType);
 
-    const connectionEventProm = promise<events.QUICServerConnectionEvent>();
+    const connectionEventProm = promise<events.EventQUICServerConnection>();
     const server = new QUICServer({
       crypto: {
         key,
-        ops: serverCrypto,
+        ops: ServerCryptoOps,
       },
       logger: logger.getChild(QUICServer.name),
       config: {
@@ -1656,7 +1652,7 @@ describe(QUICClient.name, () => {
     testsUtils.extractSocket(server, sockets);
     server.addEventListener(
       'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -1672,7 +1668,7 @@ describe(QUICClient.name, () => {
         port: server.port,
         localHost: localhost,
         crypto: {
-          ops: clientCrypto,
+          ops: ClientCryptoOps,
         },
         logger: logger.getChild(QUICClient.name),
         config: {

@@ -7,7 +7,7 @@ import * as errors from '@/errors';
 import QUICConnectionId from '@/QUICConnectionId';
 
 describe(QUICSocket.name, () => {
-  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.DEBUG, [
     new StreamHandler(),
   ]);
   // This has to be setup asynchronously due to key generation

@@ -24,7 +24,7 @@ abstract class EventQUICClient<T = null> extends EventQUIC<T> {}
 
 class EventQUICClientDestroy extends EventQUICClient {}
 
-class EventQUICClientError extends EventQUICClient<Error | EventQUICConnectionError> {}
+class EventQUICClientError extends EventQUICClient<Error> {}
 
 // Server events
 
@@ -40,7 +40,7 @@ class EventQUICServerStop extends EventQUICServer {}
 
 class EventQUICServerStopped extends EventQUICServer {}
 
-class EventQUICServerError extends EventQUICServer<Error | EventQUIC<any>> {}
+class EventQUICServerError extends EventQUICServer<Error> {}
 
 // Connection events
 
@@ -55,7 +55,6 @@ class EventQUICConnectionStarted extends EventQUICConnection {}
 class EventQUICConnectionStop extends EventQUICConnection {}
 
 class EventQUICConnectionStopped extends EventQUICConnection<Error | null> {}
-
 
 // If this represents a terminal state, then we must not emit stop
 // Then we would transition to calling `this.stop({ error })

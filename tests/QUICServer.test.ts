@@ -1,5 +1,5 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Host, ServerCrypto } from '@/types';
+import type { Host, ServerCryptoOps } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import * as utils from '@/utils';
@@ -71,7 +71,7 @@ describe(QUICServer.name, () => {
     certEd25519PEM = testsUtils.certToPEM(certEd25519);
   });
   // This has to be setup asynchronously due to key generation
-  let serverCrypto: ServerCrypto;
+  let serverCrypto: ServerCryptoOps;
   let key: ArrayBuffer;
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();

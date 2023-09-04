@@ -4,7 +4,7 @@ import type {
   StreamId,
   StreamReasonToCode,
   StreamCodeToReason,
-  ConnectionMetadata,
+  QUICConnectionMetadata,
 } from './types';
 import type { Connection } from './native/types';
 import type {
@@ -23,7 +23,6 @@ import {
   ready,
   status,
 } from '@matrixai/async-init/dist/CreateDestroy';
-import { Evented } from '@matrixai/events';
 import { quiche } from './native';
 import * as events from './events';
 import * as utils from './utils';
@@ -69,6 +68,17 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    *
    * It may receive any reason for cancellation.
    * It may receive an exception when streamRecv fails!
+   *
+   * Creation will create stream state locally in quiche. Remote state is not created until data is sent.
+   * This happens when...
+   * 1. The writable is written to.
+   * 2. The readable is cancelled.
+   * 3. The writable is aborted.
+   * 4. The QUICStream is cancelled.
+   *
+   * In the case that the stream was ended before data was sent the remote side will create state that has already ended.
+   *
+   * @internal Only used by {@link QUICConnection} to create a stream.
    */
   public static async createQUICStream({
     streamId,
@@ -96,6 +106,14 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     return stream;
   }
 
+  /**
+   * @internal Should only be used by {@link createQUICStream} to create the stream
+   * @param streamId - ID of the stream.
+   * @param connection - `QUICConnection` the stream was created on.
+   * @param reasonToCode
+   * @param codeToReason
+   * @param logger
+   */
   public constructor({
     streamId,
     connection,
@@ -122,9 +140,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     try {
       connection.conn.streamSend(streamId, new Uint8Array(0), false);
     } catch (e) {
-      // We ignore any errors here, if this is a server side stream then state already exists.
-      // But it's possible for the stream to already be closed or have an error here.
-      // These errors will be handled by the QUICStream and not here.
+      // Any errors here are critical and should be investigated.
+      throw new errors.ErrorQUICStreamCreationFailed(undefined, { cause: e });
     }
 
     this.readable = new ReadableStream(
@@ -162,8 +179,9 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
               // the stream, and we are receiving the error code
               // If it is not a `StreamReset(u64)`, then something else broke,
               // and we need to propagate the error up and down the stream
-              controller.error(reason);
-              await this.closeRecv(true, reason);
+              // Only the readable stream needs to end since the quiche stream errored
+              this.readableController.error(reason);
+              await this.closeRecv();
               // It is possible the stream was cancelled, let's check the writable state;
               try {
                 this.conn.streamWritable(this.streamId, 0);
@@ -177,6 +195,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
                 this.writableController.error(reason);
               }
             }
+            // Trigger send after processing error
+            await this.connection.send();
             return;
           }
           this.logger.debug(`stream read ${recvLength} bytes with fin(${fin})`);
@@ -189,10 +209,12 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             await this.closeRecv();
             controller.close();
           }
+          // Trigger send after processing read
+          await this.connection.send();
         },
         cancel: async (reason) => {
           this.logger.debug(`readable aborted with [${reason.message}]`);
-          await this.closeRecv(true, reason);
+          await this.closeRecvError(reason);
         },
       },
       new CountQueuingStrategy({
@@ -208,6 +230,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         },
         write: async (chunk: Uint8Array, controller) => {
           await this.streamSend(chunk).catch((e) => controller.error(e));
+          // Triggering send after processing write
           await this.connection.send();
         },
         close: async () => {
@@ -217,10 +240,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           // Close without error
           await this.closeSend();
         },
-        abort: async (reason?: any) => {
+        abort: async (reason) => {
           // Forces the stream to immediately close with an error. Will trigger a `RESET_STREAM` frame to be sent to
           //  the peer. Any buffered data is discarded.
-          await this.closeSend(true, reason);
+          await this.closeSendError(reason);
         },
       },
       {
@@ -230,38 +253,33 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     );
   }
 
+  /**
+   * Returns connection data for the connection this stream is on.
+   */
+  @ready(new errors.ErrorQUICStreamDestroyed())
+  public get meta(): QUICConnectionMetadata {
+    return this.connection.meta();
+  }
+
+  /**
+   * Returns true of the writable has closed.
+   */
   public get sendClosed(): boolean {
     return this._sendClosed;
   }
 
+  /**
+   * Returns true if the readable has closed.
+   */
   public get recvClosed(): boolean {
     return this._recvClosed;
   }
 
+  /**
+   * A promise that resolves once this `QUICStream` has ended.
+   */
   public get destroyedP() {
     return this.destroyProm.p;
-  }
-
-  /**
-   * Connection information including hosts, ports and cert data.
-   */
-  @ready(new errors.ErrorQUICStreamDestroyed())
-  public get remoteInfo(): ConnectionMetadata {
-    return {
-      localHost: this.connection.localHost,
-      localPort: this.connection.localPort,
-      remoteCertificates: this.connection.getRemoteCertsChain(),
-      remoteHost: this.connection.remoteHost,
-      remotePort: this.connection.remotePort,
-    };
-  }
-
-  /**
-   * Duplicating `remoteInfo` functionality.
-   * This strictly exists to work with agnostic RPC stream interface.
-   */
-  public get meta(): ConnectionMetadata {
-    return this.remoteInfo;
   }
 
   /**
@@ -270,9 +288,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * 1. Top-down control flow - means explicit destruction from QUICConnection
    * 2. Bottom-up control flow - means stream events from users of this stream
    *
-   * This will not wait for any transition events, It's either called when both
-   * directions have closed. Or when force closing the connection which does not
-   * require waiting.
+   * If force is true then this will trigger destruction and await for the `QUICStream` to end.
+   * If force is false then it will just wait for the `QUICStream` to end.
    */
   public async destroy({
     force = false,
@@ -287,27 +304,36 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   }
 
   /**
-   * Used to cancel the streams. This function is synchronous and will immediately close the stream and not await any
-   * response.
+   * Will trigger the destruction of the `QUICStream` if the readable or writable haven't closed, yet they will be forced
+   * closed with `reason` as the error.
+   * If streams have already closed then this will do nothing.
+   * This is synchronous by design but cancelling will happen asynchronously in the background.
    */
   public cancel(reason?: any): void {
     reason = reason ?? new errors.ErrorQUICStreamCancel();
-    if (!this._recvClosed) {
-      this.readableController.error(reason);
-      void this.closeRecv(true, reason);
-    }
-    if (!this._sendClosed) {
-      this.writableController.error(reason);
-      void this.closeSend(true, reason);
-    }
+    void Promise.all([
+      !this._recvClosed ? this.closeRecvError(reason) : undefined,
+      !this._sendClosed ? this.closeSendError(reason) : undefined,
+    ]).then(async () => {
+        // triggering send after destruction
+        await this.connection.send();
+    });
   }
 
   /**
-   * Called when stream is present in the `connection.readable` iterator
-   * Checks for certain close conditions when blocked and closes the web-stream.
+   * Called when stream is present in the `connection.readable` iterator.
+   * It resolves a promise waiting for more data to be available and processed by the readable stream.
+   *
+   * If the stream has finished then we want to process the finish condition and clean up the readable stream.
+   * Normally a stream will only finish after all the data is read from it and the fin flag is true.
+   * The stream will become finished with data still on the buffer if there was an error.
+   * We need to process this error condition and clean up. All buffered data will have been dropped by quiche.
+   *
+   * This is public but should only be used internally by the `QUICConnection`.
+   * @internal
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
-  public read(): void {
+  public async read(): Promise<void> {
     // If we're readable then we need to un-pause the readable stream.
     // We also need to check for an early end condition here.
     this.logger.debug(`desired size ${this.readableController.desiredSize}`);
@@ -325,32 +351,31 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         [, fin] = this.conn.streamRecv(this.streamId, buf);
         if (fin) {
           // Closing the readable stream
-          void this.closeRecv();
+          await this.closeRecv();
           this.readableController.close();
         }
       } catch (e) {
         if (e.message !== 'Done') {
           this.logger.debug(`Stream recv reported: error ${e.message}`);
           if (!this._recvClosed) {
-            // Close stream in background
-            void (async () => {
-              const reason =
-                (await this.processSendStreamError(e, 'recv')) ?? e;
-              this.readableController.error(reason);
-              await this.closeRecv(true, reason);
-              // It is possible the stream was cancelled, let's check the writable state;
-              try {
-                this.conn.streamWritable(this.streamId, 0);
-              } catch (e) {
-                const match = e.message.match(/InvalidStreamState\((.+)\)/);
-                if (match == null) {
-                  return never(
-                    'Errors besides [InvalidStreamState(StreamId)] are not expected here',
-                  );
-                }
-                this.writableController.error(reason);
+            const reason = (await this.processSendStreamError(e, 'recv')) ?? e;
+            // Only the readable stream needs to end since the quiche stream errored
+            this.readableController.error(reason);
+            await this.closeRecv();
+            // It is possible the stream was cancelled, let's check the writable state
+            try {
+              this.conn.streamWritable(this.streamId, 0);
+            } catch (e) {
+              const match = e.message.match(/InvalidStreamState\((.+)\)/);
+              if (match == null) {
+                return never(
+                  'Errors besides [InvalidStreamState(StreamId)] are not expected here',
+                );
               }
-            })();
+              // Only writable stream needs to end since quiche stream errored
+              this.writableController.error(reason);
+              await this.closeSend();
+            }
           }
         }
       }
@@ -369,16 +394,23 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   /**
    * Internal push is converted to an external pull
    * External system decides when to unblock
+   *
+   * If the writable stream had an error then it will be writable until the error received from quiche.
+   * To be responsive in this condition we're checking if the stream is writable to trigger an error.
+   * If there is an error we trigger a dummy write to get this error and clean up the writable stream.
+   *
+   * This is public but should only be used internally by the `QUICConnection`.
+   * @internal
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
-  public write(): void {
+  public async write(): Promise<void> {
     try {
       // Checking if the writable had an error
       this.conn.streamWritable(this.streamId, 0);
     } catch (e) {
       // If it threw an error, then the stream was closed with an error
       // We need to attempt a write to trigger state change and remove stream from writable iterator
-      void this.streamSend(Buffer.from('dummy data'), true).catch(() => {});
+      await this.streamSend(Buffer.from('dummy data'), true).catch(() => {});
     }
     // Resolve the write blocking promise
     if (this.resolveWritableP != null) {
@@ -386,6 +418,14 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     }
   }
 
+  /**
+   * This will process sending bytes from the writable stream to quiche.
+   *
+   * If quiche writable stream has failed in some way then this will process the error and clean up the writable stream.
+   *
+   * @param chunk - data to be sent.
+   * @param fin - Signal if the stream has ended.
+   */
   protected async streamSend(chunk: Uint8Array, fin = false): Promise<void> {
     // Check if we have capacity to send. Doing so will signal to quiche how many bytes are waiting and the stream will
     //  not become writable until there is room. So we can wait for the space before sending.
@@ -408,85 +448,94 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       // We can fail with an error. Likely a `StreamStopped(u64)` exception indicating the stream has
       //  failed in some way. We need to process the error and propagate it to the web-stream.
       const reason = (await this.processSendStreamError(e, 'send')) ?? e;
-      await this.closeSend(true, reason);
+      // Only writable stream needs to end since quiche stream errored
+      this.writableController.error(reason);
+      await this.closeSend();
       // Throws the exception back to the writer
       throw reason;
     }
   }
 
   /**
-   * This is called from events on the stream
-   * If `isError` is true, then it will terminate with a reason.
+   * This will trigger the shutdown of the quiche read stream.
    * The reason is converted to a code, and sent in a `STOP_SENDING` frame.
+   * Will close the readable stream with the given reason.
    */
-  protected async closeRecv(
-    isError: boolean = false,
-    reason?: any,
-  ): Promise<void> {
-    if (isError) this.logger.debug(`recv closed with error ${reason.message}`);
+  protected async closeRecvError(reason: any) {
+    this.logger.debug(`recv closed with error ${reason.message}`);
+    if (this._recvClosed) return;
+    try {
+      const code = await this.reasonToCode('send', reason);
+      // This will send a `STOP_SENDING` frame with the code
+      // When the other peer sends, they will get a `StreamStopped(u64)` exception
+      this.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
+      // we need to send after a shutdown but that's handled in the web streams or connection processing
+    } catch (e) {
+      // Ignore if already shutdown
+      if (e.message !== 'Done') throw e;
+    }
+    this.readableController.error(reason);
+    await this.closeRecv();
+  }
+
+  /**
+   * This is used to indicate that the recv has closed.
+   * It will trigger destruction of the stream if both readable and writable has ended.
+   */
+  protected async closeRecv(): Promise<void> {
     // Further closes are NOPs
     if (this._recvClosed) return;
     this.logger.debug(`Close Recv`);
     // Indicate that the receiving side is closed
     this._recvClosed = true;
-    if (isError) {
-      try {
-        const code = isError ? await this.reasonToCode('send', reason) : 0;
-        // This will send a `STOP_SENDING` frame with the code
-        // When the other peer sends, they will get a `StreamStopped(u64)` exception
-        this.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
-      } catch (e) {
-        // Ignore if already shutdown
-        if (e.message !== 'Done') throw e;
-      }
-      this.readableController.error(reason);
-    }
-    // Background the send to avoid deadlock
-    void this.connection.send();
     if (this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
       this.destroyProm.resolveP();
-      if (this[status] !== 'destroying') void this.destroy();
+      if (this[status] !== 'destroying') await this.destroy();
     }
     this.logger.debug(`Closed Recv`);
   }
 
   /**
-   * This is called from events on the stream.
-   * Will trigger any error and clean up logic events.
-   * If `isError` is true, then it will terminate with a reason.
+   * This will trigger the shutdown of the quiche writable stream.
    * The reason is converted to a code, and sent in a `RESET_STREAM` frame.
+   *
+   * This should only be used to trigger the shutdown of the writable stream in response to cancellation or an error.
    */
-  protected async closeSend(
-    isError: boolean = false,
-    reason?: any,
-  ): Promise<void> {
-    if (isError) this.logger.debug(`send closed with error ${reason.message}`);
+  protected async closeSendError(reason: any) {
+    this.logger.debug(`send closed with error ${reason.message}`);
+    try {
+      const code = await this.reasonToCode('send', reason);
+      // This will send a `RESET_STREAM` frame with the code
+      // When the other peer receives, they will get a `StreamReset(u64)` exception
+      this.conn.streamShutdown(this.streamId, quiche.Shutdown.Write, code);
+      // we need to trigger send after a shutdown but that's handled in the web streams or connection processing
+    } catch (e) {
+      // Ignore if already shutdown
+      if (e.message !== 'Done') throw e;
+    }
+    this.writableController.error(reason);
+    await this.closeSend();
+  }
+
+  /**
+   * This is used to indicate that the send has closed.
+   * It will trigger destruction of the stream if both readable and writable has ended.
+   *
+   * This should only be used to trigger the shutdown of the readable stream in response to cancellation or an error.
+   */
+  protected async closeSend(): Promise<void> {
     // Further closes are NOPs
     if (this._sendClosed) return;
     this.logger.debug(`Close Send`);
     // Indicate that the sending side is closed
     this._sendClosed = true;
-    if (isError) {
-      try {
-        const code = await this.reasonToCode('send', reason);
-        // This will send a `RESET_STREAM` frame with the code
-        // When the other peer receives, they will get a `StreamReset(u64)` exception
-        this.conn.streamShutdown(this.streamId, quiche.Shutdown.Write, code);
-      } catch (e) {
-        // Ignore if already shutdown
-        if (e.message !== 'Done') throw e;
-      }
-      this.writableController.error(reason);
-    }
-    // Background the send to avoid deadlock
-    void this.connection.send();
     if (this._recvClosed && this._sendClosed) {
       // Only destroy if we are not already destroying
       // and that both recv and send is closed
       this.destroyProm.resolveP();
-      if (this[status] !== 'destroying') void this.destroy();
+      if (this[status] !== 'destroying') await this.destroy();
     }
     this.logger.debug(`Closed Send`);
   }

@@ -1,6 +1,7 @@
 import type { QUICConfig } from './types';
 import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
+import * as utils from './utils';
 import * as errors from './errors';
 
 /**
@@ -39,7 +40,6 @@ const minIdleTimeout = Infinity;
 const clientDefault: QUICConfig = {
   sigalgs,
   verifyPeer: true,
-  verifyAllowFail: false,
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
@@ -60,7 +60,6 @@ const clientDefault: QUICConfig = {
 const serverDefault: QUICConfig = {
   sigalgs,
   verifyPeer: false,
-  verifyAllowFail: false,
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
@@ -77,9 +76,6 @@ const serverDefault: QUICConfig = {
   applicationProtos: ['quic'],
   enableEarlyData: true,
 };
-
-const textDecoder = new TextDecoder('utf-8');
-const textEncoder = new TextEncoder();
 
 /**
  * Converts QUICConfig to QuicheConfig.
@@ -107,65 +103,26 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   // This is a concatenated CA certificates in PEM format
   let caPEMBuffer: Uint8Array | undefined;
   if (config.ca != null) {
-    let caPEMString = '';
-    if (typeof config.ca === 'string') {
-      caPEMString = config.ca.trim() + '\n';
-    } else if (config.ca instanceof Uint8Array) {
-      caPEMString = textDecoder.decode(config.ca).trim() + '\n';
-    } else if (Array.isArray(config.ca)) {
-      for (const c of config.ca) {
-        if (typeof c === 'string') {
-          caPEMString += c.trim() + '\n';
-        } else {
-          caPEMString += textDecoder.decode(c).trim() + '\n';
-        }
-      }
-    }
-    caPEMBuffer = textEncoder.encode(caPEMString);
+    const caPEMBuffers = utils.concatPEMs(config.ca);
+    caPEMBuffer = utils.textEncoder.encode(caPEMBuffers.join(''));
   }
-  // This is an array of private keys in PEM format
+  // This is an array of private keys in PEM format as buffers
   let keyPEMBuffers: Array<Uint8Array> | undefined;
   if (config.key != null) {
-    const keyPEMs: Array<string> = [];
-    if (typeof config.key === 'string') {
-      keyPEMs.push(config.key.trim() + '\n');
-    } else if (config.key instanceof Uint8Array) {
-      keyPEMs.push(textDecoder.decode(config.key).trim() + '\n');
-    } else if (Array.isArray(config.key)) {
-      for (const k of config.key) {
-        if (typeof k === 'string') {
-          keyPEMs.push(k.trim() + '\n');
-        } else {
-          keyPEMs.push(textDecoder.decode(k).trim() + '\n');
-        }
-      }
-    }
-    keyPEMBuffers = keyPEMs.map((k) => textEncoder.encode(k));
+    const keyPEMs = utils.concatPEMs(config.key);
+    keyPEMBuffers = keyPEMs.map((k) => utils.textEncoder.encode(k));
   }
-  // This is an array of certificate chains in PEM format
+  // This is an array of certificate chains in PEM format as buffers
   let certChainPEMBuffers: Array<Uint8Array> | undefined;
   if (config.cert != null) {
-    const certChainPEMs: Array<string> = [];
-    if (typeof config.cert === 'string') {
-      certChainPEMs.push(config.cert.trim() + '\n');
-    } else if (config.cert instanceof Uint8Array) {
-      certChainPEMs.push(textDecoder.decode(config.cert).trim() + '\n');
-    } else if (Array.isArray(config.cert)) {
-      for (const c of config.cert) {
-        if (typeof c === 'string') {
-          certChainPEMs.push(c.trim() + '\n');
-        } else {
-          certChainPEMs.push(textDecoder.decode(c).trim() + '\n');
-        }
-      }
-    }
-    certChainPEMBuffers = certChainPEMs.map((c) => textEncoder.encode(c));
+    const certPEMsChain = utils.concatPEMs(config.cert);
+    certChainPEMBuffers = certPEMsChain.map((c) => utils.textEncoder.encode(c));
   }
   let quicheConfig: QuicheConfig;
   try {
     quicheConfig = quiche.Config.withBoringSslCtx(
       config.verifyPeer,
-      config.verifyAllowFail,
+      config.verifyCallback != null,
       caPEMBuffer,
       keyPEMBuffers,
       certChainPEMBuffers,
