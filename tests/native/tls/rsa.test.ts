@@ -11,7 +11,6 @@ import { quiche } from '@/native';
 import { clientDefault, serverDefault, buildQuicheConfig } from '@/config';
 import QUICConnectionId from '@/QUICConnectionId';
 import * as utils from '@/utils';
-import { sleep } from '@/utils';
 import * as testsUtils from '../../utils';
 
 describe('native/tls/rsa', () => {
@@ -643,13 +642,6 @@ describe('native/tls/rsa', () => {
           from: clientHost,
         }),
       ).toThrow('TlsFail');
-      // 304 means the client supplied certificates that failed verification
-      expect(serverConn.localError()).toEqual({
-        isApp: false,
-        // This code is unknown!
-        errorCode: 304,
-        reason: new Uint8Array(),
-      });
       expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -658,6 +650,14 @@ describe('native/tls/rsa', () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.isClosed()).toBeFalse();
       expect(serverConn.isDraining()).toBeFalse();
+    });
+    test('server has local error TlsFail 304', async () => {
+      // 304 means the client supplied certificates that failed verification
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        errorCode: 304,
+        reason: new Uint8Array(),
+      });
     });
     test('client <-handshake- server', async () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -688,6 +688,13 @@ describe('native/tls/rsa', () => {
       expect(clientConn.isClosed()).toBeFalse();
       // Client is in draining state now
       expect(clientConn.isDraining()).toBeTrue();
+    });
+    test('client has peer error TlsFail 304', async () => {
+      expect(clientConn.peerError()).toEqual({
+        isApp: false,
+        errorCode: 304,
+        reason: new Uint8Array(),
+      });
     });
     test('client and server close', async () => {
       expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -735,6 +742,7 @@ describe('native/tls/rsa', () => {
         verifyPeer: true,
         key: keyPairRSAPEM.privateKey,
         cert: certRSAPEM,
+        ca: certRSAPEM,
         maxIdleTimeout: 0,
       };
       clientQuicheConfig = buildQuicheConfig(clientConfig);
@@ -852,12 +860,6 @@ describe('native/tls/rsa', () => {
           from: clientHost,
         }),
       ).toThrow('TlsFail');
-      // 372 means the client did not supply any certificates
-      expect(serverConn.localError()).toEqual({
-        isApp: false,
-        errorCode: 372,
-        reason: new Uint8Array(),
-      });
       expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -866,6 +868,14 @@ describe('native/tls/rsa', () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.isClosed()).toBeFalse();
       expect(serverConn.isDraining()).toBeFalse();
+    });
+    test('server has local error TlsFail 372', async () => {
+      // 372 means the client did not supply any certificates
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        errorCode: 372,
+        reason: new Uint8Array(),
+      });
     });
     test('client <-handshake- server', async () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -896,6 +906,13 @@ describe('native/tls/rsa', () => {
       expect(clientConn.isClosed()).toBeFalse();
       // Client is in draining state now
       expect(clientConn.isDraining()).toBeTrue();
+    });
+    test('client has peer error TlsFail 372', async () => {
+      expect(clientConn.peerError()).toEqual({
+        isApp: false,
+        errorCode: 372,
+        reason: new Uint8Array(),
+      });
     });
     test('client and server close', async () => {
       expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -1044,15 +1061,7 @@ describe('native/tls/rsa', () => {
           from: serverHost,
         }),
       ).toThrow('TlsFail');
-
-      expect(clientConn.localError()).toEqual({
-        isApp: false,
-        // This code is unknown!
-        errorCode: 304,
-        reason: new Uint8Array(),
-      });
       expect(clientConn.peerError()).toBeNull();
-
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
       expect(clientConn.isEstablished()).toBeFalse();
@@ -1060,6 +1069,13 @@ describe('native/tls/rsa', () => {
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.isClosed()).toBeFalse();
       expect(clientConn.isDraining()).toBeFalse();
+    });
+    test('client has local error TlsFail 304', async () => {
+      expect(clientConn.localError()).toEqual({
+        isApp: false,
+        errorCode: 304,
+        reason: new Uint8Array(),
+      });
     });
     test('client -handshake-> server', async () => {
       [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
@@ -1082,12 +1098,6 @@ describe('native/tls/rsa', () => {
         from: clientHost,
       });
       expect(serverConn.localError()).toBeNull();
-      expect(serverConn.peerError()).toEqual({
-        isApp: false,
-        // This code is unknown!
-        errorCode: 304,
-        reason: new Uint8Array(),
-      });
       expect(serverConn.timeout()).not.toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1097,6 +1107,13 @@ describe('native/tls/rsa', () => {
       expect(serverConn.isClosed()).toBeFalse();
       // Client is in draining state now
       expect(serverConn.isDraining()).toBeTrue();
+    });
+    test('server has peer error TlsFail 304', async () => {
+      expect(serverConn.peerError()).toEqual({
+        isApp: false,
+        errorCode: 304,
+        reason: new Uint8Array(),
+      });
     });
     test('client and server close', async () => {
       expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -1109,7 +1126,7 @@ describe('native/tls/rsa', () => {
       expect(serverConn.isClosed()).toBeTrue();
     });
   });
-  describe('RSA fail with no server certificates (InternalError)', () => {
+  describe('RSA fail with no server certificates (InternalError 1)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
       host: '127.0.0.1' as Host,
@@ -1224,12 +1241,6 @@ describe('native/tls/rsa', () => {
           from: clientHost,
         })
       ).toThrow('TlsFail');
-      expect(serverConn.localError()).toEqual({
-        isApp: false,
-        // This code is unknown!
-        errorCode: 1,
-        reason: new Uint8Array(),
-      });
       expect(serverConn.peerError()).toBeNull();
       expect(serverConn.isTimedOut()).toBeFalse();
       expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1238,6 +1249,13 @@ describe('native/tls/rsa', () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.isClosed()).toBeFalse();
       expect(serverConn.isDraining()).toBeFalse();
+    });
+    test('server has local error 1', async () => {
+      expect(serverConn.localError()).toEqual({
+        isApp: false,
+        errorCode: 1,
+        reason: new Uint8Array(),
+      });
     });
     test('client <-initial- server', () => {
       [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
@@ -1260,12 +1278,6 @@ describe('native/tls/rsa', () => {
         from: serverHost,
       });
       expect(clientConn.localError()).toBeNull();
-      expect(clientConn.peerError()).toEqual({
-        isApp: false,
-        // This code is unknown!
-        errorCode: 1,
-        reason: new Uint8Array(),
-      });
       expect(clientConn.timeout()).not.toBeNull();
       expect(clientConn.isTimedOut()).toBeFalse();
       expect(clientConn.isInEarlyData()).toBeFalse();
@@ -1275,6 +1287,13 @@ describe('native/tls/rsa', () => {
       expect(clientConn.isClosed()).toBeFalse();
       // Client is in draining state now
       expect(clientConn.isDraining()).toBeTrue();
+    });
+    test('client has peer error 1', async () => {
+      expect(clientConn.peerError()).toEqual({
+        isApp: false,
+        errorCode: 1,
+        reason: new Uint8Array(),
+      });
     });
     test('client and server close', async () => {
       expect(() => clientConn.send(clientBuffer)).toThrow('Done');
@@ -1442,12 +1461,10 @@ describe('native/tls/rsa', () => {
         expect(typeof utils.derToPEM(clientPeerCertChain[0])).toBe(
           'string',
         );
-        expect(
-          verifyCallback(
-            clientPeerCertChain.map(utils.derToPEM),
-            utils.concatPEMs(clientConfig.ca)
-          )
-        ).resolves.not.toThrow();
+        await verifyCallback(
+          clientPeerCertChain.map(utils.derToPEM),
+          utils.concatPEMs(clientConfig.ca)
+        );
       });
       test('client -handshake-> server', async () => {
         [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
@@ -1463,6 +1480,10 @@ describe('native/tls/rsa', () => {
         expect(serverPeerCertChain).toHaveLength(1);
         expect(typeof utils.derToPEM(serverPeerCertChain[0])).toBe(
           'string',
+        );
+        await verifyCallback(
+          serverPeerCertChain.map(utils.derToPEM),
+          utils.concatPEMs(serverConfig.ca)
         );
       });
       test('client <-short- server', async () => {
@@ -1532,11 +1553,957 @@ describe('native/tls/rsa', () => {
       });
     });
     describe('RSA success with only server certificates', () => {
-
+      // These tests run in-order, and each step is a tate transition
+      const clientHost = {
+        host: '127.0.0.1' as Host,
+        port: 55555 as Port,
+      };
+      const serverHost = {
+        host: '127.0.0.1' as Host,
+        port: 55556,
+      };
+      // These buffers will be used between the tests and will be mutated
+      let clientSendLength: number, _clientSendInfo: SendInfo;
+      const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let serverSendLength: number, _serverSendInfo: SendInfo;
+      const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let clientConfig: QUICConfig;
+      let serverConfig: QUICConfig;
+      let clientQuicheConfig: Config;
+      let serverQuicheConfig: Config;
+      let clientScid: QUICConnectionId;
+      let clientDcid: QUICConnectionId;
+      let serverScid: QUICConnectionId;
+      let serverDcid: QUICConnectionId;
+      let clientConn: Connection;
+      let serverConn: Connection;
+      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+        expect(certs).toHaveLength(1);
+        expect(ca).toHaveLength(1);
+        return;
+      };
+      beforeAll(async () => {
+        clientConfig = {
+          ...clientDefault,
+          verifyPeer: true,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        serverConfig = {
+          ...serverDefault,
+          verifyPeer: false,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        clientQuicheConfig = buildQuicheConfig(clientConfig);
+        serverQuicheConfig = buildQuicheConfig(serverConfig);
+      });
+      test('client connect', async () => {
+        // Randomly generate the client SCID
+        const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+        await crypto.ops.randomBytes(scidBuffer);
+        clientScid = new QUICConnectionId(scidBuffer);
+        clientConn = quiche.Connection.connect(
+          null,
+          clientScid,
+          clientHost,
+          serverHost,
+          clientQuicheConfig,
+        );
+      });
+      test('client dialing', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      });
+      test('client and server negotiation', async () => {
+        const clientHeaderInitial = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+        serverScid = new QUICConnectionId(
+          await crypto.ops.sign(crypto.key, clientDcid),
+          0,
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Stateless retry
+        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        const retryDatagramLength = quiche.retry(
+          clientScid,
+          clientDcid,
+          serverScid,
+          token,
+          clientHeaderInitial.version,
+          retryDatagram,
+        );
+        // Retry gets sent back to be processed by the client
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        // Client will retry the initial packet with the token
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderInitialRetry = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Validate the token
+        const dcidOriginal = await utils.validateToken(
+          Buffer.from(clientHeaderInitialRetry.token!),
+          clientHost.host,
+          crypto,
+        );
+        // The original randomly generated DCID was embedded in the token
+        expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
+        serverConn = quiche.Connection.accept(
+          serverScid,
+          clientDcid,
+          serverHost,
+          clientHost,
+          serverQuicheConfig,
+        );
+        clientDcid = serverScid;
+        serverDcid = clientScid;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-initial- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client -initial-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-handshake- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client is established', async () => {
+        expect(clientConn.isEstablished()).toBeTrue();
+        const clientPeerCertChain = clientConn.peerCertChain()!;
+        expect(clientPeerCertChain).not.toBeNull();
+        expect(clientPeerCertChain).toHaveLength(1);
+        expect(typeof utils.derToPEM(clientPeerCertChain[0])).toBe(
+          'string',
+        );
+        await verifyCallback(
+          clientPeerCertChain.map(utils.derToPEM),
+          utils.concatPEMs(clientConfig.ca)
+        );
+      });
+      test('client -handshake-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('server is established', async () => {
+        expect(serverConn.isEstablished()).toBeTrue();
+        // The client does not supply a certificate, it is expected to be null
+        // This means there's no chance of having an empty array
+        const serverPeerCertChain = serverConn.peerCertChain()!;
+        expect(serverPeerCertChain).toBeNull();
+      });
+      test('client <-short- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderShort = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client -short-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client and server established', async () => {
+        // Both client and server is established
+        // Server connection timeout is now null
+        // Note that this occurs after the server has received the last short frame
+        // This is due to max idle timeout of 0
+        // need to check the timeout
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(clientConn.timeout()).toBeNull();
+        expect(serverConn.timeout()).toBeNull();
+        const clientPeerCertChain = clientConn.peerCertChain()!;
+        expect(clientPeerCertChain).not.toBeNull();
+        expect(clientPeerCertChain).toHaveLength(1);
+        expect(typeof utils.derToPEM(clientPeerCertChain[0])).toBe(
+          'string',
+        );
+        const serverPeerCertChain = serverConn.peerCertChain()!;
+        expect(serverPeerCertChain).toBeNull();
+      });
+      test('client close', async () => {
+        clientConn.close(true, 0, Buffer.from(''));
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        await testsUtils.sleep(clientConn.timeout()!);
+        clientConn.onTimeout();
+        await testsUtils.waitForTimeoutNull(clientConn);
+        expect(clientConn.timeout()).toBeNull();
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+        await testsUtils.sleep(serverConn.timeout()!);
+        serverConn.onTimeout();
+        await testsUtils.waitForTimeoutNull(serverConn);
+        expect(serverConn.timeout()).toBeNull();
+        expect(clientConn.isClosed()).toBeTrue();
+        expect(serverConn.isClosed()).toBeTrue();
+      });
     });
-    describe('RSA fail verifying client with bad client certificate (TLS 304)', () => {
+    describe('RSA fail verifying client with bad client certificate (TlsFail 304)', () => {
+      // These tests run in-order, and each step is a state transition
+      const clientHost = {
+        host: '127.0.0.1' as Host,
+        port: 55555 as Port,
+      };
+      const serverHost = {
+        host: '127.0.0.1' as Host,
+        port: 55556,
+      };
+      // These buffers will be used between the tests and will be mutated
+      let clientSendLength: number, _clientSendInfo: SendInfo;
+      const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let serverSendLength: number, _serverSendInfo: SendInfo;
+      const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let clientConfig: QUICConfig;
+      let serverConfig: QUICConfig;
+      let clientQuicheConfig: Config;
+      let serverQuicheConfig: Config;
+      let clientScid: QUICConnectionId;
+      let clientDcid: QUICConnectionId;
+      let serverScid: QUICConnectionId;
+      let serverDcid: QUICConnectionId;
+      let clientConn: Connection;
+      let serverConn: Connection;
+      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+        expect(certs).toHaveLength(1);
+        expect(ca).toHaveLength(1);
+        throw new Error('Verification failed');
+      };
+      beforeAll(async () => {
+        clientConfig = {
+          ...clientDefault,
+          verifyPeer: true,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        serverConfig = {
+          ...serverDefault,
+          verifyPeer: true,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        clientQuicheConfig = buildQuicheConfig(clientConfig);
+        serverQuicheConfig = buildQuicheConfig(serverConfig);
+      });
+      test('client connect', async () => {
+        // Randomly generate the client SCID
+        const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+        await crypto.ops.randomBytes(scidBuffer);
+        clientScid = new QUICConnectionId(scidBuffer);
+        clientConn = quiche.Connection.connect(
+          null,
+          clientScid,
+          clientHost,
+          serverHost,
+          clientQuicheConfig,
+        );
+      });
+      test('client dialing', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      });
+      test('client and server negotiation', async () => {
+        const clientHeaderInitial = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+        serverScid = new QUICConnectionId(
+          await crypto.ops.sign(crypto.key, clientDcid),
+          0,
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Stateless retry
+        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        const retryDatagramLength = quiche.retry(
+          clientScid,
+          clientDcid,
+          serverScid,
+          token,
+          clientHeaderInitial.version,
+          retryDatagram,
+        );
+        // Retry gets sent back to be processed by the client
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        // Client will retry the initial packet with the token
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderInitialRetry = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Validate the token
+        const dcidOriginal = await utils.validateToken(
+          Buffer.from(clientHeaderInitialRetry.token!),
+          clientHost.host,
+          crypto,
+        );
+        // The original randomly generated DCID was embedded in the token
+        expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
+        serverConn = quiche.Connection.accept(
+          serverScid,
+          clientDcid,
+          serverHost,
+          clientHost,
+          serverQuicheConfig,
+        );
+        clientDcid = serverScid;
+        serverDcid = clientScid;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-initial- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client -initial-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-handshake- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client is established', async () => {
+        expect(clientConn.isEstablished()).toBeTrue();
+      });
+      test('client -handshake-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        // Server will accept the client's bad certificate due to the verify callback
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+        // Because the custom verify callback overrides the default verification function
+        // The server connection is considered established
+        expect(serverConn.isEstablished()).toBeTrue();
+        const serverPeerCertChain = serverConn.peerCertChain()!;
+        expect(serverPeerCertChain).not.toBeNull();
+        expect(serverPeerCertChain).toHaveLength(1);
+        expect(typeof utils.derToPEM(serverPeerCertChain[0])).toBe(
+          'string',
+        );
+        // We can imagine that our verify callback fails on the bad certificate
+        expect(
+          verifyCallback(
+            serverPeerCertChain.map(utils.derToPEM),
+            utils.concatPEMs(serverConfig.ca)
+          )
+        ).rejects.toThrow();
+        // Simulate a 304 as it means the client supplied a bad certificate
+        serverConn.close(false, 304, Buffer.from(''));
+        expect(serverConn.peerError()).toBeNull();
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        expect(serverConn.isDraining()).toBeFalse();
+      });
+      test('server has local error TlsFail 304', async () => {
+        expect(serverConn.localError()).toEqual({
+          isApp: false,
+          errorCode: 304,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client <-short- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderShort = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(serverHeaderShort.ty).toBe(quiche.Type.Short);
+        expect(serverConn.timeout()).not.toBeNull();
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        // Server is in draining state now
+        expect(serverConn.isDraining()).toBeTrue();
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        // Client is in draining state now
+        expect(clientConn.isDraining()).toBeTrue();
+      });
+      test('client has peer error TlsFail 304', async () => {
+        expect(clientConn.peerError()).toEqual({
+          isApp: false,
+          errorCode: 304,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client and server close', async () => {
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        await testsUtils.waitForTimeoutNull(clientConn);
+        await testsUtils.waitForTimeoutNull(serverConn);
+        expect(clientConn.isClosed()).toBeTrue();
+        expect(serverConn.isClosed()).toBeTrue();
+      });
     });
-    describe('RSA fail verifying server with bad server certificate (TLS 304)', () => {
+    describe('RSA fail verifying client with no client certificate (TlsFail 372)', () => {
+      // These tests run in-order, and each step is a state transition
+      const clientHost = {
+        host: '127.0.0.1' as Host,
+        port: 55555 as Port,
+      };
+      const serverHost = {
+        host: '127.0.0.1' as Host,
+        port: 55556,
+      };
+      // These buffers will be used between the tests and will be mutated
+      let clientSendLength: number, _clientSendInfo: SendInfo;
+      const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let serverSendLength: number, _serverSendInfo: SendInfo;
+      const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let clientConfig: QUICConfig;
+      let serverConfig: QUICConfig;
+      let clientQuicheConfig: Config;
+      let serverQuicheConfig: Config;
+      let clientScid: QUICConnectionId;
+      let clientDcid: QUICConnectionId;
+      let serverScid: QUICConnectionId;
+      let serverDcid: QUICConnectionId;
+      let clientConn: Connection;
+      let serverConn: Connection;
+      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+        expect(certs).toHaveLength(0);
+        expect(ca).toHaveLength(1);
+        throw new Error('Verification failed');
+      };
+      beforeAll(async () => {
+        clientConfig = {
+          ...clientDefault,
+          verifyPeer: true,
+          verifyCallback,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        serverConfig = {
+          ...serverDefault,
+          verifyPeer: true,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        clientQuicheConfig = buildQuicheConfig(clientConfig);
+        serverQuicheConfig = buildQuicheConfig(serverConfig);
+      });
+      test('client connect', async () => {
+        // Randomly generate the client SCID
+        const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+        await crypto.ops.randomBytes(scidBuffer);
+        clientScid = new QUICConnectionId(scidBuffer);
+        clientConn = quiche.Connection.connect(
+          null,
+          clientScid,
+          clientHost,
+          serverHost,
+          clientQuicheConfig,
+        );
+      });
+      test('client dialing', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      });
+      test('client and server negotiation', async () => {
+        const clientHeaderInitial = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+        serverScid = new QUICConnectionId(
+          await crypto.ops.sign(crypto.key, clientDcid),
+          0,
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Stateless retry
+        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        const retryDatagramLength = quiche.retry(
+          clientScid,
+          clientDcid,
+          serverScid,
+          token,
+          clientHeaderInitial.version,
+          retryDatagram,
+        );
+        // Retry gets sent back to be processed by the client
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        // Client will retry the initial packet with the token
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderInitialRetry = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Validate the token
+        const dcidOriginal = await utils.validateToken(
+          Buffer.from(clientHeaderInitialRetry.token!),
+          clientHost.host,
+          crypto,
+        );
+        // The original randomly generated DCID was embedded in the token
+        expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
+        serverConn = quiche.Connection.accept(
+          serverScid,
+          clientDcid,
+          serverHost,
+          clientHost,
+          serverQuicheConfig,
+        );
+        clientDcid = serverScid;
+        serverDcid = clientScid;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-initial- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client -initial-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-handshake- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client is established', async () => {
+        expect(clientConn.isEstablished()).toBeTrue();
+        const clientPeerCertChain = clientConn.peerCertChain()!;
+        expect(clientPeerCertChain).not.toBeNull();
+        expect(clientPeerCertChain).toHaveLength(1);
+        expect(typeof utils.derToPEM(clientPeerCertChain[0])).toBe(
+          'string',
+        );
+      });
+      test('client -handshake-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        // Even with the custom verify callback, requiring the certificates
+        // will make the `recv` fail with `TlsFail`
+        expect(() =>
+          serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+            to: serverHost,
+            from: clientHost,
+          }),
+        ).toThrow('TlsFail');
+        // No certificates is available
+        const serverPeerCertChain = serverConn.peerCertChain()!;
+        expect(serverPeerCertChain).toBeNull();
+        // There's no need to do this, but for symmetry
+        expect(
+          verifyCallback(
+            (serverPeerCertChain ?? []).map(utils.derToPEM),
+            utils.concatPEMs(serverConfig.ca)
+          )
+        ).rejects.toThrow();
+        expect(serverConn.peerError()).toBeNull();
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeFalse();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        expect(serverConn.isDraining()).toBeFalse();
+      });
+      test('server has local error TlsFail 372', async () => {
+        // 372 means the client did not supply any certificates
+        expect(serverConn.localError()).toEqual({
+          isApp: false,
+          errorCode: 372,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client <-handshake- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const serverHeaderHandshake = quiche.Header.fromSlice(
+          serverBuffer.subarray(0, serverSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(serverHeaderHandshake.ty).toBe(quiche.Type.Handshake);
+        expect(serverConn.timeout()).not.toBeNull();
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeFalse();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        // Server is in draining state now
+        expect(serverConn.isDraining()).toBeTrue();
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        // Client is in draining state now
+        expect(clientConn.isDraining()).toBeTrue();
+      });
+      test('client has peer error TlsFail 372', async () => {
+        expect(clientConn.peerError()).toEqual({
+          isApp: false,
+          errorCode: 372,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client and server close', async () => {
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        await testsUtils.waitForTimeoutNull(clientConn);
+        await testsUtils.waitForTimeoutNull(serverConn);
+        expect(clientConn.isClosed()).toBeTrue();
+        expect(serverConn.isClosed()).toBeTrue();
+      });
+    });
+    describe('RSA fail verifying server with bad server certificate (TlsFail 304)', () => {
+      // These tests run in-order, and each step is a state transition
+      const clientHost = {
+        host: '127.0.0.1' as Host,
+        port: 55555 as Port,
+      };
+      const serverHost = {
+        host: '127.0.0.1' as Host,
+        port: 55556,
+      };
+      // These buffers will be used between the tests and will be mutated
+      let clientSendLength: number, _clientSendInfo: SendInfo;
+      const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let serverSendLength: number, _serverSendInfo: SendInfo;
+      const serverBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      let clientConfig: QUICConfig;
+      let serverConfig: QUICConfig;
+      let clientQuicheConfig: Config;
+      let serverQuicheConfig: Config;
+      let clientScid: QUICConnectionId;
+      let clientDcid: QUICConnectionId;
+      let serverScid: QUICConnectionId;
+      let serverDcid: QUICConnectionId;
+      let clientConn: Connection;
+      let serverConn: Connection;
+      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+        expect(certs).toHaveLength(1);
+        expect(ca).toHaveLength(1);
+        throw new Error('Verification failed');
+      };
+      beforeAll(async () => {
+        clientConfig = {
+          ...clientDefault,
+          verifyPeer: true,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        serverConfig = {
+          ...serverDefault,
+          verifyPeer: true,
+          verifyCallback,
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+          ca: certRSAPEM,
+          maxIdleTimeout: 0,
+        };
+        clientQuicheConfig = buildQuicheConfig(clientConfig);
+        serverQuicheConfig = buildQuicheConfig(serverConfig);
+      });
+      test('client connect', async () => {
+        // Randomly generate the client SCID
+        const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
+        await crypto.ops.randomBytes(scidBuffer);
+        clientScid = new QUICConnectionId(scidBuffer);
+        clientConn = quiche.Connection.connect(
+          null,
+          clientScid,
+          clientHost,
+          serverHost,
+          clientQuicheConfig,
+        );
+      });
+      test('client dialing', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      });
+      test('client and server negotiation', async () => {
+        const clientHeaderInitial = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        clientDcid = new QUICConnectionId(clientHeaderInitial.dcid);
+        serverScid = new QUICConnectionId(
+          await crypto.ops.sign(crypto.key, clientDcid),
+          0,
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Stateless retry
+        const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+        const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+        const retryDatagramLength = quiche.retry(
+          clientScid,
+          clientDcid,
+          serverScid,
+          token,
+          clientHeaderInitial.version,
+          retryDatagram,
+        );
+        // Retry gets sent back to be processed by the client
+        clientConn.recv(retryDatagram.subarray(0, retryDatagramLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+        // Client will retry the initial packet with the token
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderInitialRetry = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        // Validate the token
+        const dcidOriginal = await utils.validateToken(
+          Buffer.from(clientHeaderInitialRetry.token!),
+          clientHost.host,
+          crypto,
+        );
+        // The original randomly generated DCID was embedded in the token
+        expect(dcidOriginal).toEqual(clientDcid);
+      });
+      test('server accept', async () => {
+        serverConn = quiche.Connection.accept(
+          serverScid,
+          clientDcid,
+          serverHost,
+          clientHost,
+          serverQuicheConfig,
+        );
+        clientDcid = serverScid;
+        serverDcid = clientScid;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-initial- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client -initial-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client <-handshake- server', async () => {
+        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        // Client will accept the server's bad certificate due to the verify callback
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        }),
+        // Because the custom verify callback overrides the default verification function
+        // The client connection is considered established
+        expect(clientConn.isEstablished()).toBeTrue();
+        const clientPeerCertChain = clientConn.peerCertChain()!;
+        expect(clientPeerCertChain).not.toBeNull();
+        expect(clientPeerCertChain).toHaveLength(1);
+        expect(typeof utils.derToPEM(clientPeerCertChain[0])).toBe(
+          'string',
+        );
+        // We can imagine that our verify callback fails on the bad certificate
+        expect(
+          verifyCallback(
+            clientPeerCertChain.map(utils.derToPEM),
+            utils.concatPEMs(serverConfig.ca)
+          )
+        ).rejects.toThrow();
+        // Due to an upstream bug, if we were to simulate a close with 304 code
+        // it would actually break the server connection, the client connection
+        // would successfully drain and then close, but the server connection is
+        // left to idle until it times out.
+        // Therefore instead of closing immediately here, we have to complete the
+        // handshake by sending a the handshake frame to the server, and then
+        // simulate a close with 304 as the code
+      });
+      test('client -handshake-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderHandshake = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(clientHeaderHandshake.ty).toBe(quiche.Type.Handshake);
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+        // Simulate a 304 as it means the client supplied a bad certificate
+        clientConn.close(false, 304, Buffer.from(''));
+        expect(clientConn.peerError()).toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        expect(clientConn.isDraining()).toBeFalse();
+      });
+      test('client has local error TlsFail 304', async () => {
+        expect(clientConn.localError()).toEqual({
+          isApp: false,
+          errorCode: 304,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client -short-> server', async () => {
+        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const clientHeaderShort = quiche.Header.fromSlice(
+          clientBuffer.subarray(0, clientSendLength),
+          quiche.MAX_CONN_ID_LEN,
+        );
+        expect(clientHeaderShort.ty).toBe(quiche.Type.Short);
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(clientConn.isTimedOut()).toBeFalse();
+        expect(clientConn.isInEarlyData()).toBeFalse();
+        expect(clientConn.isEstablished()).toBeTrue();
+        expect(clientConn.isResumed()).toBeFalse();
+        expect(clientConn.isReadable()).toBeFalse();
+        expect(clientConn.isClosed()).toBeFalse();
+        // Client is in draining state now
+        expect(clientConn.isDraining()).toBeTrue();
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+        expect(serverConn.timeout()).not.toBeNull();
+        expect(serverConn.isTimedOut()).toBeFalse();
+        expect(serverConn.isInEarlyData()).toBeFalse();
+        expect(serverConn.isEstablished()).toBeTrue();
+        expect(serverConn.isResumed()).toBeFalse();
+        expect(serverConn.isReadable()).toBeFalse();
+        expect(serverConn.isClosed()).toBeFalse();
+        // Client is in draining state now
+        expect(serverConn.isDraining()).toBeTrue();
+      });
+      test('server has peer error TlsFail 304', async () => {
+        expect(serverConn.peerError()).toEqual({
+          isApp: false,
+          errorCode: 304,
+          reason: new Uint8Array(),
+        });
+      });
+      test('client and server close', async () => {
+        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.timeout()).not.toBeNull();
+        expect(serverConn.timeout()).not.toBeNull();
+        await testsUtils.waitForTimeoutNull(clientConn);
+        await testsUtils.waitForTimeoutNull(serverConn);
+        expect(clientConn.isClosed()).toBeTrue();
+        expect(serverConn.isClosed()).toBeTrue();
+      });
     });
   });
 });
