@@ -189,6 +189,10 @@ describe('native/connection', () => {
           expect(() => clientConn.send(clientBuffer)).toThrow('Done');
           // Exahust the timeout
           await testsUtils.waitForTimeoutNull(clientConn);
+          // After max idle timeout, you cannot artifically close the connection
+          expect(
+            () => clientConn.close(true, 0, Buffer.from('abc'))
+          ).toThrow('Done');
           // Connection has timed out
           expect(clientConn.isTimedOut()).toBeTrue();
           expect(clientConn.isInEarlyData()).toBeFalse();
@@ -198,7 +202,7 @@ describe('native/connection', () => {
           // Connection is closed
           expect(clientConn.isClosed()).toBeTrue();
           expect(clientConn.isDraining()).toBeFalse();
-          // No errors during idle timeout
+          // No errors after max idle timeout
           expect(clientConn.localError()).toBeNull();
           expect(clientConn.peerError()).toBeNull();
         });
@@ -346,6 +350,11 @@ describe('native/connection', () => {
           expect(clientConn.isReadable()).toBeFalse();
           expect(clientConn.isClosed()).toBeTrue();
           expect(clientConn.isDraining()).toBeFalse();
+          // After both are timed out, there's no local error nor peer error
+          expect(serverConn.localError()).toBeNull();
+          expect(serverConn.peerError()).toBeNull();
+          expect(clientConn.localError()).toBeNull();
+          expect(clientConn.peerError()).toBeNull();
         });
       });
       describe('handshake timeout', () => {

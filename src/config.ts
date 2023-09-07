@@ -103,19 +103,19 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   // This is a concatenated CA certificates in PEM format
   let caPEMBuffer: Uint8Array | undefined;
   if (config.ca != null) {
-    const caPEMBuffers = utils.concatPEMs(config.ca);
+    const caPEMBuffers = utils.collectPEMs(config.ca);
     caPEMBuffer = utils.textEncoder.encode(caPEMBuffers.join(''));
   }
   // This is an array of private keys in PEM format as buffers
   let keyPEMBuffers: Array<Uint8Array> | undefined;
   if (config.key != null) {
-    const keyPEMs = utils.concatPEMs(config.key);
+    const keyPEMs = utils.collectPEMs(config.key);
     keyPEMBuffers = keyPEMs.map((k) => utils.textEncoder.encode(k));
   }
   // This is an array of certificate chains in PEM format as buffers
   let certChainPEMBuffers: Array<Uint8Array> | undefined;
   if (config.cert != null) {
-    const certPEMsChain = utils.concatPEMs(config.cert);
+    const certPEMsChain = utils.collectPEMs(config.cert);
     certChainPEMBuffers = certPEMsChain.map((c) => utils.textEncoder.encode(c));
   }
   let quicheConfig: QuicheConfig;

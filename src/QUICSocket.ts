@@ -149,7 +149,7 @@ class QUICSocket {
         if (
           errorsUtils.checkError(
             e,
-            (e) => e instanceof errors.ErrorQUICConnectionStartTimeOut,
+            (e) => e instanceof errors.ErrorQUICConnectionStartTimeout,
           )
         ) {
           return;
@@ -183,11 +183,7 @@ class QUICSocket {
         // state is optional. We can respond with `STATELESS_RESET`
         // but it's not necessary, and ignoring is simpler
         // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
-        await connection.withMonitor(async (mon) => {
-          await mon.lock(connection.lockingKey)();
-          await connection.recv(data, remoteInfo_, mon);
-          await connection.send(mon);
-        });
+        await connection.recv(data, remoteInfo_);
       } catch (e) {
         // If the connection recv and send failed due to a socket error, then we
         // should dispatch a QUIC socket error.

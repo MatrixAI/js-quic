@@ -336,10 +336,6 @@ function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
   return Buffer.from(connIdString, 'hex') as ConnectionId;
 }
 
-function never(message?: string): never {
-  throw new errors.ErrorQUICUndefinedBehaviour(message);
-}
-
 async function mintToken(
   dcid: QUICConnectionId,
   peerHost: Host,
@@ -445,7 +441,7 @@ function streamStats(
  * Collects PEMs into a PEM chain array.
  * This can be used for keys, certs and ca.
  */
-function concatPEMs(
+function collectPEMs(
   pems?: string | Array<string> | Uint8Array | Array<Uint8Array>
 ): Array<string> {
   const pemsChain: Array<string> = [];
@@ -502,11 +498,10 @@ export {
   isHostWildcard,
   encodeConnectionId,
   decodeConnectionId,
-  never,
   mintToken,
   validateToken,
   sleep,
   streamStats,
-  concatPEMs,
+  collectPEMs,
   derToPEM,
 };

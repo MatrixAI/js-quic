@@ -20,7 +20,10 @@ import QUICConnection from './QUICConnection';
 import QUICConnectionId from './QUICConnectionId';
 
 interface QUICClient extends CreateDestroy {}
-@CreateDestroy()
+@CreateDestroy({
+  eventDestroy: events.EventQUICClientDestroy,
+  eventDestroyed: events.EventQUICClientDestroyed,
+})
 class QUICClient extends EventTarget {
 
   /**
@@ -74,7 +77,7 @@ class QUICClient extends EventTarget {
     },
     ctx?: Partial<ContextTimedInput>,
   ): PromiseCancellable<QUICClient>;
-  @timedCancellable(true, minIdleTimeout, errors.ErrorQUICClientCreateTimeOut)
+  @timedCancellable(true, minIdleTimeout, errors.ErrorQUICClientCreateTimeout)
   public static async createQUICClient(
     {
       host,
@@ -134,10 +137,11 @@ class QUICClient extends EventTarget {
     // in this case, 0.0.0.0 is resolved to 127.0.0.1 and :: and ::0 is
     // resolved to ::1
     host_ = utils.resolvesZeroIP(host_);
+    // FIXME: is this even needed?
     // This error promise is only used during `connection.start()`.
     const { p: socketErrorP, rejectP: rejectSocketErrorP } =
       utils.promise<never>();
-    const handleQUICSocketError = (e: events.QUICSocketErrorEvent) => {
+    const handleQUICSocketError = (e: events.EventQUICSocketError) => {
       rejectSocketErrorP(e.detail);
     };
     let isSocketShared: boolean;
@@ -225,7 +229,6 @@ class QUICClient extends EventTarget {
     // While this is happening the socket is doing concurrent recv & send pairs
     // We will need to add ourselves to the socket as well
 
-
     socket.connectionMap.set(connection.connectionId, connection);
     connection.addEventListener(
       events.EventQUICConnectionError.name,
@@ -237,10 +240,8 @@ class QUICClient extends EventTarget {
       client.handleEventQUICConnectionStopped,
       { once: true },
     );
-    const connectionP = connection.start(ctx);
     try {
-      await connection.send();
-      await connectionP;
+      await connection.start(ctx);
     } catch (e) {
       connection.removeEventListener(
         events.EventQUICConnectionStopped.name,
@@ -251,30 +252,24 @@ class QUICClient extends EventTarget {
         client.handleEventQUICConnectionError
       );
       socket.connectionMap.delete(connection.connectionId);
-      throw new errors.ErrorQUICClientNewConnection(
-        '???',
-        { cause: e }
-      );
+      if (!client.isSocketShared) {
+        // This can be idempotent
+        // If stop fails, it is a software bug
+        await socket.stop({ force: true });
+      }
+      // TODO: if creation failed then we throw this failure
+      //  Need a new error
+      throw e;
     }
-
-
-    // WHAT IS ALL THIS FOR?
-    // FIX THIS!
-
-    // try {
-    //   await Promise.race([connectionProm, socketErrorP]);
-    // } catch (e) {
-    //   // In case the `connection.start` is ongoing, we need to abort it
-    //   abortController.abort(e);
-    //   if (!isSocketShared) {
-    //     // Stop is idempotent
-    //     await socket.stop();
-    //   }
-    //   throw e;
-    // } finally {
-    //   socket.removeEventListener('socketError', handleQUICSocketError);
-    //   ctx.signal.removeEventListener('abort', abortHandler);
-    // }
+    // Setting up client events
+    client.addEventListener( events.EventQUICClientError.name, client.handleEventQUICClientError, {once: true})
+    // Setting up socket events
+    socket.addEventListener(events.EventQUICSocketError.name, client.handleEventQUICSocketError, {once: true});
+    socket.addEventListener(events.EventQUICSocketStopped.name, client.handleEventQUICSocketStopped, {once: true});
+    // Setting up connection events
+    connection.addEventListener(events.EventQUICConnectionStream.name, client.handleEventQUICConnectionStream);
+    connection.addEventListener(events.EventQUICConnectionError.name, client.handleEventQUICConnectionError, {once: true});
+    connection.addEventListener(events.EventQUICConnectionStopped.name, client.handleEventQUICConnectionStopped, {once: true});
 
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -329,6 +324,11 @@ class QUICClient extends EventTarget {
     );
   };
 
+  // re-emit the event upwards
+  protected handleEventQUICConnectionStream = (e: events.EventQUICConnectionStream) => {
+    this.dispatchEvent(e.clone());
+  };
+
   /**
    * If the connection timed out, it's an error
    * If the connection experiences runtime IO errors, it's an error
@@ -359,6 +359,8 @@ class QUICClient extends EventTarget {
   protected handleEventQUICConnectionStopped = (evt: events.EventQUICConnectionStopped) => {
     const connection = evt.target as QUICConnection;
     this.socket.connectionMap.delete(connection.connectionId);
+    this.dispatchEvent(new events.EventQUICClientError({ detail: Error('QUIC CONNECTION ENDED')}))
+    // TODO: trigger stop of QUICClient as well.
   };
 
   public constructor({
@@ -408,33 +410,22 @@ class QUICClient extends EventTarget {
   }: {
     force?: boolean;
   } = {}) {
-    const address = utils.buildAddress(this.host, this.port);
-    this.logger.info(`Destroy ${this.constructor.name} on ${address}`);
-    // Listen on all socket events
-    this.socket.removeEventListener('socketError', this.handleQUICSocketEvents);
-    this.socket.removeEventListener('socketStop', this.handleQUICSocketEvents);
+    this.logger.info(`Destroy ${this.constructor.name}`);
+    // Remove connection events
+    this._connection.removeEventListener(events.EventQUICConnectionStopped.name, this.handleEventQUICConnectionStopped);
+    this._connection.removeEventListener(events.EventQUICConnectionError.name, this.handleEventQUICConnectionError);
+    this._connection.addEventListener(events.EventQUICConnectionStream.name, this.handleEventQUICConnectionStream);
+    // remove socket events
+    this.socket.addEventListener(events.EventQUICSocketStopped.name, this.handleEventQUICSocketStopped);
+    this.socket.addEventListener(events.EventQUICSocketError.name, this.handleEventQUICSocketError);
+    // Remove client events
+    this.addEventListener( events.EventQUICClientError.name, this.handleEventQUICClientError)
     // Listen on all connection events
-    this._connection.removeEventListener(
-      'connectionStream',
-      this.handleQUICConnectionEvents,
-    );
-    this._connection.removeEventListener(
-      'connectionStop',
-      this.handleQUICConnectionEvents,
-    );
-    this._connection.removeEventListener(
-      'connectionError',
-      this.handleQUICConnectionEvents,
-    );
-    this._connection.removeEventListener(
-      'streamDestroy',
-      this.handleQUICConnectionEvents,
-    );
     await this._connection.stop({ force });
     if (!this.isSocketShared) {
       await this.socket.stop({ force });
     }
-    this.logger.info(`Destroyed ${this.constructor.name} on ${address}`);
+    this.logger.info(`Destroyed ${this.constructor.name}`);
   }
 }
 

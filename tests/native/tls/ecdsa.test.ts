@@ -244,7 +244,17 @@ describe('native/tls/ecdsa', () => {
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
+      // Closing always results in local error
+      expect(clientConn.localError()).toEqual({
+        isApp: true,
+        errorCode: 0,
+        reason: new Uint8Array(),
+      });
+      expect(clientConn.peerError()).toBeNull();
       [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const clientBufferCopy = Buffer.from(clientBuffer);
+      expect(clientConn.isDraining()).toBeTrue();
+      expect(clientConn.isClosed()).toBeFalse();
       await testsUtils.sleep(clientConn.timeout()!);
       clientConn.onTimeout();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -253,6 +263,23 @@ describe('native/tls/ecdsa', () => {
         to: serverHost,
         from: clientHost,
       });
+      expect(serverConn.localError()).toBeNull();
+      // Receiving a close is always a peer error
+      expect(serverConn.peerError()).toEqual({
+        isApp: true,
+        errorCode: 0,
+        reason: new Uint8Array(),
+      });
+      expect(serverConn.isDraining()).toBeTrue();
+      expect(serverConn.isClosed()).toBeFalse();
+      // There is no acknowledgement after receiving close
+      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      // Quiche has not implemented a stateless reset
+      serverConn.recv(clientBufferCopy, {
+        to: serverHost,
+        from: clientHost,
+      });
+      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
       await testsUtils.sleep(serverConn.timeout()!);
       serverConn.onTimeout();
       await testsUtils.waitForTimeoutNull(serverConn);
@@ -1380,7 +1407,7 @@ describe('native/tls/ecdsa', () => {
         );
         await verifyCallback(
           clientPeerCertChain.map(utils.derToPEM),
-          utils.concatPEMs(clientConfig.ca)
+          utils.collectPEMs(clientConfig.ca)
         );
       });
       test('client -initial-> server', async () => {
@@ -1400,7 +1427,7 @@ describe('native/tls/ecdsa', () => {
         );
         await verifyCallback(
           serverPeerCertChain.map(utils.derToPEM),
-          utils.concatPEMs(serverConfig.ca)
+          utils.collectPEMs(serverConfig.ca)
         );
       });
       test('client <-short- server', async () => {
@@ -1607,7 +1634,7 @@ describe('native/tls/ecdsa', () => {
         );
         await verifyCallback(
           clientPeerCertChain.map(utils.derToPEM),
-          utils.concatPEMs(clientConfig.ca)
+          utils.collectPEMs(clientConfig.ca)
         );
       });
       test('client -initial-> server', async () => {
@@ -1840,7 +1867,7 @@ describe('native/tls/ecdsa', () => {
         expect(
           verifyCallback(
             serverPeerCertChain.map(utils.derToPEM),
-            utils.concatPEMs(serverConfig.ca)
+            utils.collectPEMs(serverConfig.ca)
           )
         ).rejects.toThrow();
         // Simulate a 304 as it means the client supplied a bad certificate
@@ -2067,7 +2094,7 @@ describe('native/tls/ecdsa', () => {
         expect(
           verifyCallback(
             (serverPeerCertChain ?? []).map(utils.derToPEM),
-            utils.concatPEMs(serverConfig.ca)
+            utils.collectPEMs(serverConfig.ca)
           )
         ).rejects.toThrow();
         expect(serverConn.peerError()).toBeNull();
@@ -2281,7 +2308,7 @@ describe('native/tls/ecdsa', () => {
         expect(
           verifyCallback(
             clientPeerCertChain.map(utils.derToPEM),
-            utils.concatPEMs(serverConfig.ca)
+            utils.collectPEMs(serverConfig.ca)
           )
         ).rejects.toThrow();
         // Due to an upstream bug, if we were to simulate a close with 304 code

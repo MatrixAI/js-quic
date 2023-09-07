@@ -8,33 +8,69 @@ import QUICServer from '../src/QUICServer';
 import * as testsUtils from '../tests/utils';
 import QUICClient from '../src/QUICClient';
 
-async function main() {
-  const logger = new Logger(`Stream1KB Bench`, LogLevel.WARN, [
-    new StreamHandler(
-      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
-    ),
-  ]);
-  // Setting up initial state
-  const data1KiB = Buffer.alloc(1024, 0xf0);
-  const host = '127.0.0.1' as Host;
-  const tlsConfig = await testsUtils.generateConfig('RSA');
+const logger = new Logger(`stream_1KiB Bench`, LogLevel.WARN, [
+  new StreamHandler(),
+]);
 
+async function main() {
+  const data1KiB = Buffer.alloc(1024);
+  const crypto = {
+    key: await testsUtils.generateKeyHMAC(),
+    ops: {
+      sign: testsUtils.signHMAC,
+      verify: testsUtils.verifyHMAC,
+      randomBytes: testsUtils.randomBytes,
+    },
+  };
+  const keyPairRSA = await testsUtils.generateKeyPairRSA();
+  const certRSA = await testsUtils.generateCertificate({
+    certId: '0',
+    subjectKeyPair: keyPairRSA,
+    issuerPrivateKey: keyPairRSA.privateKey,
+    duration: 60 * 60 * 24 * 365 * 10,
+  });
+  const keyPairRSAPEM = await testsUtils.keyPairRSAToPEM(keyPairRSA);
+  const certRSAPEM = testsUtils.certToPEM(certRSA);
+  const quicServerConfig = {
+    verifyPeer: false,
+    key: keyPairRSAPEM.privateKey,
+    cert: certRSAPEM,
+  };
+  const quicServerCrypto = {
+    key: await testsUtils.generateKeyHMAC(),
+    ops: {
+      sign: testsUtils.signHMAC,
+      verify: testsUtils.verifyHMAC,
+    },
+  };
   const quicServer = new QUICServer({
-    config: {
-      key: tlsConfig.key,
-      cert: tlsConfig.cert,
-      verifyPeer: false,
-      keepAliveIntervalTime: 1000,
-    },
-    crypto: {
-      key: await testsUtils.generateKeyHMAC(),
-      ops: {
-        sign: testsUtils.signHMAC,
-        verify: testsUtils.verifyHMAC,
-      },
-    },
+    config: quicServerConfig,
+    crypto: quicServerCrypto,
     logger,
   });
+  await quicServer.start({
+    host: 'localhost',
+  });
+
+
+  // Create a new QUIC connection in the bootstrapping
+  // const client = await QUICClient.createQUICClient({
+  //   config: {
+  //     verifyPeer: false,
+  //   },
+  //   host,
+  //   port: quicServer.port,
+  //   localHost: host,
+  //   crypto: {
+  //     ops: {
+  //       randomBytes: testsUtils.randomBytes,
+  //     },
+  //   },
+  //   logger,
+  // });
+
+
+
   quicServer.addEventListener(
     'serverConnection',
     async (e: events.QUICServerConnectionEvent) => {
@@ -59,28 +95,19 @@ async function main() {
       );
     },
   );
-  await quicServer.start({
-    host,
-  });
-  const client = await QUICClient.createQUICClient({
-    config: {
-      verifyPeer: false,
-    },
-    host,
-    port: quicServer.port,
-    localHost: host,
-    crypto: {
-      ops: {
-        randomBytes: testsUtils.randomBytes,
-      },
-    },
-    logger,
-  });
 
   // Running benchmark
   const summary = await b.suite(
     path.basename(__filename, path.extname(__filename)),
-    b.add('send 1Kib of data', async () => {
+    b.add('send 1 KiB of data over UDP', async () => {
+
+    }),
+    b.add('send 1 KiB of data over QUICConnection', async () => {
+      // how do you do this on just the connection?
+      // i don't think it's possible
+
+    }),
+    b.add('send 1Kib of data over QUICStream', async () => {
       const stream = await client.connection.streamNew();
       await Promise.all([
         (async () => {

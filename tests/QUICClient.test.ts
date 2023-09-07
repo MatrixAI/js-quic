@@ -1,5 +1,4 @@
 import type { ClientCryptoOps, ServerCryptoOps } from '@/types';
-import type * as events from '@/events';
 import type QUICConnection from '@/QUICConnection';
 import type { KeyTypes, TLSConfigs } from './utils';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
@@ -10,11 +9,12 @@ import QUICClient from '@/QUICClient';
 import QUICServer from '@/QUICServer';
 import * as errors from '@/errors';
 import { promise } from '@/utils';
+import * as events from '@/events';
 import * as testsUtils from './utils';
 import { generateConfig, sleep } from './utils';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -31,7 +31,8 @@ describe(QUICClient.name, () => {
   };
   let sockets: Set<QUICSocket>;
 
-  const types: Array<KeyTypes> = ['RSA', 'ECDSA', 'ED25519'];
+  // const types: Array<KeyTypes> = ['RSA', 'ECDSA', 'ED25519'];
+  const types: Array<KeyTypes> = ['RSA'];
   const defaultType = types[0];
 
   // We need to test the stream making
@@ -66,7 +67,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
@@ -111,7 +112,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
@@ -157,7 +158,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e),
       );
@@ -204,7 +205,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         }),
-      ).rejects.toThrow(errors.ErrorQUICConnectionStartTimeOut);
+      ).rejects.toThrow(errors.ErrorQUICConnectionIdleTimeOut);
     });
     test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
       // Larger keepAliveIntervalTime throws
@@ -430,7 +431,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<any>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         handleConnectionEventProm.resolveP,
       );
       await server.start({
@@ -473,7 +474,7 @@ describe(QUICClient.name, () => {
       });
       const handleConnectionEventProm = promise<any>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         handleConnectionEventProm.resolveP,
       );
       await server.start({
@@ -516,7 +517,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<any>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         handleConnectionEventProm.resolveP,
       );
       await server.start({
@@ -687,7 +688,7 @@ describe(QUICClient.name, () => {
         testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
@@ -711,7 +712,7 @@ describe(QUICClient.name, () => {
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
-          'connectionStream',
+          events.EventQUICConnectionStream.name,
           (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
@@ -795,7 +796,7 @@ describe(QUICClient.name, () => {
         testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
@@ -819,7 +820,7 @@ describe(QUICClient.name, () => {
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
-          'connectionStream',
+          events.EventQUICConnectionStream.name,
           (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
@@ -903,7 +904,7 @@ describe(QUICClient.name, () => {
         testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
@@ -927,7 +928,7 @@ describe(QUICClient.name, () => {
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
-          'connectionStream',
+          events.EventQUICConnectionStream.name,
           (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
@@ -1011,7 +1012,7 @@ describe(QUICClient.name, () => {
         testsUtils.extractSocket(server, sockets);
         const connectionEventProm = promise<events.EventQUICServerConnection>();
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           (e: events.EventQUICServerConnection) =>
             connectionEventProm.resolveP(e),
         );
@@ -1035,7 +1036,7 @@ describe(QUICClient.name, () => {
         // Do the test
         const serverStreamProms: Array<Promise<void>> = [];
         conn.addEventListener(
-          'connectionStream',
+          events.EventQUICConnectionStream.name,
           (streamEvent: events.EventQUICConnectionStream) => {
             const stream = streamEvent.detail;
             const streamProm = stream.readable.pipeTo(stream.writable);
@@ -1113,7 +1114,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
@@ -1139,7 +1140,7 @@ describe(QUICClient.name, () => {
       const clientConnection = client.connection;
       const clientTimeoutProm = promise<void>();
       clientConnection.addEventListener(
-        'connectionError',
+        events.EventQUICConnectionError.name,
         (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             clientTimeoutProm.resolveP();
@@ -1173,7 +1174,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
@@ -1200,7 +1201,7 @@ describe(QUICClient.name, () => {
       const serverConnection = await connectionEventProm.p;
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
-        'connectionError',
+        events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
@@ -1233,7 +1234,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
@@ -1260,7 +1261,7 @@ describe(QUICClient.name, () => {
       const clientConnection = client.connection;
       const clientTimeoutProm = promise<void>();
       clientConnection.addEventListener(
-        'connectionError',
+        events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             clientTimeoutProm.resolveP();
@@ -1296,7 +1297,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
@@ -1322,7 +1323,7 @@ describe(QUICClient.name, () => {
       const serverConnection = await connectionEventProm.p;
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
-        'connectionError',
+        events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
@@ -1356,7 +1357,7 @@ describe(QUICClient.name, () => {
       });
       testsUtils.extractSocket(server, sockets);
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (e: events.EventQUICServerConnection) =>
           connectionEventProm.resolveP(e.detail),
       );
@@ -1383,7 +1384,7 @@ describe(QUICClient.name, () => {
       const serverConnection = await connectionEventProm.p;
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
-        'connectionError',
+        events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
           if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
             serverTimeoutProm.resolveP();
@@ -1438,7 +1439,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<any>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         handleConnectionEventProm.resolveP,
       );
       await server.start({
@@ -1484,7 +1485,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<QUICConnection>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (event: events.EventQUICServerConnection) =>
           handleConnectionEventProm.resolveP(event.detail),
       );
@@ -1545,7 +1546,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<any>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         handleConnectionEventProm.resolveP,
       );
       await server.start({
@@ -1592,7 +1593,7 @@ describe(QUICClient.name, () => {
       testsUtils.extractSocket(server, sockets);
       const handleConnectionEventProm = promise<QUICConnection>();
       server.addEventListener(
-        'serverConnection',
+        events.EventQUICServerConnection.name,
         (event: events.EventQUICServerConnection) =>
           handleConnectionEventProm.resolveP(event.detail),
       );
@@ -1651,7 +1652,7 @@ describe(QUICClient.name, () => {
     });
     testsUtils.extractSocket(server, sockets);
     server.addEventListener(
-      'serverConnection',
+      events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({

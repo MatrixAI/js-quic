@@ -7,7 +7,6 @@ import type QUICStream from '@/QUICStream';
 import type { StreamCodeToReason, StreamReasonToCode } from '@';
 import * as peculiarWebcrypto from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
-import { never } from '@/utils';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -666,10 +665,7 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
         privateKeyPem = (await keyPairEd25519ToPEM(keysLeaf)).privateKey;
       }
       break;
-    default:
-      never();
   }
-
   const certCa = await generateCertificate({
     certId: '0',
     duration: 100000,
@@ -690,7 +686,7 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
 }
 
 /**
- * This will create a `reasonToCode` and `CodeToReason` function that will
+ * This will create a `reasonToCode` and `codeToReason` functions that will
  * allow errors to "jump" the network boundary. It does this by mapping the
  * errors to an incrementing code and returning them on the other end of the
  * connection.

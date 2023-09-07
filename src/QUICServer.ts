@@ -112,32 +112,38 @@ class QUICServer {
     );
   };
 
-  /**
-   * If the connection timed out, it's an error
-   * If the connection experiences runtime IO errors, it's an error
-   * If the remote side closed the connection with an error, it's an error
-   * If the remote side closed the connection without error, it's not an error
-   * If the local side closed the connection with an error, it's not an error
-   * If the local side closed the connection without error, it's not an error
-   */
-  protected handleEventQUICConnectionError = async (
-    evt: events.EventQUICConnectionError,
-  ) => {
-    const connection = evt.target as QUICConnection;
-    const error = evt.detail;
-    this.logger.error(
-      `${error.name}${
-        'description' in error ? `: ${error.description}` : ''
-      }${error.message !== undefined ? `- ${error.message}` : ''}`,
-    );
-    // Because force is used, streams are immediately canceled
-    // The connection will send its `CONNECTION_CLOSE` frame
-    // However quiche will wait in a draining state until idle timeout
-    // There is no expected acknowledgement from the other side
-    // If packets are still received, they can be ignored
-    // If stop fails, it is a software bug
-    await connection.stop({ force: true });
-  };
+  // /**
+  //  * If the connection timed out, it's an error
+  //  * If the connection experiences runtime IO errors, it's an error
+  //  * If the remote side closed the connection with an error, it's an error
+  //  * If the remote side closed the connection without error, it's not an error
+  //  * If the local side closed the connection with an error, it's not an error
+  //  * If the local side closed the connection without error, it's not an error
+  //  */
+  // protected handleEventQUICConnectionError = async (
+  //   evt: events.EventQUICConnectionError,
+  // ) => {
+  //   const connection = evt.target as QUICConnection;
+  //   const error = evt.detail;
+
+  //   // This just logs it out in the quic server
+  //   // but really that doesn't really make any sense
+  //   // We know the connection self stops
+  //   // So this is not necessary
+
+  //   this.logger.error(
+  //     `${error.name}${
+  //       'description' in error ? `: ${error.description}` : ''
+  //     }${error.message !== undefined ? `- ${error.message}` : ''}`,
+  //   );
+  //   // Because force is used, streams are immediately canceled
+  //   // The connection will send its `CONNECTION_CLOSE` frame
+  //   // However quiche will wait in a draining state until idle timeout
+  //   // There is no expected acknowledgement from the other side
+  //   // If packets are still received, they can be ignored
+  //   // If stop fails, it is a software bug
+  //   await connection.stop({ force: true });
+  // };
 
   protected handleEventQUICConnectionStopped = (evt: events.EventQUICConnectionStopped) => {
     const connection = evt.target as QUICConnection;
@@ -281,10 +287,6 @@ class QUICServer {
           force,
         }).then(() => {
           connection.removeEventListener(
-            events.EventQUICConnectionError.name,
-            this.handleEventQUICConnectionError
-          );
-          connection.removeEventListener(
             events.EventQUICConnectionStopped.name,
             this.handleEventQUICConnectionStopped
           );
@@ -426,32 +428,22 @@ class QUICServer {
     // concurrent received packets to trigger the `recv` and `send` pair.
     this.socket.connectionMap.set(connection.connectionId, connection);
     connection.addEventListener(
-      events.EventQUICConnectionError.name,
-      this.handleEventQUICConnectionError,
-      { once: true },
-    );
-    connection.addEventListener(
       events.EventQUICConnectionStopped.name,
       this.handleEventQUICConnectionStopped,
       { once: true },
     );
-    const connectionP = connection.start({ timer: this.minIdleTimeout });
     try {
-      // Process initial data for the new accepted connection
-      await connection.withMonitor(async (mon) => {
-        await mon.lock(connection.lockingKey)();
-        await connection.recv(data, remoteInfo, mon);
-        await connection.send(mon);
-      });
-      await connectionP;
+      await connection.start(
+        {
+          data,
+          remoteInfo
+        },
+        { timer: this.minIdleTimeout }
+      );
     } catch (e) {
       connection.removeEventListener(
         events.EventQUICConnectionStopped.name,
         this.handleEventQUICConnectionStopped
-      );
-      connection.removeEventListener(
-        events.EventQUICConnectionError.name,
-        this.handleEventQUICConnectionError
       );
       this.socket.connectionMap.delete(connection.connectionId);
       // This could be due to a runtime IO exception or start timeout

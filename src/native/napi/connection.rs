@@ -301,46 +301,20 @@ impl Connection {
     );
   }
 
-  // This data buffer must be the size of the entire largest packet...
-  // It is not the max datagram size, you have to potentially take
-  // A VERY large packet
-  // On the other hand, it's all dynamic in JS
-  // So it may not be a problem
   #[napi]
   pub fn recv(
     &mut self,
     mut data: Uint8Array,
     recv_info: RecvInfo,
   ) -> napi::Result<i64> {
-
-    // Parsing is kind of slow
-    // the from address has to be passed in from JS side
-    // but the local address here is already known here
-    // if we can keep track of it, it would work nicely
-    // In fact, for any given connection, don't we already have both the remote address and the local address already?
-    // Yea, exactly this information is technically already known
-
-    // recv_info.from
-
     let recv_info = quiche::RecvInfo {
       from: recv_info.from.try_into().or_else(
         |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
       )?,
-      // from: (recv_info.from.addr, recv_info.from.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next().unwrap(),
       to: recv_info.to.try_into().or_else(
         |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
       )?,
-      // to: (recv_info.to.addr, recv_info.to.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next().unwrap(),
     };
-    // If there is an error, the JS side should continue to read
-    // But it can log out the error
-    // You may call this multiple times
-    // When receiving multiple packets
-    // Process potentially coalesced packets.
     let read = match self.0.recv(
       &mut data,
       recv_info
