@@ -64,6 +64,8 @@ class EventQUICConnectionStopped extends EventQUICConnection<Error | null> {}
 // Ok so we get rid of `stop` then
 class EventQUICConnectionError extends EventQUICConnection<Error> {}
 
+class EventQUICConnectionClosed extends EventQUICConnection {}
+
 // Stream events
 
 abstract class EventQUICStream<T = null> extends EventQUIC<T> {}
@@ -97,6 +99,7 @@ export {
   EventQUICConnectionStop,
   EventQUICConnectionStopped,
   EventQUICConnectionError,
+  EventQUICConnectionClosed,
   EventQUICStream,
   EventQUICStreamDestroy,
   EventQUICStreamDestroyed,

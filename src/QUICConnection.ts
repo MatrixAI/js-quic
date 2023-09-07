@@ -33,6 +33,7 @@ import * as events from './events';
 import * as utils from './utils';
 import { never, promise } from './utils';
 import * as errors from './errors';
+import { EventQUICConnectionClosed } from './events';
 
 const timerCleanupReasonSymbol = Symbol('timerCleanupReasonSymbol');
 
@@ -195,6 +196,22 @@ class QUICConnection {
   protected resolveClosedP: () => void;
   protected rejectClosedP: (reason?: any) => void;
 
+  // handlers
+  protected handleEventQUICConnectionError = async (e: events.EventQUICConnectionError) => {
+    // handling events here we expect internal connection to already have closed
+    console.error(e.detail);
+    await this.stop({
+      force: true,
+    })
+  }
+
+  protected handleEventQUICConnectionClosed = async () => {
+    // if closed we just want to clean up
+    await this.stop({
+      force: true,
+    })
+  }
+
   public constructor({
     type,
     scid,
@@ -303,6 +320,10 @@ class QUICConnection {
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
     this.rejectClosedP = rejectClosedP;
+
+    // Setting up events
+    this.addEventListener(events.EventQUICConnectionError.name,  this.handleEventQUICConnectionError, { once: true });
+    this.addEventListener(events.EventQUICConnectionClosed.name,  this.handleEventQUICConnectionClosed, { once: true })
   }
 
   public get remoteHost(): string {
@@ -440,6 +461,10 @@ class QUICConnection {
     // Mon?: Monitor<RWLockWriter>,
   ) {
     this.logger.info(`Stop ${this.constructor.name}`);
+
+    // removing events
+    this.removeEventListener(events.EventQUICConnectionError.name,  this.handleEventQUICConnectionError);
+    this.removeEventListener(events.EventQUICConnectionClosed.name,  this.handleEventQUICConnectionClosed);
 
     // Cleaning up existing streams
     const streamsDestroyP: Array<Promise<void>> = [];
@@ -592,87 +617,15 @@ class QUICConnection {
 
       // Should only be a `TLSFail` if we fail here.
       // The error details will be available as a local error.
-      // TlsFail is ignored here but the connection will transition to closed
-      // and the TlsFailure will be processed in the finally block
+      // TlsFail is ignored here but processed during the `processState()`
       if (e.message !== 'TlsFail') {
         // No other exceptions are expected
-        never();
+        throw e;
       }
-      // TODO: I don't know if we can have a local AND a peer error. may need to combine into an aggregate error.
-      // getting local error
-      const localError = this.conn.localError();
-      if (localError != null) {
-        const message = `connection failed with localError ${Buffer.from(
-          localError.reason,
-        ).toString()}(${localError.errorCode})`;
-        this.logger.info(message);
-        const error = new errors.ErrorQUICConnectionInternal(message, {
-          data: {
-            type: 'local',
-            ...localError,
-          },
-        });
-        this.rejectSecureEstablishedP(error);
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({
-            detail: error,
-          }),
-        );
-      }
-      // getting the peer error
-      const peerError = this.conn.peerError();
-      if (peerError != null) {
-        const message = `Connection errored out with peerError ${Buffer.from(
-          peerError.reason,
-        ).toString()}(${peerError.errorCode})`;
-        this.logger.info(message);
-        const error = new errors.ErrorQUICConnectionInternal(message, {
-          data: {
-            type: 'local',
-            ...peerError,
-          },
-        });
-        this.rejectSecureEstablishedP(error);
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({
-            detail: error,
-          }),
-        );
-      }
-      if (localError != null && peerError != null) never('Just checking if this is ever true');
-      this.logger.warn('Possible Deadlock C');
-      // FIXME: this will probably deadlock, It's being called in recv, triggers a send and needs further recv's to
-      //  fully resolve.
-      await this.stop({ force: true });
-      return;
     }
     // We don't actually "fail"
     // the closedP until we proceed
     // But note that if there's an error
-
-    if (
-      this[status] !== 'destroying' &&
-      (this.conn.isClosed() || this.conn.isDraining())
-    ) {
-      // When processing a `recv`
-      // We may process into a closed state
-      // We have to then "complete" the call
-      // I don't believe this makes sense either
-      // this.logger.debug('calling stop due to closed or draining');
-      // Destroy in the background, we still need to process packets.
-      // Draining means no more packets are sent, so streams must be force closed.
-      // TODO: check if this catch is needed.
-      // TODO: I'm sure this stop is still needed unless it's handled via an event now?
-      // void this.stop({ force: true }, mon).catch(() => {});
-      if (this.conn.isClosed()) {
-        this.resolveClosedP();
-        return;
-      }
-    }
-
-    if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
-      await this.processStreams();
-    }
   }
 
   /**
@@ -707,6 +660,10 @@ class QUICConnection {
       });
     }
     await mon.lock(this.lockingKey)();
+
+    // Process streams
+    await this.processStreams();
+
     const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
     let sendLength: number;
     let sendInfo: SendInfo;
@@ -733,80 +690,43 @@ class QUICConnection {
     } catch (e) {
       // An error here means a hard failure in sending, we must force clean up
       //  since any further communication is expected to fail.
+      const message = `Calling stop due to sending error [${e.message}]`;
       this.logger.debug(`Calling stop due to sending error [${e.message}]`);
       const code = await this.reasonToCode('send', e);
-      await this.stop({
-        applicationError: false,
-        errorCode: code,
-        errorMessage: e.message,
-        force: true,
-      });
-      // We need to finish without any exceptions
+      // FIXME: is this an application error? its a transport problem.
+      //  Might want to use one of the `ConnectionErrorCode` codes?
+      this.conn.close(
+        false,
+        code,
+        Buffer.from(message),
+      )
+      this.dispatchEvent(
+        new events.EventQUICConnectionError({
+          detail: new errors.ErrorQUICConnectionInternal(message, {
+            data: {
+              type: 'local',
+              applicationError: false,
+              errorCode: code,
+              errorMessage: e.message,
+            },
+          }),
+        }),
+      );
       return;
     }
 
-    // Handling custom TLS verification, this must be done after the following conditions.
-    //  1. Connection established.
-    //  2. Certs available.
-    //  3. Sent after connection has established.
-    if (!this.secureEstablished && this.conn.isEstablished()) {
-      this.resolveSecureEstablishedP();
-      this.secureEstablished = true;
-      if ( this.config.verifyPeer && this.config.verifyCallback != null ) {
-        const peerCerts = this.conn.peerCertChain();
-        // If verifyPeer is true then certs should always exist
-        if (peerCerts == null) never();
-        const peerCertsPem: Array<string> = peerCerts.map((c) =>
-          utils.derToPEM(c),
-        );
-        try {
-          // Running verify callback if available
-          const ca = utils.concatPEMs(this.config.ca);
-          await this.config.verifyCallback(peerCertsPem, ca);
-          this.logger.debug('TLS verification succeeded');
-          // Generate ack frame to satisfy the short + 1 condition of secure establishment
-          this.conn.sendAckEliciting();
-        } catch (e) {
-          // Force the connection to end.
-          // Error 304 indicates cert chain failed verification.
-          // Error 372 indicates cert chain was missing.
-          this.logger.debug(
-            `TLS fail due to [${e.message}], closing connection`,
-          );
-          this.conn.close(
-            false,
-            304,
-            Buffer.from(`Custom TLSFail: ${e.message}`),
-          );
-        }
-      }
-    }
-
-    if (this.conn.isClosed()) {
-      // Handle stream clean up if closed
-      this.resolveClosedP();
-      const error = this.conn.localError() ?? this.conn.peerError();
-      const stopOptions =
-        error !== null
-          ? {
-              applicationError: error.isApp,
-              errorCode: error.errorCode,
-              errorMessage: Buffer.from(error.reason).toString('utf-8'),
-              force: true,
-            }
-          : { force: true };
-      await this.stop(stopOptions);
-    }
-    this.setConnTimeOutTimer();
+    await this.processState();
   }
 
   /**
    * Process all stream data.
-   * This only occurs upon receving data for this connection.
+   * Since we always do a send after processing streams this will be the first stage of sending.
    * This will process readable streams and writable streams.
    * This will create new streams if needed.
    */
   protected async processStreams() {
+    // Only run if established or data is allowed
+    if (!this.secureEstablished) return;
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
@@ -874,6 +794,117 @@ class QUICConnection {
     }
   }
 
+  /**
+   * This is the one-stop shop for checking state change and triggering events
+   */
+  protected async processState(): Promise<void> {
+
+    // Handling custom TLS verification, this must be done after the following conditions.
+    //  1. Connection established.
+    //  2. Certs available.
+    //  3. Sent after connection has established.
+    if (!this.secureEstablished && this.conn.isEstablished()) {
+      this.resolveSecureEstablishedP();
+      this.secureEstablished = true;
+      if ( this.config.verifyPeer && this.config.verifyCallback != null ) {
+        const peerCerts = this.conn.peerCertChain();
+        // If verifyPeer is true then certs should always exist
+        if (peerCerts == null) never();
+        const peerCertsPem: Array<string> = peerCerts.map((c) =>
+          utils.derToPEM(c),
+        );
+        try {
+          // Running verify callback if available
+          const ca = utils.concatPEMs(this.config.ca);
+          await this.config.verifyCallback(peerCertsPem, ca);
+          this.logger.debug('TLS verification succeeded');
+          // Generate ack frame to satisfy the short + 1 condition of secure establishment
+          this.conn.sendAckEliciting();
+        } catch (e) {
+          // Force the connection to end.
+          // Error 304 indicates cert chain failed verification.
+          // Error 372 indicates cert chain was missing.
+          this.logger.debug(
+            `TLS fail due to [${e.message}], closing connection`,
+          );
+          this.conn.close(
+            false,
+            304,
+            Buffer.from(`Custom TLSFail: ${e.message}`),
+          );
+        }
+      }
+    }
+
+    // We want to trigger stoppage of the connection if the connection is draining or closed.
+    // In these cases there are potential errors that could exist.
+    const isClosed = this.conn.isClosed();
+    const isDraining = this.conn.isDraining();
+    if (isClosed) {
+      this.resolveClosedP();
+      return;
+    }
+    if (isClosed || isDraining) {
+      const localError = this.conn.localError();
+      const peerError = this.conn.peerError();
+      // emit error if it was an error state.
+      // emit close trigger.
+      // if there are any errors then it's an error event
+      // otherwise we trigger a close event
+      if (this.conn.isTimedOut()) {
+        // Handling timeout condition
+        const error = new errors.ErrorQUICConnectionIdleTimeOut()
+        this.rejectSecureEstablishedP(error);
+        this.dispatchEvent(
+          new events.EventQUICConnectionError({
+            detail: error,
+          }),
+        );
+      } else if (localError != null) {
+        const message = `connection failed with localError ${Buffer.from(
+          localError.reason,
+        ).toString()}(${localError.errorCode})`;
+        this.logger.info(message);
+        const error = new errors.ErrorQUICConnectionInternal(message, {
+          data: {
+            type: 'local',
+            ...localError,
+          },
+        });
+        this.rejectSecureEstablishedP(error);
+        this.dispatchEvent(
+          new events.EventQUICConnectionError({
+            detail: error,
+          }),
+        );
+      } else if (peerError != null) {
+        const message = `Connection errored out with peerError ${Buffer.from(
+          peerError.reason,
+        ).toString()}(${peerError.errorCode})`;
+        this.logger.info(message);
+        const error = new errors.ErrorQUICConnectionInternal(message, {
+          data: {
+            type: 'remote',
+            ...peerError,
+          },
+        });
+        this.rejectSecureEstablishedP(error);
+        this.dispatchEvent(
+          new events.EventQUICConnectionError({
+            detail: error,
+          }),
+        );
+      } else {
+        // closed event
+        this.rejectSecureEstablishedP(new errors.ErrorQUICConnectionClosed());
+        this.dispatchEvent(
+          new events.EventQUICConnectionClosed(),
+        );
+      }
+    }
+    this.setConnTimeOutTimer();
+  }
+
   protected setConnTimeOutTimer(): void {
     const logger = this.logger.getChild('timer');
     const connTimeOutHandler = async () => {
@@ -884,34 +915,9 @@ class QUICConnection {
       logger.debug('CALLING ON TIMEOUT');
       this.conn.onTimeout();
 
-      // Handling timeout condition
-      if (this.conn.isTimedOut()) {
-        const error = new errors.ErrorQUICConnectionIdleTimeOut()
-        this.rejectSecureEstablishedP(error);
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({
-            detail: error,
-          }),
-        );
-      }
-
-      // Connection may have closed after timing out
-      if (this.conn.isClosed()) {
-        logger.debug('resolving closedP');
-        // We resolve closing here, stop checks if the connection has timed out
-        //  and handles it.
-        this.resolveClosedP();
-        // If we are still running and not stopping then we need to stop
-        if (this[running] && this[status] !== 'stopping') {
-          // Background stopping, we don't want to block the timer resolving
-          void this.stop({ force: true });
-        }
-        logger.debug('CLEANING UP TIMER');
-        return;
-      }
-
       // There may be data to send after timing out
-      void this.send();
+      logger.debug('TIMEOUT TRIGGERING SEND');
+      await this.send();
 
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
