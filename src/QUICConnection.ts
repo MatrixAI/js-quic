@@ -495,13 +495,13 @@ class QUICConnection {
     if (typeof this.config.cert === 'string') {
       certs.push(this.config.cert);
     } else if (this.config.cert instanceof Uint8Array) {
-      certs.push(utils.certificateDERToPEM(this.config.cert));
+      certs.push(utils.derToPEM(this.config.cert));
     } else if (Array.isArray(this.config.cert)) {
       for (const cert of this.config.cert) {
         if (typeof cert === 'string') {
           certs.push(cert);
         } else if (cert instanceof Uint8Array) {
-          certs.push(utils.certificateDERToPEM(cert));
+          certs.push(utils.derToPEM(cert));
         }
       }
     }
@@ -515,7 +515,7 @@ class QUICConnection {
   public getRemoteCertsChain(): Array<string> {
     const certsDER = this.conn.peerCertChain();
     if (certsDER == null) return [];
-    return certsDER.map(utils.certificateDERToPEM);
+    return certsDER.map(utils.derToPEM);
   }
 
   @ready(new errors.ErrorQUICConnectionNotRunning())
@@ -650,42 +650,6 @@ class QUICConnection {
     // the closedP until we proceed
     // But note that if there's an error
 
-    // Handling custom TLS verification, this must be done after the following conditions.
-    //  1. Connection established.
-    //  2. Certs available.
-    //  3. Sent after connection has established.
-    if (!this.secureEstablished && this.conn.isEstablished()) {
-      this.resolveSecureEstablishedP();
-      this.secureEstablished = true;
-      if ( this.config.verifyPeer && this.config.verifyCallback != null ) {
-        const peerCerts = this.conn.peerCertChain();
-        // If verifyPeer is true then certs should always exist
-        if (peerCerts == null) never();
-        const peerCertsPem = peerCerts.map((c) =>
-          utils.certificateDERToPEM(c),
-        );
-        try {
-          // Running verify callback if available
-          await this.config.verifyCallback(peerCertsPem);
-          this.logger.debug('TLS verification succeeded');
-          // Generate ack frame to satisfy the short + 1 condition of secure establishment
-          this.conn.sendAckEliciting();
-        } catch (e) {
-          // Force the connection to end.
-          // Error 304 indicates cert chain failed verification.
-          // Error 372 indicates cert chain was missing.
-          this.logger.debug(
-            `TLS fail due to [${e.message}], closing connection`,
-          );
-          this.conn.close(
-            false,
-            304,
-            Buffer.from(`Custom TLSFail: ${e.message}`),
-          );
-        }
-      }
-    }
-
     if (
       this[status] !== 'destroying' &&
       (this.conn.isClosed() || this.conn.isDraining())
@@ -780,6 +744,44 @@ class QUICConnection {
       // We need to finish without any exceptions
       return;
     }
+
+    // Handling custom TLS verification, this must be done after the following conditions.
+    //  1. Connection established.
+    //  2. Certs available.
+    //  3. Sent after connection has established.
+    if (!this.secureEstablished && this.conn.isEstablished()) {
+      this.resolveSecureEstablishedP();
+      this.secureEstablished = true;
+      if ( this.config.verifyPeer && this.config.verifyCallback != null ) {
+        const peerCerts = this.conn.peerCertChain();
+        // If verifyPeer is true then certs should always exist
+        if (peerCerts == null) never();
+        const peerCertsPem: Array<string> = peerCerts.map((c) =>
+          utils.derToPEM(c),
+        );
+        try {
+          // Running verify callback if available
+          const ca = utils.concatPEMs(this.config.ca);
+          await this.config.verifyCallback(peerCertsPem, ca);
+          this.logger.debug('TLS verification succeeded');
+          // Generate ack frame to satisfy the short + 1 condition of secure establishment
+          this.conn.sendAckEliciting();
+        } catch (e) {
+          // Force the connection to end.
+          // Error 304 indicates cert chain failed verification.
+          // Error 372 indicates cert chain was missing.
+          this.logger.debug(
+            `TLS fail due to [${e.message}], closing connection`,
+          );
+          this.conn.close(
+            false,
+            304,
+            Buffer.from(`Custom TLSFail: ${e.message}`),
+          );
+        }
+      }
+    }
+
     if (this.conn.isClosed()) {
       // Handle stream clean up if closed
       this.resolveClosedP();
