@@ -13,7 +13,7 @@ import * as x509 from '@peculiar/x509';
  * This behaves differently with respect to Ed25519 keys
  * See: https://github.com/PeculiarVentures/webcrypto/issues/55
  */
-const webcrypto = new peculiarWebcrypto.Crypto() as Crypto;
+const webcrypto = new peculiarWebcrypto.Crypto();
 
 /**
  * Monkey patches the global crypto object polyfill

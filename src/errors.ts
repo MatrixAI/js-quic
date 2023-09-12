@@ -128,18 +128,6 @@ class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream is destroyed';
 }
 
-class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream force close';
-}
-
-class ErrorQUICStreamCancel<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream was cancelled without a provided reason';
-}
-
-class ErrorQUICStreamCreate<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream failed to create';
-}
-
 class ErrorQUICStreamLocalRead<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream locally closed readable side';
 }
@@ -200,14 +188,9 @@ export {
 
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
-
   ErrorQUICStreamLocalRead,
   ErrorQUICStreamLocalWrite,
   ErrorQUICStreamPeerRead,
   ErrorQUICStreamPeerWrite,
   ErrorQUICStreamInternal,
-
-  ErrorQUICStreamClose,
-  ErrorQUICStreamCancel,
-  ErrorQUICStreamCreate,
 };

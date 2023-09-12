@@ -208,16 +208,18 @@ class QUICConnection {
    * This also allows us to deal with failures here if it happens
    */
   protected handleEventQUICStreamSend = async () => {
+    // We handle errors here
     await this.send();
   };
 
-  // Note that in this case, this being used
-  // Means that this doesn't need to be removed
-  // Since on destruction it will happen automaticaly
   protected handleEventQUICStreamDestroyed = (
     evt: events.EventQUICStreamDestroyed
   ) => {
     const quicStream = evt.target as QUICStream;
+    quicStream.removeEventListener(
+      events.EventQUICStreamSend,
+      this.handleEventQUICStreamSend
+    );
     this.streamMap.delete(quicStream.streamId);
   };
 
@@ -1024,6 +1026,7 @@ class QUICConnection {
         // Otherwise the stream type has to be determined
         quicStream = await QUICStream.createQUICStream({
           type: 'bidi',
+          initiated: 'peer',
           streamId,
           config: this.config,
           connection: this,
@@ -1032,6 +1035,10 @@ class QUICConnection {
           logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
         });
         this.streamMap.set(quicStream.streamId, quicStream);
+        quicStream.addEventListener(
+          events.EventQUICStreamSend.name,
+          this.handleEventQUICStreamSend
+        );
         quicStream.addEventListener(
           events.EventQUICStreamDestroyed.name,
           this.handleEventQUICStreamDestroyed,
@@ -1230,6 +1237,7 @@ class QUICConnection {
       }
       const quicStream = await QUICStream.createQUICStream({
         type: type,
+        initiated: 'local',
         streamId: streamId!,
         connection: this,
         config: this.config,
@@ -1238,6 +1246,10 @@ class QUICConnection {
         logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
       });
       this.streamMap.set(quicStream.streamId, quicStream);
+      quicStream.addEventListener(
+        events.EventQUICStreamSend.name,
+        this.handleEventQUICStreamSend,
+      );
       quicStream.addEventListener(
         events.EventQUICStreamDestroyed.name,
         this.handleEventQUICStreamDestroyed,

@@ -1,48 +1,93 @@
 async function run() {
   let resolve;
   let reject;
+  let c: WritableStreamDefaultController;
+
+  let writer: WritableStreamDefaultWriter;
+
+  // async function doSomething() {
+  //   console.log(await writer.close());
+  // }
+
+  const p = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
   const stream = new WritableStream({
+    start(controller) {
+      c = controller;
+    },
     async write(chunk, controller) {
-      const p = new Promise((res, rej) => {
-        resolve = res;
-        reject = rej;
-      });
+      // controller.error(new Error('oh no!'));
+      // throw new Error('oh no!');
       try {
         await p;
       } catch (e) {
         console.log('ERROR!', e);
         throw e;
       }
-      console.log('writing', chunk);
+      // console.log('writing', chunk);
     },
     async close() {
-      console.log('called close');
-      reject(new Error('it was closed!'));
+      // console.log('called close');
+      // const e = new Error('oh no!');
+      // c.error(e);
+      // throw e;
+      // reject(new Error('it was closed!'));
     },
     async abort() {
       console.log('called abort');
+      // const e = new Error('it was aborted!');
+      // reject(e);
+      // return;
     }
   });
 
-  const writer = stream.getWriter();
+
+  writer = stream.getWriter();
+
+  // writer.closed
 
   try {
-    console.log('?');
-    const writeP = writer.write('abc');
-    console.log('?');
-    const closeP = writer.close();
-    console.log('?');
-    // This never resolves!?
-    await closeP;
-    console.log('?');
+
+    await writer.close();
+    c!.error(new Error("oh no"));
+
+    // await stream.abort(new Error('oh no!'));
+
+    // console.log('?');
+    // const writeP = writer.write('abc');
+    // console.log('?');
+    // await writer.write('abc');
+    // console.log('?');
+    // // This never resolves!?
+    // await closeP;
+    // console.log('?');
     // await writeP;
+
+    // await writer.abort();
+    // console.log('HERE?');
+    // await writeP;
+    // console.log('HERE?');
+
   } catch (e) {
+    console.log('BIG ERROR');
     // It's a `TypeError`
     console.log(e.name);
     // It's a message
     console.log(e.message);
     // There's a code `ERR_INVALID_STATE`
   }
+  console.log('YAY');
+  // await writer.write('balh');
+
+  // try {
+  //   await writer.close();
+  // } catch (e) {
+  //   console.log('??', e.name);
+  // }
+
 }
 
 void run();

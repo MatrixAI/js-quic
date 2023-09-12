@@ -293,17 +293,17 @@ type ResolveHostname = (hostname: string) => string | PromiseLike<string>;
  * Use `0` to indicate unknown/default reason.
  */
 type StreamReasonToCode = (
-  type: 'recv' | 'send',
+  type: 'read' | 'write',
   reason?: any,
-) => number | PromiseLike<number>;
+) => number;
 
 /**
  * Maps code to a reason. 0 usually indicates unknown/default reason.
  */
 type StreamCodeToReason = (
-  type: 'recv' | 'send',
+  type: 'read' | 'write',
   code: number,
-) => any | PromiseLike<any>;
+) => any;
 
 /**
  * Custom TLS verification callback.
