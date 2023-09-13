@@ -208,8 +208,10 @@ class QUICConnection {
    * This also allows us to deal with failures here if it happens
    */
   protected handleEventQUICStreamSend = async () => {
-    // We handle errors here
-    await this.send();
+    // Failure of send is both a caller error and domain error
+    // In this case we can ignore the caller error, since the domain error will be handled
+    // by the QUICConnection error handlers
+    await this.send().catch(() => {});
   };
 
   protected handleEventQUICStreamDestroyed = (
@@ -217,7 +219,7 @@ class QUICConnection {
   ) => {
     const quicStream = evt.target as QUICStream;
     quicStream.removeEventListener(
-      events.EventQUICStreamSend,
+      events.EventQUICStreamSend.name,
       this.handleEventQUICStreamSend
     );
     this.streamMap.delete(quicStream.streamId);
@@ -839,11 +841,12 @@ class QUICConnection {
       });
     }
     await mon.lock(this.lockingKey)();
-    const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
     let sendLength: number;
     let sendInfo: SendInfo;
     // Send until `Done`
     while (true) {
+      // Roughly 1350 bytes
+      const sendBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       try {
         [sendLength, sendInfo] = this.conn.send(sendBuffer);
       } catch (e) {
@@ -871,50 +874,30 @@ class QUICConnection {
             }
           }
         ));
-        // After dispatching the error event, we still need to dispatch the close event!
+        // This is in fact a caller error and domain error
+        // Not a legitimate state transition
         throw e_;
       }
-      try {
-        await this.socket.send(
-          sendBuffer,
-          0,
-          sendLength,
-          sendInfo.to.port,
-          sendInfo.to.host,
-        );
-      } catch (e) {
-        const e_ = new errors.ErrorQUICConnectionInternal(
-          'Failed to send data on the QUICSocket',
-          {
-            data: {
-              msg: sendBuffer,
-              offset: 0,
-              length: sendLength,
-              host: sendInfo.to.host,
-              port: sendInfo.to.port,
-            },
-            cause: e,
+
+      // Push the send event
+      // This represents the fact that there is data queued up on the connection's send buffer
+      // To be sent out, the listener which can be `QUICClient` or `QUICServer`
+      // will then coordinate with their `QUICSocket` to send out the information asynchronousy
+      // From the perspective of `QUICConnection`, it's job is done, and it doesn't care about errors
+      // about the `QUICSocket`.
+      // Note that the `sendBuffer` must be a new buffer each time
+      // Otherwise it might get overwritten if it is too slow
+      this.dispatchEvent(
+        new events.EventQUICConnectionSend({
+          detail: {
+            msg: sendBuffer,
+            offset: 0,
+            length: sendLength,
+            port: sendInfo.to.port,
+            address: sendInfo.to.host,
           }
-        );
-        // This is a software error
-        this.conn.close(
-          false,
-          ConnectionErrorCode.InternalError,
-          Buffer.from('')
-        );
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({ detail: e_ })
-        );
-        this.dispatchEvent(new events.EventQUICConnectionClose(
-          {
-            detail: {
-              type: 'local',
-              ...this.conn.localError()!
-            }
-          }
-        ));
-        throw e_;
-      }
+        })
+      );
     }
 
     // Resets the connection timeout timer
