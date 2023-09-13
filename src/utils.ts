@@ -6,6 +6,7 @@ import type {
   Host,
   Port,
   QUICServerCrypto,
+  StreamId,
 } from './types';
 import type { Connection } from './native';
 import dns from 'dns';
@@ -397,6 +398,22 @@ async function sleep(ms: number): Promise<void> {
   return await new Promise<void>((r) => setTimeout(r, ms));
 }
 
+function isStreamClientInitiated(streamId: StreamId): boolean {
+  return (streamId & 0b01) === 0;
+}
+
+function isStreamServerInitiated(streamId: StreamId): boolean {
+  return (streamId & 0b01) === 1;
+}
+
+function isStreamUnidirectional(streamId: StreamId): boolean {
+  return (streamId & 0b10) !== 0;
+}
+
+function isStreamBidirectional(streamId: StreamId): boolean {
+  return (streamId & 0b10) === 0;
+}
+
 /**
  * Useful for debug printing stream state
  */
@@ -501,6 +518,10 @@ export {
   mintToken,
   validateToken,
   sleep,
+  isStreamClientInitiated,
+  isStreamServerInitiated,
+  isStreamBidirectional,
+  isStreamUnidirectional,
   streamStats,
   collectPEMs,
   derToPEM,

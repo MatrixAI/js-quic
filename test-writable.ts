@@ -15,44 +15,52 @@ async function run() {
   });
 
   const stream = new WritableStream({
-    start(controller) {
+    start: async (controller) => {
       c = controller;
+      // console.log('CLOSED!');
     },
-    async write(chunk, controller) {
-      // controller.error(new Error('oh no!'));
-      // throw new Error('oh no!');
-      try {
-        await p;
-      } catch (e) {
-        console.log('ERROR!', e);
-        throw e;
-      }
-      // console.log('writing', chunk);
-    },
-    async close() {
-      // console.log('called close');
-      // const e = new Error('oh no!');
-      // c.error(e);
-      // throw e;
-      // reject(new Error('it was closed!'));
-    },
-    async abort() {
-      console.log('called abort');
-      // const e = new Error('it was aborted!');
-      // reject(e);
-      // return;
-    }
+    // async write(chunk, controller) {
+    //   // controller.error(new Error('oh no!'));
+    //   // throw new Error('oh no!');
+    //   try {
+    //     await p;
+    //   } catch (e) {
+    //     console.log('ERROR!', e);
+    //     throw e;
+    //   }
+    //   // console.log('writing', chunk);
+    // },
+    // async close() {
+
+    //   console.log('called close');
+    //   // const e = new Error('oh no!');
+    //   // c.error(e);
+    //   // throw e;
+    //   // reject(new Error('it was closed!'));
+    // },
+    // async abort() {
+    //   console.log('called abort');
+    //   // const e = new Error('it was aborted!');
+    //   // reject(e);
+    //   // return;
+    // }
   });
 
 
-  writer = stream.getWriter();
 
   // writer.closed
 
   try {
 
-    await writer.close();
-    c!.error(new Error("oh no"));
+    await stream.close();
+    console.log('??');
+    writer = stream.getWriter();
+    console.log('first');
+    await writer.write('abc');
+    console.log('second');
+
+    // await writer.close();
+    // c!.error(new Error("oh no"));
 
     // await stream.abort(new Error('oh no!'));
 

@@ -57,7 +57,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * @internal Only used by {@link QUICConnection} to create a stream.
    */
   public static async createQUICStream({
-    type,
     initiated,
     streamId,
     connection,
@@ -67,7 +66,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       new Error(`${type.toString()} ${code.toString()}`),
     logger = new Logger(`${this.name} ${streamId}`),
   }: {
-    type: 'bidi' | 'uni';
     initiated: 'local' | 'peer';
     streamId: StreamId;
     connection: QUICConnection;
@@ -78,7 +76,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   }): Promise<QUICStream> {
     logger.info(`Create ${this.name}`);
     const stream = new this({
-      type,
       initiated,
       streamId,
       connection,
@@ -87,6 +84,21 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       codeToReason,
       logger,
     });
+    // Because you cannot construct a closed writable stream
+    // Closing the writable stream requires async await
+    // Therefore we close both the readable stream and writable stream
+    // Here on condition of being unidirectional
+    if (utils.isStreamUnidirectional(streamId)) {
+      if (initiated === 'local') {
+        // Readable is automatically closed if it is local and unidirectional
+        stream.readableController.close();
+        stream._readClosed = true;
+      } else if (initiated === 'peer') {
+        // Writable is automatically closed if it is peer and unidirectional
+        await stream.writable.close();
+        stream._writeClosed = true;
+      }
+    }
     stream.addEventListener(
       events.EventQUICStreamError.name,
       stream.handleEventQUICStreamError,
@@ -118,6 +130,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   public readonly initiated: 'local' | 'peer';
 
+  public readonly clientOrServer
+
   public readonly streamId: StreamId;
   public readonly readable: ReadableStream<Uint8Array>;
   public readonly writable: WritableStream<Uint8Array>;
@@ -132,7 +146,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   protected _readClosed: boolean = false;
   protected _writeClosed: boolean = false;
 
-  protected readableChunk: Buffer;
+  protected readableChunk?: Buffer;
 
   protected resolveReadableP?: () => void;
   protected rejectReadableP?: (reason?: any) => void;
@@ -188,7 +202,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * @internal
    */
   public constructor({
-    type,
     initiated,
     streamId,
     connection,
@@ -197,7 +210,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     codeToReason,
     logger,
   }: {
-    type: 'bidi' | 'uni';
     initiated: 'local' | 'peer';
     streamId: StreamId;
     connection: QUICConnection;
@@ -206,388 +218,96 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     codeToReason: StreamCodeToReason;
     logger: Logger;
   }) {
-    if (type === 'uni') {
-      throw new TypeError('Unidirectional streams are not yet supported');
+    if (utils.isStreamBidirectional(streamId)) {
+      this.type = 'bidi';
+    } else if (utils.isStreamUnidirectional(streamId)) {
+      this.type = 'uni';
     }
     this.logger = logger;
-    this.type = type;
     this.initiated = initiated;
     this.streamId = streamId;
     this.connection = connection;
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-
-    // This will setup the readable chunk buffer with the size set to the
-    // configured per-stream buffer size. Note that this doubles the memory
-    // usage of each stream due to maintaining both the Rust and JS buffers
-    // @ts-ignore - Eventually we will support unidirectional streams
-    if (type === 'uni') {
-      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataUni);
-    } else if (type === 'bidi' && initiated === 'local') {
-      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiLocal);
-    } else if (type === 'bidi' && initiated === 'peer') {
-      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiRemote);
-    }
-
     // This will be used to know when both readable and writable is closed
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
 
-    try {
-      // Quiche stream state doesn't yet exist until data is either received
-      // or sent on the stream. However in this QUIC library, one may want to
-      // create a new stream to use. Therefore in order to maintain consistent
-      // closing behaviour, we can prime the stream state in quiche by sending
-      // a 0-length message. The data is not actually send to the peer.
-      connection.conn.streamSend(streamId, new Uint8Array(0), false);
-    } catch (e) {
-      // Note that `conn.streamSend` does not throw `Done` when writing
-      // a 0-length message
-      throw new errors.ErrorQUICStreamInternal(
-        'Failed to prime local stream state with a 0-length message',
-        { cause: e }
+    // This will setup the readable chunk buffer with the size set to the
+    // configured per-stream buffer size. Note that this doubles the memory
+    // usage of each stream due to maintaining both the Rust and JS buffers
+    if (this.type === 'uni') {
+      if (initiated === 'local') {
+        // We expect the readable stream to be closed
+        this.readableChunk = undefined;
+      } else if (initiated === 'peer') {
+        this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataUni);
+      }
+    } else if (this.type === 'bidi' && initiated === 'local') {
+      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiLocal);
+    } else if (this.type === 'bidi' && initiated === 'peer') {
+      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiRemote);
+    }
+
+    // If it is uni directional and it is peer initiated
+    // Then we cannot write to the peer, and thus no point in initialising state
+    if (!(this.type === 'uni' && this.initiated === 'peer')) {
+      try {
+        // Quiche stream state doesn't yet exist until data is either received
+        // or sent on the stream. However in this QUIC library, one may want to
+        // create a new stream to use. Therefore in order to maintain consistent
+        // closing behaviour, we can prime the stream state in quiche by sending
+        // a 0-length message. The data is not actually send to the peer.
+        connection.conn.streamSend(streamId, new Uint8Array(0), false);
+      } catch (e) {
+        // Note that `conn.streamSend` does not throw `Done` when writing
+        // a 0-length message
+        throw new errors.ErrorQUICStreamInternal(
+          'Failed to prime local stream state with a 0-length message',
+          { cause: e }
+        );
+      }
+    }
+
+    if (this.type === 'uni' && initiated === 'local') {
+      // This is just a dummy stream that will be auto-closed during creation
+      this.readable = new ReadableStream({
+        start: this.readableStart.bind(this),
+      });
+    } else {
+      this.readable = new ReadableStream(
+        {
+          start: this.readableStart.bind(this),
+          pull: this.readablePull.bind(this),
+          cancel: this.readableCancel.bind(this),
+        },
+        new CountQueuingStrategy({
+          // Allow 1 buffered message, so we can know when data is desired, and we can know when to un-pause.
+          highWaterMark: 1,
+        }),
       );
     }
-    // Arrow methods are used to ensure that `this` refers to the class instance
-    // and not the stream object itself
-    this.readable = new ReadableStream(
-      {
-        start: (controller) => {
-          this.readableController = controller;
-        },
-        pull: async (controller) => {
-          // Block the pull if the quiche stream is not readable
-          if (!this.connection.conn.streamReadable(this.streamId)) {
-            const {
-              p: readableP,
-              resolveP: resolveReadableP,
-              rejectP: rejectReadableP
-            } = utils.promise();
-            // This will act as the signal to continue reading
-            // What if it rejects? We could argue that when the stream is cancelled
-            // Then anything blocking it should be cancelled too
-            this.resolveReadableP = resolveReadableP;
-            this.rejectReadableP = rejectReadableP;
-            // If this rejects:
-            // Case 1 is the stream readable side was closed with `STOP_SENDING`
-            // Case 2 which is peer sends `STREAM_RESET` - this is handled afterwards
-            // Case 3 is some internal error happened
-            // In either case of 1 and 3, the error is thrown upwards
-            // The stream enters an errored state, and any reader will
-            // get the same exception
-            // Note that in case 1, since it is cancelled... it's not necessary to do anything here
-            // As the pull method will be blocked, and eventually be garbage collected
-            await readableP;
-          }
-          let recvLength: number, fin: boolean;
-          try {
-            [recvLength, fin] = this.connection.conn.streamRecv(this.streamId, this.readableChunk);
-          } catch (e) {
-            let match: RegExpMatchArray | null;
-            if ((match = e.message.match(/StreamReset\((.+)\)/)) != null) {
-              const code = parseInt(match[1]);
-              // Use the reason as the cause
-              const reason = this.codeToReason('read', code);
-              const e_ = new errors.ErrorQUICStreamPeerRead(
-                'Peer reset the readable stream',
-                {
-                  data: { code },
-                  cause: reason
-                }
-              );
-              controller.error(e_);
-              this.dispatchEvent(
-                new events.EventQUICStreamError({
-                  detail: e_
-                })
-              );
-              this.dispatchEvent(
-                new events.EventQUICStreamCloseRead({
-                  detail: {
-                    type: 'peer',
-                    code
-                  }
-                })
-              );
-              // The pull doesn't need to throw it upwards, the controller.error already ensures errored state
-              // And any read operation will end up throwing
-              // But we do it here for symmetricity with write
-              throw e_;
-            } else {
-              // In all other cases, this is an internal error
-              // Error messages might be `Done`, `InvalidStreamState`
-              const e_ = new errors.ErrorQUICStreamInternal(
-                'Failed `streamRecv` on the readable stream',
-                { cause: e }
-              );
-              controller.error(e_);
-              this.dispatchEvent(
-                new events.EventQUICStreamError({
-                  detail: e_
-                })
-              );
-              this.dispatchEvent(
-                new events.EventQUICStreamCloseRead({
-                  detail: {
-                    type: 'local',
-                    code: this.reasonToCode('read', e_)
-                  }
-                })
-              );
-              throw e_;
-            }
-          }
-          // If it is 0-length message, the `fin` should be true
-          // But even if it isn't, we can just ignore the chunk
-          // Readers shouldn't be reading a 0-length message
-          if (recvLength > 0) {
-            controller.enqueue(this.readableChunk.subarray(0, recvLength));
-          }
-          // Generally a recv length of 0 will come with a fin being true
-          // QUIC stream should not in fact give you a 0-length message with
-          // fin being false, however if the implementation is buggy, we just
-          // drop that frame
-          if (fin) {
-            // Reader will receive `{ value: undefined, done: true }`
-            controller.close();
-            // If fin is true, then that means, the stream is CLOSED
-            this.dispatchEvent(
-              new events.EventQUICStreamCloseRead({
-                detail: { type: 'peer' }
-              })
-            );
-          }
-          // Trigger send after processing read
-          // You would want to dispatch an event here
-          // So that QUICConnection can call this.send to make this work
-          // But it's not a close event
-          // What could it be?
-          // EventQUICStreamSend - event
-          // means that data is "enqueued" onto the stream state to be sent
-          // would you do then say that, that's true as long
-          // it's not a close read or whatever?
 
-          // Basically every time you were to call `send`
-          // You dispatch the event instead
-          // That saves the error handling to `QUICConnection` instead
-
-          this.dispatchEvent(
-            new events.EventQUICStreamSend()
-          );
-          return;
+    if (this.type ==='uni' && this.initiated === 'peer') {
+      // This is just a dummy stream that will be auto-closed during creation
+      this.writable = new WritableStream({
+        start: this.writableStart.bind(this),
+      });
+    } else {
+      this.writable = new WritableStream(
+        {
+          start: this.writableStart.bind(this),
+          write: this.writableWrite.bind(this),
+          close: this.writableClose.bind(this),
+          abort: this.writableAbort.bind(this),
         },
-        // ReadableStream ensures that this method is idempotent
-        cancel: (reason) => {
-          this.readableCancel(reason);
+        {
+          // Allow 1 buffered 'message', Buffering is handled via quiche
+          highWaterMark: 1,
         },
-      },
-      new CountQueuingStrategy({
-        // Allow 1 buffered message, so we can know when data is desired, and we can know when to un-pause.
-        highWaterMark: 1,
-      }),
-    );
-
-    this.writable = new WritableStream(
-      {
-        start: (controller) => {
-          this.writableController = controller;
-        },
-        /**
-         * This will be serialised with close
-         */
-        write: async (chunk: Uint8Array, controller: WritableStreamDefaultController) => {
-          if (chunk.byteLength === 0) {
-            return;
-          }
-          let sentLength: number;
-          while (true) {
-            try {
-              sentLength = this.connection.conn.streamSend(this.streamId, chunk, false);
-            } catch (e) {
-              let match: RegExpMatchArray | null;
-              if (e.message === 'Done') {
-                // This will trigger send, and also loop back to the top
-                sentLength = 0;
-              } else if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
-                // Stream was stopped by the peer
-                const code = parseInt(match[1]);
-                const reason = this.codeToReason('write', code);
-                const e_ = new errors.ErrorQUICStreamPeerWrite(
-                  'Peer stopped the writable stream',
-                  {
-                    data: { code },
-                    cause: reason
-                  }
-                );
-                controller.error(e_);
-                this.dispatchEvent(
-                  new events.EventQUICStreamError({
-                    detail: e_
-                  })
-                );
-                this.dispatchEvent(
-                  new events.EventQUICStreamCloseWrite({
-                    detail: {
-                      type: 'peer',
-                      code
-                    }
-                  })
-                );
-                throw e_;
-              } else {
-                // This could happen due to `InvalidStreamState`
-                // or something else that is unknown
-                // I think invalid stream state shouldn't really happen
-                // Cause anything blocked and waiting would have been rejected
-                const e_ = new errors.ErrorQUICStreamInternal(
-                  'Local stream writable could not `streamSend`',
-                  { cause: e }
-                );
-                // Ensure state transitions to error first before event handlers
-                controller.error(e_);
-                this.dispatchEvent(
-                  new events.EventQUICStreamError({
-                    detail: e_
-                  })
-                );
-                this.dispatchEvent(
-                  new events.EventQUICStreamCloseWrite({
-                    detail: {
-                      type: 'local',
-                      code: this.reasonToCode('write', e_)
-                    }
-                  })
-                );
-                // Ensure caller rejects
-                throw e_;
-              }
-            }
-            // Every time this succeeds, we need to dispatch
-            this.dispatchEvent(
-              new events.EventQUICStreamSend()
-            );
-            // Every time the sent length is less than the input length, then we must wait again
-            // Because it means the buffer is not enough for the entire chunk, there's still
-            // remaining work to do
-            // It means we have to await writableP, which is resolved when the stream is writable
-            // again which means usually there's capacity opened up on the buffer
-            if (sentLength < chunk.byteLength) {
-              // Cause that means we still have data left to send, and we should
-              // send in the remaining data afterwards by subtracting the sent length
-              chunk = chunk.subarray(sentLength, chunk.byteLength);
-              const {
-                p: writableP,
-                resolveP: resolveWritableP,
-                rejectP: rejectWritableP
-              } = utils.promise();
-              this.resolveWritableP = resolveWritableP;
-              this.rejectWritableP = rejectWritableP;
-
-              // If this rejects, the entire write is rejected
-              // It should be rejected in the case of abort
-              // But it would not be rejected in the case of close...
-              // Since it would not even be runnable in that case
-              // If someone were to call close, while this is waiting on being writable
-              // It cannot actually be called... you cannot do a graceful close
-              // While a write is still being blocked
-              // You can only do an abort
-              await writableP;
-              continue;
-            }
-            // We are done here
-            return;
-          }
-        },
-        /**
-         * This is mutually exclusive with write.
-         * It will be serialised!
-         */
-        close: () => {
-          try {
-            // This will not throw `Done` if the chunk is 0-length as it is here
-            // Close is always sending a 0-length message
-            // That technically means there's no need to wait for anything
-            this.connection.conn.streamSend(this.streamId, new Uint8Array(0), true);
-          } catch (e) {
-            let match: RegExpMatchArray | null;
-            // If the stream is already reset, we cannot gracefully close
-            if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
-              // Stream was stopped by the peer
-              const code = parseInt(match[1]);
-              const reason = this.codeToReason('write', code);
-              const e_ = new errors.ErrorQUICStreamPeerWrite(
-                'Peer stopped the writable stream',
-                {
-                  data: { code },
-                  cause: reason
-                }
-              );
-              // Close method doesn't get access to the controller
-              this.writableController.error(e_);
-              this.dispatchEvent(
-                new events.EventQUICStreamError({
-                  detail: e_
-                })
-              );
-              this.dispatchEvent(
-                new events.EventQUICStreamCloseWrite({
-                  detail: {
-                    type: 'peer',
-                    code
-                  }
-                })
-              );
-              // This fails the `close`, however no matter what
-              // the writable stream is in a closed state
-              throw e_;
-            } else {
-              // This could happen due to `InvalidStreamState`
-              const e_ = new errors.ErrorQUICStreamInternal(
-                'Local stream writable could not `streamSend`',
-                { cause: e }
-              );
-              this.writableController.error(e_);
-              this.dispatchEvent(
-                new events.EventQUICStreamError({
-                  detail: e_
-                })
-              );
-              this.dispatchEvent(
-                new events.EventQUICStreamCloseWrite({
-                  detail: {
-                    type: 'local',
-                    code: this.reasonToCode('write', e_)
-                  }
-                })
-              );
-              throw e_;
-            }
-          }
-
-          // Graceful close on the write without any code
-          this.dispatchEvent(
-            new events.EventQUICStreamCloseWrite({
-              detail: { type: 'local' }
-            })
-          );
-
-          // Trigger send
-          this.dispatchEvent(
-            new events.EventQUICStreamSend()
-          );
-          return;
-        },
-        // I think this would idempotent too
-        abort: (reason) => {
-          return this.writableAbort(reason);
-        },
-      },
-      {
-        // Allow 1 buffered 'message', Buffering is handled via quiche
-        highWaterMark: 1,
-      },
-    );
+      );
+    }
   }
 
   /**
@@ -731,8 +451,328 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this.resolveWritableP?.();
   }
 
+  protected readableStart(controller: ReadableStreamDefaultController): void {
+    this.readableController = controller;
+  }
+
+  protected writableStart(controller: WritableStreamDefaultController): void {
+    this.writableController = controller;
+  }
+
+  protected async readablePull(): Promise<void> {
+    // Block the pull if the quiche stream is not readable
+    if (!this.connection.conn.streamReadable(this.streamId)) {
+      const {
+        p: readableP,
+        resolveP: resolveReadableP,
+        rejectP: rejectReadableP
+      } = utils.promise();
+      // This will act as the signal to continue reading
+      // What if it rejects? We could argue that when the stream is cancelled
+      // Then anything blocking it should be cancelled too
+      this.resolveReadableP = resolveReadableP;
+      this.rejectReadableP = rejectReadableP;
+      // If this rejects:
+      // Case 1 is the stream readable side was closed with `STOP_SENDING`
+      // Case 2 which is peer sends `STREAM_RESET` - this is handled afterwards
+      // Case 3 is some internal error happened
+      // In either case of 1 and 3, the error is thrown upwards
+      // The stream enters an errored state, and any reader will
+      // get the same exception
+      // Note that in case 1, since it is cancelled... it's not necessary to do anything here
+      // As the pull method will be blocked, and eventually be garbage collected
+      await readableP;
+    }
+    let recvLength: number, fin: boolean;
+    try {
+      [recvLength, fin] = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
+    } catch (e) {
+      let match: RegExpMatchArray | null;
+      if ((match = e.message.match(/StreamReset\((.+)\)/)) != null) {
+        const code = parseInt(match[1]);
+        // Use the reason as the cause
+        const reason = this.codeToReason('read', code);
+        const e_ = new errors.ErrorQUICStreamPeerRead(
+          'Peer reset the readable stream',
+          {
+            data: { code },
+            cause: reason
+          }
+        );
+        this.readableController.error(e_);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+        this.dispatchEvent(
+          new events.EventQUICStreamCloseRead({
+            detail: {
+              type: 'peer',
+              code
+            }
+          })
+        );
+        // The pull doesn't need to throw it upwards, the controller.error already ensures errored state
+        // And any read operation will end up throwing
+        // But we do it here for symmetricity with write
+        throw e_;
+      } else {
+        // In all other cases, this is an internal error
+        // Error messages might be `Done`, `InvalidStreamState`
+        const e_ = new errors.ErrorQUICStreamInternal(
+          'Failed `streamRecv` on the readable stream',
+          { cause: e }
+        );
+        this.readableController.error(e_);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+        this.dispatchEvent(
+          new events.EventQUICStreamCloseRead({
+            detail: {
+              type: 'local',
+              code: this.reasonToCode('read', e_)
+            }
+          })
+        );
+        throw e_;
+      }
+    }
+    // If it is 0-length message, the `fin` should be true
+    // But even if it isn't, we can just ignore the chunk
+    // Readers shouldn't be reading a 0-length message
+    if (recvLength > 0) {
+      this.readableController.enqueue(this.readableChunk!.subarray(0, recvLength));
+    }
+    // Generally a recv length of 0 will come with a fin being true
+    // QUIC stream should not in fact give you a 0-length message with
+    // fin being false, however if the implementation is buggy, we just
+    // drop that frame
+    if (fin) {
+      // Reader will receive `{ value: undefined, done: true }`
+      this.readableController.close();
+      // If fin is true, then that means, the stream is CLOSED
+      this.dispatchEvent(
+        new events.EventQUICStreamCloseRead({
+          detail: { type: 'peer' }
+        })
+      );
+    }
+    // Trigger send after processing read
+    // You would want to dispatch an event here
+    // So that QUICConnection can call this.send to make this work
+    // But it's not a close event
+    // What could it be?
+    // EventQUICStreamSend - event
+    // means that data is "enqueued" onto the stream state to be sent
+    // would you do then say that, that's true as long
+    // it's not a close read or whatever?
+
+    // Basically every time you were to call `send`
+    // You dispatch the event instead
+    // That saves the error handling to `QUICConnection` instead
+
+    this.dispatchEvent(
+      new events.EventQUICStreamSend()
+    );
+    return;
+  }
+
+  /**
+   * This will be serialised with close
+   */
+  protected async writableWrite(
+    chunk: Uint8Array,
+  ): Promise<void> {
+    if (chunk.byteLength === 0) {
+      return;
+    }
+    let sentLength: number;
+    while (true) {
+      try {
+        sentLength = this.connection.conn.streamSend(this.streamId, chunk, false);
+      } catch (e) {
+        let match: RegExpMatchArray | null;
+        if (e.message === 'Done') {
+          // This will trigger send, and also loop back to the top
+          sentLength = 0;
+        } else if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
+          // Stream was stopped by the peer
+          const code = parseInt(match[1]);
+          const reason = this.codeToReason('write', code);
+          const e_ = new errors.ErrorQUICStreamPeerWrite(
+            'Peer stopped the writable stream',
+            {
+              data: { code },
+              cause: reason
+            }
+          );
+          this.writableController.error(e_);
+          this.dispatchEvent(
+            new events.EventQUICStreamError({
+              detail: e_
+            })
+          );
+          this.dispatchEvent(
+            new events.EventQUICStreamCloseWrite({
+              detail: {
+                type: 'peer',
+                code
+              }
+            })
+          );
+          throw e_;
+        } else {
+          // This could happen due to `InvalidStreamState`
+          // or something else that is unknown
+          // I think invalid stream state shouldn't really happen
+          // Cause anything blocked and waiting would have been rejected
+          const e_ = new errors.ErrorQUICStreamInternal(
+            'Local stream writable could not `streamSend`',
+            { cause: e }
+          );
+          // Ensure state transitions to error first before event handlers
+          this.writableController.error(e_);
+          this.dispatchEvent(
+            new events.EventQUICStreamError({
+              detail: e_
+            })
+          );
+          this.dispatchEvent(
+            new events.EventQUICStreamCloseWrite({
+              detail: {
+                type: 'local',
+                code: this.reasonToCode('write', e_)
+              }
+            })
+          );
+          // Ensure caller rejects
+          throw e_;
+        }
+      }
+      // Every time this succeeds, we need to dispatch
+      this.dispatchEvent(
+        new events.EventQUICStreamSend()
+      );
+      // Every time the sent length is less than the input length, then we must wait again
+      // Because it means the buffer is not enough for the entire chunk, there's still
+      // remaining work to do
+      // It means we have to await writableP, which is resolved when the stream is writable
+      // again which means usually there's capacity opened up on the buffer
+      if (sentLength < chunk.byteLength) {
+        // Cause that means we still have data left to send, and we should
+        // send in the remaining data afterwards by subtracting the sent length
+        chunk = chunk.subarray(sentLength, chunk.byteLength);
+        const {
+          p: writableP,
+          resolveP: resolveWritableP,
+          rejectP: rejectWritableP
+        } = utils.promise();
+        this.resolveWritableP = resolveWritableP;
+        this.rejectWritableP = rejectWritableP;
+
+        // If this rejects, the entire write is rejected
+        // It should be rejected in the case of abort
+        // But it would not be rejected in the case of close...
+        // Since it would not even be runnable in that case
+        // If someone were to call close, while this is waiting on being writable
+        // It cannot actually be called... you cannot do a graceful close
+        // While a write is still being blocked
+        // You can only do an abort
+        await writableP;
+        continue;
+      }
+      // We are done here
+      return;
+    }
+  }
+
+  /**
+   * This is mutually exclusive with write.
+   * It will be serialised!
+   */
+  protected writableClose(): void {
+    try {
+      // This will not throw `Done` if the chunk is 0-length as it is here
+      // Close is always sending a 0-length message
+      // That technically means there's no need to wait for anything
+      this.connection.conn.streamSend(this.streamId, new Uint8Array(0), true);
+    } catch (e) {
+      let match: RegExpMatchArray | null;
+      // If the stream is already reset, we cannot gracefully close
+      if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
+        // Stream was stopped by the peer
+        const code = parseInt(match[1]);
+        const reason = this.codeToReason('write', code);
+        const e_ = new errors.ErrorQUICStreamPeerWrite(
+          'Peer stopped the writable stream',
+          {
+            data: { code },
+            cause: reason
+          }
+        );
+        // Close method doesn't get access to the controller
+        this.writableController.error(e_);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+        this.dispatchEvent(
+          new events.EventQUICStreamCloseWrite({
+            detail: {
+              type: 'peer',
+              code
+            }
+          })
+        );
+        // This fails the `close`, however no matter what
+        // the writable stream is in a closed state
+        throw e_;
+      } else {
+        // This could happen due to `InvalidStreamState`
+        const e_ = new errors.ErrorQUICStreamInternal(
+          'Local stream writable could not `streamSend`',
+          { cause: e }
+        );
+        this.writableController.error(e_);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+        this.dispatchEvent(
+          new events.EventQUICStreamCloseWrite({
+            detail: {
+              type: 'local',
+              code: this.reasonToCode('write', e_)
+            }
+          })
+        );
+        throw e_;
+      }
+    }
+
+    // Graceful close on the write without any code
+    this.dispatchEvent(
+      new events.EventQUICStreamCloseWrite({
+        detail: { type: 'local' }
+      })
+    );
+
+    // Trigger send
+    this.dispatchEvent(
+      new events.EventQUICStreamSend()
+    );
+    return;
+  }
+
   /**
    * This is factored out and callable by both `readable.cancel` and `this.cancel`.
+   * ReadableStream ensures that this method is idempotent
    *
    * @throws {errors.ErrorQUICStreamInternal}
    */

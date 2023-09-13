@@ -1,5 +1,5 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-import type { ContextCancellable, ContextTimed, ContextTimedInput } from '@matrixai/contexts';
+import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
 import type QUICSocket from './QUICSocket';
 import type QUICConnectionId from './QUICConnectionId';
 import type {
@@ -18,7 +18,7 @@ import { Lock, LockBox, RWLockWriter } from '@matrixai/async-locks';
 import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
-import { timedCancellable, cancellable, context } from '@matrixai/contexts/dist/decorators';
+import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { withF } from '@matrixai/resources';
 import { utils as contextsUtils } from '@matrixai/contexts';
 import { buildQuicheConfig, minIdleTimeout } from './config';
@@ -61,13 +61,14 @@ class QUICConnection {
 
   /**
    * Tracks the locks for use with the monitors
+   * And also used for stream ID locking.
    */
-  public readonly lockBox = new LockBox<RWLockWriter>();
+  protected lockBox = new LockBox<RWLockWriter>();
 
   /**
    * This is the locking key for the monitor.
    */
-  public readonly lockingKey = 'QUICConnection lock recv send';
+  protected recvSendLockKey = 'QUICConnection lock recv send';
 
   /**
    * Logger.
@@ -93,10 +94,10 @@ class QUICConnection {
    */
   protected codeToReason: StreamCodeToReason;
 
-  /**
-   * Stream ID increment lock.
-   */
-  protected streamIdLock: Lock = new Lock();
+  protected streamIdClientBidiLock: Lock = new Lock();
+  protected streamIdServerBidiLock: Lock = new Lock();
+  protected streamIdClientUniLock: Lock = new Lock();
+  protected streamIdServerUniLock: Lock = new Lock();
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -113,16 +114,14 @@ class QUICConnection {
   /**
    * Client initiated unidirectional stream starts at 2.
    * Increment by 4 to get the next ID.
-   * Currently unsupported.
    */
-  protected _streamIdClientUni: StreamId = 0b10 as StreamId;
+  protected streamIdClientUni: StreamId = 0b10 as StreamId;
 
   /**
    * Server initiated unidirectional stream starts at 3.
    * Increment by 4 to get the next ID.
-   * Currently unsupported.
    */
-  protected _streamIdServerUni: StreamId = 0b11 as StreamId;
+  protected streamIdServerUni: StreamId = 0b11 as StreamId;
 
   /**
    * Internal conn timer. This is used to tick the state transitions on the
@@ -674,7 +673,7 @@ class QUICConnection {
         return this.recv(data, remoteInfo, mon);
       });
     }
-    await mon.lock(this.lockingKey)();
+    await mon.lock(this.recvSendLockKey)();
     // The remote information may be changed on each receive
     // However to do so would mean connection migration,
     // which is not yet supported
@@ -840,7 +839,7 @@ class QUICConnection {
         return this.send(mon);
       });
     }
-    await mon.lock(this.lockingKey)();
+    await mon.lock(this.recvSendLockKey)();
     let sendLength: number;
     let sendInfo: SendInfo;
     // Send until `Done`
@@ -856,7 +855,7 @@ class QUICConnection {
         // This is a software error
         const e_ = new errors.ErrorQUICConnectionInternal(
           'Failed `send` with unknown internal error',
-          { cause : e }
+          { cause: e }
         );
         // Exceptions could be `BufferTooShort`, `InvalidState`
         this.conn.close(
@@ -1005,10 +1004,9 @@ class QUICConnection {
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
-        // Unidirectional streams are not supported yet
-        // Otherwise the stream type has to be determined
+        // Wait a minute, if the stream doesn't exist
+        // Then it has to be a peer initiated stream
         quicStream = await QUICStream.createQUICStream({
-          type: 'bidi',
           initiated: 'peer',
           streamId,
           config: this.config,
@@ -1030,75 +1028,54 @@ class QUICConnection {
         this.dispatchEvent(
           new events.EventQUICConnectionStream({ detail: quicStream }),
         );
-
-        // If we have created a stream
-        // why are we not reading?
-        // I think this needs to be called
-        await quicStream.read();
-
-        // No need to read after creation, doing so will throw during early cancellation
-        // What do you mean? No need to read after creation? Why wouldn't you want to read after creation
-        // What is this early cancellation you're talking about?
-        // This represents the streams that the peer has written to myself!
-      } else {
-        await quicStream.read();
       }
+      quicStream.read();
     }
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-
-      // So if a stream is writable
-      // It means we have written something to the stream
-      // But then suppose we look up our stream map
-      // And for some reason it doesn't exist
-
-
       const quicStream = this.streamMap.get(streamId);
+      // When there's a concurrent stream close from both ends
+      // It is possible for `quicStream` to have already been deleted
+      // When the remote's `STOP_SENDING` frame arrives, quiche notifies
+      // us as the stream is writable (even though we had already closed it)
+      // Therefore we must process this closed writable stream, by acknowledging
+      // `StreamStopped` exception
       if (quicStream == null) {
-        // This is a dead case, there are only two ways streams are created.
-        //  The QUICStream will always exist before processing it's writable.
-        //  1. First time it is seen in the readable iterator
-        //  2. created using `newStream()`
-
-        // If both sides cancel concurrently
-        // The stream is destroyed on both sides
-        // But it is still "writable"?
-        // Possibly be receiving something about the fact that
-        // The stream is writable?
-        // The remote side sends a closing frame.
-        // Why would we consider this stream to still be writable...
-
-        // There is one condition where this can happen. That is when both sides of the
-        // stream cancel concurrently.
-        // Local state is cleaned up while the remote side still sends a closing frame.
         try {
-          // Check if the stream can write 0 bytes, should throw if the stream has ended.
-          // We need to check if it's writable to trigger any state change for the stream.
+          // Check if it can write 0 bytes
+          // This will throw `StreamStopped`
           this.conn.streamWritable(streamId, 0);
-
-          // I guess in this case, that wouldn't make sense
-          // We would expect that you cannot write to it
-
-          utils.never(
-            'The stream should never be writable if a QUICStream does not exist for it',
-          );
         } catch (e) {
-          // Stream should be stopped here, any other error is a never
-          if (e.message.match(/StreamStopped\((.+)\)/) == null) {
-            // We only expect a StreamStopped error here
-            throw e;
+          if (e.message.match(/StreamStopped\((.+)\)/) != null) {
+            // Now as long as it is in fact `StreamStopped`, this passes
+            // And the quiche underlying state is then cleaned up
+            continue;
           }
-
-          // So this basically cleans up the writable state
-          // If stopped we just ignore it, `streamWritable` should've cleaned up the native state
-          this.logger.debug(
-            `StreamId ${streamId} was writable without an existing stream and error ${e.message}`,
-          );
+          // This would be considered a critical error because we do not expect
+          // any other possibility, it would be an upstream bug
+          throw e;
         }
+        // If this occurs, then this is a runtime domain error
+        // Because it represents our own domain's bug
+        const e = new errors.ErrorQUICConnectionInternal(
+          'Failed processing stream, stream was writable even though `QUICStream` does not exist',
+        );
+        this.conn.close(
+          false,
+          ConnectionErrorCode.InternalError,
+          Buffer.from('')
+        );
+        this.dispatchEvent(new events.EventQUICConnectionError({ detail: e }));
+        this.dispatchEvent(new events.EventQUICConnectionClose(
+          {
+            detail: {
+              type: 'local',
+              ...this.conn.localError()!
+            }
+          }
+        ));
+        throw e;
       } else {
-
-        // Write the quic stream!!!
-
-        await quicStream.write();
+        quicStream.write();
       }
     }
   }
@@ -1205,21 +1182,33 @@ class QUICConnection {
 
   /**
    * Creates a new stream on the connection.
-   * Only supports bidi streams atm.
    * This is a serialised call, it must be blocking.
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
-  public async newStream(type: 'bidi' = 'bidi'): Promise<QUICStream> {
+  public async newStream(type: 'bidi' | 'uni' = 'bidi'): Promise<QUICStream> {
+    let lock: Lock;
+    if (this.type === 'client' && type === 'bidi') {
+      lock = this.streamIdClientBidiLock;
+    } else if (this.type === 'server' && type === 'bidi') {
+      lock = this.streamIdServerBidiLock;
+    } else if (this.type === 'client' && type === 'uni') {
+      lock = this.streamIdClientUniLock;
+    } else if (this.type === 'server' && type === 'uni') {
+      lock = this.streamIdServerUniLock;
+    }
     // Using a lock on stream ID to prevent racing updates
-    return await this.streamIdLock.withF(async () => {
+    return await lock!.withF(async () => {
       let streamId: StreamId;
       if (this.type === 'client' && type === 'bidi') {
         streamId = this.streamIdClientBidi;
       } else if (this.type === 'server' && type === 'bidi') {
         streamId = this.streamIdServerBidi;
+      } else if (this.type === 'client' && type === 'uni') {
+        streamId = this.streamIdClientUni;
+      } else if (this.type === 'server' && type === 'uni') {
+        streamId = this.streamIdServerUni;
       }
       const quicStream = await QUICStream.createQUICStream({
-        type: type,
         initiated: 'local',
         streamId: streamId!,
         connection: this,
@@ -1238,11 +1227,14 @@ class QUICConnection {
         this.handleEventQUICStreamDestroyed,
         { once: true },
       );
-      // Ok the stream is opened and working
       if (this.type === 'client' && type === 'bidi') {
         this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
       } else if (this.type === 'server' && type === 'bidi') {
         this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
+      } else if (this.type === 'client' && type === 'uni') {
+        this.streamIdClientUni = (this.streamIdClientUni + 4) as StreamId;
+      } else if (this.type === 'server' && type === 'uni') {
+        this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
       }
       return quicStream;
     });
