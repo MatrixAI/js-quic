@@ -164,7 +164,9 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this._readClosed = true;
     if (this._readClosed && this._writeClosed) {
       this.resolveClosedP();
-      if (!this[destroyed] && this[status] !== 'destroying') {
+      if (!this[destroyed]) {
+        // If we are destroying, we still end up calling this
+        // This is to enable, that when a failed cancellation to continue to destroy
         await this.destroy({ force: false });
       }
     }
@@ -174,7 +176,9 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this._writeClosed = true;
     if (this._readClosed && this._writeClosed) {
       this.resolveClosedP();
-      if (!this[destroyed] && this[status] !== 'destroying') {
+      if (!this[destroyed]) {
+        // If we are destroying, we still end up calling this
+        // This is to enable, that when a failed cancellation to continue to destroy
         await this.destroy({ force: false });
       }
     }
@@ -626,6 +630,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * If force is false then it will just wait for readable and writable to be closed.
    *
    * Unlike QUICConnection, this defaults to true for force.
+   *
+   * @throws {errors.ErrorQUICStreamInternal}
    */
   public async destroy({
     force = true,
@@ -638,6 +644,15 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     if (force) {
       // If force is true, we are going to cancel the 2 streams
       // This means cancelling the readable stream and aborting the writable stream
+
+      // Even if this call fails which bubbles up to the caller of `destroy`
+      // Do note, a that the `QUICStream` will still in fact asynchronously destroy
+      // Due to the event handlers
+
+      // If it succeeds we end up calling destroy again...
+      // But this time it will be a noop
+      // So destroy calls destroy
+      // That kind of sucks because it is locked...
       this.cancel(reason);
     }
     // This can only resolve, if you call this without being forced
@@ -670,9 +685,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * the stream.
    * It's essential that this is synchronus, as that ensures only one thing is running at a time.
    * Note that if cancellation fails...
-   * The functions will not throw
    *
    * Calling this will lead an asynchronous destruction of this `QUICStream` instance.
+   * This could throw actually. But cancellation is likely to have occurred.
+   *
+   * @throws {errors.ErrorQUICStreamInternal}
    */
   public cancel(reason?: any): void {
     this.readableCancel(reason);
@@ -716,6 +733,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   /**
    * This is factored out and callable by both `readable.cancel` and `this.cancel`.
+   *
+   * @throws {errors.ErrorQUICStreamInternal}
    */
   protected readableCancel(reason?: any): void {
     // Ignore if already closed
@@ -750,9 +769,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           }
         })
       );
-      // This ensures that it doesn't throw
-      // Which is not necessary
-      return;
+      throw e_;
     }
     const e = new errors.ErrorQUICStreamLocalRead(
       'Closing readable stream locally',
@@ -791,6 +808,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
 
   /**
    * This is factored out and callable by both `writable.abort` and `this.cancel`.
+   *
+   * @throws {errors.ErrorQUICStreamInternal}
    */
   protected writableAbort(reason?: any): void {
     // Ignore if already closed
@@ -820,7 +839,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           }
         })
       );
-      return;
+      throw e_;
     }
     const e = new errors.ErrorQUICStreamLocalWrite(
       'Closing writable stream locally',
