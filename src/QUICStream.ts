@@ -222,11 +222,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // usage of each stream due to maintaining both the Rust and JS buffers
     // @ts-ignore - Eventually we will support unidirectional streams
     if (type === 'uni') {
-      this.readableChunk = Buffer.allocUnsafeSlow(config.initialMaxStreamDataUni);
+      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataUni);
     } else if (type === 'bidi' && initiated === 'local') {
-      this.readableChunk = Buffer.allocUnsafeSlow(config.initialMaxStreamDataBidiLocal);
+      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiLocal);
     } else if (type === 'bidi' && initiated === 'peer') {
-      this.readableChunk = Buffer.allocUnsafeSlow(config.initialMaxStreamDataBidiRemote);
+      this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiRemote);
     }
 
     // This will be used to know when both readable and writable is closed
