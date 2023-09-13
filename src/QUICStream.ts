@@ -21,7 +21,6 @@ import {
   CreateDestroy,
   ready,
   destroyed,
-  status,
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import * as events from './events';
@@ -130,8 +129,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   public readonly initiated: 'local' | 'peer';
 
-  public readonly clientOrServer
-
   public readonly streamId: StreamId;
   public readonly readable: ReadableStream<Uint8Array>;
   public readonly writable: WritableStream<Uint8Array>;
@@ -153,7 +150,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   protected resolveWritableP?: () => void;
   protected rejectWritableP?: (reason?: any) => void;
 
-  protected _closedP: Promise<void>;
+  public readonly closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**
@@ -181,6 +178,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       if (!this[destroyed]) {
         // If we are destroying, we still end up calling this
         // This is to enable, that when a failed cancellation to continue to destroy
+        // By disabling force, we don't end up running cancel again
+        // But that way it does infact successfully destroy
+        // Failing to destroy is also a caller error, there's no domain error handling (because this runs once)
+        // So we let it bubble up
         await this.destroy({ force: false });
       }
     }
@@ -193,6 +194,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       if (!this[destroyed]) {
         // If we are destroying, we still end up calling this
         // This is to enable, that when a failed cancellation to continue to destroy
+        // By disabling force, we don't end up running cancel again
+        // But that way it does infact successfully destroy
         await this.destroy({ force: false });
       }
     }
@@ -231,7 +234,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this.codeToReason = codeToReason;
     // This will be used to know when both readable and writable is closed
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
-    this._closedP = closedP;
+    this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
 
     // This will setup the readable chunk buffer with the size set to the
@@ -263,6 +266,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       } catch (e) {
         // Note that `conn.streamSend` does not throw `Done` when writing
         // a 0-length message
+        // This is a software error
         throw new errors.ErrorQUICStreamInternal(
           'Failed to prime local stream state with a 0-length message',
           { cause: e }
@@ -332,12 +336,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     return this._readClosed;
   }
 
-  /**
-   * Closed promise property tells us when both readable and writable has been
-   * closed.
-   */
-  public get closed(): Promise<void> {
-    return this._closedP;
+  public get closed() {
+    return this._readClosed && this._writeClosed;
   }
 
   /**
@@ -361,23 +361,18 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     reason?: any;
   } = {}) {
     this.logger.info(`Destroy ${this.constructor.name}`);
-    if (force) {
+    if (force && !(this._readClosed && this._writeClosed)) {
       // If force is true, we are going to cancel the 2 streams
       // This means cancelling the readable stream and aborting the writable stream
-
-      // Even if this call fails which bubbles up to the caller of `destroy`
-      // Do note, a that the `QUICStream` will still in fact asynchronously destroy
-      // Due to the event handlers
-
-      // If it succeeds we end up calling destroy again...
-      // But this time it will be a noop
-      // So destroy calls destroy
-      // That kind of sucks because it is locked...
+      // Whether this fails or succeeds, it will trigger the close handler
+      // Which means we recurse back into `this.destroy`.
+      // If it failed, it recurses into destroy and will succeed (because the force will be false)
+      // If it succeeded, it recurses into destroy into a noop.
       this.cancel(reason);
     }
     // This can only resolve, if you call this without being forced
     // You have to wait for close from the users of the stream
-    await this._closedP;
+    await this.closedP;
     this.removeEventListener(
       events.EventQUICStreamError.name,
       this.handleEventQUICStreamError
@@ -412,7 +407,15 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * @throws {errors.ErrorQUICStreamInternal}
    */
   public cancel(reason?: any): void {
-    this.readableCancel(reason);
+    try {
+      this.readableCancel(reason);
+    } catch (e) {
+      // If cancelling readable failed here, it would have dispatched the domain error and close for read
+      // So we need to also dispatch the close for write here, because failing to cancel is a domain error
+      this.dispatchEvent(new events.EventQUICStreamCloseWrite());
+      throw e;
+    }
+    // If this failed, it will be a domain error, but readable cancel would have succeeded
     this.writableAbort(reason);
   }
 

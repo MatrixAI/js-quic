@@ -25,10 +25,6 @@ class ErrorQUICSocketNotRunning<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket is not running';
 }
 
-class ErrorQUICSocketServerDuplicate<T> extends ErrorQUICSocket<T> {
-  static description = 'QUIC Socket already has a server that is running';
-}
-
 class ErrorQUICSocketConnectionsActive<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket has active connections';
 }
@@ -39,6 +35,10 @@ class ErrorQUICSocketInvalidBindAddress<T> extends ErrorQUICSocket<T> {
 
 class ErrorQUICSocketInvalidSendAddress<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket cannot send to the specified address';
+}
+
+class ErrorQUICSocketInternal<T> extends ErrorQUICSocket<T> {
+  static description = 'QUIC Socket internal error';
 }
 
 class ErrorQUICServer<T> extends ErrorQUIC<T> {
@@ -56,6 +56,10 @@ class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
 
 class ErrorQUICServerNewConnection<T> extends ErrorQUICServer<T> {
   static description = 'QUIC Server creating a new connection';
+}
+
+class ErrorQUICServerInternal<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Server internal error';
 }
 
 class ErrorQUICClient<T> extends ErrorQUIC<T> {
@@ -77,6 +81,10 @@ class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICClient<T> {
 
 class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
   static description = 'QUIC Client cannot be created with the specified host';
+}
+
+class ErrorQUICClientInternal<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client internal error';
 }
 
 class ErrorQUICConnection<T> extends ErrorQUIC<T> {
@@ -153,23 +161,28 @@ export {
   ErrorQUICHostInvalid,
   ErrorQUICPortInvalid,
   ErrorQUICConfig,
+
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,
-  ErrorQUICSocketServerDuplicate,
   ErrorQUICSocketConnectionsActive,
   ErrorQUICSocketInvalidBindAddress,
   ErrorQUICSocketInvalidSendAddress,
+  ErrorQUICSocketInternal,
+
+  ErrorQUICClient,
+  ErrorQUICClientDestroyed,
+  ErrorQUICClientCreateTimeout,
+  ErrorQUICClientInvalidHost,
+  ErrorQUICClientSocketNotRunning,
+  ErrorQUICClientInternal,
+
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
   ErrorQUICServerNewConnection,
-  ErrorQUICClient,
+  ErrorQUICServerInternal,
 
-  ErrorQUICClientCreateTimeout,
 
-  ErrorQUICClientDestroyed,
-  ErrorQUICClientSocketNotRunning,
-  ErrorQUICClientInvalidHost,
   ErrorQUICConnection,
   ErrorQUICConnectionNotRunning,
   ErrorQUICConnectionStartData,

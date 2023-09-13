@@ -10,6 +10,11 @@ import {
   ErrorQUICStreamPeerWrite,
   ErrorQUICStreamInternal,
   ErrorQUICConnectionIdleTimeout,
+  ErrorQUICSocketInternal,
+  ErrorQUICServerInternal,
+  ErrorQUICServerSocketNotRunning,
+  ErrorQUICClientSocketNotRunning,
+  ErrorQUICClientInternal,
 } from './errors';
 import type { ConnectionError } from './native';
 import { AbstractEvent } from '@matrixai/events';
@@ -28,7 +33,9 @@ class EventQUICSocketStop extends EventQUICSocket {}
 
 class EventQUICSocketStopped extends EventQUICSocket {}
 
-class EventQUICSocketError extends EventQUICSocket<Error> {}
+class EventQUICSocketError extends EventQUICSocket<ErrorQUICSocketInternal<unknown>> {}
+
+class EventQUICSocketClose extends EventQUICSocket {}
 
 // Client events
 
@@ -38,7 +45,21 @@ class EventQUICClientDestroy extends EventQUICClient {}
 
 class EventQUICClientDestroyed extends EventQUICClient {}
 
-class EventQUICClientError extends EventQUICClient<Error> {}
+/**
+ * All `EventQUICConnectionError` errors is also `EventQUICClient` errors.
+ * This is because `QUICClient` is 1 to 1 to `QUICConnection`.
+ * It's thin wrapper around it.
+ */
+class EventQUICClientError extends EventQUICClient<
+  | ErrorQUICClientInternal<unknown>
+  | ErrorQUICClientSocketNotRunning<unknown>
+  | ErrorQUICConnectionLocal<unknown>
+  | ErrorQUICConnectionPeer<unknown>
+  | ErrorQUICConnectionIdleTimeout<unknown>
+  | ErrorQUICConnectionInternal<unknown>
+> {}
+
+class EventQUICClientClose extends EventQUICClient {}
 
 // Server events
 
@@ -54,7 +75,12 @@ class EventQUICServerStop extends EventQUICServer {}
 
 class EventQUICServerStopped extends EventQUICServer {}
 
-class EventQUICServerError extends EventQUICServer<Error> {}
+class EventQUICServerError extends EventQUICServer<
+  | ErrorQUICServerInternal<unknown>
+  | ErrorQUICServerSocketNotRunning<unknown>
+> {}
+
+class EventQUICServerClose extends EventQUICServer {}
 
 // Connection events
 
@@ -225,17 +251,23 @@ export {
   EventQUICSocketStop,
   EventQUICSocketStopped,
   EventQUICSocketError,
+  EventQUICSocketClose,
+
   EventQUICClient,
   EventQUICClientDestroy,
   EventQUICClientDestroyed,
   EventQUICClientError,
+  EventQUICClientClose,
+
   EventQUICServer,
   EventQUICServerStart,
   EventQUICServerStarted,
   EventQUICServerStop,
   EventQUICServerStopped,
-  EventQUICServerError,
   EventQUICServerConnection,
+  EventQUICServerError,
+  EventQUICServerClose,
+
   EventQUICConnection,
   EventQUICConnectionStart,
   EventQUICConnectionStarted,
@@ -245,7 +277,6 @@ export {
   EventQUICConnectionClose,
   EventQUICConnectionStream,
 
-  // TODO use this
   EventQUICConnectionSend,
 
   EventQUICStream,
@@ -255,7 +286,6 @@ export {
   EventQUICStreamCloseRead,
   EventQUICStreamCloseWrite,
 
-  // TODO use this
   EventQUICStreamSend,
 
 };

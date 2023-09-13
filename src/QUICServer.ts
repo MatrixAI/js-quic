@@ -8,8 +8,9 @@ import type {
   QUICServerConfigInput,
   ResolveHostname,
 } from './types';
-import type { Header } from './native/types';
+import type { Header, ConnectionErrorCode } from './native/types';
 import Logger from '@matrixai/logger';
+import { AbstractEvent, EventAll } from '@matrixai/events';
 import { StartStop, ready, running } from '@matrixai/async-init/dist/StartStop';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
@@ -65,6 +66,10 @@ class QUICServer {
    */
   protected socket: QUICSocket;
 
+  protected _closed: boolean = false;
+  public readonly closedP: Promise<void>;
+  protected resolveClosedP: () => void;
+
   /**
    * This must be attached once.
    */
@@ -77,26 +82,47 @@ class QUICServer {
         error.message !== undefined ? `- ${error.message}` : ''
       }`,
     );
-    // If stop fails, it is a software bug
-    await this.stop({ force: true });
   };
 
   /**
-   * This must be attached once.
+   * Close event for QUICServer.
+   * This means we are closing, but an error state may have already occurred.
+   * Unlike node's net objects, `close` doesn't mean closed.
    */
-  protected handleEventQUICSocketError = async (
-    evt: events.EventQUICSocketError,
-  ) => {
+  protected handleEventQUICServerClose = async () => {
+    // Only stop the socket if it was encapsulated
     if (!this.isSocketShared) {
-      // This can be idempotent
-      // If stop fails, it is a software bug
-      await this.socket.stop({ force: true });
+      // Remove the stopped listener, as we intend to stop the socket
+      this.socket.removeEventListener(
+        events.EventQUICSocketStopped.name,
+        this.handleEventQUICSocketStopped
+      );
+      try {
+        // Force stop of the socket even if it had a connection map
+        // This is because we will be stopping this `QUICServer` which
+        // which will stop all the relevant connections
+        await this.socket.stop({ force: true });
+      } catch (e) {
+        // Caller error would mean a domain error here
+        const e_ = new errors.ErrorQUICServerInternal(
+          'Failed to stop QUICSocket',
+          { cause: e }
+        );
+        this.dispatchEvent(
+          new events.EventQUICServerError({ detail: e_ })
+        );
+        // This will not recurse because this handler is attached once
+        this.dispatchEvent(new events.EventQUICServerClose());
+        // Continue closing the server, because this domain error
+        // must lead to stopping the server
+      }
     }
-    this.dispatchEvent(
-      new events.EventQUICServerError({
-        detail: evt.detail,
-      }),
-    );
+    this._closed = true;
+    this.resolveClosedP();
+    if (this[running]) {
+      // Failing this is a software error
+      await this.stop({ force: true });
+    }
   };
 
   /**
@@ -105,49 +131,75 @@ class QUICServer {
    * This must be attached once.
    */
   protected handleEventQUICSocketStopped = () => {
+    const e = new errors.ErrorQUICServerSocketNotRunning();
     this.dispatchEvent(
       new events.EventQUICServerError({
-        detail: new errors.ErrorQUICServerSocketNotRunning(),
+        detail: e,
       }),
     );
+    this.dispatchEvent(new events.EventQUICServerClose());
   };
 
-  // /**
-  //  * If the connection timed out, it's an error
-  //  * If the connection experiences runtime IO errors, it's an error
-  //  * If the remote side closed the connection with an error, it's an error
-  //  * If the remote side closed the connection without error, it's not an error
-  //  * If the local side closed the connection with an error, it's not an error
-  //  * If the local side closed the connection without error, it's not an error
-  //  */
-  // protected handleEventQUICConnectionError = async (
-  //   evt: events.EventQUICConnectionError,
-  // ) => {
-  //   const connection = evt.target as QUICConnection;
-  //   const error = evt.detail;
+  /**
+   * This must be attached multiple times.
+   */
+  protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
+    const { msg, offset, length, port, address } = evt.detail;
+    try {
+      await this.socket.send(
+        msg,
+        offset,
+        length,
+        port,
+        address,
+      );
+    } catch (e) {
+      // Caller error means a domain error here
+      const e_ = new errors.ErrorQUICServerInternal(
+        'Failed to send data on the QUICSocket',
+        {
+          data: {
+            msg,
+            offset,
+            length,
+            port,
+            address,
+          },
+          cause: e,
+        }
+      );
+      this.dispatchEvent(
+        new events.EventQUICServerError({ detail: e_ })
+      );
+      this.dispatchEvent(new events.EventQUICServerClose());
+    }
+  };
 
-  //   // This just logs it out in the quic server
-  //   // but really that doesn't really make any sense
-  //   // We know the connection self stops
-  //   // So this is not necessary
+  /**
+   * This must be attached once.
+   */
+  protected handleEventQUICConnectionStopped = (
+    evt: events.EventQUICConnectionStopped
+  ) => {
+    const quicConnection = evt.target as QUICConnection;
+    quicConnection.removeEventListener(
+      events.EventQUICConnectionSend.name,
+      this.handleEventQUICConnectionSend
+    );
+    this.socket.connectionMap.delete(quicConnection.connectionId);
+  };
 
-  //   this.logger.error(
-  //     `${error.name}${
-  //       'description' in error ? `: ${error.description}` : ''
-  //     }${error.message !== undefined ? `- ${error.message}` : ''}`,
-  //   );
-  //   // Because force is used, streams are immediately canceled
-  //   // The connection will send its `CONNECTION_CLOSE` frame
-  //   // However quiche will wait in a draining state until idle timeout
-  //   // There is no expected acknowledgement from the other side
-  //   // If packets are still received, they can be ignored
-  //   // If stop fails, it is a software bug
-  //   await connection.stop({ force: true });
-  // };
+  protected handleEventQUICConnection = (evt: EventAll) => {
+    if (evt.detail instanceof AbstractEvent) {
+      this.dispatchEvent(evt.detail.clone());
+    }
+  };
 
-  protected handleEventQUICConnectionStopped = (evt: events.EventQUICConnectionStopped) => {
-    const connection = evt.target as QUICConnection;
-    this.socket.connectionMap.delete(connection.connectionId);
+  // This should only be done if it is encapsulated
+  protected handleEventQUICSocket = (evt: EventAll) => {
+    if (evt.detail instanceof AbstractEvent) {
+      this.dispatchEvent(evt.detail.clone());
+    }
   };
 
   public constructor(opts: {
@@ -199,8 +251,6 @@ class QUICServer {
       this.socket = socket;
       this.isSocketShared = true;
     }
-    // Registers itself to the socket
-    this.socket.registerServer(this);
     this.config = {
       ...serverDefault,
       ...config,
@@ -208,6 +258,12 @@ class QUICServer {
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this.minIdleTimeout = minIdleTimeout;
+    const {
+      p: closedP,
+      resolveP: resolveClosedP,
+    } = utils.promise();
+    this.closedP = closedP;
+    this.resolveClosedP = resolveClosedP;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
@@ -218,6 +274,14 @@ class QUICServer {
   @ready(new errors.ErrorQUICServerNotRunning())
   public get port(): number {
     return this.socket.port;
+  }
+
+  /**
+   * This just means the server is no longer accepting connections.
+   * Like deregistered from a server.
+   */
+  public get closed() {
+    return this._closed;
   }
 
   /**
@@ -251,21 +315,27 @@ class QUICServer {
       address = utils.buildAddress(this.socket.host, this.socket.port);
       this.logger.info(`Start ${this.constructor.name} on ${address}`);
     }
-    this.socket.addEventListener(
-      events.EventQUICSocketError.name,
-      this.handleEventQUICSocketError,
-      { once: true },
+    this.socket.setServer(this);
+    this.addEventListener(
+      events.EventQUICServerError.name,
+      this.handleEventQUICServerError,
+    );
+    this.addEventListener(
+      events.EventQUICServerClose.name,
+      this.handleEventQUICServerClose,
+      { once: true }
     );
     this.socket.addEventListener(
       events.EventQUICSocketStopped.name,
       this.handleEventQUICSocketStopped,
       { once: true },
     );
-    this.addEventListener(
-      events.EventQUICServerError.name,
-      this.handleEventQUICServerError,
-      { once: true }
-    );
+    if (!this.isSocketShared) {
+      this.socket.addEventListener(
+        EventAll.name,
+        this.handleEventQUICSocket
+      );
+    }
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
@@ -273,43 +343,71 @@ class QUICServer {
    * Stops the QUICServer
    */
   public async stop({
-    force = false,
-  }: {
-    force?: boolean;
-  } = {}) {
+    applicationError = true,
+    errorCode = 0,
+    errorMessage = '',
+    force = true,
+    }:
+      | {
+          applicationError?: false;
+          errorCode?: ConnectionErrorCode;
+          errorMessage?: string;
+          force?: boolean;
+        }
+      | {
+          applicationError: true;
+          errorCode?: number;
+          errorMessage?: string;
+          force?: boolean;
+        } = {},
+  ) {
     const address = utils.buildAddress(this.socket.host, this.socket.port);
     this.logger.info(`Stop ${this.constructor.name} on ${address}`);
+    // Stop answering new connections
+    this.socket.unsetServer();
     const destroyProms: Array<Promise<void>> = [];
     for (const connection of this.socket.connectionMap.serverConnections.values()) {
       destroyProms.push(
         connection.stop({
-          applicationError: true,
+          applicationError,
+          errorCode,
+          errorMessage,
           force,
-        }).then(() => {
-          connection.removeEventListener(
-            events.EventQUICConnectionStopped.name,
-            this.handleEventQUICConnectionStopped
-          );
         })
       );
     }
+    // This will wait for connection timeouts to occur
+    // It might be a bit slow, if that's the case
     await Promise.all(destroyProms);
-    // Remove just before stopping to avoid handling expected stop
+    if (!this._closed) {
+      // If this succeeds, then we are just transitioned to close
+      // This will trigger noop recursion, that's fine
+      this.dispatchEvent(
+        new events.EventQUICServerClose()
+      );
+    }
+    // Wait for the socket to be closed
+    await this.closedP;
+    this.removeEventListener(
+      events.EventQUICServerError.name,
+      this.handleEventQUICServerError,
+    );
+    this.removeEventListener(
+      events.EventQUICServerClose.name,
+      this.handleEventQUICServerClose,
+    );
+    // The socket may not have been stopped if it is shared
+    // In which case we just remove our listener here
     this.socket.removeEventListener(
       events.EventQUICSocketStopped.name,
       this.handleEventQUICSocketStopped,
     );
     if (!this.isSocketShared) {
-      await this.socket.stop();
+      this.socket.removeEventListener(
+        EventAll.name,
+        this.handleEventQUICSocket
+      );
     }
-    this.socket.removeEventListener(
-      events.EventQUICSocketError.name,
-      this.handleEventQUICSocketError,
-    );
-    this.removeEventListener(
-      events.EventQUICServerError.name,
-      this.handleEventQUICSocketError,
-    );
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
@@ -354,6 +452,8 @@ class QUICServer {
           remoteInfo.host,
         );
       } catch (e) {
+        // This is a caller error
+        // Not a domain error for QUICServer
         throw new errors.ErrorQUICServerNewConnection(
           `Failed to send version datagram ${peerAddress}`,
           { cause: e },
@@ -386,6 +486,8 @@ class QUICServer {
           remoteInfo.host,
         );
       } catch (e) {
+        // This is a caller error
+        // Not a domain error for QUICServer
         throw new errors.ErrorQUICServerNewConnection(
           `Failed to send stateless retry datagram to ${peerAddress}`,
           { cause: e },
@@ -428,9 +530,17 @@ class QUICServer {
     // concurrent received packets to trigger the `recv` and `send` pair.
     this.socket.connectionMap.set(connection.connectionId, connection);
     connection.addEventListener(
+      events.EventQUICConnectionSend.name,
+      this.handleEventQUICConnectionSend
+    );
+    connection.addEventListener(
       events.EventQUICConnectionStopped.name,
       this.handleEventQUICConnectionStopped,
       { once: true },
+    );
+    connection.addEventListener(
+      EventAll.name,
+      this.handleEventQUICConnection
     );
     try {
       await connection.start(
@@ -442,16 +552,26 @@ class QUICServer {
       );
     } catch (e) {
       connection.removeEventListener(
+        events.EventQUICConnectionSend.name,
+        this.handleEventQUICConnectionSend
+      );
+      connection.removeEventListener(
         events.EventQUICConnectionStopped.name,
         this.handleEventQUICConnectionStopped
       );
+      connection.removeEventListener(
+        EventAll.name,
+        this.handleEventQUICConnection
+      );
       this.socket.connectionMap.delete(connection.connectionId);
       // This could be due to a runtime IO exception or start timeout
+      // Failing this is a caller error
       throw new errors.ErrorQUICServerNewConnection(
         'Failed to start accepted connection',
         { cause: e }
       );
     }
+    // This connection is now started and ready to be used
     this.dispatchEvent(
       new events.EventQUICServerConnection({ detail: connection }),
     );

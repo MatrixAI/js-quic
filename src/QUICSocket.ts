@@ -1,5 +1,4 @@
 import type QUICServer from './QUICServer';
-import type QUICConnection from './QUICConnection';
 import type { Host, Hostname, Port, ResolveHostname } from './types';
 import type { Header } from './native/types';
 import dgram from 'dgram';
@@ -58,6 +57,10 @@ class QUICSocket {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
+  public readonly closedP: Promise<void>;
+  protected _closed: boolean = false;
+  protected resolveClosedP: () => void;
+
   /**
    * Upon a QUIC socket error, stop this socket.
    */
@@ -70,15 +73,16 @@ class QUICSocket {
         error.message !== undefined ? `- ${error.message}` : ''
       }`,
     );
-    // If stop fails, it is a software bug
-    await this.stop({ force: true });
   };
 
-  /**
-   * Upon a DGRAM socket error, dispatch a QUIC socket error
-   */
-  protected handleSocketError = (e: Error) => {
-    this.dispatchEvent(new events.EventQUICSocketError({ detail: e }));
+  protected handleEventQUICSocketClose = async () => {
+    await this.socketClose();
+    this._closed = true;
+    this.resolveClosedP();
+    if (this[running]) {
+      // Failing this is a software error
+      await this.stop({ force: true });
+    }
   };
 
   /**
@@ -119,13 +123,24 @@ class QUICSocket {
       host: remoteInfo.address as Host,
       port: remoteInfo.port as Port,
     };
-    if (!this.connectionMap.has(dcid)) {
+    const connection = this.connectionMap.get(dcid);
+    if (connection != null) {
+      // Remember if the connection is stopped, then the @ready decorator prevent calls
+      // If it is stopping, then this can still be called, and quiche might just be ignoring
+      // But if the connection is stopped, it could not have been acquired here
+
+      // In the QUIC protocol, acknowledging packets while in a draining
+      // state is optional. We can respond with `STATELESS_RESET`
+      // but it's not necessary, and ignoring is simpler
+      // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
+      await connection.recv(data, remoteInfo_);
+      // Failing this is a software error (not a caller error)
+    } else {
       // If the server is not registered, we cannot attempt to create a new
       // connection for this packet.
       if (this.server == null) {
         return;
       }
-      let connection: QUICConnection | undefined;
       try {
         // This call will block until the connection is started which
         // may require multiple `recv` and `send` pairs to process the
@@ -136,13 +151,18 @@ class QUICSocket {
         // These concurrent `recv` and `send` pairs occur in this same handler,
         // but just in the other branch of the current `if` statement where
         // the connection object already exists in the connection map.
-        connection = await this.server.acceptConnection(
+        await this.server.acceptConnection(
           remoteInfo_,
           header,
           dcid,
           data,
         );
       } catch (e) {
+        // The acceptConnection is a caller error
+        // Now we have to handle this and decide
+        // Whether this is to be dropped
+        // OR that it's a domain error
+
         // If the connection timed out during start, this is an expected
         // possibility, because the remote peer might have become unavailable,
         // in which case we can just ignore the error here.
@@ -152,52 +172,31 @@ class QUICSocket {
             (e) => e instanceof errors.ErrorQUICConnectionStartTimeout,
           )
         ) {
+          // This is a legitimate state transition
+          // The caller error is ignored
           return;
         }
-        // If the connection creation failed due to a socket error, then we
-        // should dispatch a QUIC socket error.
+        // Translate the caller error to a domain error
         if (
           errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)
         ) {
+          // This would mean the `this.send` call somewhere failed
+          const e_ = new errors.ErrorQUICSocketInternal(
+            'Failed to call accept connection due to socket send',
+            { cause: e }
+          );
           this.dispatchEvent(
             new events.EventQUICSocketError({
-              detail: e,
-            }),
+              detail: e_
+            })
+          );
+          this.dispatchEvent(
+            new events.EventQUICSocketClose()
           );
           return;
         }
-        // All other exceptions are software errors
-        throw e;
-      }
-      // If there is no connection yet, then the server is still performing
-      // version negotiation or stateless retry.
-      if (connection == null) {
-        return;
-      }
-    } else {
-      const connection = this.connectionMap.get(dcid)!;
-      try {
-        // Remember if the connection is stopping or stopped
-        // Then calls to `recv` and `send` should be noops
-        // In the QUIC protocol, acknowledging packets while in a draining
-        // state is optional. We can respond with `STATELESS_RESET`
-        // but it's not necessary, and ignoring is simpler
-        // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
-        await connection.recv(data, remoteInfo_);
-      } catch (e) {
-        // If the connection recv and send failed due to a socket error, then we
-        // should dispatch a QUIC socket error.
-        if (
-          errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)
-        ) {
-          this.dispatchEvent(
-            new events.EventQUICSocketError({
-              detail: e,
-            }),
-          );
-          return;
-        }
-        // All other exceptions are software bugs
+
+        // Software error - throw upwards
         throw e;
       }
     }
@@ -212,6 +211,19 @@ class QUICSocket {
   }) {
     this.logger = logger ?? new Logger(this.constructor.name);
     this.resolveHostname = resolveHostname;
+    const {
+      p: closedP,
+      resolveP: resolveClosedP,
+    } = utils.promise();
+    this.closedP = closedP;
+    this.resolveClosedP = resolveClosedP;
+  }
+
+  /**
+   * Socket is closed!
+   */
+  public get closed() {
+    return this._closed;
   }
 
   /**
@@ -313,6 +325,12 @@ class QUICSocket {
       );
     }
     this.socket.removeListener('error', rejectErrorP);
+
+    // The dgram socket's error events might just be informational
+    // They don't necessarily correspond to an error
+    // Therefore we don't bother listening for it
+    // Unless we were propagating default events upwards
+
     const socketAddress = this.socket.address();
     // This is the resolved IP, not the original hostname
     this._host = socketAddress.address as Host;
@@ -325,12 +343,15 @@ class QUICSocket {
     } else if (udpType === 'udp6') {
       this._type = 'ipv6';
     }
-    this.socket.once('error', this.handleSocketError);
     this.socket.on('message', this.handleSocketMessage);
     this.addEventListener(
       events.EventQUICSocketError.name,
       this.handleEventQUICSocketError,
-      { once: true },
+    );
+    this.addEventListener(
+      events.EventQUICSocketClose.name,
+      this.handleEventQUICSocketClose,
+      { once: true }
     );
     address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
@@ -343,7 +364,6 @@ class QUICSocket {
    *
    * @throws {errors.ErrorQUICSocketConnectionsActive} if the connection map is
    * not empty and `force` is `false`.
-   * @throws {Error} if the socket cannot be closed.
    */
   public async stop({
     force = false,
@@ -355,13 +375,19 @@ class QUICSocket {
         `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
       );
     }
-    await this.socketClose();
+    if (!this._closed) {
+      this.dispatchEvent(new events.EventQUICSocketClose());
+    }
+    await this.closedP;
     this.removeEventListener(
       events.EventQUICSocketError.name,
       this.handleEventQUICSocketError,
     );
+    this.removeEventListener(
+      events.EventQUICSocketClose.name,
+      this.handleEventQUICSocketClose
+    );
     this.socket.off('message', this.handleSocketMessage);
-    this.socket.off('error', this.handleSocketError);
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
@@ -440,17 +466,12 @@ class QUICSocket {
     return this.socketSend(...params);
   }
 
-  /**
-   * Sets a single server to the socket.
-   * You can only have 1 server for the socket.
-   * If the socket is injected, and you want to change the `QUICServer`.
-   * Stop the `QUICServer` first, then inject the socket to the new `QUICServer`.
-   */
-  public registerServer(server: QUICServer) {
-    if (this.server != null && this.server[running]) {
-      throw new errors.ErrorQUICSocketServerDuplicate();
-    }
+  public setServer(server: QUICServer) {
     this.server = server;
+  }
+
+  public unsetServer() {
+    delete this.server;
   }
 }
 
