@@ -159,10 +159,6 @@ Keeping track of how the system works is therefore quite complex and must follow
 * Pull methods - these are either synchronous or asynchronous methods that may throw exceptions.
 * Push handlers - these are event handlers that can initiate pull methods, if these pull handlers throw exceptions, these exceptions must be caught, and expected runtime exceptions are to be converted to error events, all other exceptions will be considered to be software bugs and will be bubbled up to the program boundary as unhandled exceptions or unhandled promise rejections. Generally the only exceptions that are expected runtime exceptions are those that arise from perform IO with the operating system.
 
-Some pull methods are synchronous event though execute asynchronous operations. In these cases, the asynchronous function call must be chained with a catch handler that handles the exception as if it was a push handler. It would need to decide whether to ignore, emit as an error event, or bubble up to become an unhandled promise rejection.
-
-Exceptions should only be ignored if they are considered an acceptable resolution of a certain operations. For example connection timeout. Error events should only be emitted if it represents an error transition for that component. For example the `QUICSocket` message event handler may end up calling pull methods that eventually call `QUICSocket.send`, which may throw an exception due to failing to write to the UDP socket. When catching such an exception it would emit this exception as an `EventQUICSocketError` event. Such an event would be listened for by `QUICServer` and `QUICClient`, as they may need to react as well.
-
 ## Benchmarks
 
 ```sh
