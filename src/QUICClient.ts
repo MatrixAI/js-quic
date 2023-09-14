@@ -1,6 +1,6 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
-import type { QUICClientCrypto, QUICClientConfigInput, ResolveHostname } from './types';
+import type { Host, Port, QUICClientCrypto, QUICClientConfigInput, ResolveHostname } from './types';
 import type { Config, ConnectionErrorCode } from './native/types';
 import type {
   StreamCodeToReason,
@@ -482,12 +482,12 @@ class QUICClient extends EventTarget {
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
-  public get host(): string {
+  public get host(): Host {
     return this.socket.host;
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
-  public get port(): number {
+  public get port(): Port {
     return this.socket.port;
   }
 

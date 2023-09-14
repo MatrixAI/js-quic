@@ -1,5 +1,6 @@
 import type {
   Host,
+  Port,
   RemoteInfo,
   StreamCodeToReason,
   StreamReasonToCode,
@@ -267,12 +268,12 @@ class QUICServer {
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
-  public get host(): string {
+  public get host(): Host {
     return this.socket.host;
   }
 
   @ready(new errors.ErrorQUICServerNotRunning())
-  public get port(): number {
+  public get port(): Port {
     return this.socket.port;
   }
 

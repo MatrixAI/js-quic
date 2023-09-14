@@ -234,8 +234,8 @@ class QUICSocket {
    * Whereas `0.0.0.0` means only all IPv4.
    */
   @ready(new errors.ErrorQUICSocketNotRunning())
-  public get host(): string {
-    return utils.fromHost(this._host);
+  public get host(): Host {
+    return this._host;
   }
 
   /**
@@ -244,8 +244,8 @@ class QUICSocket {
    * Because `0` is always resolved to a specific port.
    */
   @ready(new errors.ErrorQUICSocketNotRunning())
-  public get port(): number {
-    return utils.fromPort(this._port);
+  public get port(): Port {
+    return this._port;
   }
 
   /**

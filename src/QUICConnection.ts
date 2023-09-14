@@ -361,19 +361,19 @@ class QUICConnection {
     this.resolveClosedP = resolveClosedP;
   }
 
-  public get remoteHost(): string {
-    return utils.fromHost(this._remoteHost);
+  public get remoteHost(): Host {
+    return this._remoteHost;
   }
 
-  public get remotePort(): number {
-    return utils.fromPort(this._remotePort);
+  public get remotePort(): Port {
+    return this._remotePort;
   }
 
-  public get localHost(): string {
+  public get localHost(): Host {
     return this.socket.host;
   }
 
-  public get localPort(): number {
+  public get localPort(): Port {
     return this.socket.port;
   }
 

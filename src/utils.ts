@@ -180,13 +180,6 @@ async function resolveHost(
 }
 
 /**
- * Converts a Host back to a string.
- */
-function fromHost(host: Host): string {
-  return host;
-}
-
-/**
  * Is it a valid Port?
  */
 function isPort(port: any): port is Port {
@@ -199,13 +192,6 @@ function isPort(port: any): port is Port {
  */
 function toPort(port: any): Port {
   if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
-  return port;
-}
-
-/**
- * Converts a Port back to a number.
- */
-function fromPort(port: Port): number {
   return port;
 }
 
@@ -503,10 +489,8 @@ export {
   toCanonicalIp,
   resolveHostname,
   resolveHost,
-  fromHost,
   isPort,
   toPort,
-  fromPort,
   promisify,
   promise,
   bufferWrap,
