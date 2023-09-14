@@ -78,11 +78,7 @@ class QUICServer {
     evt: events.EventQUICServerError,
   ) => {
     const error = evt.detail;
-    this.logger.error(
-      `${error.name}${'description' in error ? `: ${error.description}` : ''}${
-        error.message !== undefined ? `- ${error.message}` : ''
-      }`,
-    );
+    this.logger.error(utils.formatError(error));
   };
 
   /**
@@ -415,6 +411,7 @@ class QUICServer {
   /**
    * @internal
    */
+  @ready(new errors.ErrorQUICServerNotRunning())
   public async acceptConnection(
     remoteInfo: RemoteInfo,
     header: Header,

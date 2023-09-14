@@ -475,6 +475,16 @@ function derToPEM(der: Uint8Array): string {
   return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
 }
 
+/**
+ * Formats error exceptions.
+ * Example: `Error: description - message`
+ */
+function formatError(error: Error): string {
+  return `${error.name}${'description' in error ? `: ${error.description}` : ''}${
+    error.message !== undefined ? ` - ${error.message}` : ''
+  }`;
+}
+
 export {
   textEncoder,
   textDecoder,
@@ -509,4 +519,5 @@ export {
   streamStats,
   collectPEMs,
   derToPEM,
+  formatError,
 };

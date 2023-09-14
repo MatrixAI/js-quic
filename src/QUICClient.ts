@@ -317,11 +317,7 @@ class QUICClient extends EventTarget {
 
   protected handleEventQUICClientError = async (evt: events.EventQUICClientError) => {
     const error = evt.detail;
-    this.logger.error(
-      `${error.name}${
-        'description' in error ? `: ${error.description}` : ''
-      }${error.message !== undefined ? `- ${error.message}` : ''}`,
-    );
+    this.logger.error(utils.formatError(error));
   };
 
   protected handleEventQUICClientClose = async () => {

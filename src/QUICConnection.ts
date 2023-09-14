@@ -179,11 +179,7 @@ class QUICConnection {
     evt: events.EventQUICConnectionError
   ) => {
     const error = evt.detail;
-    this.logger.error(
-      `${error.name}${
-        'description' in error ? `: ${error.description}` : ''
-      }${error.message !== undefined ? `- ${error.message}` : ''}`,
-    );
+    this.logger.error(utils.formatError(error));
     // If an error event occurs, we have to reject the secure established promise.
     // This will allow the `connection.start()` to reject with the error.
     // This has no effect if this connection is already started.
