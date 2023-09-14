@@ -7,6 +7,7 @@ import type QUICStream from '@/QUICStream';
 import type { StreamCodeToReason, StreamReasonToCode } from '@';
 import * as peculiarWebcrypto from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
+import { fc } from '@fast-check/jest';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -24,6 +25,10 @@ x509.cryptoProvider.set(webcrypto);
 
 async function sleep(ms: number): Promise<void> {
   return await new Promise<void>((r) => setTimeout(r, ms));
+}
+
+async function yieldMicro(): Promise<void> {
+  return await new Promise<void>((r) => queueMicrotask(r));
 }
 
 async function randomBytes(data: ArrayBuffer) {
@@ -538,6 +543,32 @@ async function verifyHMAC(
 }
 
 /**
+ * Zero-copy wraps ArrayBuffer-like objects into Buffer
+ * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
+ */
+function bufferWrap(
+  array: BufferSource,
+  offset?: number,
+  length?: number,
+): Buffer {
+  if (Buffer.isBuffer(array)) {
+    return array;
+  } else if (ArrayBuffer.isView(array)) {
+    return Buffer.from(
+      array.buffer,
+      offset ?? array.byteOffset,
+      length ?? array.byteLength,
+    );
+  } else {
+    return Buffer.from(array, offset, length);
+  }
+}
+
+const bufferArb = (constraints?: fc.IntArrayConstraints) => {
+  return fc.uint8Array(constraints).map(bufferWrap);
+};
+
+/**
  * Use this on every client or server. It is essential for cleaning them up.
  */
 function extractSocket(
@@ -716,6 +747,7 @@ function createReasonConverters() {
 
 export {
   sleep,
+  yieldMicro,
   randomBytes,
   generateKeyPairRSA,
   generateKeyPairECDSA,
@@ -728,6 +760,8 @@ export {
   generateKeyHMAC,
   signHMAC,
   verifyHMAC,
+  bufferWrap,
+  bufferArb,
   extractSocket,
   handleStreamProm,
   waitForTimeoutNull,

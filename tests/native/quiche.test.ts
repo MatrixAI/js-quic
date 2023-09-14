@@ -1,44 +1,25 @@
+import { testProp, fc } from '@fast-check/jest';
 import { quiche } from '@/native';
 import * as testsUtils from '../utils';
 
 describe('native/quiche', () => {
-  test('packet parsing', async () => {
-    // Remember a UDP payload only has 1 QUIC packet
-    // But 1 QUIC packet can have multiple QUIC frames
-    expect(() =>
-      quiche.Header.fromSlice(Buffer.from('hello world'), quiche.MAX_CONN_ID_LEN),
-    ).toThrow('BufferTooShort');
-    expect(() =>
-      quiche.Header.fromSlice(
-        Buffer.alloc(quiche.MAX_CONN_ID_LEN),
-        quiche.MAX_CONN_ID_LEN
-      )
-    ).toThrow('BufferTooShort');
-    const header = quiche.Header.fromSlice(
-      Buffer.alloc(quiche.MAX_CONN_ID_LEN + 1),
-      quiche.MAX_CONN_ID_LEN
-    );
-    expect(header.ty).toBe(quiche.Type.Short);
-    // Triggering `InvalidPacket` seems to require a non-short
-    // packet that has some incorrect structure, which means
-    // random data looks like short packets
-    for (let i = 0; i < 100; i++) {
-      // It's possible that eventually this may generate a long packet
-      // that becomes invalid, but after trying 10,000 times, still nothing
-      // If it does happen, then log out the packet!
-      const packet = Buffer.alloc(quiche.MAX_DATAGRAM_SIZE);
-      await testsUtils.randomBytes(packet)
+  testProp(
+    'packet parsing',
+    [testsUtils.bufferArb({ minLength: 0, maxLength: 100})],
+    (packet) => {
+      // Remember a UDP payload only has 1 QUIC packet
+      // But 1 QUIC packet can have multiple QUIC frames
       try {
-        const h = quiche.Header.fromSlice(packet, quiche.MAX_CONN_ID_LEN);
-        expect(h.ty).toBe(quiche.Type.Short);
+        // The `quiche.MAX_CONN_ID_LEN` is 20 bytes
+        // From 21 bytes it is possible to by pass `BufferTooShort` but it is not guaranteed
+        // However 20 bytes and under is always `BufferTooShort`
+        quiche.Header.fromSlice(packet, quiche.MAX_CONN_ID_LEN);
       } catch (e) {
-        if (e.message === 'InvalidPacket') {
-          // Store this somewhere!
-          console.warn('InvalidPacket found!', ...packet);
-        }
+        expect(e.message).toBe('BufferTooShort');
+        // InvalidPacket seems very rare, save it as an example if you find one!
       }
     }
-  });
+  );
   test('version negotiation', async () => {
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await testsUtils.randomBytes(scidBuffer);
