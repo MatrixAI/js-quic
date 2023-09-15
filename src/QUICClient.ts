@@ -212,18 +212,6 @@ class QUICClient extends EventTarget {
       codeToReason,
       logger: logger.getChild(`${QUICConnection.name} ${scid.toString()}`),
     });
-    socket.connectionMap.set(connection.connectionId, connection);
-    try {
-      await connection.start(undefined, ctx);
-    } catch (e) {
-      socket.connectionMap.delete(connection.connectionId);
-      if (!isSocketShared) {
-        // This can be idempotent
-        // If stop fails, it is a software bug
-        await socket.stop({ force: true });
-      }
-      throw e;
-    }
     const client = new this({
       socket,
       connection,
@@ -267,6 +255,52 @@ class QUICClient extends EventTarget {
       client.handleEventQUICClientClose,
       { once: true }
     );
+    // We have to start the connection after associating the event listeners on the client
+    // The client bridges the push flow from the connection to the socket
+    socket.connectionMap.set(connection.connectionId, connection);
+    try {
+      await connection.start(undefined, ctx);
+    } catch (e) {
+      socket.connectionMap.delete(connection.connectionId);
+      socket.removeEventListener(
+        events.EventQUICSocketStopped.name,
+        client.handleEventQUICSocketStopped,
+      );
+      if (!isSocketShared) {
+        socket.removeEventListener(
+          EventAll.name,
+          client.handleEventQUICSocket
+        );
+        // This can be idempotent
+        // If stop fails, it is a software bug
+        await socket.stop({ force: true });
+      }
+      connection.removeEventListener(
+        events.EventQUICConnectionError.name,
+        client.handleEventQUICConnectionError
+      );
+      connection.removeEventListener(
+        events.EventQUICConnectionStopped.name,
+        client.handleEventQUICConnectionStopped,
+      );
+      connection.removeEventListener(
+        events.EventQUICConnectionSend.name,
+        client.handleEventQUICConnectionSend
+      );
+      connection.removeEventListener(
+        EventAll.name,
+        client.handleEventQUICConnection
+      );
+      client.removeEventListener(
+        events.EventQUICClientError.name,
+        client.handleEventQUICClientError
+      );
+      client.removeEventListener(
+        events.EventQUICClientClose.name,
+        client.handleEventQUICClientClose,
+      );
+      throw e;
+    }
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
     return client;
