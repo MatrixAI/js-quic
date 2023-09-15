@@ -1,13 +1,6 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Connection } from '@/native/types';
-import type QUICSocket from '@/QUICSocket';
-import type QUICClient from '@/QUICClient';
-import type QUICServer from '@/QUICServer';
-import type QUICStream from '@/QUICStream';
-import type { StreamCodeToReason, StreamReasonToCode } from '@';
 import * as peculiarWebcrypto from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
-import { fc } from '@fast-check/jest';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -17,14 +10,6 @@ import { fc } from '@fast-check/jest';
 const webcrypto = new peculiarWebcrypto.Crypto();
 
 x509.cryptoProvider.set(webcrypto);
-
-async function sleep(ms: number): Promise<void> {
-  return await new Promise<void>((r) => setTimeout(r, ms));
-}
-
-async function yieldMicro(): Promise<void> {
-  return await new Promise<void>((r) => queueMicrotask(r));
-}
 
 async function randomBytes(data: ArrayBuffer) {
   webcrypto.getRandomValues(new Uint8Array(data));
@@ -537,212 +522,74 @@ async function verifyHMAC(
   return webcrypto.subtle.verify('HMAC', cryptoKey, sig, data);
 }
 
-/**
- * Zero-copy wraps ArrayBuffer-like objects into Buffer
- * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
- */
-function bufferWrap(
-  array: BufferSource,
-  offset?: number,
-  length?: number,
-): Buffer {
-  if (Buffer.isBuffer(array)) {
-    return array;
-  } else if (ArrayBuffer.isView(array)) {
-    return Buffer.from(
-      array.buffer,
-      offset ?? array.byteOffset,
-      length ?? array.byteLength,
-    );
-  } else {
-    return Buffer.from(array, offset, length);
-  }
-}
-
-const bufferArb = (constraints?: fc.IntArrayConstraints) => {
-  return fc.uint8Array(constraints).map(bufferWrap);
-};
-
-/**
- * Use this on every client or server. It is essential for cleaning them up.
- */
-function extractSocket(
-  thing: QUICClient | QUICServer,
-  sockets: Set<QUICSocket>,
-) {
-  // @ts-ignore: kidnap protected property
-  sockets.add(thing.socket);
-}
-
-type Messages = Array<Uint8Array>;
-
-type StreamData = {
-  messages: Messages;
-  startDelay: number;
-  endDelay: number;
-  delays: Array<number>;
-};
-
-/**
- * This is used to have a stream run concurrently in the background.
- * Will resolve once stream has completed.
- * This will send the data provided with delays provided.
- * Will consume stream with provided delays between reads.
- */
-const handleStreamProm = async (stream: QUICStream, streamData: StreamData) => {
-  const messages = streamData.messages;
-  const delays = streamData.delays;
-  const writeProm = (async () => {
-    // Write data
-    let count = 0;
-    const writer = stream.writable.getWriter();
-    for (const message of messages) {
-      await writer.write(message);
-      await sleep(delays[count % delays.length]);
-      count += 1;
-    }
-    await sleep(streamData.endDelay);
-    await writer.close();
-  })();
-  const readProm = (async () => {
-    // Consume readable
-    let count = 0;
-    for await (const _ of stream.readable) {
-      // Do nothing with delay,
-      await sleep(delays[count % delays.length]);
-      count += 1;
-    }
-  })();
-  try {
-    await Promise.all([writeProm, readProm]);
-  } finally {
-    await stream.destroy().catch(() => {});
-    // @ts-ignore: kidnap logger
-    const streamLogger = stream.logger;
-    streamLogger.info(
-      `stream result ${JSON.stringify(
-        await Promise.allSettled([readProm, writeProm]),
-      )}`,
-    );
-  }
-};
-
-/**
- * When the `conn.timeout()` returns `0`, it is still a valid timeout.
- * Only when it returns `null`, is the timeout fully exhausted.
- * This should only be called after `conn.onTimeout()` is triggered.
- * This is useful for tests that need to exhaust the timeout.
- */
-async function waitForTimeoutNull(conn: Connection): Promise<void> {
-  while (true) {
-    const timeout = conn.timeout();
-    if (timeout == null) return;
-    await sleep(timeout + 1);
-    conn.onTimeout();
-  }
-}
-
-/**
- * Creates a formatted string listing the connection state.
- */
-function connStats(conn: Connection, label: string) {
-  return `
-----${label}----
-established: ${conn.isEstablished()},
-draining: ${conn.isDraining()},
-closed: ${conn.isClosed()},
-resumed: ${conn.isResumed()},
-earlyData: ${conn.isInEarlyData()},
-peerCerts: ${conn.peerCertChain() !== null ? 'Avaliable' : 'Missing'},
-timeout: ${conn.timeout()},
-`;
-}
-
-type KeyTypes = 'RSA' | 'ECDSA' | 'ED25519';
-type TLSConfigs = {
-  key: string;
-  cert: string;
-  ca: string;
-};
-
-async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
-  let privateKeyPem: string;
-  let keysLeaf: { publicKey: JsonWebKey; privateKey: JsonWebKey };
-  let keysCa: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+async function generateTLSConfig(
+  type: 'RSA' | 'ECDSA' | 'Ed25519'
+): Promise<{
+  leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  leafKeyPairPEM: { publicKey: string; privateKey: string };
+  leafCert: X509Certificate;
+  leafCertPEM: string;
+  caKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  caKeyPairPEM: { publicKey: string; privateKey: string };
+  caCert: X509Certificate;
+  caCertPEM: string;
+}> {
+  let leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  let leafKeyPairPEM: { publicKey: string; privateKey: string };
+  let caKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  let caKeyPairPEM: { publicKey: string; privateKey: string };
   switch (type) {
     case 'RSA':
       {
-        keysLeaf = await generateKeyPairRSA();
-        keysCa = await generateKeyPairRSA();
-        privateKeyPem = (await keyPairRSAToPEM(keysLeaf)).privateKey;
+        leafKeyPair = await generateKeyPairRSA();
+        leafKeyPairPEM = await keyPairRSAToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairRSA();
+        caKeyPairPEM = await keyPairRSAToPEM(caKeyPair);
       }
       break;
     case 'ECDSA':
       {
-        keysLeaf = await generateKeyPairECDSA();
-        keysCa = await generateKeyPairECDSA();
-        privateKeyPem = (await keyPairECDSAToPEM(keysLeaf)).privateKey;
+        leafKeyPair = await generateKeyPairECDSA();
+        leafKeyPairPEM = await keyPairECDSAToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairECDSA();
+        caKeyPairPEM = await keyPairECDSAToPEM(caKeyPair);
       }
       break;
-    case 'ED25519':
+    case 'Ed25519':
       {
-        keysLeaf = await generateKeyPairEd25519();
-        keysCa = await generateKeyPairEd25519();
-        privateKeyPem = (await keyPairEd25519ToPEM(keysLeaf)).privateKey;
+        leafKeyPair = await generateKeyPairEd25519();
+        leafKeyPairPEM = await keyPairEd25519ToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairEd25519();
+        caKeyPairPEM = await keyPairEd25519ToPEM(caKeyPair);
       }
       break;
   }
-  const certCa = await generateCertificate({
+  const caCert = await generateCertificate({
     certId: '0',
-    duration: 100000,
-    issuerPrivateKey: keysCa.privateKey,
-    subjectKeyPair: keysCa,
+    issuerPrivateKey: caKeyPair.privateKey,
+    subjectKeyPair: caKeyPair,
+    duration: 60 * 60 * 24 * 365 * 10,
   });
-  const certLeaf = await generateCertificate({
+  const leafCert = await generateCertificate({
     certId: '1',
-    duration: 100000,
-    issuerPrivateKey: keysCa.privateKey,
-    subjectKeyPair: keysLeaf,
+    issuerPrivateKey: caKeyPair.privateKey,
+    subjectKeyPair: leafKeyPair,
+    duration: 60 * 60 * 24 * 365 * 10,
   });
   return {
-    key: privateKeyPem,
-    cert: certToPEM(certLeaf),
-    ca: certToPEM(certCa),
+    leafKeyPair,
+    leafKeyPairPEM,
+    leafCert,
+    leafCertPEM: certToPEM(leafCert),
+    caKeyPair,
+    caKeyPairPEM,
+    caCert,
+    caCertPEM: certToPEM(caCert),
   };
 }
 
-/**
- * This will create a `reasonToCode` and `codeToReason` functions that will
- * allow errors to "jump" the network boundary. It does this by mapping the
- * errors to an incrementing code and returning them on the other end of the
- * connection.
- *
- * Note: this should ONLY be used for testing as it requires the client and
- * server to share the same instance of `reasonToCode` and `codeToReason`.
- */
-function createReasonConverters() {
-  const reasonMap = new Map<number, any>();
-  let code = 0;
-
-  const reasonToCode: StreamReasonToCode = (_type, reason) => {
-    code++;
-    reasonMap.set(code, reason);
-    return code;
-  };
-
-  const codeToReason: StreamCodeToReason = (_type, code) => {
-    return reasonMap.get(code) ?? new Error('Reason not found');
-  };
-
-  return {
-    reasonToCode,
-    codeToReason,
-  };
-}
 
 export {
-  sleep,
-  yieldMicro,
   randomBytes,
   generateKeyPairRSA,
   generateKeyPairECDSA,
@@ -755,14 +602,5 @@ export {
   generateKeyHMAC,
   signHMAC,
   verifyHMAC,
-  bufferWrap,
-  bufferArb,
-  extractSocket,
-  handleStreamProm,
-  waitForTimeoutNull,
-  connStats,
-  generateConfig,
-  createReasonConverters,
+  generateTLSConfig,
 };
-
-export type { Messages, StreamData, KeyTypes, TLSConfigs };
