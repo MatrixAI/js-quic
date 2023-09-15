@@ -470,7 +470,6 @@ class QUICConnection {
         abortP, // This might abort for some other reason!
       ]);
     } catch (e) {
-      let e_ = e;
       // This should only be true if we are infact aborted due to start timeout
       if (ctx.signal.aborted) {
         // No `QUICStream` objects could have been created, however quiche stream
@@ -494,6 +493,7 @@ class QUICConnection {
           Buffer.from('')
         );
         const localError = this.conn.localError()!;
+        // This throws an augmented exception because that's what the events expect
         const e_ = new errors.ErrorQUICConnectionLocal(
           'Failed to start QUIC connection due to start timeout',
           {
@@ -518,8 +518,7 @@ class QUICConnection {
       // Wait for the connection to be fully closed
       // It is expected that max idle timer will eventually resolve this
       await this.closedP;
-      // Throw the augmented exception if it is augmented
-      // Otherwise throw the original
+      // Throws the original exception
       throw e;
     } finally {
       ctx.signal.removeEventListener('abort', abortHandler);
@@ -1040,7 +1039,7 @@ class QUICConnection {
       if (peerError != null) {
         this.dispatchEvent(
           new events.EventQUICConnectionError({
-            detail: new errors.ErrorQUICConnectionLocal(
+            detail: new errors.ErrorQUICConnectionPeer(
               'Failed connection due to peer error',
               { data: peerError }
             )
@@ -1173,13 +1172,17 @@ class QUICConnection {
       // `conn.timeout()` is time aware, so calling `conn.onTimeout` will only
       //  trigger state transitions after the time has passed.
       this.conn.onTimeout();
-      // this.logger.warn(`isClosed is ${this.conn.isClosed()}`)
       // If it is closed, we can resolve, and we are done for this connection.
       // We need to check if the connection timed out due to the `maxIdleTimeout`, if so we dispatch the error and close.
       if (this.conn.isClosed()) {
         this.resolveClosedP();
         if (this.conn.isTimedOut()) {
-          // TODO: add a comment
+
+          // Ok so this is an issue
+          // If it is because we timed out
+          // Then it is because we actually timed out
+          // And it wasn't due to some proper close that occurred earlier
+
           this.dispatchEvent(
             new events.EventQUICConnectionError({
               detail: new errors.ErrorQUICConnectionIdleTimeout()
@@ -1202,6 +1205,8 @@ class QUICConnection {
       const timeout = this.conn.timeout();
       // If this is `null`, then quiche is requesting the timer to be cleaned up
       if (timeout == null) {
+        // If the max idle timeout is 0, then the timeout may revert to `null`
+        // It would only be set when the connection is ready to be closed
         return;
       }
       // Allow an extra 1ms for the delay to fully complete, so we can avoid a repeated 0ms delay
@@ -1221,8 +1226,24 @@ class QUICConnection {
       // If it is `settling`, then cancelling only prevents it at the beginning
       // Afterwards if it continues, it will continue to execute
       this.connTimeoutTimer?.cancel();
+
+      // Timer needs to be deleted because if the timer is cancelled
+      // It would not be settled, and the next time this is called
+      // We may need to set the timer when the connection is to be closed
       delete this.connTimeoutTimer;
+
+      // For this to happen, it must be because the connection actually timed out
+      // Not due to a proper close that already occurred
       if (this.conn.isTimedOut()) {
+
+        // Remember at this point
+        // It's possible that we already have closed
+        // So that's an issue if we are repeating this
+
+        // OH YEA... that might be an issue
+        // Cause close would come up... and we are already closed
+
+
         this.dispatchEvent(
           new events.EventQUICConnectionError({
             detail: new errors.ErrorQUICConnectionIdleTimeout()
@@ -1236,11 +1257,18 @@ class QUICConnection {
           })
         );
       }
+
       if (this.conn.isClosed()) {
         this.resolveClosedP();
       }
       return;
     }
+
+    // At this point we may be recreating the timer or resetting the timer
+    // If the timer does not exist or that it is settled we are going to create it
+    // If it was cancelled, we also need to create it
+    // Which is why if the timer is cancelled we would have deleted it
+
     // If there's no timer, create it
     // If the timer is settled, create it
     // If the timer is settling, do nothing (it will recreate itself)
