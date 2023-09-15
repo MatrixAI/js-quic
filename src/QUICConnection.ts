@@ -417,6 +417,15 @@ class QUICConnection {
       rejectAbortP(ctx.signal.reason);
     };
     ctx.signal.addEventListener('abort', abortHandler);
+    this.addEventListener(
+      events.EventQUICConnectionError.name,
+      this.handleEventQUICConnectionError,
+    );
+    this.addEventListener(
+      events.EventQUICConnectionClose.name,
+      this.handleEventQUICConnectionClose,
+      { once: true }
+    );
     if (this.type === 'client') {
       // The timeout only starts after the first send is called
       await this.send();
@@ -470,7 +479,6 @@ class QUICConnection {
             cause: e
           }
         );
-        this.rejectSecureEstablishedP(e_);
         this.dispatchEvent(
           new events.EventQUICConnectionError({
             detail: e_
@@ -484,8 +492,6 @@ class QUICConnection {
             }
           })
         );
-        // Send out the close!
-        await this.send();
       }
       // Wait for the connection to be fully closed
       // It is expected that max idle timer will eventually resolve this
@@ -499,15 +505,6 @@ class QUICConnection {
     if (this.config.keepAliveIntervalTime != null) {
       this.startKeepAliveIntervalTimer(this.config.keepAliveIntervalTime);
     }
-    this.addEventListener(
-      events.EventQUICConnectionError.name,
-      this.handleEventQUICConnectionError,
-    );
-    this.addEventListener(
-      events.EventQUICConnectionClose.name,
-      this.handleEventQUICConnectionClose,
-      { once: true }
-    );
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
