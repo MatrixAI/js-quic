@@ -7,7 +7,7 @@ import type QUICStream from '@/QUICStream';
 import type { StreamCodeToReason, StreamReasonToCode } from '@';
 import * as peculiarWebcrypto from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
-import { fc } from '@fast-check/jest';
+import fc from 'fast-check';
 
 /**
  * WebCrypto polyfill from @peculiar/webcrypto
@@ -711,6 +711,72 @@ async function generateConfig(type: KeyTypes): Promise<TLSConfigs> {
   };
 }
 
+async function generateTLSConfig(
+  type: 'RSA' | 'ECDSA' | 'Ed25519'
+): Promise<{
+  leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  leafKeyPairPEM: { publicKey: string; privateKey: string };
+  leafCert: X509Certificate;
+  leafCertPEM: string;
+  caKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  caKeyPairPEM: { publicKey: string; privateKey: string };
+  caCert: X509Certificate;
+  caCertPEM: string;
+}> {
+  let leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  let leafKeyPairPEM: { publicKey: string; privateKey: string };
+  let caKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
+  let caKeyPairPEM: { publicKey: string; privateKey: string };
+  switch (type) {
+    case 'RSA':
+      {
+        leafKeyPair = await generateKeyPairRSA();
+        leafKeyPairPEM = await keyPairRSAToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairRSA();
+        caKeyPairPEM = await keyPairRSAToPEM(caKeyPair);
+      }
+      break;
+    case 'ECDSA':
+      {
+        leafKeyPair = await generateKeyPairECDSA();
+        leafKeyPairPEM = await keyPairECDSAToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairECDSA();
+        caKeyPairPEM = await keyPairECDSAToPEM(caKeyPair);
+      }
+      break;
+    case 'Ed25519':
+      {
+        leafKeyPair = await generateKeyPairEd25519();
+        leafKeyPairPEM = await keyPairEd25519ToPEM(leafKeyPair);
+        caKeyPair = await generateKeyPairEd25519();
+        caKeyPairPEM = await keyPairEd25519ToPEM(caKeyPair);
+      }
+      break;
+  }
+  const caCert = await generateCertificate({
+    certId: '0',
+    issuerPrivateKey: caKeyPair.privateKey,
+    subjectKeyPair: caKeyPair,
+    duration: 60 * 60 * 24 * 365 * 10,
+  });
+  const leafCert = await generateCertificate({
+    certId: '1',
+    issuerPrivateKey: caKeyPair.privateKey,
+    subjectKeyPair: leafKeyPair,
+    duration: 60 * 60 * 24 * 365 * 10,
+  });
+  return {
+    leafKeyPair,
+    leafKeyPairPEM,
+    leafCert,
+    leafCertPEM: certToPEM(leafCert),
+    caKeyPair,
+    caKeyPairPEM,
+    caCert,
+    caCertPEM: certToPEM(caCert),
+  };
+}
+
 /**
  * This will create a `reasonToCode` and `codeToReason` functions that will
  * allow errors to "jump" the network boundary. It does this by mapping the
@@ -761,6 +827,7 @@ export {
   handleStreamProm,
   waitForTimeoutNull,
   connStats,
+  generateTLSConfig,
   generateConfig,
   createReasonConverters,
 };

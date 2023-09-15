@@ -1,11 +1,9 @@
-import b from 'benny';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
-import QUICClient from '@/QUICClient';
-import QUICServer from '@/QUICServer';
-import * as events from '@/events';
-import * as utils from '@/utils';
-import * as testsUtils from '../../../tests/utils';
-import { summaryName, suiteCommon } from '../../utils';
+import QUICClient from './src/QUICClient';
+import QUICServer from './src/QUICServer';
+import * as events from './src/events';
+import * as utils from './src/utils';
+import * as testsUtils from './tests/utils';
 
 async function main() {
   const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
@@ -32,10 +30,12 @@ async function main() {
   });
   quicServer.addEventListener(
     events.EventQUICServerConnection.name,
+    // @ts-ignore
     (evt: events.EventQUICServerConnection) => {
       const connection = evt.detail;
       connection.addEventListener(
         events.EventQUICConnectionStream.name,
+        // @ts-ignore
         async (evt: events.EventQUICConnectionStream) => {
           const stream = evt.detail;
           // Graceful close of writable
@@ -69,31 +69,28 @@ async function main() {
   const reader = stream.readable.getReader();
   const writer = stream.writable.getWriter();
 
-  const summary = await b.suite(
-    summaryName(__filename),
-    b.add('send 1Kib of data over QUICStream', async () => {
-      await writer.write(data1KiB);
-    }),
-    ...suiteCommon,
-  );
+  for (let i = 0; i < 1000; i++) {
+    await writer.write(data1KiB);
+  }
 
   // This should already be done, because it was closed
   await reader.cancel();
 
   await writer.close();
 
+  await testsUtils.sleep(1000);
+
+  process.stderr.write('BEFORE QUICCLIENT DESTROY\n');
+
   // No need to force, streams should already be closed
   // If your force is true by default, then we are technically force closing streams
   // It will cause an error
   await quicClient.destroy({ force: false });
 
+  process.stderr.write('DESROYED\n');
+
   // If the connections are all gone, we shouldn't need to do this
   await quicServer.stop({ force: false });
-  return summary;
 }
 
-if (require.main === module) {
-  void main();
-}
-
-export default main;
+void main();
