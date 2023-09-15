@@ -179,7 +179,21 @@ class QUICConnection {
     evt: events.EventQUICConnectionError
   ) => {
     const error = evt.detail;
-    this.logger.error(utils.formatError(error));
+    // In the case of graceful exit, we don't want to log out the error
+    // But we will still reject the `secureEstablishedP`
+    const isLocalGracefulError = (
+      error instanceof errors.ErrorQUICConnectionLocal
+      &&
+      error.data?.errorCode === ConnectionErrorCode.NoError
+    );
+    const isPeerGracefulError = (
+      error instanceof errors.ErrorQUICConnectionPeer
+      &&
+      error.data?.errorCode === ConnectionErrorCode.NoError
+    );
+    if (!(isLocalGracefulError || isPeerGracefulError)) {
+      this.logger.error(utils.formatError(error));
+    }
     // If an error event occurs, we have to reject the secure established promise.
     // This will allow the `connection.start()` to reject with the error.
     // This has no effect if this connection is already started.
