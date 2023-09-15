@@ -821,7 +821,11 @@ class QUICConnection {
     // sufficient to mean we are securely established, however if it is defined
     // then secure establishment occurs only after custom TLS verification has
     // passed.
-    if (this.conn.isEstablished() && this.config.verifyCallback != null) {
+    if (
+      !this.secureEstablished &&
+      this.conn.isEstablished() &&
+      this.config.verifyCallback == null
+    ) {
       this.resolveSecureEstablishedP();
     }
     // If we are "secure established" we can process streams.
