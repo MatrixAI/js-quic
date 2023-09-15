@@ -103,6 +103,10 @@ class ErrorQUICConnectionStartTimeout<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection start timeout';
 }
 
+class ErrorQUICConnectionClosed<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection has been closed';
+}
+
 /**
  * Note that TlsFail error codes are documented here:
  * https://github.com/google/boringssl/blob/master/include/openssl/ssl.h
@@ -185,6 +189,7 @@ export {
 
   ErrorQUICConnection,
   ErrorQUICConnectionNotRunning,
+  ErrorQUICConnectionClosed,
   ErrorQUICConnectionStartData,
   ErrorQUICConnectionStartTimeout,
   ErrorQUICConnectionConfigInvalid,

@@ -411,6 +411,10 @@ class QUICConnection {
     @context ctx: ContextTimed
   ): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
+    // If the connection has already been closed, we cannot start it again
+    if (this.conn.isClosed()) {
+      throw new errors.ErrorQUICConnectionClosed();
+    }
     // Are we supposed to throw?
     // It depends, if the connection start is aborted
     // In a way, it makes sense for it be thrown
