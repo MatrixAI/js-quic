@@ -1159,20 +1159,13 @@ class QUICConnection {
       // `conn.timeout()` is time aware, so calling `conn.onTimeout` will only
       //  trigger state transitions after the time has passed.
       this.conn.onTimeout();
-      // If it is closed, we can resolve, and we are done for this connection
-      // So we can just return, nothing more to do
+      // this.logger.warn(`isClosed is ${this.conn.isClosed()}`)
+      // If it is closed, we can resolve, and we are done for this connection.
+      // We need to check if the connection timed out due to the `maxIdleTimeout`, if so we dispatch the error and close.
       if (this.conn.isClosed()) {
         this.resolveClosedP();
-        return;
-      }
-      // Otherwise, we should be calling send after the timeout
-      // If the status is not equal null, then we can send
-      await this.send();
-      // Note that a `0` timeout is still a valid timeout
-      const timeout = this.conn.timeout();
-      // If this is `null`, then quiche is requesting the timer to be cleaned up
-      if (timeout == null) {
         if (this.conn.isTimedOut()) {
+          // TODO: add a comment
           this.dispatchEvent(
             new events.EventQUICConnectionError({
               detail: new errors.ErrorQUICConnectionIdleTimeout()
@@ -1186,6 +1179,15 @@ class QUICConnection {
             })
           );
         }
+        return;
+      }
+      // Otherwise, we should be calling send after the timeout
+      // If the status is not equal null, then we can send
+      await this.send();
+      // Note that a `0` timeout is still a valid timeout
+      const timeout = this.conn.timeout();
+      // If this is `null`, then quiche is requesting the timer to be cleaned up
+      if (timeout == null) {
         return;
       }
       // Allow an extra 1ms for the delay to fully complete, so we can avoid a repeated 0ms delay
@@ -1205,6 +1207,7 @@ class QUICConnection {
       // If it is `settling`, then cancelling only prevents it at the beginning
       // Afterwards if it continues, it will continue to execute
       this.connTimeoutTimer?.cancel();
+      delete this.connTimeoutTimer;
       if (this.conn.isTimedOut()) {
         this.dispatchEvent(
           new events.EventQUICConnectionError({
