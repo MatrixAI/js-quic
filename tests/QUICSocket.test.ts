@@ -204,6 +204,34 @@ describe(QUICSocket.name, () => {
     ]);
     await socket.stop();
   });
+  test('failed send is a caller error and does not result in domain error', async () => {
+    const socket = new QUICSocket({
+      logger,
+    });
+    const handleEventQUICSocketError = jest.fn();
+    socket.addEventListener(
+      events.EventQUICSocketError.name,
+      handleEventQUICSocketError
+    );
+    await socket.start({
+      host: '::',
+    });
+    const msg = Buffer.from('hello world');
+    expect(
+      // @ts-ignore
+      socket.send(msg),
+    ).rejects.toThrow(TypeError);
+    // This should throw a `RangeError` which comes from Node, but due to Jest VM isolation
+    expect(
+      socket.send(msg, 0, '::1')
+    ).rejects.toHaveProperty('name', 'RangeError');
+    await expect(
+      socket.send(msg, ipv4SocketPort, '0.0.0.0'),
+    ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+    expect(handleEventQUICSocketError).not.toHaveBeenCalled();
+    await socket.stop();
+    expect(handleEventQUICSocketError).not.toHaveBeenCalled();
+  });
   describe('events', () => {
     test('start and stop event lifecycle', async () => {
       const socket = new QUICSocket({
