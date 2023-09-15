@@ -480,7 +480,7 @@ class QUICConnection {
           Buffer.from('')
         );
         const localError = this.conn.localError()!;
-        e_ = new errors.ErrorQUICConnectionLocal(
+        const e_ = new errors.ErrorQUICConnectionLocal(
           'Failed to start QUIC connection due to start timeout',
           {
             data: localError,
@@ -506,7 +506,7 @@ class QUICConnection {
       await this.closedP;
       // Throw the augmented exception if it is augmented
       // Otherwise throw the original
-      throw e_;
+      throw e;
     } finally {
       ctx.signal.removeEventListener('abort', abortHandler);
     }
