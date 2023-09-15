@@ -21,7 +21,6 @@ async function main(): Promise<void> {
     if (typeof suite === 'function' && suite.name === 'main') {
       await suite();
     }
-    console.log('DONE!');
   }
   // Concatenating metrics
   const metricsPath = path.join(resultsPath, 'metrics.txt');

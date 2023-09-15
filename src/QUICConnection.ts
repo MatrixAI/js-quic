@@ -212,14 +212,19 @@ class QUICConnection {
    * It does not actually mean that `closedP` is resolved.
    * That only occurs if the timeout timer detects that the connection is closed.
    */
-  protected handleEventQUICConnectionClose = async () => {
+  protected handleEventQUICConnectionClose = async (evt: events.EventQUICConnectionClose) => {
     // The final send is necessary after a close
     // But even if this fails, then we expect a timeout expiry to occur
     // Failure of send is both a caller and domain error
     // We skip the caller error, the domain error is also somewhat ignored
     // Because this handler is registered to only run once
     // It will proceed to stop the connection
-    await this.send();
+
+    // Only run this if the close wasn't due to peer
+    if (evt.detail.type !== 'peer') {
+      await this.send();
+    }
+
     if (this[running]) {
       // Here we keep forcing true, since force affects streams
       // Not the connection itself
@@ -780,30 +785,6 @@ class QUICConnection {
       const localError = this.conn.localError();
       if (localError == null) {
         // This is a software error
-
-        // const e_ = new errors.ErrorQUICConnectionInternal(
-        //   'Failed `recv` with unknown internal error',
-        //   { cause: e }
-        // );
-        // this.conn.close(
-        //   false,
-        //   ConnectionErrorCode.InternalError,
-        //   Buffer.from('')
-        // );
-        // this.dispatchEvent(
-        //   new events.EventQUICConnectionError({
-        //     detail: e_
-        //   })
-        // );
-        // this.dispatchEvent(
-        //   new events.EventQUICConnectionClose({
-        //     detail: {
-        //       type: 'local',
-        //       ...this.conn.localError()!
-        //     }
-        //   })
-        // );
-
         // The problem is that both "caller error" and "software" error
         // Is executed by throwing it upwards
         // It is up the caller to distinguish between the 2
@@ -926,26 +907,9 @@ class QUICConnection {
           'Failed `send` with unknown internal error',
           { cause: e }
         );
-
-        // // Exceptions could be `BufferTooShort`, `InvalidState`
-        // this.conn.close(
-        //   false,
-        //   ConnectionErrorCode.InternalError,
-        //   Buffer.from('')
-        // );
-        // // First you want to dispatch this
-        // this.dispatchEvent(new events.EventQUICConnectionError({ detail: e_ }));
-        // this.dispatchEvent(new events.EventQUICConnectionClose(
-        //   {
-        //     detail: {
-        //       type: 'local',
-        //       ...this.conn.localError()!
-        //     }
-        //   }
-        // ));
+        // Exceptions could be `BufferTooShort`, `InvalidState`
         // This is in fact a caller error and domain error
         // Not a legitimate state transition
-
         // Software error is propagated upwards
         throw e_;
       }
@@ -1141,20 +1105,6 @@ class QUICConnection {
         const e = new errors.ErrorQUICConnectionInternal(
           'Failed processing stream, stream was writable even though `QUICStream` does not exist',
         );
-        // this.conn.close(
-        //   false,
-        //   ConnectionErrorCode.InternalError,
-        //   Buffer.from('')
-        // );
-        // this.dispatchEvent(new events.EventQUICConnectionError({ detail: e }));
-        // this.dispatchEvent(new events.EventQUICConnectionClose(
-        //   {
-        //     detail: {
-        //       type: 'local',
-        //       ...this.conn.localError()!
-        //     }
-        //   }
-        // ));
         // This would be a software error
         throw e;
       } else {
