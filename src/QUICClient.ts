@@ -199,19 +199,27 @@ class QUICClient extends EventTarget {
       }
       throw e;
     }
-    const connection = new QUICConnection({
-      type: 'client',
-      scid,
-      socket,
-      remoteInfo: {
-        host: host_,
-        port: port_,
-      },
-      config: quicConfig,
-      reasonToCode,
-      codeToReason,
-      logger: logger.getChild(`${QUICConnection.name} ${scid.toString()}`),
-    });
+    let connection: QUICConnection;
+    try {
+      connection = new QUICConnection({
+        type: 'client',
+        scid,
+        socket,
+        remoteInfo: {
+          host: host_,
+          port: port_,
+        },
+        config: quicConfig,
+        reasonToCode,
+        codeToReason,
+        logger: logger.getChild(`${QUICConnection.name} ${scid.toString()}`),
+      });
+    } catch (e) {
+      if (!isSocketShared) {
+        await socket.stop({ force: true });
+      }
+      throw e;
+    }
     const client = new this({
       socket,
       connection,
