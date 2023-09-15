@@ -508,7 +508,6 @@ class QUICConnection {
       this.handleEventQUICConnectionClose,
       { once: true }
     );
-    this.addEventListener(EventAll.name, this.handleEventQUICStream);
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
@@ -612,7 +611,6 @@ class QUICConnection {
       events.EventQUICConnectionClose.name,
       this.handleEventQUICConnectionClose
     );
-    this.removeEventListener(EventAll.name, this.handleEventQUICStream);
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
@@ -1079,6 +1077,10 @@ class QUICConnection {
           this.handleEventQUICStreamDestroyed,
           { once: true },
         );
+        quicStream.addEventListener(
+          EventAll.name,
+          this.handleEventQUICStream,
+        );
         this.dispatchEvent(
           new events.EventQUICConnectionStream({ detail: quicStream }),
         );
@@ -1282,6 +1284,10 @@ class QUICConnection {
         events.EventQUICStreamDestroyed.name,
         this.handleEventQUICStreamDestroyed,
         { once: true },
+      );
+      quicStream.addEventListener(
+        EventAll.name,
+        this.handleEventQUICStream
       );
       if (this.type === 'client' && type === 'bidi') {
         this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
