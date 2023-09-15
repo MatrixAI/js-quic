@@ -54,8 +54,8 @@ class QUICClient extends EventTarget {
     opts: {
       host: string;
       port: number;
-      localHost: string;
-      localPort: number;
+      localHost?: string;
+      localPort?: number;
       crypto: QUICClientCrypto;
       config?: QUICClientConfigInput;
       resolveHostname?: ResolveHostname;
