@@ -1230,7 +1230,9 @@ class QUICConnection {
       // Timer needs to be deleted because if the timer is cancelled
       // It would not be settled, and the next time this is called
       // We may need to set the timer when the connection is to be closed
-      delete this.connTimeoutTimer;
+
+      // This should not be needed because immediately after cancel the timer is settled
+      // delete this.connTimeoutTimer;
 
       // For this to happen, it must be because the connection actually timed out
       // Not due to a proper close that already occurred
