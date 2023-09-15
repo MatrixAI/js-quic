@@ -238,10 +238,6 @@ class QUICClient extends EventTarget {
       );
     }
     connection.addEventListener(
-      events.EventQUICConnectionError.name,
-      client.handleEventQUICConnectionError
-    );
-    connection.addEventListener(
       events.EventQUICConnectionStopped.name,
       client.handleEventQUICConnectionStopped,
       { once: true }
@@ -283,10 +279,6 @@ class QUICClient extends EventTarget {
         // If stop fails, it is a software bug
         await socket.stop({ force: true });
       }
-      connection.removeEventListener(
-        events.EventQUICConnectionError.name,
-        client.handleEventQUICConnectionError
-      );
       connection.removeEventListener(
         events.EventQUICConnectionStopped.name,
         client.handleEventQUICConnectionStopped,
@@ -379,18 +371,6 @@ class QUICClient extends EventTarget {
     this.dispatchEvent(new events.EventQUICClientClose());
   };
 
-  protected handleEventQUICConnectionError = (
-    evt: events.EventQUICConnectionError
-  ) => {
-    const detail = evt.detail;
-    // All connection errors are also our domain errors
-    this.dispatchEvent(
-      new events.EventQUICClientError({
-        detail
-      })
-    );
-  };
-
   /**
    * This must be attached once.
    */
@@ -398,10 +378,6 @@ class QUICClient extends EventTarget {
     evt: events.EventQUICConnectionStopped
   ) => {
     const quicConnection = evt.target as QUICConnection;
-    quicConnection.removeEventListener(
-      events.EventQUICConnectionError.name,
-      this.handleEventQUICConnectionError
-    );
     quicConnection.removeEventListener(
       events.EventQUICConnectionSend.name,
       this.handleEventQUICConnectionSend
