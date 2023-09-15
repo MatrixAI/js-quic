@@ -84,7 +84,7 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: false,
-        },
+        }
       });
       testsUtils.extractSocket(client, sockets);
       const conn = (await connectionEventProm.p).detail;
@@ -205,7 +205,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         }),
-      ).rejects.toThrow(errors.ErrorQUICConnectionIdleTimeOut);
+      ).rejects.toThrow(errors.ErrorQUICConnectionIdleTimeout);
     });
     test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
       // Larger keepAliveIntervalTime throws
@@ -224,7 +224,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         }),
-      ).rejects.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      ).rejects.toThrow(errors.ErrorQUICConnectionConfigInvalid);
       // Smaller keepAliveIntervalTime doesn't cause a problem
       await expect(
         QUICClient.createQUICClient({
@@ -241,7 +241,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         }),
-      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
       // Not setting an interval doesn't cause a problem either
       await expect(
         QUICClient.createQUICClient({
@@ -257,7 +257,7 @@ describe(QUICClient.name, () => {
             verifyPeer: false,
           },
         }),
-      ).rejects.not.toThrow(errors.ErrorQUICConnectionInvalidConfig);
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
     });
     test('client times out with ctx timer while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
@@ -279,7 +279,7 @@ describe(QUICClient.name, () => {
           },
           { timer: 100 },
         ),
-      ).rejects.toThrow(errors.ErrorQUICClientCreateTimeOut);
+      ).rejects.toThrow(errors.ErrorQUICClientCreateTimeout);
     });
     test('client times out with ctx signal while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
@@ -735,7 +735,7 @@ describe(QUICClient.name, () => {
         })();
         // We want to check that things function fine between bad data
         const randomActivityProm = (async () => {
-          const stream = await client.connection.streamNew();
+          const stream = await client.connection.newStream();
           await Promise.all([
             (async () => {
               // Write data
@@ -843,7 +843,7 @@ describe(QUICClient.name, () => {
         })();
         // We want to check that things function fine between bad data
         const randomActivityProm = (async () => {
-          const stream = await client.connection.streamNew();
+          const stream = await client.connection.newStream();
           await Promise.all([
             (async () => {
               // Write data
@@ -951,7 +951,7 @@ describe(QUICClient.name, () => {
         })();
         // We want to check that things function fine between bad data
         const randomActivityProm = (async () => {
-          const stream = await client.connection.streamNew();
+          const stream = await client.connection.newStream();
           await Promise.all([
             (async () => {
               // Write data
@@ -1059,7 +1059,7 @@ describe(QUICClient.name, () => {
         })();
         // We want to check that things function fine between bad data
         const randomActivityProm = (async () => {
-          const stream = await client.connection.streamNew();
+          const stream = await client.connection.newStream();
           await Promise.all([
             (async () => {
               // Write data
@@ -1142,7 +1142,7 @@ describe(QUICClient.name, () => {
       clientConnection.addEventListener(
         events.EventQUICConnectionError.name,
         (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
+          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             clientTimeoutProm.resolveP();
           }
         },
@@ -1203,7 +1203,7 @@ describe(QUICClient.name, () => {
       serverConnection.addEventListener(
         events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
+          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             serverTimeoutProm.resolveP();
           }
         },
@@ -1263,7 +1263,7 @@ describe(QUICClient.name, () => {
       clientConnection.addEventListener(
         events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
+          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             clientTimeoutProm.resolveP();
           }
         },
@@ -1325,7 +1325,7 @@ describe(QUICClient.name, () => {
       serverConnection.addEventListener(
         events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
+          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             serverTimeoutProm.resolveP();
           }
         },
@@ -1386,7 +1386,7 @@ describe(QUICClient.name, () => {
       serverConnection.addEventListener(
         events.EventQUICConnectionStream.name,
         (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeOut) {
+          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             serverTimeoutProm.resolveP();
           }
         },
@@ -1417,7 +1417,7 @@ describe(QUICClient.name, () => {
         },
       });
       await expect(clientProm).rejects.toThrow(
-        errors.ErrorQUICConnectionStartTimeOut,
+        errors.ErrorQUICConnectionStartTimeout,
       );
     });
   });
