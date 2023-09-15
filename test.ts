@@ -8,7 +8,7 @@ import * as testsUtils from './tests/utils';
 async function main() {
   const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
     new StreamHandler(
-      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
+      formatting.format`${formatting.date}-${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
   const data1KiB = Buffer.alloc(1024);
@@ -80,14 +80,14 @@ async function main() {
 
   await testsUtils.sleep(1000);
 
-  process.stderr.write('BEFORE QUICCLIENT DESTROY\n');
-
   // No need to force, streams should already be closed
   // If your force is true by default, then we are technically force closing streams
   // It will cause an error
   await quicClient.destroy({ force: false });
 
-  process.stderr.write('DESROYED\n');
+  console.log('BEFORE SLEEP');
+  await testsUtils.sleep(5000);
+  console.log('AFTER SLEEP');
 
   // If the connections are all gone, we shouldn't need to do this
   await quicServer.stop({ force: false });

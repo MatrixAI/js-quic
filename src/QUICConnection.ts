@@ -181,17 +181,16 @@ class QUICConnection {
     const error = evt.detail;
     // In the case of graceful exit, we don't want to log out the error
     // But we will still reject the `secureEstablishedP`
-    const isLocalGracefulError = (
-      error instanceof errors.ErrorQUICConnectionLocal
-      &&
-      error.data?.errorCode === ConnectionErrorCode.NoError
-    );
-    const isPeerGracefulError = (
-      error instanceof errors.ErrorQUICConnectionPeer
-      &&
-      error.data?.errorCode === ConnectionErrorCode.NoError
-    );
-    if (!(isLocalGracefulError || isPeerGracefulError)) {
+    if (
+      (
+        error instanceof errors.ErrorQUICConnectionLocal
+        ||
+        error instanceof errors.ErrorQUICConnectionPeer
+      )
+      && error.data?.errorCode === ConnectionErrorCode.NoError
+    ) {
+      this.logger.info(utils.formatError(error));
+    } else {
       this.logger.error(utils.formatError(error));
     }
     // If an error event occurs, we have to reject the secure established promise.
@@ -591,14 +590,17 @@ class QUICConnection {
       // Or it can be 0x1d for application close with an error
       this.conn.close(applicationError, errorCode, Buffer.from(errorMessage));
       const localError = this.conn.localError()!;
+      const message = `Locally closed with ${
+        localError.isApp
+        ? 'application'
+        : 'transport'
+      } code ${localError.errorCode}`;
       this.dispatchEvent(
         new events.EventQUICConnectionError(
           {
             detail: new errors.ErrorQUICConnectionLocal(
-              'Stopping connection due to local error',
-              {
-                data: localError
-              }
+              message,
+              { data: localError }
             )
           }
         )
@@ -1037,10 +1039,15 @@ class QUICConnection {
     if (this[status] !== 'stopping') {
       const peerError = this.conn.peerError();
       if (peerError != null) {
+        const message = `Peer closed with ${
+          peerError.isApp
+          ? 'application'
+          : 'transport'
+        } code ${peerError.errorCode}`;
         this.dispatchEvent(
           new events.EventQUICConnectionError({
             detail: new errors.ErrorQUICConnectionPeer(
-              'Failed connection due to peer error',
+              message,
               { data: peerError }
             )
           })
