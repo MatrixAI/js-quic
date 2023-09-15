@@ -955,10 +955,10 @@ class QUICConnection {
     this.setConnTimeoutTimer();
 
     if (
+      !this.secureEstablished &&
       !this.conn.isDraining() &&
       !this.conn.isClosed() &&
       this.conn.isEstablished() &&
-      !this.secureEstablished &&
       this.config.verifyPeer &&
       this.config.verifyCallback != null
     ) {
