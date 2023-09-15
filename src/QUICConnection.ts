@@ -236,6 +236,10 @@ class QUICConnection {
       events.EventQUICStreamSend.name,
       this.handleEventQUICStreamSend
     );
+    quicStream.removeEventListener(
+      EventAll.name,
+      this.handleEventQUICStream
+    )
     this.streamMap.delete(quicStream.streamId);
   };
 
