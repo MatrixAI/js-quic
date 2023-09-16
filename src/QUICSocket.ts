@@ -462,6 +462,27 @@ class QUICSocket {
     return this.socketSend(...params);
   }
 
+  /**
+   * This is an internal send that is faster.
+   * @internal
+   */
+  public async send_(
+    msg: string | Uint8Array | ReadonlyArray<any>,
+    port: number,
+    address: string,
+  ): Promise<number>;
+  public async send_(
+    msg: string | Uint8Array,
+    offset: number,
+    length: number,
+    port: number,
+    address: string,
+  ): Promise<number>;
+  @ready(new errors.ErrorQUICSocketNotRunning())
+  public async send_(...params: Array<any>): Promise<number> {
+    return this.socketSend(...params);
+  }
+
   public setServer(server: QUICServer) {
     this.server = server;
   }

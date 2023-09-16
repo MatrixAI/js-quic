@@ -143,7 +143,7 @@ class QUICServer {
   protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
     const { msg, offset, length, port, address } = evt.detail;
     try {
-      await this.socket.send(
+      await this.socket.send_(
         msg,
         offset,
         length,
@@ -442,7 +442,7 @@ class QUICServer {
         versionDatagram,
       );
       try {
-        await this.socket.send(
+        await this.socket.send_(
           versionDatagram,
           0,
           versionDatagramLength,
@@ -476,7 +476,7 @@ class QUICServer {
         retryDatagram,
       );
       try {
-        await this.socket.send(
+        await this.socket.send_(
           retryDatagram,
           0,
           retryDatagramLength,

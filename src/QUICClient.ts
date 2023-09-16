@@ -396,7 +396,7 @@ class QUICClient extends EventTarget {
   protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
     const { msg, offset, length, port, address } = evt.detail;
     try {
-      await this.socket.send(
+      await this.socket.send_(
         msg,
         offset,
         length,
