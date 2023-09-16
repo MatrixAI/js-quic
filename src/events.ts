@@ -237,8 +237,8 @@ class EventQUICStreamSend extends EventQUICStream {}
  */
 class EventQUICConnectionSend extends EventQUICConnection<{
   msg: Uint8Array;
-  offset: number;
-  length: number;
+  // offset: number;
+  // length: number;
   port: number;
   address: string;
 }> {}

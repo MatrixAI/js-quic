@@ -394,27 +394,18 @@ class QUICClient extends EventTarget {
    * This must be attached multiple times.
    */
   protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
-    const { msg, offset, length, port, address } = evt.detail;
     try {
       await this.socket.send_(
-        msg,
-        offset,
-        length,
-        port,
-        address,
+        evt.detail.msg,
+        evt.detail.port,
+        evt.detail.address,
       );
     } catch (e) {
       // Caller error means a domain error here
       const e_ = new errors.ErrorQUICClientInternal(
         'Failed to send data on the QUICSocket',
         {
-          data: {
-            msg,
-            offset,
-            length,
-            port,
-            address,
-          },
+          data: evt.detail,
           cause: e,
         }
       );

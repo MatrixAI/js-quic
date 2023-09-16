@@ -1,8 +1,8 @@
 # TYPE streams.stream_1KiB_ops gauge
-streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream"} 901
+streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream"} 753
 
 # TYPE streams.stream_1KiB_margin gauge
-streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream"} 9.11
+streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream"} 12.45
 
 # TYPE streams.stream_1KiB_samples counter
-streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream"} 43
+streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream"} 23

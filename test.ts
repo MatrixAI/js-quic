@@ -85,9 +85,7 @@ async function main() {
   // It will cause an error
   await quicClient.destroy({ force: false });
 
-  console.log('BEFORE SLEEP');
-  await testsUtils.sleep(5000);
-  console.log('AFTER SLEEP');
+  await testsUtils.sleep(1000);
 
   // If the connections are all gone, we shouldn't need to do this
   await quicServer.stop({ force: false });

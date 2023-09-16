@@ -871,14 +871,20 @@ class QUICConnection {
 
     let sendLength: number;
     let sendInfo: SendInfo;
+
+    // WHY is this considered something that is werird?
     // Send until `Done`
     while (true) {
-      // Roughly 1350 bytes
-      const sendBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      // This is the fastest way of allocating a buffer per send
+      // It's needed because sending the data out on the socket is now asynchronous
+      const sendBuffer = Buffer.allocUnsafe(
+        this.config.maxSendUdpPayloadSize
+      );
       try {
         [sendLength, sendInfo] = this.conn.send(sendBuffer);
       } catch (e) {
         if (e.message === 'Done') {
+          // Wait this breaks the LOOP!?
           break;
         }
         // This is a software error
@@ -893,6 +899,10 @@ class QUICConnection {
         throw e_;
       }
 
+      // Wait IF IT IS DONE
+      // there's nothing to send
+      // WTF!
+
       // Push the send event
       // This represents the fact that there is data queued up on the connection's send buffer
       // To be sent out, the listener which can be `QUICClient` or `QUICServer`
@@ -901,12 +911,13 @@ class QUICConnection {
       // about the `QUICSocket`.
       // Note that the `sendBuffer` must be a new buffer each time
       // Otherwise it might get overwritten if it is too slow
+
+      // console.log('SEND LENGTH', sendLength);
+
       this.dispatchEvent(
         new events.EventQUICConnectionSend({
           detail: {
-            msg: sendBuffer,
-            offset: 0,
-            length: sendLength,
+            msg: sendBuffer.subarray(0, sendLength),
             port: sendInfo.to.port,
             address: sendInfo.to.host,
           }
