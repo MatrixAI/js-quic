@@ -28,7 +28,7 @@
   </head>
   <body>
     <div class="container">
-      <canvas id="chart1694761436558" width="16" height="9"></canvas>
+      <canvas id="chart1694859123757" width="16" height="9"></canvas>
     </div>
     <script>
       const format = (num) => {
@@ -51,16 +51,16 @@
           chunked.map((chunk) => chunk.join('')).join(' ') + fractionStr
         )
       }
-      const ctx1694761436558 = document
-        .getElementById('chart1694761436558')
+      const ctx1694859123757 = document
+        .getElementById('chart1694859123757')
         .getContext('2d')
-      const chart1694761436558 = new Chart(ctx1694761436558, {
+      const chart1694859123757 = new Chart(ctx1694859123757, {
         type: 'bar',
         data: {
           labels: ["send 1Kib of data over QUICStream"],
           datasets: [
             {
-              data: [685],
+              data: [901],
               backgroundColor: ["hsl(120, 85%, 55%)"],
               borderColor: ["hsl(120, 85%, 55%)"],
               borderWidth: 2,

@@ -71,9 +71,12 @@ async function main() {
 
   const summary = await b.suite(
     summaryName(__filename),
-    b.add('send 1Kib of data over QUICStream', async () => {
-      await writer.write(data1KiB);
-    }),
+    b.add(
+      'send 1Kib of data over QUICStream',
+      async () => {
+        await writer.write(data1KiB);
+      },
+    ),
     ...suiteCommon,
   );
 
@@ -82,10 +85,14 @@ async function main() {
 
   await writer.close();
 
+  await testsUtils.sleep(1000);
+
   // No need to force, streams should already be closed
   // If your force is true by default, then we are technically force closing streams
   // It will cause an error
   await quicClient.destroy({ force: false });
+
+  await testsUtils.sleep(1000);
 
   // If the connections are all gone, we shouldn't need to do this
   await quicServer.stop({ force: false });
