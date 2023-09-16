@@ -13,15 +13,12 @@ import type {
   QUICConnectionMetadata,
 } from './types';
 import type { Connection, ConnectionError,  SendInfo } from './native/types';
-import type { Monitor } from '@matrixai/async-locks';
 import { AbstractEvent, EventAll } from '@matrixai/events';
 import { Lock, LockBox, RWLockWriter } from '@matrixai/async-locks';
 import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
-import { withF } from '@matrixai/resources';
-import { utils as contextsUtils } from '@matrixai/contexts';
 import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
 import { quiche, ConnectionErrorCode } from './native';
@@ -60,16 +57,7 @@ class QUICConnection {
    */
   public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
-  /**
-   * Tracks the locks for use with the monitors
-   * And also used for stream ID locking.
-   */
-  protected lockBox = new LockBox<RWLockWriter>();
-
-  /**
-   * This is the locking key for the monitor.
-   */
-  protected recvSendLockKey = 'QUICConnection lock recv send';
+  protected recvLock: Lock = new Lock();
 
   /**
    * Logger.
@@ -715,139 +703,138 @@ class QUICConnection {
   public async recv(
     data: Uint8Array,
     remoteInfo: RemoteInfo,
-    mon?: Monitor<RWLockWriter>,
   ): Promise<void> {
-    if (mon == null) {
-      return this.withMonitor((mon) => {
-        return this.recv(data, remoteInfo, mon);
-      });
-    }
-    await mon.lock(this.recvSendLockKey)();
 
     // // If the connection is closed, we can just ignore
     // if (this.conn.isClosed()) {
     //   return;
     // }
 
-    // The remote information may be changed on each receive
-    // However to do so would mean connection migration,
-    // which is not yet supported
-    this._remoteHost = remoteInfo.host;
-    this._remotePort = remoteInfo.port;
-    const recvInfo = {
-      to: {
-        host: this.localHost,
-        port: this.localPort,
-      },
-      from: {
-        host: remoteInfo.host,
-        port: remoteInfo.port,
-      },
-    };
-    try {
-      // This can process multiple QUIC packets.
-      // Remember that 1 QUIC packet can have multiple QUIC frames.
-      // Expect the `data` is mutated here due to in-place decryption,
-      // so do not re-use the `data` afterwards.
-      this.conn.recv(data, recvInfo);
-    } catch (e) {
+    // Recv which are chained to `this.send` must be serialised
+    // To avoid another `recv` call to be called in the middle
+    await this.recvLock.withF(async () => {
 
-      // If `config.verifyPeer` is true and `config.verifyCallback` is undefined
-      // then during the TLS handshake, a `TlsFail` exception will only be thrown
-      // if the peer did not supply a certificate or that its certificate failed
-      // the default certificate verification procedure.
+      // The remote information may be changed on each receive
+      // However to do so would mean connection migration,
+      // which is not yet supported
+      this._remoteHost = remoteInfo.host;
+      this._remotePort = remoteInfo.port;
+      const recvInfo = {
+        to: {
+          host: this.localHost,
+          port: this.localPort,
+        },
+        from: {
+          host: remoteInfo.host,
+          port: remoteInfo.port,
+        },
+      };
+      try {
+        // This can process multiple QUIC packets.
+        // Remember that 1 QUIC packet can have multiple QUIC frames.
+        // Expect the `data` is mutated here due to in-place decryption,
+        // so do not re-use the `data` afterwards.
+        this.conn.recv(data, recvInfo);
+      } catch (e) {
 
-      // If `config.verifyPeer` is true and `config.verifyCallback` is defined,
-      // then during the TLS handshake, a `TlsFail` exception will only be thrown
-      // if the peer did not supply a peer certificate.
+        // If `config.verifyPeer` is true and `config.verifyCallback` is undefined
+        // then during the TLS handshake, a `TlsFail` exception will only be thrown
+        // if the peer did not supply a certificate or that its certificate failed
+        // the default certificate verification procedure.
 
-      // Other exceptions may occur such as `UnknownVersion`, `InvalidPacket`
-      // and more...
+        // If `config.verifyPeer` is true and `config.verifyCallback` is defined,
+        // then during the TLS handshake, a `TlsFail` exception will only be thrown
+        // if the peer did not supply a peer certificate.
 
-      // Whether `TlsFail` or any other exception, the quiche connection
-      // internally will have `close` called on it with a local or peer error.
+        // Other exceptions may occur such as `UnknownVersion`, `InvalidPacket`
+        // and more...
 
-      // However it may not enter draining state until a `this.conn.send` is
-      // called.
+        // Whether `TlsFail` or any other exception, the quiche connection
+        // internally will have `close` called on it with a local or peer error.
 
-      // Because all state processing is centralised inside `this.send`,
-      // regardless of the exception, we will call `this.send` in
-      // order to complete the entire state transition, and all errors will
-      // be processed in the `this.send` call. That is also where we will
-      // perform custom TLS verification.
+        // However it may not enter draining state until a `this.conn.send` is
+        // called.
 
-      // However if there is no peer error or local error, the exception is
-      // not coming from quiche, and therefore represents a software error.
+        // Because all state processing is centralised inside `this.send`,
+        // regardless of the exception, we will call `this.send` in
+        // order to complete the entire state transition, and all errors will
+        // be processed in the `this.send` call. That is also where we will
+        // perform custom TLS verification.
 
-      // Note that peer errors while set by the `this.conn.recv`, will not
-      // be thrown upwards. Only local errors will be thrown upwards here.
+        // However if there is no peer error or local error, the exception is
+        // not coming from quiche, and therefore represents a software error.
 
-      const localError = this.conn.localError();
-      if (localError == null) {
-        // This is a software error
-        // The problem is that both "caller error" and "software" error
-        // Is executed by throwing it upwards
-        // It is up the caller to distinguish between the 2
-        // That if it is a software error, it just has to keep bubbling up
-        // If it is a caller error, it may be able to handle it
-        // If it is caller error, it may bea domain error on the caller
-        throw e;
-      } else {
-        // This is a legitimate state transition of the connection
-        // So it is not a caller error, therefore we do not throw it up
-        const e_ = new errors.ErrorQUICConnectionLocal(
-          'Failed connection due to local error',
-          {
-            cause: e,
-            data: localError,
-          }
-        );
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({ detail: e_ })
-        );
-        this.dispatchEvent(
-          new events.EventQUICConnectionClose({
-            detail: {
-              type: 'local',
-              ...localError
+        // Note that peer errors while set by the `this.conn.recv`, will not
+        // be thrown upwards. Only local errors will be thrown upwards here.
+
+        const localError = this.conn.localError();
+        if (localError == null) {
+          // This is a software error
+          // The problem is that both "caller error" and "software" error
+          // Is executed by throwing it upwards
+          // It is up the caller to distinguish between the 2
+          // That if it is a software error, it just has to keep bubbling up
+          // If it is a caller error, it may be able to handle it
+          // If it is caller error, it may bea domain error on the caller
+          throw e;
+        } else {
+          // This is a legitimate state transition of the connection
+          // So it is not a caller error, therefore we do not throw it up
+          const e_ = new errors.ErrorQUICConnectionLocal(
+            'Failed connection due to local error',
+            {
+              cause: e,
+              data: localError,
             }
-          })
-        );
-        return;
+          );
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({ detail: e_ })
+          );
+          this.dispatchEvent(
+            new events.EventQUICConnectionClose({
+              detail: {
+                type: 'local',
+                ...localError
+              }
+            })
+          );
+          return;
+        }
       }
-    }
-    // If `config.verifyCallback` is not defined, simply being established is
-    // sufficient to mean we are securely established, however if it is defined
-    // then secure establishment occurs only after custom TLS verification has
-    // passed.
-    if (
-      !this.secureEstablished &&
-      this.conn.isEstablished() &&
-      this.config.verifyCallback == null
-    ) {
-      this.resolveSecureEstablishedP();
-    }
-    // If we are "secure established" we can process streams.
-    if (this.secureEstablished) {
-      await this.processStreams();
-    }
+      // If `config.verifyCallback` is not defined, simply being established is
+      // sufficient to mean we are securely established, however if it is defined
+      // then secure establishment occurs only after custom TLS verification has
+      // passed.
+      if (
+        !this.secureEstablished &&
+        this.conn.isEstablished() &&
+        this.config.verifyCallback == null
+      ) {
+        this.resolveSecureEstablishedP();
+      }
+      // If we are "secure established" we can process streams.
+      if (this.secureEstablished) {
+        await this.processStreams();
+      }
 
-    // Going through the source code, it shows that this is the case
-    // LOCAL ERROR can only occur after close() (which can happen due to conn.recv())
-    // PEER ERROR can only occur after recv() (which can happen due to conn.recv())
+      // Going through the source code, it shows that this is the case
+      // LOCAL ERROR can only occur after close() (which can happen due to conn.recv())
+      // PEER ERROR can only occur after recv() (which can happen due to conn.recv())
 
-    // Processing the custom TLS callback means
-    // and if it passes, we would ideally proceed to processing the streams
-    // That would mean we did have a verifyCallback being true
-    // Then we woul be established, but not secure established
-    // Then... we would go down to `send`
-    // Then afterwards check the custom callback
-    // if it fails... then we just close and send again
-    // if it succeeds... then actually we want to process the streams again!
-    // That means we have to run `processStreams` again after send
-    // But only if we did a TLS verification, and it passed
+      // Processing the custom TLS callback means
+      // and if it passes, we would ideally proceed to processing the streams
+      // That would mean we did have a verifyCallback being true
+      // Then we woul be established, but not secure established
+      // Then... we would go down to `send`
+      // Then afterwards check the custom callback
+      // if it fails... then we just close and send again
+      // if it succeeds... then actually we want to process the streams again!
+      // That means we have to run `processStreams` again after send
+      // But only if we did a TLS verification, and it passed
 
-    await this.send(mon);
+      await this.send();
+
+    });
   }
 
   /**
@@ -875,15 +862,7 @@ class QUICConnection {
    * @internal
    */
   @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['starting', 'stopping'])
-  public async send(
-    mon?: Monitor<RWLockWriter> | undefined,
-  ): Promise<void> {
-    if (mon == null) {
-      return this.withMonitor((mon) => {
-        return this.send(mon);
-      });
-    }
-    await mon.lock(this.recvSendLockKey)();
+  public async send(): Promise<void> {
 
     // // If the connection is closed, ignore and do nothing
     // if (this.conn.isClosed()) {
@@ -1342,14 +1321,6 @@ class QUICConnection {
    */
   protected stopKeepAliveIntervalTimer(): void {
     this.keepAliveIntervalTimer?.cancel();
-  }
-
-  protected withMonitor<T>(
-    f: (mon: Monitor<RWLockWriter>) => Promise<T>,
-  ): Promise<T> {
-    return withF([contextsUtils.monitor(this.lockBox, RWLockWriter)], ([mon]) =>
-      f(mon),
-    );
   }
 }
 
