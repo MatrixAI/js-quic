@@ -43,8 +43,8 @@ const clientDefault: QUICConfig = {
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200,
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 65527, but set to 1350
+  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 1200, but set to 1350
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
@@ -63,8 +63,8 @@ const serverDefault: QUICConfig = {
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 65527
+  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 1200, but set to 1350
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
