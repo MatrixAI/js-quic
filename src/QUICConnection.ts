@@ -13,11 +13,10 @@ import type {
   QUICConnectionMetadata,
 } from './types';
 import type { Connection, ConnectionError,  SendInfo } from './native/types';
-import { AbstractEvent, EventAll } from '@matrixai/events';
-import { Lock, LockBox, RWLockWriter } from '@matrixai/async-locks';
-import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
+import { AbstractEvent, EventAll } from '@matrixai/events';
+import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
@@ -57,8 +56,6 @@ class QUICConnection {
    */
   public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
-  protected recvLock: Lock = new Lock();
-
   /**
    * Logger.
    */
@@ -82,11 +79,6 @@ class QUICConnection {
    * Used during `QUICStream` creation.
    */
   protected codeToReason: StreamCodeToReason;
-
-  protected streamIdClientBidiLock: Lock = new Lock();
-  protected streamIdServerBidiLock: Lock = new Lock();
-  protected streamIdClientUniLock: Lock = new Lock();
-  protected streamIdServerUniLock: Lock = new Lock();
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -210,7 +202,7 @@ class QUICConnection {
 
     // Only run this if the close wasn't due to peer
     if (evt.detail.type !== 'peer') {
-      await this.send();
+      this.send();
     }
 
     if (this[running]) {
@@ -231,7 +223,7 @@ class QUICConnection {
     // Failure of send is both a caller error and domain error
     // In this case we can ignore the caller error, since the domain error will be handled
     // by the QUICConnection error handlers
-    await this.send();
+    this.send();
   };
 
   protected handleEventQUICStreamDestroyed = (
@@ -442,7 +434,7 @@ class QUICConnection {
     );
     if (this.type === 'client') {
       // The timeout only starts after the first send is called
-      await this.send();
+      this.send();
     } else if (this.type === 'server') {
       if (data == null || remoteInfo == null) {
         throw new errors.ErrorQUICConnectionStartData(
@@ -450,7 +442,7 @@ class QUICConnection {
         );
       }
       // This chain up recv and send and setup the max idle timeout
-      await this.recv(data, remoteInfo);
+      this.recv(data, remoteInfo);
     }
     try {
       // This will block until the connection is established
@@ -700,10 +692,10 @@ class QUICConnection {
    * @internal
    */
   @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['starting', 'stopping'])
-  public async recv(
+  public recv(
     data: Uint8Array,
     remoteInfo: RemoteInfo,
-  ): Promise<void> {
+  ): void {
 
     // // If the connection is closed, we can just ignore
     // if (this.conn.isClosed()) {
@@ -712,7 +704,7 @@ class QUICConnection {
 
     // Recv which are chained to `this.send` must be serialised
     // To avoid another `recv` call to be called in the middle
-    await this.recvLock.withF(async () => {
+    // await this.recvLock.withF(async () => {
 
       // The remote information may be changed on each receive
       // However to do so would mean connection migration,
@@ -814,7 +806,7 @@ class QUICConnection {
       }
       // If we are "secure established" we can process streams.
       if (this.secureEstablished) {
-        await this.processStreams();
+        this.processStreams();
       }
 
       // Going through the source code, it shows that this is the case
@@ -832,9 +824,9 @@ class QUICConnection {
       // That means we have to run `processStreams` again after send
       // But only if we did a TLS verification, and it passed
 
-      await this.send();
+      this.send();
 
-    });
+    // });
   }
 
   /**
@@ -862,7 +854,7 @@ class QUICConnection {
    * @internal
    */
   @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['starting', 'stopping'])
-  public async send(): Promise<void> {
+  public send(): void {
 
     // // If the connection is closed, ignore and do nothing
     // if (this.conn.isClosed()) {
@@ -941,7 +933,7 @@ class QUICConnection {
     ) {
       const peerCertsChain = this.conn.peerCertChain()!;
       try {
-        await this.config.verifyCallback(
+        this.config.verifyCallback(
           peerCertsChain.map(utils.derToPEM),
           utils.collectPEMs(this.config.ca)
         );
@@ -978,7 +970,7 @@ class QUICConnection {
         return;
       }
       this.resolveSecureEstablishedP();
-      await this.processStreams();
+      this.processStreams();
     }
 
     // So this is an issue, remember peer error is checked here already
@@ -1031,13 +1023,13 @@ class QUICConnection {
    * it should be moving the handle event at the top
    * And the dead case needs to be re-examined too
    */
-  protected async processStreams() {
+  protected processStreams() {
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
         // Wait a minute, if the stream doesn't exist
         // Then it has to be a peer initiated stream
-        quicStream = await QUICStream.createQUICStream({
+        quicStream = QUICStream.createQUICStream({
           initiated: 'peer',
           streamId,
           config: this.config,
@@ -1147,7 +1139,7 @@ class QUICConnection {
       }
       // Otherwise, we should be calling send after the timeout
       // If the status is not equal null, then we can send
-      await this.send();
+      this.send();
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
       // If this is `null`, then quiche is requesting the timer to be cleaned up
@@ -1242,19 +1234,19 @@ class QUICConnection {
    * This is a serialised call, it must be blocking.
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
-  public async newStream(type: 'bidi' | 'uni' = 'bidi'): Promise<QUICStream> {
-    let lock: Lock;
-    if (this.type === 'client' && type === 'bidi') {
-      lock = this.streamIdClientBidiLock;
-    } else if (this.type === 'server' && type === 'bidi') {
-      lock = this.streamIdServerBidiLock;
-    } else if (this.type === 'client' && type === 'uni') {
-      lock = this.streamIdClientUniLock;
-    } else if (this.type === 'server' && type === 'uni') {
-      lock = this.streamIdServerUniLock;
-    }
-    // Using a lock on stream ID to prevent racing updates
-    return await lock!.withF(async () => {
+  public newStream(type: 'bidi' | 'uni' = 'bidi'): QUICStream {
+    // let lock: Lock;
+    // if (this.type === 'client' && type === 'bidi') {
+    //   lock = this.streamIdClientBidiLock;
+    // } else if (this.type === 'server' && type === 'bidi') {
+    //   lock = this.streamIdServerBidiLock;
+    // } else if (this.type === 'client' && type === 'uni') {
+    //   lock = this.streamIdClientUniLock;
+    // } else if (this.type === 'server' && type === 'uni') {
+    //   lock = this.streamIdServerUniLock;
+    // }
+    // // Using a lock on stream ID to prevent racing updates
+    // return await lock!.withF(async () => {
       let streamId: StreamId;
       if (this.type === 'client' && type === 'bidi') {
         streamId = this.streamIdClientBidi;
@@ -1265,7 +1257,7 @@ class QUICConnection {
       } else if (this.type === 'server' && type === 'uni') {
         streamId = this.streamIdServerUni;
       }
-      const quicStream = await QUICStream.createQUICStream({
+      const quicStream = QUICStream.createQUICStream({
         initiated: 'local',
         streamId: streamId!,
         connection: this,
@@ -1298,7 +1290,7 @@ class QUICConnection {
         this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
       }
       return quicStream;
-    });
+    // });
   }
 
   /**
@@ -1315,7 +1307,7 @@ class QUICConnection {
       // If the connection has already sent ack-eliciting frames
       // then this is a noop.
       this.conn.sendAckEliciting();
-      await this.send();
+      this.send();
       this.keepAliveIntervalTimer = new Timer({
         delay: ms,
         handler: keepAliveHandler,

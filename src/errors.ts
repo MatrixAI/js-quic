@@ -144,6 +144,12 @@ class ErrorQUICStreamLocalRead<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream locally closed readable side';
 }
 
+/**
+ * If `data.code` exists, it means we wrote out this code.
+ * However if `data.code` doesn't exist, then it's a local write close
+ * without actually sending any close signal.
+ * In most cases this means it was a unidirectional peer stream.
+ */
 class ErrorQUICStreamLocalWrite<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream locally closed writable side';
 }

@@ -190,6 +190,7 @@ class EventQUICStreamError extends EventQUICStream<
  * QUIC stream readable side was closed
  * Local means I closed my readable side - there must be an error code.
  * Peer means the peer closed my readable side by closing their writable side - there may not be an error code.
+ * If no code, it means it was graceful.
  */
 class EventQUICStreamCloseRead extends EventQUICStream<{
   type: 'local';
@@ -203,6 +204,7 @@ class EventQUICStreamCloseRead extends EventQUICStream<{
  * QUIC stream writable side was closed
  * Local means I closed my writable side - there may not be an error code.
  * Peer means the peer closed my writable side by closing their readable side - there must be an error code.
+ * If no code, it means it was graceful.
  */
 class EventQUICStreamCloseWrite extends EventQUICStream<{
   type: 'local';
@@ -237,8 +239,6 @@ class EventQUICStreamSend extends EventQUICStream {}
  */
 class EventQUICConnectionSend extends EventQUICConnection<{
   msg: Uint8Array;
-  // offset: number;
-  // length: number;
   port: number;
   address: string;
 }> {}

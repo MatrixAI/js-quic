@@ -65,7 +65,7 @@ async function main() {
     logger: logger.getChild('QUICClient'),
   });
 
-  const stream = await quicClient.connection.newStream();
+  const stream = quicClient.connection.newStream();
   const reader = stream.readable.getReader();
   const writer = stream.writable.getWriter();
 

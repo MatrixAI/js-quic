@@ -34,28 +34,10 @@ interface QUICStream extends CreateDestroy {}
 })
 class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   /**
-   * For `reasonToCode`, return 0 means "unknown reason"
-   * It is the catch-all for codes.
-   * So it is the default reason.
-   *
-   * It may receive any reason for cancellation.
-   * It may receive an exception when streamRecv fails!
-   *
-   * Creation will create stream state locally in quiche.
-   * Remote state is not created until data is sent.
-   *
-   * This happens when...
-   * 1. The writable is written to.
-   * 2. The readable is cancelled.
-   * 3. The writable is aborted.
-   * 4. The QUICStream is cancelled.
-   *
-   * In the case that the stream was ended before data was sent
-   * the remote side will create state that has already ended.
-   *
-   * @internal Only used by {@link QUICConnection} to create a stream.
+   * Synchronous creation here.
+   * Avoids concurrency issues.
    */
-  public static async createQUICStream({
+  public static createQUICStream({
     initiated,
     streamId,
     connection,
@@ -72,7 +54,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     reasonToCode?: StreamReasonToCode;
     codeToReason?: StreamCodeToReason;
     logger?: Logger;
-  }): Promise<QUICStream> {
+  }): QUICStream {
     logger.info(`Create ${this.name}`);
     const stream = new this({
       initiated,
@@ -87,14 +69,24 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // Closing the writable stream requires async await
     // Therefore we close both the readable stream and writable stream
     // Here on condition of being unidirectional
-    if (utils.isStreamUnidirectional(streamId)) {
+    if (stream.type === 'uni') {
       if (initiated === 'local') {
         // Readable is automatically closed if it is local and unidirectional
-        stream.readableController.close();
+        // All attempts to read will get this error.
+        stream.readableController.error(
+          new errors.ErrorQUICStreamLocalRead(
+            'Closing readable stream because QUIC stream is unidirectional writable from local to peer'
+          )
+        );
         stream._readClosed = true;
       } else if (initiated === 'peer') {
         // Writable is automatically closed if it is peer and unidirectional
-        await stream.writable.close();
+        // All attempts to write will get this error.
+        stream.writableController.error(
+          new errors.ErrorQUICStreamLocalWrite(
+            'Closing writable stream because QUIC stream is unidirectional readable from peer to local'
+          )
+        );
         stream._writeClosed = true;
       }
     }
@@ -198,6 +190,24 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   };
 
   /**
+   * For `reasonToCode`, returning `0` means unknown reason.
+   * Thus `0` is the default reason.
+   *
+   * When we get a code, we also just create a generic `Error`.
+   * Although we will create a special error just for this.
+   *
+   * You are supposed to supply the `reasonToCode` and `codeToReason`.
+   * Based on what you think are appropriate stream error codes.
+   *
+   * There is one reason you should be aware of that is internal to QUIC.
+   * `ErrorQUICStreamInternal`. This may go into `reasonToCode`.
+   *
+   * By default this will mean a close event is emitted with this as the code.
+   * However such a code does not mean it came from the other side or was sent.
+   * It just means something internally happened to the stream that broke.
+   * The `ErrorQUICStreamInternal` thus may be a relevant exception for any
+   * stream related operations.
+   *
    * @internal
    */
   public constructor({
