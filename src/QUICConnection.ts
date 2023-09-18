@@ -881,12 +881,13 @@ class QUICConnection {
         this.config.maxSendUdpPayloadSize
       );
       try {
-        [sendLength, sendInfo] = this.conn.send(sendBuffer);
-      } catch (e) {
-        if (e.message === 'Done') {
-          // Wait this breaks the LOOP!?
+        const result = this.conn.send(sendBuffer);
+        if (result === null) {
+          // Break the loop
           break;
         }
+        [sendLength, sendInfo] = result;
+      } catch (e) {
         // This is a software error
         const e_ = new errors.ErrorQUICConnectionInternal(
           'Failed `send` with unknown internal error',

@@ -500,8 +500,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       await readableP;
     }
     let recvLength: number, fin: boolean;
+    let result: [number, boolean] | null;
     try {
-      [recvLength, fin] = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
+      result = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
+      [recvLength, fin] = result;
     } catch (e) {
       let code: number | false;
       if ((code = utils.isStreamReset(e)) !== false) {
@@ -556,6 +558,29 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         throw e_;
       }
     }
+
+    if (result === null) {
+      // This is an error, because this must be readable at this point
+      const e = new errors.ErrorQUICStreamInternal(
+        'Failed `streamRecv` on the readable stream because it is not readable',
+      );
+      this.readableController.error(e);
+      this.dispatchEvent(
+        new events.EventQUICStreamError({
+          detail: e
+        })
+      );
+      this.dispatchEvent(
+        new events.EventQUICStreamCloseRead({
+          detail: {
+            type: 'local',
+            code: this.reasonToCode('read', e)
+          }
+        })
+      );
+      throw e;
+    }
+
     // If it is 0-length message, the `fin` should be true
     // But even if it isn't, we can just ignore the chunk
     // Readers shouldn't be reading a 0-length message
@@ -608,13 +633,16 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     let sentLength: number;
     while (true) {
       try {
-        sentLength = this.connection.conn.streamSend(this.streamId, chunk, false);
-      } catch (e) {
-        let code: number | false;
-        if (e.message === 'Done') {
+        const result = this.connection.conn.streamSend(this.streamId, chunk, false);
+        if (result === null) {
           // This will trigger send, and also loop back to the top
           sentLength = 0;
-        } else if ((code = utils.isStreamStopped(e)) !== false) {
+        } else {
+          sentLength = result;
+        }
+      } catch (e) {
+        let code: number | false;
+        if ((code = utils.isStreamStopped(e)) !== false) {
           // Stream was stopped by the peer
           const reason = this.codeToReason('write', code);
           const e_ = new errors.ErrorQUICStreamPeerWrite(
@@ -768,7 +796,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         throw e_;
       }
     }
-
     // Graceful close on the write without any code
     this.dispatchEvent(
       new events.EventQUICStreamCloseWrite({
@@ -801,8 +828,9 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // The stream state should still exist, at this point
     // Idempotent, that's not that important
     // Discards buffered data
+    let result: void | null;
     try {
-      this.connection.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
+      result = this.connection.conn.streamShutdown(this.streamId, quiche.Shutdown.Read, code);
     } catch (e) {
       const e_ = new errors.ErrorQUICStreamInternal(
         'Local stream readable could not be shutdown',
@@ -823,6 +851,30 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         })
       );
       throw e_;
+    }
+    if (result === null) {
+      // Means stream no longer exists
+      // This is technically an error
+      // Cause that should not happen here
+      // The stream must exist
+      const e = new errors.ErrorQUICStreamInternal(
+        'Local stream readable could not be shutdown because it does not exist',
+      );
+      this.readableController.error(e);
+      this.dispatchEvent(
+        new events.EventQUICStreamError({
+          detail: e
+        })
+      );
+      this.dispatchEvent(
+        new events.EventQUICStreamCloseRead({
+          detail: {
+            type: 'local',
+            code: this.reasonToCode('read', e)
+          }
+        })
+      );
+      throw e;
     }
     const e = new errors.ErrorQUICStreamLocalRead(
       'Closing readable stream locally',
