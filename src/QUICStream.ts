@@ -503,7 +503,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     let result: [number, boolean] | null;
     try {
       result = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
-      [recvLength, fin] = result;
+      // [recvLength, fin] = result;
     } catch (e) {
       let code: number | false;
       if ((code = utils.isStreamReset(e)) !== false) {
@@ -580,6 +580,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       );
       throw e;
     }
+
+    [recvLength, fin] = result;
 
     // If it is 0-length message, the `fin` should be true
     // But even if it isn't, we can just ignore the chunk
