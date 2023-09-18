@@ -1,41 +1,41 @@
 {
   "cpu": {
-    "manufacturer": "AMD",
-    "brand": "Ryzen 7 2700X Eight-Core Processor",
-    "vendor": "AMD",
-    "family": "23",
-    "model": "8",
-    "stepping": "2",
+    "manufacturer": "Intel",
+    "brand": "Xeon® E3-1241 v3",
+    "vendor": "Intel",
+    "family": "6",
+    "model": "60",
+    "stepping": "3",
     "revision": "",
     "voltage": "",
-    "speed": 3.7,
-    "speedMin": 2.2,
-    "speedMax": 3.7,
+    "speed": 3.5,
+    "speedMin": 0.8,
+    "speedMax": 3.9,
     "governor": "performance",
-    "cores": 16,
-    "physicalCores": 8,
-    "performanceCores": 8,
+    "cores": 8,
+    "physicalCores": 4,
+    "performanceCores": 4,
     "efficiencyCores": 0,
     "processors": 1,
     "socket": "",
-    "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb hw_pstate ssbd ibpb vmmcall fsgsbase bmi1 avx2 smep bmi2 rdseed adx smap clflushopt sha_ni xsaveopt xsavec xgetbv1 clzero irperf xsaveerptr arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif overflow_recov succor smca sev sev_es",
+    "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm cpuid_fault epb invpcid_single pti ssbd ibrs ibpb stibp tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid xsaveopt dtherm ida arat pln pts md_clear flush_l1d",
     "virtualization": true,
     "cache": {
-      "l1d": 262144,
-      "l1i": 524288,
-      "l2": 4194304,
-      "l3": 16777216
+      "l1d": 131072,
+      "l1i": 131072,
+      "l2": 1048576,
+      "l3": 8388608
     }
   },
   "osInfo": {
     "platform": "linux",
     "distro": "nixos",
-    "release": "23.05",
-    "kernel": "6.1.47",
+    "release": "22.11",
+    "kernel": "5.10.177",
     "arch": "x64"
   },
   "system": {
-    "model": "System Product Name",
-    "manufacturer": "System manufacturer"
+    "model": "P7 Pro SE",
+    "manufacturer": "EUROCOM"
   }
 }

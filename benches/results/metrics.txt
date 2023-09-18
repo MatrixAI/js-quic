@@ -1,35 +1,8 @@
-# TYPE buffers.buffer_allocation_ops gauge
-buffers.buffer_allocation_ops{name="Buffer.alloc"} 740368
-buffers.buffer_allocation_ops{name="Buffer.allocUnsafe"} 3260687
-buffers.buffer_allocation_ops{name="Buffer.allocUnsafeSlow"} 819219
-buffers.buffer_allocation_ops{name="Buffer.from subarray"} 1644181
-buffers.buffer_allocation_ops{name="Buffer.copyBytesFrom"} 495628
-buffers.buffer_allocation_ops{name="Uint8Array"} 717099
-buffers.buffer_allocation_ops{name="Uint8Array slice"} 668982
+# TYPE native.stream_1KiB_ops gauge
+native.stream_1KiB_ops{name="send 1Kib of data over QUICStream"} 2385
 
-# TYPE buffers.buffer_allocation_margin gauge
-buffers.buffer_allocation_margin{name="Buffer.alloc"} 2.43
-buffers.buffer_allocation_margin{name="Buffer.allocUnsafe"} 1.87
-buffers.buffer_allocation_margin{name="Buffer.allocUnsafeSlow"} 3.48
-buffers.buffer_allocation_margin{name="Buffer.from subarray"} 2.03
-buffers.buffer_allocation_margin{name="Buffer.copyBytesFrom"} 2.65
-buffers.buffer_allocation_margin{name="Uint8Array"} 3.26
-buffers.buffer_allocation_margin{name="Uint8Array slice"} 4.55
+# TYPE native.stream_1KiB_margin gauge
+native.stream_1KiB_margin{name="send 1Kib of data over QUICStream"} 1.55
 
-# TYPE buffers.buffer_allocation_samples counter
-buffers.buffer_allocation_samples{name="Buffer.alloc"} 77
-buffers.buffer_allocation_samples{name="Buffer.allocUnsafe"} 79
-buffers.buffer_allocation_samples{name="Buffer.allocUnsafeSlow"} 61
-buffers.buffer_allocation_samples{name="Buffer.from subarray"} 83
-buffers.buffer_allocation_samples{name="Buffer.copyBytesFrom"} 80
-buffers.buffer_allocation_samples{name="Uint8Array"} 55
-buffers.buffer_allocation_samples{name="Uint8Array slice"} 52
-
-# TYPE streams.stream_1KiB_ops gauge
-streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream"} 1251
-
-# TYPE streams.stream_1KiB_margin gauge
-streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream"} 6.02
-
-# TYPE streams.stream_1KiB_samples counter
-streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream"} 49
+# TYPE native.stream_1KiB_samples counter
+native.stream_1KiB_samples{name="send 1Kib of data over QUICStream"} 81
