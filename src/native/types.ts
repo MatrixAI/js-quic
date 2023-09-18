@@ -57,16 +57,16 @@ interface Connection {
   setKeylog(path: string): void;
   setSession(session: Uint8Array): void;
   recv(data: Uint8Array, recvInfo: RecvInfo): number;
-  send(data: Uint8Array): [number, SendInfo];
+  send(data: Uint8Array): [number, SendInfo] | null;
   sendOnPath(
     data: Uint8Array,
     from?: HostPort | undefined | null,
     to?: HostPort | undefined | null,
-  ): [number, SendInfo | null];
+  ): [number, SendInfo | null] | null;
   sendQuantum(): number;
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number;
-  streamRecv(streamId: number, data: Uint8Array): [number, boolean];
-  streamSend(streamId: number, data: Uint8Array, fin: boolean): number;
+  streamRecv(streamId: number, data: Uint8Array): [number, boolean] | null;
+  streamSend(streamId: number, data: Uint8Array, fin: boolean): number | null;
   streamPriority(streamId: number, urgency: number, incremental: boolean): void;
   streamShutdown(streamId: number, direction: Shutdown, err: number): void;
   streamCapacity(streamId: number): number;
@@ -78,9 +78,9 @@ interface Connection {
   readable(): StreamIter;
   writable(): StreamIter;
   maxSendUdpPayloadSize(): number;
-  dgramRecv(data: Uint8Array): number;
+  dgramRecv(data: Uint8Array): number | null;
   dgramRecvVec(): Uint8Array | null;
-  dgramRecvPeek(data: Uint8Array, len: number): number;
+  dgramRecvPeek(data: Uint8Array, len: number): number | null;
   dgramRecvFrontLen(): number | null;
   dgramRecvQueueLen(): number;
   dgramRecvQueueByteSize(): number;
@@ -88,8 +88,8 @@ interface Connection {
   dgramSendQueueByteSize(): number;
   isDgramSendQueueFull(): boolean;
   isDgramRecvQueueFull(): boolean;
-  dgramSend(data: Uint8Array): void;
-  dgramSendVec(data: Uint8Array): void;
+  dgramSend(data: Uint8Array): void | null;
+  dgramSendVec(data: Uint8Array): void | null;
   dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void;
   dgramMaxWritableLen(): number | null;
   timeout(): number | null;

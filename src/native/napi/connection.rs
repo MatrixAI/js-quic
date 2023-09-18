@@ -335,13 +335,15 @@ impl Connection {
   /// You may then send a 0-lenght buffer.
   /// If there is nothing to be sent a Done error will be thrown.
   #[napi(ts_return_type = "[number, SendInfo]")]
-  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
+  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Option<Array>> {
     // Convert the Done error into a 0-length write
     // This would mean that there's nothing to send
 
     let (write, send_info) = match self.0.send(&mut data) {
       Ok((write, send_info)) => (write, send_info),
-      // Err(quiche::Error::Done) => (0, None),
+      // Done means it's done, no more data to be sent
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = {
@@ -359,7 +361,7 @@ impl Connection {
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
-    return Ok(write_and_send_info);
+    return Ok(Some(write_and_send_info));
   }
 
   // So you can pass the SocketAddr
@@ -372,7 +374,7 @@ impl Connection {
     mut data: Uint8Array,
     from: Option<HostPort>,
     to: Option<HostPort>
-  ) -> napi::Result<Array> {
+  ) -> napi::Result<Option<Array>> {
     // If we want to "preserve" the error
     // We have to then provide a Some(Result)
     // Which means Option<Result<SocketAddr>>
@@ -410,6 +412,9 @@ impl Connection {
     };
     let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
       Ok((write, send_info)) => (write, Some(send_info)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
@@ -428,7 +433,7 @@ impl Connection {
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
-    return Ok(write_and_send_info);
+    return Ok(Some(write_and_send_info));
   }
 
   #[napi]
@@ -457,25 +462,22 @@ impl Connection {
     env: Env,
     stream_id: i64,
     mut data: Uint8Array,
-  ) -> napi::Result<Array> {
+  ) -> napi::Result<Option<Array>> {
     let (read, fin) = match self.0.stream_recv(
       stream_id as u64,
       &mut data,
     ) {
       Ok((read, fin)) => (read, fin),
-      // Change this to an exception
-      // DONE means it's actually done!
-      // Done means there's no more data to receive
-      // Err(quiche::Error::Done) => (0, true),
-      // Which is different from receiving a 0-length buffer
-      // We can also change this to a different kind of thing?
-      // But if it is a result array or something else
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
+      // All other errors are exceptional
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let mut read_and_fin = env.create_array(2)?;
     read_and_fin.set(0, read as i64)?;
     read_and_fin.set(1, fin)?;
-    return Ok(read_and_fin);
+    return Ok(Some(read_and_fin));
   }
 
   #[napi]
@@ -484,7 +486,7 @@ impl Connection {
     stream_id: i64,
     data: Uint8Array,
     fin: bool
-  ) -> napi::Result<i64> {
+  ) -> napi::Result<Option<i64>> {
     // 0-length buffer can be written with a fin being true
     // this indicates that it has finished the stream
 
@@ -496,9 +498,11 @@ impl Connection {
       &data,
       fin
     ) {
-      Ok(v) => return Ok(v as i64),
-      // We are going to just return Done
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
+      // All other errors are exceptional
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -517,6 +521,7 @@ impl Connection {
     ).map_err(|e| napi::Error::from_reason(e.to_string()));
   }
 
+  // FIXME: can return DONE
   #[napi]
   pub fn stream_shutdown(
     &mut self,
@@ -612,12 +617,14 @@ impl Connection {
   pub fn dgram_recv(
     &mut self,
     mut data: Uint8Array
-  ) -> napi::Result<i64> {
+  ) -> napi::Result<Option<i64>> {
     match self.0.dgram_recv(
       &mut data,
     ) {
-      Ok(v) => return Ok(v as i64),
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -628,19 +635,24 @@ impl Connection {
   ) -> napi::Result<Option<Uint8Array>> {
     match self.0.dgram_recv_vec() {
       Ok(v) => return Ok(Some(v.into())),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       // Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
 
   #[napi]
-  pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<i64> {
+  pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<Option<i64>> {
     match self.0.dgram_recv_peek(
       &mut data,
       len as usize,
     ) {
-      Ok(v) => return Ok(v as i64),
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string()))
     };
   }
@@ -684,13 +696,14 @@ impl Connection {
   pub fn dgram_send(
     &mut self,
     data: Uint8Array,
-  ) -> napi::Result<()> {
+  ) -> napi::Result<Option<()>> {
     match self.0.dgram_send(
       &data,
     ) {
-      Ok(v) => return Ok(v),
-      // If no data is sent, also return Ok
-      // Err(quiche::Error::Done) => return Ok(()),
+      Ok(v) => return Ok(Some(v)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -699,12 +712,14 @@ impl Connection {
   pub fn dgram_send_vec(
     &mut self,
     data: Uint8Array
-  ) -> napi::Result<()> {
+  ) -> napi::Result<Option<()>> {
     match self.0.dgram_send_vec(
       data.to_vec()
     ) {
-      Ok(v) => return Ok(v),
-      // Err(quiche::Error::Done) => return Ok(()),
+      Ok(v) => return Ok(Some(v)),
+      // Done means it's done, no more data to be read
+      // We return null in this case
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -888,6 +903,7 @@ impl Connection {
     return Ok(path::HostIter(socket_addr_iter));
   }
 
+  // FIXME: can return DONE
   #[napi]
   pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<()> {
     return self.0.close(app, err as u64, &reason).or_else(

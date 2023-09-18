@@ -164,96 +164,62 @@ async function main() {
   sendPacket(clientConn, serverConn);
   // Both are established
 
-  // Setting up runtimes
-
-  // Resolved when client receives data
-  let clientWaitRecvProm = utils.promise<void>();
-  let serverWaitRecvProm = utils.promise<void>();
   const clientBuf = Buffer.allocUnsafe(1024);
 
-  const clientSend = () => {
-    let sent = false;
-    while(true) {
-      if (sendPacket(clientConn, serverConn)) {
-        sent = true;
-      } else {
-        break;
-      }
-    }
-    if (sent) serverWaitRecvProm.resolveP();
-  }
-  const clientWrite = (buffer: Buffer) => {
-    // write buffer to stream
-    clientConn.streamSend(0, buffer, false);
-    // trigger send
-    clientSend();
-  }
-  const clientRuntime = (async () => {
-    while (true) {
-      await clientWaitRecvProm.p
-      clientWaitRecvProm = utils.promise<void>();
-      // Process streams.
-      for (const streamId of serverConn.readable()) {
-        while (true) {
-          // read and ditch information
-          if (clientConn.streamRecv(0, clientBuf) === null) break;
-        }
-      }
-      // process sends.
-      clientSend();
-      // check state change,
-      if (clientConn.isClosed() || clientConn.isDraining()) break;
-    }
-  })();
-
-  const serverSend = () => {
-    let sent = false;
-    while(true) {
-      if (sendPacket(serverConn, clientConn)) {
-        sent = true;
-      } else {
-        break;
-      }
-    }
-    if (sent) clientWaitRecvProm.resolveP();
-  }
-
-  const serverRuntime = (async () => {
-    while (true) {
-      await serverWaitRecvProm.p
-      serverWaitRecvProm = utils.promise<void>();
-      // Process streams.
-      for (const streamId of serverConn.readable()){
-        while(true) {
-          // read and ditch information
-          if (serverConn.streamRecv(0, clientBuf) === null) break;
-        }
-      }
-      // process sends.
-      serverSend();
-      // check state change,
-      if (serverConn.isClosed() || serverConn.isDraining()) break;
-    }
-  })();
-
+  logger.warn('Starting test');
   const summary = await b.suite(
     summaryName(__filename),
     b.add(
-      'send 1Kib of data over QUICStream with simple async runtime',
+      'send 1Kib of data over QUICStream with minimal operations',
       async () => {
-        clientWrite(data1KiB);
+        // Doing nothing - 12 896 010 ops/s, ±1.05%
+        clientConn.streamSend(0, data1KiB, false);
+        // Just passing data to `streamSend` - 451 088 ops/s, ±1.22% | 2.22 ,, 0.88%
+        while(true) {
+          const result = clientConn.send(dataBuffer);
+          if (result === null) break;
+          // Doing clientConn.send inside loop -  89 343 ops/s, ±0.91% | 11.2, 9, 3.6%
+        const [serverSendLength, sendInfo] = result;
+          serverConn.recv(dataBuffer.subarray(0, serverSendLength), {
+            to: sendInfo.to,
+            from: sendInfo.from,
+          });
+          // Passing data to serverConn.recv - 82 360 ops/s, ±1.45% | 12.2, 1, 0.4%
+        }
+        for (const streamId of serverConn.readable()){
+          // Just iterating readable - 17 924 ops/s, ±6.38% | 55.6, 43.4, 17.4%
+          while(true) {
+            // read and ditch information
+            if (serverConn.streamRecv(0, clientBuf) === null) break;
+            // Checking streamRecv inside loop - 21 113 ops/s, ±5.68% | 47.6, 35.4, 14.2%
+          }
+        }
+        while(true) {
+          const result = serverConn.send(dataBuffer);
+          if (result === null) break;
+          // Doing serverConn.send inside loop - 19 118 ops/s, ±3.26% | 52.6, 5.0, 2.0%
+          const [serverSendLength, sendInfo] = result;
+          clientConn.recv(dataBuffer.subarray(0, serverSendLength), {
+            to: sendInfo.to,
+            from: sendInfo.from,
+          });
+          // Passing data to clientConn.recv - 3 871 ops/s, ±0.88% | 250, 197.4, 79.0%
+        }
       },
     ),
     ...suiteCommon,
   );
-  clientConn.close(true, 0, Buffer.from([]));
-  serverConn.close(true, 0, Buffer.from([]));
-  clientSend();
-  serverSend();
-  await Promise.all([
-    clientRuntime,
-    serverRuntime,
-  ]);
+  // logger.warn('test done, closing');
+  // clientConn.close(true, 0, Buffer.from([]));
+  // serverConn.close(true, 0, Buffer.from([]));
+  // clientSend();
+  // serverSend();
+  // logger.warn('waiting for runtimes');
+  // await Promise.all([
+  //   clientRuntime.finally(() => logger.warn('client runtime ended')),
+  //   serverRuntime.finally(() => logger.warn('server runtime ended')),
+  // ]);
+  // logger.warn('runtimes ended')
   return summary;
 }
 
