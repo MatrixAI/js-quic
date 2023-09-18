@@ -2,7 +2,8 @@ use std::io;
 use std::fs::File;
 use std::net::{
   SocketAddr,
-  ToSocketAddrs,
+  Ipv4Addr,
+  Ipv6Addr,
 };
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
@@ -139,12 +140,18 @@ pub struct HostPort {
 impl TryFrom<HostPort> for SocketAddr {
   type Error = io::Error;
   fn try_from(host: HostPort) -> io::Result<Self> {
-    (host.host, host.port).to_socket_addrs()?.next().ok_or(
-      io::Error::new(
-        io::ErrorKind::Other,
-        "Could not convert host to socket address"
-      )
-    )
+    if let Ok(ipv4) = host.host.parse::<Ipv4Addr>() {
+      return Ok(SocketAddr::new(ipv4.into(), host.port));
+    }
+
+    if let Ok(ipv6) = host.host.parse::<Ipv6Addr>() {
+      return Ok(SocketAddr::new(ipv6.into(), host.port));
+    }
+
+    Err(io::Error::new(
+      io::ErrorKind::Other,
+      "Could not convert host to socket address",
+    ))
   }
 }
 
