@@ -259,27 +259,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataBidiRemote);
     }
 
-    // If it is uni directional and it is peer initiated
-    // Then we cannot write to the peer, and thus no point in initialising state
-    if (!(this.type === 'uni' && this.initiated === 'peer')) {
-      try {
-        // Quiche stream state doesn't yet exist until data is either received
-        // or sent on the stream. However in this QUIC library, one may want to
-        // create a new stream to use. Therefore in order to maintain consistent
-        // closing behaviour, we can prime the stream state in quiche by sending
-        // a 0-length message. The data is not actually send to the peer.
-        connection.conn.streamSend(streamId, new Uint8Array(0), false);
-      } catch (e) {
-        // Note that `conn.streamSend` does not throw `Done` when writing
-        // a 0-length message
-        // This is a software error
-        throw new errors.ErrorQUICStreamInternal(
-          'Failed to prime local stream state with a 0-length message',
-          { cause: e }
-        );
-      }
-    }
-
     if (this.type === 'uni' && initiated === 'local') {
       // This is just a dummy stream that will be auto-closed during creation
       this.readable = new ReadableStream({
@@ -317,6 +296,34 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           highWaterMark: 1,
         },
       );
+
+      // If it is uni directional and it is peer initiated
+      // Then we cannot write to the peer, and thus no point in initialising state
+      try {
+        // Quiche stream state doesn't yet exist until data is either received
+        // or sent on the stream. However in this QUIC library, one may want to
+        // create a new stream to use. Therefore in order to maintain consistent
+        // closing behaviour, we can prime the stream state in quiche by sending
+        // a 0-length message. The data is not actually send to the peer.
+        connection.conn.streamSend(streamId, new Uint8Array(0), false);
+      } catch (e) {
+        // There is no need to prime the state if our the other side already close the readable side
+        // In this case, we need to ensure that we understand the stream is already closed
+        // It's possible... that even though it was bidirectional
+        // That the other side already cancelled the readable side
+        // So in this case it would be `StreamStopped` error code
+        // If it is a stream stopped, then we can ignore here
+        // It will be dealt with on the next write inside `writableWrite`
+        // Remember we cannot dispatch events inside the constructor
+        if (utils.isStreamStopped(e) === false) {
+          // Note that `conn.streamSend` does not throw `Done` when writing
+          // a 0-length message, therefore this is a software error
+          throw new errors.ErrorQUICStreamInternal(
+            'Failed to prime local stream state with a 0-length message',
+            { cause: e }
+          );
+        }
+      }
     }
   }
 
@@ -496,9 +503,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     try {
       [recvLength, fin] = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
     } catch (e) {
-      let match: RegExpMatchArray | null;
-      if ((match = e.message.match(/StreamReset\((.+)\)/)) != null) {
-        const code = parseInt(match[1]);
+      let code: number | false;
+      if ((code = utils.isStreamReset(e)) !== false) {
         // Use the reason as the cause
         const reason = this.codeToReason('read', code);
         const e_ = new errors.ErrorQUICStreamPeerRead(
@@ -604,13 +610,12 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       try {
         sentLength = this.connection.conn.streamSend(this.streamId, chunk, false);
       } catch (e) {
-        let match: RegExpMatchArray | null;
+        let code: number | false;
         if (e.message === 'Done') {
           // This will trigger send, and also loop back to the top
           sentLength = 0;
-        } else if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
+        } else if ((code = utils.isStreamStopped(e)) !== false) {
           // Stream was stopped by the peer
-          const code = parseInt(match[1]);
           const reason = this.codeToReason('write', code);
           const e_ = new errors.ErrorQUICStreamPeerWrite(
             'Peer stopped the writable stream',
@@ -710,11 +715,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       // That technically means there's no need to wait for anything
       this.connection.conn.streamSend(this.streamId, new Uint8Array(0), true);
     } catch (e) {
-      let match: RegExpMatchArray | null;
+      let code: number | false;
       // If the stream is already reset, we cannot gracefully close
-      if ((match = e.message.match(/StreamStopped\((.+)\)/)) != null) {
+      if ((code = utils.isStreamStopped(e)) !== false) {
         // Stream was stopped by the peer
-        const code = parseInt(match[1]);
         const reason = this.codeToReason('write', code);
         const e_ = new errors.ErrorQUICStreamPeerWrite(
           'Peer stopped the writable stream',

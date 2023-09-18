@@ -40,7 +40,11 @@ async function main() {
           const stream = evt.detail;
           // Graceful close of writable
           process.stderr.write('>>>>>>>>> HANDLING THE QUIC SERVER STREAM\n');
-          await stream.writable.close();
+          try {
+            await stream.writable.close();
+          } catch (e) {
+            console.log('ALREADY CLOSED', e.name, e.message);
+          }
           // Consume until graceful close of readable
           for await (const _ of stream.readable) {
             // Do nothing, only consume
@@ -69,20 +73,30 @@ async function main() {
   const reader = stream.readable.getReader();
   const writer = stream.writable.getWriter();
 
-  for (let i = 0; i < 1000; i++) {
+  // This should already be done, because it was closed on the other side
+  // When we MOVE this above... it ends up being a problem if the stream is already `StreamStopped`
+  await reader.cancel();
+
+  // Write some bytes!
+  for (let i = 0; i < 10; i++) {
     await writer.write(data1KiB);
   }
 
-  // This should already be done, because it was closed
-  await reader.cancel();
 
   await writer.close();
 
+  // So let's say you don't allow any time to process the stream closures
+  // You go straight to connection closing
+  // Then no delay here
   await testsUtils.sleep(1000);
+  // We need to ensure that this in fact works
 
   // No need to force, streams should already be closed
   // If your force is true by default, then we are technically force closing streams
   // It will cause an error
+
+  // This would mean... that we don't force it... we wait gracefully for the streams to just close
+  // And it should still work
   await quicClient.destroy({ force: false });
 
   await testsUtils.sleep(1000);
