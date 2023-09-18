@@ -30,8 +30,9 @@ pub const MAX_CONNECTION_WINDOW: i64 = 24 * 1024 * 1024;
 
 /// The maximum size of the receiver stream flow control window.
 /// This is the default for `set_max_stream_window`
+/// This is not exported by quiche, but it's 16 MiB
 #[napi]
-pub const MAX_STREAM_WINDOW: i64 = quiche::stream::MAX_STREAM_WINDOW;
+pub const MAX_STREAM_WINDOW: i64 = 16 * 1024 * 1024;
 
 // We don't need this anymore...
 // pub const HTTP_3: [&[u8]; 4] = [b"h3", b"h3-29", b"h3-28", b"h3-27"];

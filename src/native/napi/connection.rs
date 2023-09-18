@@ -528,7 +528,7 @@ impl Connection {
     ).map_err(|e| napi::Error::from_reason(e.to_string()));
   }
 
-  // FIXME: can return DONE
+  /// This may return `None` if the stream no longer exists
   #[napi]
   pub fn stream_shutdown(
     &mut self,
