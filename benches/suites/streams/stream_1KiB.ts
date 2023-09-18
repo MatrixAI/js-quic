@@ -8,8 +8,6 @@ import * as testsUtils from '../../../tests/utils';
 import { summaryName, suiteCommon } from '../../utils';
 
 async function main() {
-  // FIXME: stub out
-  return;
   const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
