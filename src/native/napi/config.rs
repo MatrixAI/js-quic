@@ -342,6 +342,11 @@ impl Config {
   }
 
   #[napi]
+  pub fn set_max_stream_window(&mut self, v: i64) {
+    return self.0.set_max_stream_window(v as u64);
+  }
+
+  #[napi]
   pub fn set_max_connection_window(&mut self, v: i64) -> () {
     return self.0.set_max_connection_window(v as u64);
   }

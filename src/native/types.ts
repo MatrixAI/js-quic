@@ -36,6 +36,7 @@ interface Config {
     recvQueueLen: number,
     sendQueueLen: number,
   ): void;
+  setMaxStreamWindow(v: number): void;
   setMaxConnectionWindow(v: number): void;
   setStatelessResetToken(v?: bigint | undefined | null): void;
   setDisableDcidReuse(v: boolean): void;

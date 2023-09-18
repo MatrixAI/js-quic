@@ -21,6 +21,8 @@ interface Quiche {
   PROTOCOL_VERSION: number;
   MAX_DATAGRAM_SIZE: number;
   MAX_UDP_PACKET_SIZE: number;
+  MAX_STREAM_WINDOW: number;
+  MAX_CONNECTION_WINDOW: number;
   CongestionControlAlgorithm: typeof CongestionControlAlgorithm;
   Shutdown: typeof Shutdown;
   Type: typeof Type;

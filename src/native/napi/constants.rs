@@ -22,6 +22,17 @@ pub const MAX_DATAGRAM_SIZE: i64 = 1350;
 #[napi]
 pub const MAX_UDP_PACKET_SIZE: i64 = 65535;
 
+/// The maximum size of the receiver connection flow control window.
+/// Note that this is not exported by quiche, but it is 24 MiB
+/// This is the default fro `set_max_connection_window`
+#[napi]
+pub const MAX_CONNECTION_WINDOW: i64 = 24 * 1024 * 1024;
+
+/// The maximum size of the receiver stream flow control window.
+/// This is the default for `set_max_stream_window`
+#[napi]
+pub const MAX_STREAM_WINDOW: i64 = quiche::stream::MAX_STREAM_WINDOW;
+
 // We don't need this anymore...
 // pub const HTTP_3: [&[u8]; 4] = [b"h3", b"h3-29", b"h3-28", b"h3-27"];
 // let alpns: Vec<&'static [u8]> = HTTP_3.to_vec();
