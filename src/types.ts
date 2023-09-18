@@ -223,6 +223,16 @@ type QUICConfig = {
   initialMaxStreamsUni: number;
 
   /**
+   * This defaults to 24 MiB.
+   */
+  maxConnectionWindow: number;
+
+  /**
+   * This defaults to 16 MiB.
+   */
+  maxStreamWindow: number;
+
+  /**
    * Enables receiving dgram.
    * The 2 numbers are receive queue length and send queue length.
    * This defaults to `[false, 0, 0]`.
