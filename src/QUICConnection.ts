@@ -15,6 +15,7 @@ import type {
 import type { Connection, ConnectionError,  SendInfo } from './native/types';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
+import { Lock } from '@matrixai/async-locks';
 import { AbstractEvent, EventAll } from '@matrixai/events';
 import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
@@ -79,6 +80,13 @@ class QUICConnection {
    * Used during `QUICStream` creation.
    */
   protected codeToReason: StreamCodeToReason;
+
+  /**
+   * This is used to ensure that `recv` is serialised.
+   * To prevent another `recv` call intercepting the previous `recv` call
+   * that is still finishing up with a `send` call.
+   */
+  protected recvLock: Lock = new Lock();
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -202,7 +210,7 @@ class QUICConnection {
 
     // Only run this if the close wasn't due to peer
     if (evt.detail.type !== 'peer') {
-      this.send();
+      await this.send();
     }
 
     if (this[running]) {
@@ -223,7 +231,7 @@ class QUICConnection {
     // Failure of send is both a caller error and domain error
     // In this case we can ignore the caller error, since the domain error will be handled
     // by the QUICConnection error handlers
-    this.send();
+    await this.send();
   };
 
   protected handleEventQUICStreamDestroyed = (
@@ -434,7 +442,7 @@ class QUICConnection {
     );
     if (this.type === 'client') {
       // The timeout only starts after the first send is called
-      this.send();
+      await this.send();
     } else if (this.type === 'server') {
       if (data == null || remoteInfo == null) {
         throw new errors.ErrorQUICConnectionStartData(
@@ -442,7 +450,7 @@ class QUICConnection {
         );
       }
       // This chain up recv and send and setup the max idle timeout
-      this.recv(data, remoteInfo);
+      await this.recv(data, remoteInfo);
     }
     try {
       // This will block until the connection is established
@@ -692,10 +700,10 @@ class QUICConnection {
    * @internal
    */
   @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['starting', 'stopping'])
-  public recv(
+  public async recv(
     data: Uint8Array,
     remoteInfo: RemoteInfo,
-  ): void {
+  ): Promise<void> {
 
     // // If the connection is closed, we can just ignore
     // if (this.conn.isClosed()) {
@@ -704,7 +712,7 @@ class QUICConnection {
 
     // Recv which are chained to `this.send` must be serialised
     // To avoid another `recv` call to be called in the middle
-    // await this.recvLock.withF(async () => {
+    await this.recvLock.withF(async () => {
 
       // The remote information may be changed on each receive
       // However to do so would mean connection migration,
@@ -824,9 +832,9 @@ class QUICConnection {
       // That means we have to run `processStreams` again after send
       // But only if we did a TLS verification, and it passed
 
-      this.send();
+      await this.send();
 
-    // });
+    });
   }
 
   /**
@@ -854,7 +862,7 @@ class QUICConnection {
    * @internal
    */
   @ready(new errors.ErrorQUICConnectionNotRunning(), false, ['starting', 'stopping'])
-  public send(): void {
+  public async send(): Promise<void> {
 
     // // If the connection is closed, ignore and do nothing
     // if (this.conn.isClosed()) {
@@ -933,7 +941,7 @@ class QUICConnection {
     ) {
       const peerCertsChain = this.conn.peerCertChain()!;
       try {
-        this.config.verifyCallback(
+        await this.config.verifyCallback(
           peerCertsChain.map(utils.derToPEM),
           utils.collectPEMs(this.config.ca)
         );
@@ -1139,7 +1147,7 @@ class QUICConnection {
       }
       // Otherwise, we should be calling send after the timeout
       // If the status is not equal null, then we can send
-      this.send();
+      await this.send();
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
       // If this is `null`, then quiche is requesting the timer to be cleaned up
@@ -1235,62 +1243,49 @@ class QUICConnection {
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
   public newStream(type: 'bidi' | 'uni' = 'bidi'): QUICStream {
-    // let lock: Lock;
-    // if (this.type === 'client' && type === 'bidi') {
-    //   lock = this.streamIdClientBidiLock;
-    // } else if (this.type === 'server' && type === 'bidi') {
-    //   lock = this.streamIdServerBidiLock;
-    // } else if (this.type === 'client' && type === 'uni') {
-    //   lock = this.streamIdClientUniLock;
-    // } else if (this.type === 'server' && type === 'uni') {
-    //   lock = this.streamIdServerUniLock;
-    // }
-    // // Using a lock on stream ID to prevent racing updates
-    // return await lock!.withF(async () => {
-      let streamId: StreamId;
-      if (this.type === 'client' && type === 'bidi') {
-        streamId = this.streamIdClientBidi;
-      } else if (this.type === 'server' && type === 'bidi') {
-        streamId = this.streamIdServerBidi;
-      } else if (this.type === 'client' && type === 'uni') {
-        streamId = this.streamIdClientUni;
-      } else if (this.type === 'server' && type === 'uni') {
-        streamId = this.streamIdServerUni;
-      }
-      const quicStream = QUICStream.createQUICStream({
-        initiated: 'local',
-        streamId: streamId!,
-        connection: this,
-        config: this.config,
-        codeToReason: this.codeToReason,
-        reasonToCode: this.reasonToCode,
-        logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
-      });
-      this.streamMap.set(quicStream.streamId, quicStream);
-      quicStream.addEventListener(
-        events.EventQUICStreamSend.name,
-        this.handleEventQUICStreamSend,
-      );
-      quicStream.addEventListener(
-        events.EventQUICStreamDestroyed.name,
-        this.handleEventQUICStreamDestroyed,
-        { once: true },
-      );
-      quicStream.addEventListener(
-        EventAll.name,
-        this.handleEventQUICStream
-      );
-      if (this.type === 'client' && type === 'bidi') {
-        this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
-      } else if (this.type === 'server' && type === 'bidi') {
-        this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
-      } else if (this.type === 'client' && type === 'uni') {
-        this.streamIdClientUni = (this.streamIdClientUni + 4) as StreamId;
-      } else if (this.type === 'server' && type === 'uni') {
-        this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
-      }
-      return quicStream;
-    // });
+    let streamId: StreamId;
+    if (this.type === 'client' && type === 'bidi') {
+      streamId = this.streamIdClientBidi;
+    } else if (this.type === 'server' && type === 'bidi') {
+      streamId = this.streamIdServerBidi;
+    } else if (this.type === 'client' && type === 'uni') {
+      streamId = this.streamIdClientUni;
+    } else if (this.type === 'server' && type === 'uni') {
+      streamId = this.streamIdServerUni;
+    }
+    const quicStream = QUICStream.createQUICStream({
+      initiated: 'local',
+      streamId: streamId!,
+      connection: this,
+      config: this.config,
+      codeToReason: this.codeToReason,
+      reasonToCode: this.reasonToCode,
+      logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
+    });
+    this.streamMap.set(quicStream.streamId, quicStream);
+    quicStream.addEventListener(
+      events.EventQUICStreamSend.name,
+      this.handleEventQUICStreamSend,
+    );
+    quicStream.addEventListener(
+      events.EventQUICStreamDestroyed.name,
+      this.handleEventQUICStreamDestroyed,
+      { once: true },
+    );
+    quicStream.addEventListener(
+      EventAll.name,
+      this.handleEventQUICStream
+    );
+    if (this.type === 'client' && type === 'bidi') {
+      this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
+    } else if (this.type === 'server' && type === 'bidi') {
+      this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
+    } else if (this.type === 'client' && type === 'uni') {
+      this.streamIdClientUni = (this.streamIdClientUni + 4) as StreamId;
+    } else if (this.type === 'server' && type === 'uni') {
+      this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
+    }
+    return quicStream;
   }
 
   /**
@@ -1307,7 +1302,7 @@ class QUICConnection {
       // If the connection has already sent ack-eliciting frames
       // then this is a noop.
       this.conn.sendAckEliciting();
-      this.send();
+      await this.send();
       this.keepAliveIntervalTimer = new Timer({
         delay: ms,
         handler: keepAliveHandler,

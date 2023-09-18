@@ -129,7 +129,7 @@ class QUICSocket {
       // state is optional. We can respond with `STATELESS_RESET`
       // but it's not necessary, and ignoring is simpler
       // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
-      connection.recv(data, remoteInfo_);
+      await connection.recv(data, remoteInfo_);
       // Failing this is a software error (not a caller error)
     } else {
       // If the server is not registered, we cannot attempt to create a new

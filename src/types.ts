@@ -319,7 +319,7 @@ type StreamCodeToReason = (
 type TLSVerifyCallback = (
   certs: Array<string>,
   ca: Array<string>
-) => void;
+) => PromiseLike<void>;
 
 type ConnectionId = Opaque<'ConnectionId', Buffer>;
 
