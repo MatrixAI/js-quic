@@ -62,13 +62,13 @@ interface Connection {
     data: Uint8Array,
     from?: HostPort | undefined | null,
     to?: HostPort | undefined | null,
-  ): [number, SendInfo | null] | null;
+  ): [number, SendInfo] | null;
   sendQuantum(): number;
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number;
   streamRecv(streamId: number, data: Uint8Array): [number, boolean] | null;
   streamSend(streamId: number, data: Uint8Array, fin: boolean): number | null;
   streamPriority(streamId: number, urgency: number, incremental: boolean): void;
-  streamShutdown(streamId: number, direction: Shutdown, err: number): void;
+  streamShutdown(streamId: number, direction: Shutdown, err: number): void | null;
   streamCapacity(streamId: number): number;
   streamReadable(streamId: number): boolean;
   streamWritable(streamId: number, len: number): boolean;
@@ -110,7 +110,7 @@ interface Connection {
   retiredScidNext(): Uint8Array | null;
   availableDcids(): number;
   pathsIter(from: HostPort): HostIter;
-  close(app: boolean, err: number, reason: Uint8Array): void;
+  close(app: boolean, err: number, reason: Uint8Array): void | null;
   traceId(): string;
   applicationProto(): Uint8Array;
   serverName(): string | null;

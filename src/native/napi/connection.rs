@@ -418,25 +418,25 @@ impl Connection {
       _ => None
     };
     let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
-      Ok((write, send_info)) => (write, Some(send_info)),
+      Ok((write, send_info)) => (write, send_info),
       // Done means it's done, no more data to be read
       // We return null in this case
       Err(quiche::Error::Done) => return Ok(None),
       // Err(quiche::Error::Done) => (0, None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
-    let send_info = send_info.map(|info| {
+    let send_info = {
       let from = HostPort {
-        host: info.from.ip().to_string(),
-        port: info.from.port(),
+        host: send_info.from.ip().to_string(),
+        port: send_info.from.port(),
       };
       let to = HostPort {
-        host: info.to.ip().to_string(),
-        port: info.to.port(),
+        host: send_info.to.ip().to_string(),
+        port: send_info.to.port(),
       };
-      let at = External::new(info.at);
+      let at = External::new(send_info.at);
       SendInfo { from, to, at }
-    });
+    };
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
@@ -535,7 +535,7 @@ impl Connection {
     stream_id: i64,
     direction: Shutdown,
     err: i64
-  ) -> napi::Result<()> {
+  ) -> napi::Result<Option<()>> {
     // The err is an application-supplied error code
     // It's an application protocol error code
     // https://datatracker.ietf.org/doc/html/rfc9000#section-20.2
@@ -545,13 +545,15 @@ impl Connection {
     // STOP_SENDING means we stop receiving
     // It can indicate to the peer WHY we have stopped receiving
     // But this is at the transport layer remember
-    return self.0.stream_shutdown(
+    return match self.0.stream_shutdown(
       stream_id as u64,
       direction.into(),
       err as u64
-    ).or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    );
+    ) {
+      Ok(()) => Ok(Some(())),
+      Err(quiche::Error::Done) => Ok(None),
+      Err(e) => Err(napi::Error::from_reason(e.to_string())),
+    };
   }
 
   #[napi]
@@ -910,12 +912,13 @@ impl Connection {
     return Ok(path::HostIter(socket_addr_iter));
   }
 
-  // FIXME: can return DONE
   #[napi]
-  pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<()> {
-    return self.0.close(app, err as u64, &reason).or_else(
-      |e| Err(napi::Error::from_reason(e.to_string()))
-    );
+  pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<Option<()>> {
+    return match self.0.close(app, err as u64, &reason) {
+      Ok(_) => Ok(Some(())),
+      Err(quiche::Error::Done) => Ok(None),
+      Err(e) => Err(napi::Error::from_reason(e.to_string())),
+    };
   }
 
   #[napi]
