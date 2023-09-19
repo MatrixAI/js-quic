@@ -71,10 +71,7 @@ class QUICServer {
   public readonly closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
-  /**
-   * This must be attached once.
-   */
-  protected handleEventQUICServerError = async (
+  protected handleEventQUICServerError = (
     evt: events.EventQUICServerError,
   ) => {
     const error = evt.detail;

@@ -316,7 +316,7 @@ class QUICClient extends EventTarget {
   protected _closed: boolean = false;
   protected resolveClosedP: () => void;
 
-  protected handleEventQUICClientError = async (evt: events.EventQUICClientError) => {
+  protected handleEventQUICClientError = (evt: events.EventQUICClientError) => {
     const error = evt.detail;
     this.logger.error(utils.formatError(error));
   };

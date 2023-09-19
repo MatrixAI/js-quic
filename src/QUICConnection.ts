@@ -163,7 +163,7 @@ class QUICConnection {
   public readonly closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
-  protected handleEventQUICConnectionError = async (
+  protected handleEventQUICConnectionError = (
     evt: events.EventQUICConnectionError
   ) => {
     const error = evt.detail;
@@ -1304,6 +1304,7 @@ class QUICConnection {
       // then this is a noop.
       this.conn.sendAckEliciting();
       await this.send();
+      if (signal.aborted) return;
       this.keepAliveIntervalTimer = new Timer({
         delay: ms,
         handler: keepAliveHandler,
@@ -1312,6 +1313,7 @@ class QUICConnection {
     this.keepAliveIntervalTimer = new Timer({
       delay: ms,
       handler: keepAliveHandler,
+      lazy: true
     });
   }
 

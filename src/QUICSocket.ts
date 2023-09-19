@@ -64,7 +64,7 @@ class QUICSocket {
   /**
    * Upon a QUIC socket error, stop this socket.
    */
-  protected handleEventQUICSocketError = async (
+  protected handleEventQUICSocketError = (
     evt: events.EventQUICSocketError,
   ) => {
     const error = evt.detail;
