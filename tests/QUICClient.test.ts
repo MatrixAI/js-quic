@@ -14,7 +14,7 @@ import * as testsUtils from './utils';
 import { generateConfig, sleep } from './utils';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.DEBUG, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -31,8 +31,8 @@ describe(QUICClient.name, () => {
   };
   let sockets: Set<QUICSocket>;
 
-  // const types: Array<KeyTypes> = ['RSA', 'ECDSA', 'ED25519'];
-  const types: Array<KeyTypes> = ['RSA'];
+  const types: Array<KeyTypes> = ['RSA', 'ECDSA', 'ED25519'];
+  // const types: Array<KeyTypes> = ['RSA'];
   const defaultType = types[0];
 
   // We need to test the stream making
@@ -335,7 +335,7 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: () => {},
+          verifyCallback: async () => {},
         },
       });
       testsUtils.extractSocket(client1, sockets);
@@ -380,7 +380,7 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: () => {},
+          verifyCallback: async () => {},
         },
       });
       testsUtils.extractSocket(client1, sockets);
@@ -400,7 +400,7 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: () => {},
+          verifyCallback: async () => {},
         },
       });
       testsUtils.extractSocket(client2, sockets);
@@ -598,23 +598,30 @@ describe(QUICClient.name, () => {
       await server.start({
         host: localhost,
       });
-      // Connection should fail
-      await expect(
-        QUICClient.createQUICClient({
-          host: localhost,
-          port: server.port,
-          localHost: localhost,
-          crypto: {
-            ops: ClientCryptoOps,
-          },
-          logger: logger.getChild(QUICClient.name),
-          config: {
-            key: tlsConfigs2.key,
-            cert: tlsConfigs2.cert,
-            verifyPeer: false,
-          },
-        }),
-      ).toReject();
+      // connection succeeds but peer will reject shortly after
+      const client = await QUICClient.createQUICClient({
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: ClientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          key: tlsConfigs2.key,
+          cert: tlsConfigs2.cert,
+          verifyPeer: false,
+        },
+      });
+
+      // verification by peer happens after connection is securely established and started
+      const clientConnectionErrorProm = promise<never>();
+      client.connection.addEventListener(
+        events.EventQUICConnectionError.name,
+        (evt: events.EventQUICConnectionError) => clientConnectionErrorProm.rejectP(evt.detail)
+      );
+      await expect(clientConnectionErrorProm.p).rejects.toThrow(errors.ErrorQUICConnectionPeer);
+
       await server.stop();
     });
     test('graceful failure verifying client and server', async () => {
@@ -1201,9 +1208,9 @@ describe(QUICClient.name, () => {
       const serverConnection = await connectionEventProm.p;
       const serverTimeoutProm = promise<void>();
       serverConnection.addEventListener(
-        events.EventQUICConnectionStream.name,
-        (event: events.EventQUICConnectionError) => {
-          if (event.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
+        events.EventQUICConnectionError.name,
+        (evt: events.EventQUICConnectionError) => {
+          if (evt.detail instanceof errors.ErrorQUICConnectionIdleTimeout) {
             serverTimeoutProm.resolveP();
           }
         },
@@ -1417,7 +1424,7 @@ describe(QUICClient.name, () => {
         },
       });
       await expect(clientProm).rejects.toThrow(
-        errors.ErrorQUICConnectionStartTimeout,
+        errors.ErrorQUICConnectionIdleTimeout,
       );
     });
   });
@@ -1510,17 +1517,16 @@ describe(QUICClient.name, () => {
       });
       clientProm.catch(() => {});
 
-      // Server connection is never emitted
-      await Promise.race([
-        handleConnectionEventProm.p.then(() => {
-          throw Error('Server connection should not be emitted');
-        }),
-        // Allow some time
-        sleep(200),
-      ]);
-
+      // verification by peer happens after connection is securely established and started
+      const serverConn = await handleConnectionEventProm.p;
+      const serverErrorProm = promise<never>();
+      serverConn.addEventListener(
+        events.EventQUICConnectionError.name,
+        (evt: events.EventQUICConnectionError) => serverErrorProm.rejectP(evt.detail)
+      );
+      await expect(serverErrorProm.p).rejects.toThrow(errors.ErrorQUICConnectionPeer);
       await expect(clientProm).rejects.toThrow(
-        errors.ErrorQUICConnectionInternal,
+        errors.ErrorQUICConnectionLocal,
       );
 
       await server.stop();
@@ -1602,7 +1608,7 @@ describe(QUICClient.name, () => {
         port: 55555,
       });
       // Connection should fail
-      const clientProm = QUICClient.createQUICClient({
+      const client = await QUICClient.createQUICClient({
         host: localhost,
         port: server.port,
         localHost: localhost,
@@ -1616,7 +1622,14 @@ describe(QUICClient.name, () => {
           verifyPeer: false,
         },
       });
-      clientProm.catch(() => {});
+
+      // verification by peer happens after connection is securely established and started
+      const clientConnectionErrorProm = promise<never>();
+      client.connection.addEventListener(
+        events.EventQUICConnectionError.name,
+        (evt: events.EventQUICConnectionError) => clientConnectionErrorProm.rejectP(evt.detail)
+      );
+      await expect(clientConnectionErrorProm.p).rejects.toThrow(errors.ErrorQUICConnectionPeer);
 
       // Server connection is never emitted
       await Promise.race([
@@ -1626,10 +1639,6 @@ describe(QUICClient.name, () => {
         // Allow some time
         sleep(200),
       ]);
-
-      await expect(clientProm).rejects.toThrow(
-        errors.ErrorQUICConnectionInternal,
-      );
 
       await server.stop();
     });
