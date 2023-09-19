@@ -1,4 +1,5 @@
 import type { POJO } from '@matrixai/errors';
+import type { ConnectionError } from './native';
 import AbstractError from '@matrixai/errors/dist/AbstractError';
 
 class ErrorQUIC<T> extends AbstractError<T> {
@@ -95,6 +96,14 @@ class ErrorQUICConnectionNotRunning<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection is not running';
 }
 
+class ErrorQUICConnectionConfigInvalid<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC connection invalid configuration';
+}
+
+class ErrorQUICConnectionClosed<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection cannot be restarted because it has already been closed';
+}
+
 class ErrorQUICConnectionStartData<T> extends ErrorQUIC<T> {
   static description = 'QUIC Connection start requires data when it is a server connection';
 }
@@ -103,33 +112,67 @@ class ErrorQUICConnectionStartTimeout<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection start timeout';
 }
 
-class ErrorQUICConnectionClosed<T> extends ErrorQUICConnection<T> {
-  static description = 'QUIC Connection has been closed';
+/**
+ * Note that TlsFail error codes are documented here:
+ * https://github.com/google/boringssl/blob/master/include/openssl/ssl.h
+ */
+class ErrorQUICConnectionLocal<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection local error';
+  declare data: POJO & ConnectionError;
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError;
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
 /**
  * Note that TlsFail error codes are documented here:
  * https://github.com/google/boringssl/blob/master/include/openssl/ssl.h
- * This can mean local closure of any code!
  */
-class ErrorQUICConnectionLocal<T> extends ErrorQUICConnection<T> {
-  static description = 'QUIC Connection local error';
-}
-
 class ErrorQUICConnectionPeer<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection peer error';
+  declare data: POJO & ConnectionError;
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError;
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
+/**
+ * If the connection times out, the `quiche` library does not send a
+ * `CONNECTION_CLOSE` frame, the connection is immediately closed.
+ */
 class ErrorQUICConnectionIdleTimeout<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection max idle timeout exhausted';
 }
 
+
+/**
+ * This exception is used only for software errors. This will be thrown
+ * upwards, but not dispatched as `EventQUICConnectionError`.
+ *
+ * Behaviour:
+ * * Dispatch AND throw it upwards - this is chosen
+ *   - This means this becomes `ErrorQUICConnectionError`
+ *     - Do not attempt to close... cannot stop
+ *       - Just freeze and end here
+ *       - Throw it upwards to become a `EventError`
+ *         - Default to uncaught exception
+ */
 class ErrorQUICConnectionInternal<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection internal error';
-}
-
-class ErrorQUICConnectionConfigInvalid<T> extends ErrorQUICConnection<T> {
-  static description = 'QUIC connection invalid configuration';
 }
 
 class ErrorQUICStream<T> extends ErrorQUIC<T> {

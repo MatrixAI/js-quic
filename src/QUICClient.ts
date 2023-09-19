@@ -471,21 +471,21 @@ class QUICClient extends EventTarget {
    * Force is true now
    */
   public async destroy({
-    applicationError = true,
+    isApp = true,
     errorCode = 0,
-    errorMessage = '',
+    reason = new Uint8Array(),
     force = true,
     }:
       | {
-          applicationError?: false;
+          isApp: false;
           errorCode?: ConnectionErrorCode;
-          errorMessage?: string;
+          reason?: Uint8Array;
           force?: boolean;
         }
       | {
-          applicationError: true;
+          isApp?: true;
           errorCode?: number;
-          errorMessage?: string;
+          reason?: Uint8Array;
           force?: boolean;
         } = {},
   ) {
@@ -493,9 +493,9 @@ class QUICClient extends EventTarget {
     if (!this._closed) {
       // Failing this is a software error
       await this.connection.stop({
-        applicationError,
+        isApp,
         errorCode,
-        errorMessage,
+        reason,
         force,
       });
       this.dispatchEvent(new events.EventQUICClientClose());

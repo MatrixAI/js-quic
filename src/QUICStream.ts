@@ -497,8 +497,13 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       // get the same exception
       // Note that in case 1, since it is cancelled... it's not necessary to do anything here
       // As the pull method will be blocked, and eventually be garbage collected
-      await readableP;
+      try {
+        await readableP;
+      } catch (e) {
+        throw e;
+      }
     }
+
     let recvLength: number, fin: boolean;
     let result: [number, boolean] | null;
     try {
@@ -620,6 +625,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this.dispatchEvent(
       new events.EventQUICStreamSend()
     );
+
     return;
   }
 
@@ -886,6 +892,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       }
     );
     // This is idempotent and won't error even if it is already stopped
+
     this.readableController.error(reason);
     // This rejects the readableP if it exists
     // The pull method may be blocked by `await readableP`

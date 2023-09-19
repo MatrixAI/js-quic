@@ -328,21 +328,21 @@ class QUICServer {
    * Stops the QUICServer
    */
   public async stop({
-    applicationError = true,
+    isApp = true,
     errorCode = 0,
-    errorMessage = '',
+    reason = new Uint8Array(),
     force = true,
     }:
       | {
-          applicationError?: false;
+          isApp: false;
           errorCode?: ConnectionErrorCode;
-          errorMessage?: string;
+          reason?: Uint8Array;
           force?: boolean;
         }
       | {
-          applicationError: true;
+          isApp?: true;
           errorCode?: number;
-          errorMessage?: string;
+          reason?: Uint8Array;
           force?: boolean;
         } = {},
   ) {
@@ -354,9 +354,9 @@ class QUICServer {
     for (const connection of this.socket.connectionMap.serverConnections.values()) {
       destroyProms.push(
         connection.stop({
-          applicationError,
+          isApp,
           errorCode,
-          errorMessage,
+          reason,
           force,
         })
       );

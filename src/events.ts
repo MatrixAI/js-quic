@@ -19,11 +19,11 @@ import {
 import type { ConnectionError } from './native';
 import { AbstractEvent } from '@matrixai/events';
 
-abstract class EventQUIC<T = null> extends AbstractEvent<T> {}
+abstract class EventQUIC<T = undefined> extends AbstractEvent<T> {}
 
 // Socket events
 
-abstract class EventQUICSocket<T = null> extends EventQUIC<T> {}
+abstract class EventQUICSocket<T = undefined> extends EventQUIC<T> {}
 
 class EventQUICSocketStart extends EventQUICSocket {}
 
@@ -33,13 +33,18 @@ class EventQUICSocketStop extends EventQUICSocket {}
 
 class EventQUICSocketStopped extends EventQUICSocket {}
 
-class EventQUICSocketError extends EventQUICSocket<ErrorQUICSocketInternal<unknown>> {}
+class EventQUICSocketError extends EventQUICSocket<
+  ErrorQUICSocketInternal<unknown>
+> {}
 
-class EventQUICSocketClose extends EventQUICSocket {}
+class EventQUICSocketClose extends EventQUICSocket<
+  | ErrorQUICSocketInternal<unknown>
+  | undefined
+> {}
 
 // Client events
 
-abstract class EventQUICClient<T = null> extends EventQUIC<T> {}
+abstract class EventQUICClient<T = undefined> extends EventQUIC<T> {}
 
 class EventQUICClientDestroy extends EventQUICClient {}
 
@@ -63,7 +68,7 @@ class EventQUICClientClose extends EventQUICClient {}
 
 // Server events
 
-abstract class EventQUICServer<T = null> extends EventQUIC<T> {}
+abstract class EventQUICServer<T = undefined> extends EventQUIC<T> {}
 
 class EventQUICServerConnection extends EventQUICServer<QUICConnection> {}
 
@@ -84,93 +89,55 @@ class EventQUICServerClose extends EventQUICServer {}
 
 // Connection events
 
-abstract class EventQUICConnection<T = null> extends EventQUIC<T> {}
-
-class EventQUICConnectionStream extends EventQUICConnection<QUICStream> {}
+abstract class EventQUICConnection<T = undefined> extends EventQUIC<T> {}
 
 class EventQUICConnectionStart extends EventQUICConnection {}
 
 class EventQUICConnectionStarted extends EventQUICConnection {}
 
-// These 2 Stop and Stopped is the definitive end of the connection, like "close"
 class EventQUICConnectionStop extends EventQUICConnection {}
 
 class EventQUICConnectionStopped extends EventQUICConnection {}
 
-// This is only when there's an error for the connection itself
-// It could be a local error, peer error, or recv/send internal error
-// This means both inband errors in the connection, and also errors that come from operational procedure
-// The error exception class tells us what kind of thing it is
-// That way we can have local and peer and internal
-// then users can decide how to handle each one
+/**
+ * Closing a quic connection is always an error no matter if it is graceful or not.
+ * This is due to the utilisation of the error code and error message during connection close.
+ * Additionally it is also possible that that the QUIC connection times out. In this case,
+ * quiche does not send a `CONNECTION_CLOSE` frame. That is a timeout error.
+ */
 class EventQUICConnectionError extends EventQUICConnection<
-  | ErrorQUICConnectionLocal<unknown> // errors that I'm sending to the peer (also due to idle timeout)
-  | ErrorQUICConnectionPeer<unknown> // errors that I'm receiving from the peer
+  | ErrorQUICConnectionLocal<unknown>
+  | ErrorQUICConnectionPeer<unknown>
   | ErrorQUICConnectionIdleTimeout<unknown>
-  | ErrorQUICConnectionInternal<unknown> // other internal errors which means the thing is broken
+  | ErrorQUICConnectionInternal<unknown>
 > {}
 
-// This is when the other side has gracefully closed the connection
-// If we gracefully close the connection, this is not emitted
-// If we were to do close, that would be confusing, it would have to run all the time
-// Since the connection always closes, and it would not be a post-facto event
-// End event just means the other side gracefully closed the connection
-
-// To match nodejs, after error event, we can only expect a close event (close in this case means stop and stopped)
-// alternatively, we can do something like a closed event
-// What if we do it like this instead?
-// Thus we can have a error, and a local close - well the eror usually means close is happening
-// EventQUICConnectionLocalClose
-// EventQUICConnectionPeerClose
-
-// This does not happen, we use the close
-// And users can determine what to do
-// class EventQUICConnectionEnd extends EventQUICConnection<ConnectionError> {}
-
-
-// Matching up with nodejs
-
-// error event is the same as error -> close
-// end is the same as end for graceful end with 0 -> close
-// close event is the same as Stop/Stopped
-
-// If this is a graceful close or non-graceful close, either way
-// it is closing... how should you know if it is a peer or not?
-// Well i guess it depends on the close error
-// and also it would be easier to have close and just distinguish between them
-// On the other hand, this represents specifically the inband code
-// An error above always translates to us closing here
-// UNLESS... the above is an internal error that prevents us from closing
-// But we usually let that bubble up... and we don't capture that in our event model
-// Then on close we have connection error
-// This is the possible events then (note that if  stop close stopped also had an error)
-// STOP -> ERROR -> CLOSE -> STOPPED
-// ERROR -> CLOSE -> STOP -> STOPPED
-// The `ConnectionError` does not exist when the connection is timed out
-// And no connection close frame is sent
+/**
+ * Once a connection is closing, this event is dispatched.
+ * For `QUICConnection` the connection cannot close without a preceding
+ * error event. Therefore all exceptions are passed through here.
+ * Note that in the circumstance of `ErrorQUICConnectionInternal` it should
+ * be expected that the underlying `quiche` connection is broken.
+ * If so, then a close here will still try to close the `QUICConnection`.
+ */
 class EventQUICConnectionClose extends EventQUICConnection<
-  { type: 'local' | 'peer' } & ConnectionError
-  |
-  { type: 'timeout' }
+  | ErrorQUICConnectionLocal<unknown>
+  | ErrorQUICConnectionPeer<unknown>
+  | ErrorQUICConnectionIdleTimeout<unknown>
 > {}
-// if the peer connection failed, it's neither one or the other
-// we have to state `timeout`
 
+/**
+ * When a QUICStream is created, it is ready to be used.
+ */
+class EventQUICConnectionStream extends EventQUICConnection<QUICStream> {}
 
 // Stream events
 
-abstract class EventQUICStream<T = null> extends EventQUIC<T> {}
+abstract class EventQUICStream<T = undefined> extends EventQUIC<T> {}
 
 class EventQUICStreamDestroy extends EventQUICStream {}
 
 class EventQUICStreamDestroyed extends EventQUICStream {}
-
-// Note that you can close the readable side, and give a code
-// You can close the writable side, and give a code
-// Neither of which represents an "error" for the quic stream error?
-// Or does it?
-// Because one could argue either way, and then have a way to separate
-// Intenral errors from non-internal errors
 
 /**
  * QUIC stream encountered an error.
