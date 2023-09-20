@@ -455,11 +455,21 @@ class QUICClient extends EventTarget {
 
   @ready(new errors.ErrorQUICClientDestroyed())
   public get host(): Host {
-    return this.socket.host;
+    return this.connection.remoteHost;
   }
 
   @ready(new errors.ErrorQUICClientDestroyed())
   public get port(): Port {
+    return this.connection.remotePort;
+  }
+
+  @ready(new errors.ErrorQUICClientDestroyed())
+  public get localHost(): Host {
+    return this.socket.host;
+  }
+
+  @ready(new errors.ErrorQUICClientDestroyed())
+  public get localPort(): Port {
     return this.socket.port;
   }
 
@@ -489,7 +499,16 @@ class QUICClient extends EventTarget {
           force?: boolean;
         } = {},
   ) {
-    this.logger.info(`Destroy ${this.constructor.name}`);
+    let address: string | undefined;
+    if (this.connection[running]) {
+      address = utils.buildAddress(
+        this.connection.remoteHost,
+        this.connection.remotePort
+      );
+    }
+    this.logger.info(
+      `Destroy ${this.constructor.name}${address != null ? ` to ${address}` : ''}`
+    );
     if (!this._closed) {
       // Failing this is a software error
       await this.connection.stop({
@@ -523,7 +542,9 @@ class QUICClient extends EventTarget {
     }
     // Connection listeners do not need to be removed
     // Because it is handled by `this.handleEventQUICConnectionStopped`.
-    this.logger.info(`Destroyed ${this.constructor.name}`);
+    this.logger.info(
+      `Destroyed ${this.constructor.name}${address != null ? ` to ${address}` : ''}`
+    );
   }
 }
 

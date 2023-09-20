@@ -705,9 +705,10 @@ class QUICConnection {
   ): Promise<void> {
     // Enforce mutual exclusion for an atomic pair of `this.recv` and `this.send`.
     await this.recvLock.withF(async () => {
-      // The remote information may be changed on each receive
-      // However to do so would mean connection migration,
-      // which is not yet supported
+      // The remote information may be changed on each received packet
+      // If it changes, this would mean the connection has migrated
+      // Here the remote host and port is updated, however we have not verified
+      // this behaviour
       this._remoteHost = remoteInfo.host;
       this._remotePort = remoteInfo.port;
       const recvInfo = {
