@@ -159,19 +159,6 @@ class QUICSocket {
         // Whether this is to be dropped
         // OR that it's a domain error
 
-        // If the connection timed out during start, this is an expected
-        // possibility, because the remote peer might have become unavailable,
-        // in which case we can just ignore the error here.
-        if (
-          errorsUtils.checkError(
-            e,
-            (e) => e instanceof errors.ErrorQUICServerNewConnection,
-          )
-        ) {
-          // This is a legitimate state transition
-          // The caller error is ignored
-          return;
-        }
         // Translate the caller error to a domain error
         if (
           errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)
@@ -189,6 +176,14 @@ class QUICSocket {
           this.dispatchEvent(
             new events.EventQUICSocketClose()
           );
+          return;
+        }
+        // If the connection timed out during start, this is an expected
+        // possibility, because the remote peer might have become unavailable,
+        // in which case we can just ignore the error here.
+        if (e instanceof errors.ErrorQUICServerNewConnection) {
+          // This is a legitimate state transition
+          // The caller error is ignored
           return;
         }
 
