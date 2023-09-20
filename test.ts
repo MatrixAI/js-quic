@@ -22,7 +22,7 @@ process.on('uncaughtException', (err, origin) => {
 });
 
 async function main() {
-  const logger = new Logger(`stream_1KiB Bench`, LogLevel.SILENT, [
+  const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
       // formatting.format`${formatting.date}-${formatting.level}:${formatting.keys}:${formatting.msg}`,

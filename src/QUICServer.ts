@@ -12,7 +12,7 @@ import type {
 import type { Header, ConnectionErrorCode } from './native/types';
 import Logger from '@matrixai/logger';
 import { AbstractEvent, EventAll } from '@matrixai/events';
-import { StartStop, ready, running } from '@matrixai/async-init/dist/StartStop';
+import { StartStop, ready, running, status } from '@matrixai/async-init/dist/StartStop';
 import QUICSocket from './QUICSocket';
 import QUICConnection from './QUICConnection';
 import QUICConnectionId from './QUICConnectionId';
@@ -76,6 +76,15 @@ class QUICServer {
   ) => {
     const error = evt.detail;
     this.logger.error(utils.formatError(error));
+    if (error instanceof errors.ErrorQUICServerInternal) {
+      // Use `EventError` to deal with this
+      throw error;
+    }
+    this.dispatchEvent(
+      new events.EventQUICConnectionClose({
+        detail: error
+      })
+    );
   };
 
   /**
@@ -105,15 +114,11 @@ class QUICServer {
         this.dispatchEvent(
           new events.EventQUICServerError({ detail: e_ })
         );
-        // This will not recurse because this handler is attached once
-        this.dispatchEvent(new events.EventQUICServerClose());
-        // Continue closing the server, because this domain error
-        // must lead to stopping the server
       }
     }
     this._closed = true;
     this.resolveClosedP();
-    if (this[running]) {
+    if (this[running] && this[status] !== 'stopping') {
       // Failing this is a software error
       await this.stop({ force: true });
     }
@@ -131,7 +136,6 @@ class QUICServer {
         detail: e,
       }),
     );
-    this.dispatchEvent(new events.EventQUICServerClose());
   };
 
   /**
@@ -156,7 +160,6 @@ class QUICServer {
       this.dispatchEvent(
         new events.EventQUICServerError({ detail: e_ })
       );
-      this.dispatchEvent(new events.EventQUICServerClose());
     }
   };
 
@@ -355,9 +358,9 @@ class QUICServer {
     );
     // Stop answering new connections
     this.socket.unsetServer();
-    const destroyProms: Array<Promise<void>> = [];
+    const connectionsDestroyP: Array<Promise<void>> = [];
     for (const connection of this.socket.connectionMap.serverConnections.values()) {
-      destroyProms.push(
+      connectionsDestroyP.push(
         connection.stop({
           isApp,
           errorCode,
@@ -368,7 +371,7 @@ class QUICServer {
     }
     // This will wait for connection timeouts to occur
     // It might be a bit slow, if that's the case
-    await Promise.all(destroyProms);
+    await Promise.all(connectionsDestroyP);
     if (!this._closed) {
       // If this succeeds, then we are just transitioned to close
       // This will trigger noop recursion, that's fine

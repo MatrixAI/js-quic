@@ -167,21 +167,13 @@ class QUICConnection {
    * This stores the last dispatched error.
    * If no error has occurred, it will be `null`.
    */
-  protected _errorLast: (
+  protected errorLast: (
     | errors.ErrorQUICConnectionLocal<unknown>
     | errors.ErrorQUICConnectionPeer<unknown>
     | errors.ErrorQUICConnectionIdleTimeout<unknown>
+    | errors.ErrorQUICConnectionInternal<unknown>
     | null
   ) = null;
-
-  public get errorLast(): (
-    | errors.ErrorQUICConnectionLocal<unknown>
-    | errors.ErrorQUICConnectionPeer<unknown>
-    | errors.ErrorQUICConnectionIdleTimeout<unknown>
-    | null
-  ) {
-    return this._errorLast;
-  }
 
   /**
    * Handle `EventQUICConnectionError`.
@@ -192,7 +184,7 @@ class QUICConnection {
     evt: events.EventQUICConnectionError
   ) => {
     const error = evt.detail;
-    this._errorLast = error;
+    this.errorLast = error;
     if (
       (
         error instanceof errors.ErrorQUICConnectionLocal
@@ -220,7 +212,7 @@ class QUICConnection {
     }
     this.dispatchEvent(
       new events.EventQUICConnectionClose({
-        detail: evt.detail
+        detail: error
       })
     );
   }
@@ -605,7 +597,7 @@ class QUICConnection {
       // both readable and writable to gracefully close
       streamsDestroyP.push(
         quicStream.destroy({
-          reason: this._errorLast,
+          reason: this.errorLast,
           force: force || this.conn.isDraining() || this.conn.isClosed(),
         }),
       );

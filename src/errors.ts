@@ -183,8 +183,24 @@ class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream is destroyed';
 }
 
+/**
+ * Locally closed readable with a code.
+ */
 class ErrorQUICStreamLocalRead<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream locally closed readable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
 /**
@@ -193,18 +209,70 @@ class ErrorQUICStreamLocalRead<T> extends ErrorQUICStream<T> {
  * without actually sending any close signal.
  * In most cases this means it was a unidirectional peer stream.
  */
+
+/**
+ * Locally closed writable with a code.
+ */
 class ErrorQUICStreamLocalWrite<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream locally closed writable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
+/**
+ * Peer closed readable with a code.
+ */
 class ErrorQUICStreamPeerRead<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream peer closed readable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
+/**
+ * Peer closed writable with a code.
+ */
 class ErrorQUICStreamPeerWrite<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream peer closed writable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
 }
 
+/**
+ * Unrecoverable QUICStream error.
+ */
 class ErrorQUICStreamInternal<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream internal error';
 }

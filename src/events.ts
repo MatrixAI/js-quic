@@ -56,8 +56,8 @@ class EventQUICClientDestroyed extends EventQUICClient {}
  * It's thin wrapper around it.
  */
 class EventQUICClientError extends EventQUICClient<
-  | ErrorQUICClientInternal<unknown>
   | ErrorQUICClientSocketNotRunning<unknown>
+  | ErrorQUICClientInternal<unknown>
   | ErrorQUICConnectionLocal<unknown>
   | ErrorQUICConnectionPeer<unknown>
   | ErrorQUICConnectionIdleTimeout<unknown>
@@ -81,11 +81,14 @@ class EventQUICServerStop extends EventQUICServer {}
 class EventQUICServerStopped extends EventQUICServer {}
 
 class EventQUICServerError extends EventQUICServer<
-  | ErrorQUICServerInternal<unknown>
   | ErrorQUICServerSocketNotRunning<unknown>
+  | ErrorQUICServerInternal<unknown>
 > {}
 
-class EventQUICServerClose extends EventQUICServer {}
+class EventQUICServerClose extends EventQUICServer<
+  | ErrorQUICServerSocketNotRunning<unknown>
+  | undefined
+> {}
 
 // Connection events
 
@@ -146,10 +149,10 @@ class EventQUICStreamDestroyed extends EventQUICStream {}
  * But QUICConnection closure always comes with some error code and reason, even if the code is 0.
  */
 class EventQUICStreamError extends EventQUICStream<
-  | ErrorQUICStreamLocalRead<unknown> // I may send out errors on both stop sending (shutdown read) and reset stream (shutdown write)
-  | ErrorQUICStreamLocalWrite<unknown> // I may send out errors on both stop sending (shutdown read) and reset stream (shutdown write)
-  | ErrorQUICStreamPeerRead<unknown> // I may receive errors on both stop sending (shutdown read) and reset stream (shutdown write)
-  | ErrorQUICStreamPeerWrite<unknown> // I may receive errors on both stop sending (shutdown read) and reset stream (shutdown write)
+  | ErrorQUICStreamLocalRead<unknown>
+  | ErrorQUICStreamLocalWrite<unknown>
+  | ErrorQUICStreamPeerRead<unknown>
+  | ErrorQUICStreamPeerWrite<unknown>
   | ErrorQUICStreamInternal<unknown>
 > {}
 
@@ -158,14 +161,20 @@ class EventQUICStreamError extends EventQUICStream<
  * Local means I closed my readable side - there must be an error code.
  * Peer means the peer closed my readable side by closing their writable side - there may not be an error code.
  * If no code, it means it was graceful.
+ *
+ * Unlike QUICConnection.
+ * You can close without there being an error.
+ * That's because a graceful close has no error.
+ * It does have a "direction" though.
+ * And are we propagating it into the close event too?
+ *
+ * Undefined means that it was gracefully closed.
  */
-class EventQUICStreamCloseRead extends EventQUICStream<{
-  type: 'local';
-  code: number;
-} | {
-  type: 'peer';
-  code?: number;
-}> {}
+class EventQUICStreamCloseRead extends EventQUICStream<
+  | ErrorQUICStreamLocalRead<unknown>
+  | ErrorQUICStreamPeerRead<unknown>
+  | undefined
+> {}
 
 /**
  * QUIC stream writable side was closed
@@ -173,13 +182,11 @@ class EventQUICStreamCloseRead extends EventQUICStream<{
  * Peer means the peer closed my writable side by closing their readable side - there must be an error code.
  * If no code, it means it was graceful.
  */
-class EventQUICStreamCloseWrite extends EventQUICStream<{
-  type: 'local';
-  code?: number;
-} | {
-  type: 'peer';
-  code: number;
-}> {}
+class EventQUICStreamCloseWrite extends EventQUICStream<
+  | ErrorQUICStreamLocalWrite<unknown>
+  | ErrorQUICStreamPeerWrite<unknown>
+  | undefined
+> {}
 
 /**
  * This means there is data enqueued on the stream buffer to be sent.

@@ -21,6 +21,7 @@ import {
   CreateDestroy,
   ready,
   destroyed,
+  status,
 } from '@matrixai/async-init/dist/CreateDestroy';
 import { quiche } from './native';
 import * as events from './events';
@@ -65,28 +66,18 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       codeToReason,
       logger,
     });
-    // Because you cannot construct a closed writable stream
-    // Closing the writable stream requires async await
-    // Therefore we close both the readable stream and writable stream
-    // Here on condition of being unidirectional
     if (stream.type === 'uni') {
       if (initiated === 'local') {
         // Readable is automatically closed if it is local and unidirectional
-        // All attempts to read will get this error.
-        stream.readableController.error(
-          new errors.ErrorQUICStreamLocalRead(
-            'Closing readable stream because QUIC stream is unidirectional writable from local to peer'
-          )
-        );
+        stream.readableController.close();
         stream._readClosed = true;
       } else if (initiated === 'peer') {
         // Writable is automatically closed if it is peer and unidirectional
-        // All attempts to write will get this error.
-        stream.writableController.error(
-          new errors.ErrorQUICStreamLocalWrite(
-            'Closing writable stream because QUIC stream is unidirectional readable from peer to local'
-          )
-        );
+        // This is the one place where we void a floating promise
+        // That's because the stream is a dummy stream
+        // At the same time, we will ignore any errors that occur
+        // Just in case the writable were to be aborted before it is closed
+        void stream.writable.close().catch(() => {});
         stream._writeClosed = true;
       }
     }
@@ -153,23 +144,44 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * We are able to use exception classes to distinguish things
    * Because it's always about the error itself!A
    * Note that you must distinguish between actual internal errors, and errors on the stream itself
+   *
+   * When this error is handled, the streams are already canceled.
    */
   protected handleEventQUICStreamError = (evt: events.EventQUICStreamError) => {
     const error = evt.detail;
     this.logger.error(utils.formatError(error));
+    if (error instanceof errors.ErrorQUICStreamInternal) {
+      throw error;
+    }
+    if (
+      error instanceof errors.ErrorQUICStreamLocalRead
+      ||
+      error instanceof errors.ErrorQUICStreamPeerRead
+    ) {
+      this.dispatchEvent(
+        new events.EventQUICStreamCloseRead({
+          detail: error
+        })
+      );
+    } else if (
+      error instanceof errors.ErrorQUICStreamLocalWrite
+      ||
+      error instanceof errors.ErrorQUICStreamPeerWrite
+    ) {
+      this.dispatchEvent(
+        new events.EventQUICStreamCloseWrite({
+          detail: error
+        })
+      );
+    }
   };
 
   protected handleEventQUICStreamCloseRead = async () => {
     this._readClosed = true;
     if (this._readClosed && this._writeClosed) {
       this.resolveClosedP();
-      if (!this[destroyed]) {
-        // If we are destroying, we still end up calling this
-        // This is to enable, that when a failed cancellation to continue to destroy
+      if (!this[destroyed] && this[status] !== 'destroying') {
         // By disabling force, we don't end up running cancel again
-        // But that way it does infact successfully destroy
-        // Failing to destroy is also a caller error, there's no domain error handling (because this runs once)
-        // So we let it bubble up
         await this.destroy({ force: false });
       }
     }
@@ -179,7 +191,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     this._writeClosed = true;
     if (this._readClosed && this._writeClosed) {
       this.resolveClosedP();
-      if (!this[destroyed]) {
+      if (!this[destroyed] && this[status] !== 'destroying') {
         // If we are destroying, we still end up calling this
         // This is to enable, that when a failed cancellation to continue to destroy
         // By disabling force, we don't end up running cancel again
@@ -420,15 +432,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    * @throws {errors.ErrorQUICStreamInternal}
    */
   public cancel(reason?: any): void {
-    try {
-      this.readableCancel(reason);
-    } catch (e) {
-      // If cancelling readable failed here, it would have dispatched the domain error and close for read
-      // So we need to also dispatch the close for write here, because failing to cancel is a domain error
-      this.dispatchEvent(new events.EventQUICStreamCloseWrite());
-      throw e;
-    }
-    // If this failed, it will be a domain error, but readable cancel would have succeeded
+    this.readableCancel(reason);
     this.writableAbort(reason);
   }
 
@@ -527,18 +531,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             detail: e_
           })
         );
-        this.dispatchEvent(
-          new events.EventQUICStreamCloseRead({
-            detail: {
-              type: 'peer',
-              code
-            }
-          })
-        );
         // The pull doesn't need to throw it upwards, the controller.error already ensures errored state
         // And any read operation will end up throwing
         // But we do it here for symmetricity with write
-        throw e_;
+        throw reason;
       } else {
         // In all other cases, this is an internal error
         // Error messages might be `Done`, `InvalidStreamState`
@@ -550,14 +546,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         this.dispatchEvent(
           new events.EventQUICStreamError({
             detail: e_
-          })
-        );
-        this.dispatchEvent(
-          new events.EventQUICStreamCloseRead({
-            detail: {
-              type: 'local',
-              code: this.reasonToCode('read', e_)
-            }
           })
         );
         throw e_;
@@ -573,14 +561,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       this.dispatchEvent(
         new events.EventQUICStreamError({
           detail: e
-        })
-      );
-      this.dispatchEvent(
-        new events.EventQUICStreamCloseRead({
-          detail: {
-            type: 'local',
-            code: this.reasonToCode('read', e)
-          }
         })
       );
       throw e;
@@ -603,9 +583,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       this.readableController.close();
       // If fin is true, then that means, the stream is CLOSED
       this.dispatchEvent(
-        new events.EventQUICStreamCloseRead({
-          detail: { type: 'peer' }
-        })
+        new events.EventQUICStreamCloseRead()
       );
     }
     // Trigger send after processing read
@@ -666,15 +644,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
               detail: e_
             })
           );
-          this.dispatchEvent(
-            new events.EventQUICStreamCloseWrite({
-              detail: {
-                type: 'peer',
-                code
-              }
-            })
-          );
-          throw e_;
+          throw reason;
         } else {
           // This could happen due to `InvalidStreamState`
           // or something else that is unknown
@@ -689,14 +659,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           this.dispatchEvent(
             new events.EventQUICStreamError({
               detail: e_
-            })
-          );
-          this.dispatchEvent(
-            new events.EventQUICStreamCloseWrite({
-              detail: {
-                type: 'local',
-                code: this.reasonToCode('write', e_)
-              }
             })
           );
           // Ensure caller rejects
@@ -770,17 +732,9 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             detail: e_
           })
         );
-        this.dispatchEvent(
-          new events.EventQUICStreamCloseWrite({
-            detail: {
-              type: 'peer',
-              code
-            }
-          })
-        );
         // This fails the `close`, however no matter what
         // the writable stream is in a closed state
-        throw e_;
+        throw reason;
       } else {
         // This could happen due to `InvalidStreamState`
         const e_ = new errors.ErrorQUICStreamInternal(
@@ -793,22 +747,12 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             detail: e_
           })
         );
-        this.dispatchEvent(
-          new events.EventQUICStreamCloseWrite({
-            detail: {
-              type: 'local',
-              code: this.reasonToCode('write', e_)
-            }
-          })
-        );
         throw e_;
       }
     }
     // Graceful close on the write without any code
     this.dispatchEvent(
-      new events.EventQUICStreamCloseWrite({
-        detail: { type: 'local' }
-      })
+      new events.EventQUICStreamCloseWrite()
     );
 
     // Trigger send
@@ -850,14 +794,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           detail: e_
         })
       );
-      this.dispatchEvent(
-        new events.EventQUICStreamCloseRead({
-          detail: {
-            type: 'local',
-            code: this.reasonToCode('read', e_)
-          }
-        })
-      );
       throw e_;
     }
     if (result === null) {
@@ -872,14 +808,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       this.dispatchEvent(
         new events.EventQUICStreamError({
           detail: e
-        })
-      );
-      this.dispatchEvent(
-        new events.EventQUICStreamCloseRead({
-          detail: {
-            type: 'local',
-            code: this.reasonToCode('read', e)
-          }
         })
       );
       throw e;
@@ -900,18 +828,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // However because the stream is cancelled, then
     // the exception has no effect, and any reads of this stream
     // will simply return `{ value: undefined, done: true }`
-    this.rejectReadableP?.(e);
+    this.rejectReadableP?.(reason);
     this.dispatchEvent(
       new events.EventQUICStreamError({
         detail: e
-      })
-    );
-    this.dispatchEvent(
-      new events.EventQUICStreamCloseRead({
-        detail: {
-          type: 'local',
-          code
-        }
       })
     );
     this.dispatchEvent(
@@ -945,14 +865,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           detail: e_
         })
       );
-      this.dispatchEvent(
-        new events.EventQUICStreamCloseWrite({
-          detail: {
-            type: 'local',
-            code: this.reasonToCode('write', e_)
-          }
-        })
-      );
       throw e_;
     }
     const e = new errors.ErrorQUICStreamLocalWrite(
@@ -966,18 +878,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // This will reject the writable call
     // But at the same time, it means the writable stream transitions to errored state
     // But the whole writable stream is going to be closed anyway
-    this.rejectWritableP?.(e);
+    this.rejectWritableP?.(reason);
     this.dispatchEvent(
       new events.EventQUICStreamError({
         detail: e
-      })
-    );
-    this.dispatchEvent(
-      new events.EventQUICStreamCloseWrite({
-        detail: {
-          type: 'local',
-          code
-        }
       })
     );
     this.dispatchEvent(
