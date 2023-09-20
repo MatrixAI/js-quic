@@ -8,10 +8,10 @@ import QUICServer from '@/QUICServer';
 import QUICClient from '@/QUICClient';
 import QUICStream from '@/QUICStream';
 import * as testsUtils from './utils';
-import { generateConfig } from './utils';
+import { generateConfig, sleep } from './utils';
 
 describe(QUICStream.name, () => {
-  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -27,19 +27,16 @@ describe(QUICStream.name, () => {
   const clientCrypto: ClientCryptoOps = {
     randomBytes: testsUtils.randomBytes,
   };
-  let sockets: Set<QUICSocket>;
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
 
   // We need to test the stream making
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    sockets = new Set();
+    socketCleanMethods = testsUtils.socketCleanupFactory();
   });
   afterEach(async () => {
-    const stopProms: Array<Promise<void>> = [];
-    for (const socket of sockets) {
-      stopProms.push(socket.stop({ force: true }));
-    }
-    await Promise.allSettled(stopProms);
+    logger.warn('------AFTER-------');
+    await socketCleanMethods.stopSockets();
   });
 
   test('should create streams', async () => {
@@ -59,7 +56,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -79,7 +76,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCount = 0;
@@ -121,7 +118,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -141,7 +138,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -200,7 +197,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -221,7 +218,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const activeServerStreams: Array<Promise<void>> = [];
@@ -263,7 +260,6 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for writable', async () => {
-    const streamsNum = 10;
     const testReason = Symbol('TestReason');
     const codeToReason = (type, code) => {
       switch (code) {
@@ -277,8 +273,6 @@ describe(QUICStream.name, () => {
       if (reason === testReason) return 2;
       return 1;
     };
-    const connectionEventProm =
-      utils.promise<events.EventQUICServerConnection>();
     const tlsConfig = await generateConfig(defaultType);
     const server = new QUICServer({
       crypto: {
@@ -294,15 +288,30 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
+
+    const streamProm =
+      utils.promise<QUICStream>();
     server.addEventListener(
       events.EventQUICServerConnection.name,
-      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+      (evt: events.EventQUICServerConnection) => {
+        const conn = evt.detail;
+        conn.addEventListener(
+          events.EventQUICConnectionStream.name,
+          (evt: events.EventQUICConnectionStream) => {
+            streamProm.resolveP(evt.detail);
+          },
+          { once: true },
+        )
+      },
+      { once: true },
     );
+
     await server.start({
       host: localhost,
       port: 59999,
     });
+
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
@@ -317,55 +326,30 @@ describe(QUICStream.name, () => {
       codeToReason,
       reasonToCode,
     });
-    testsUtils.extractSocket(client, sockets);
-    const conn = (await connectionEventProm.p).detail;
-    // Do the test
-    const activeServerStreams: Array<Promise<void>> = [];
-    conn.addEventListener(
-      events.EventQUICConnectionStream.name,
-      (streamEvent: events.EventQUICConnectionStream) => {
-        const stream = streamEvent.detail;
-        const streamProm = stream.readable.pipeTo(stream.writable);
-        // Ignore unhandled errors
-        streamProm.catch(() => {});
-        activeServerStreams.push(streamProm);
-      },
-    );
-    // Let's make a new streams.
-    const activeClientStreams: Array<Promise<void>> = [];
-    const message = Buffer.from('Hello!');
-    for (let i = 0; i < streamsNum; i++) {
-      activeClientStreams.push(
-        (async () => {
-          const stream = await client.connection.newStream();
-          const writer = stream.writable.getWriter();
-          // Do write and read messages here.
-          await writer.write(message);
-          await writer.abort(testReason);
-          try {
-            for await (const _ of stream.readable) {
-              // Do nothing, wait for finish
-            }
-          } catch (e) {
-            expect(e).toBe(testReason);
-          }
-        })(),
-      );
-    }
-    const expectationProms = activeServerStreams.map(async (v) => {
-      await v.catch((e) => {
-        expect(e).toBe(testReason);
-      });
-    });
-    await Promise.all([
-      Promise.all(activeClientStreams),
-      Promise.all(expectationProms),
-    ]);
+    socketCleanMethods.extractSocket(client);
+
+    // create a stream
+    const clientStream = await client.connection.newStream();
+
+    const clientWriter = clientStream.writable.getWriter();
+    const clientReader = clientStream.readable.getReader();
+    await clientWriter.write(Buffer.from('hello'));
+
+    const serverStream = await streamProm.p;
+    const serverWriter = serverStream.writable.getWriter();
+    const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
+
+    // forward write error
+    await clientWriter.abort(testReason);
+    await expect(serverReader.read()).rejects.toBe(testReason);
+    await serverWriter.abort(testReason);
+    await expect(clientReader.read()).rejects.toBe(testReason);
+
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for readable', async () => {
-    const streamsNum = 1;
     const testReason = Symbol('TestReason');
     const codeToReason = (type, code) => {
       switch (code) {
@@ -379,8 +363,6 @@ describe(QUICStream.name, () => {
       if (reason === testReason) return 2;
       return 1;
     };
-    const connectionEventProm =
-      utils.promise<events.EventQUICServerConnection>();
     const tlsConfig = await generateConfig(defaultType);
     const server = new QUICServer({
       crypto: {
@@ -396,15 +378,30 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
+
+    const streamProm =
+      utils.promise<QUICStream>();
     server.addEventListener(
       events.EventQUICServerConnection.name,
-      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+      (evt: events.EventQUICServerConnection) => {
+        const conn = evt.detail;
+        conn.addEventListener(
+          events.EventQUICConnectionStream.name,
+          (evt: events.EventQUICConnectionStream) => {
+            streamProm.resolveP(evt.detail);
+          },
+          { once: true },
+        )
+      },
+      { once: true },
     );
+
     await server.start({
       host: localhost,
-      port: 60000,
+      port: 59999,
     });
+
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
@@ -419,59 +416,35 @@ describe(QUICStream.name, () => {
       codeToReason,
       reasonToCode,
     });
-    testsUtils.extractSocket(client, sockets);
-    const conn = (await connectionEventProm.p).detail;
-    // Do the test
-    const activeServerStreams: Array<Promise<void>> = [];
-    const serverStreamsProm = utils.promise<void>();
-    let serverStreamNum = 0;
-    conn.addEventListener(
-      events.EventQUICConnectionStream.name,
-      (streamEvent: events.EventQUICConnectionStream) => {
-        const stream = streamEvent.detail;
-        const streamProm = stream.readable
-          .pipeTo(stream.writable)
-          .catch((e) => {
-            expect(e).toBe(testReason);
-          });
-        activeServerStreams.push(streamProm);
-        serverStreamNum += 1;
-        if (serverStreamNum >= streamsNum) serverStreamsProm.resolveP();
-      },
-    );
-    // Let's make a new streams.
-    const activeClientStreams: Array<Promise<void>> = [];
-    const message = Buffer.from('Hello!');
-    const serverStreamsDoneProm = utils.promise();
-    for (let i = 0; i < streamsNum; i++) {
-      const clientProm = (async () => {
-        const stream = await client.connection.newStream();
-        const writer = stream.writable.getWriter();
-        // Do write and read messages here.
-        await writer.write(message);
-        await stream.readable.cancel(testReason);
-        await serverStreamsDoneProm.p;
-        // Need time for packets to send/recv
-        await testsUtils.sleep(100);
-        const writeProm = writer.write(message);
-        await writeProm.then(
-          () => {
-            throw Error('write did not throw');
-          },
-          (e) => expect(e).toBe(testReason),
-        );
-      })();
-      // ClientProm.catch(e => logger.error(e));
-      activeClientStreams.push(clientProm);
-    }
-    // Wait for streams to be created before mapping
-    await serverStreamsProm.p;
-    await Promise.all([
-      Promise.all(activeClientStreams),
-      Promise.all(activeServerStreams).finally(() => {
-        serverStreamsDoneProm.resolveP();
-      }),
-    ]);
+    socketCleanMethods.extractSocket(client);
+
+    // create a stream
+    const clientStream = await client.connection.newStream();
+
+    const clientWriter = clientStream.writable.getWriter();
+    const clientReader = clientStream.readable.getReader();
+    await clientWriter.write(Buffer.from('hello'));
+
+    const serverStream = await streamProm.p;
+    const serverWriter = serverStream.writable.getWriter();
+    const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
+
+    // forward write error
+    console.log('cancelling')
+    await clientReader.cancel(testReason);
+    // await serverReader.cancel(testReason);
+    // takes some time for reader cancel to propagate to the writer
+    console.log('awaiting');
+    // await clientStream.closedP;
+    // await serverStream.closedP;
+    await sleep(2000);
+    console.log('checking');
+    await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(testReason);
+    console.log('checking');
+    await expect(clientWriter.write(Buffer.from('hello'))).rejects.toBe(testReason);
+    console.log('done');
+
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
@@ -493,7 +466,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -513,7 +486,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -571,7 +544,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -591,7 +564,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -649,7 +622,7 @@ describe(QUICStream.name, () => {
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -670,7 +643,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -727,7 +700,7 @@ describe(QUICStream.name, () => {
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -750,7 +723,7 @@ describe(QUICStream.name, () => {
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
@@ -813,7 +786,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -836,7 +809,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
@@ -901,7 +874,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -924,7 +897,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
@@ -985,7 +958,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -1008,7 +981,7 @@ describe(QUICStream.name, () => {
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
@@ -1066,7 +1039,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -1086,7 +1059,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const streamCreationProm = utils.promise<QUICStream>();
@@ -1136,7 +1109,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
       (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
@@ -1156,7 +1129,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const streamCreationProm = utils.promise<QUICStream>();
