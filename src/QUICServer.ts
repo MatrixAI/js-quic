@@ -346,8 +346,7 @@ class QUICServer {
           force?: boolean;
         } = {},
   ) {
-    const address = utils.buildAddress(this.socket.host, this.socket.port);
-    this.logger.info(`Stop ${this.constructor.name} on ${address}`);
+    this.logger.info(`Stop ${this.constructor.name}`);
     // Stop answering new connections
     this.socket.unsetServer();
     const destroyProms: Array<Promise<void>> = [];
@@ -393,7 +392,7 @@ class QUICServer {
         this.handleEventQUICSocket
       );
     }
-    this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
+    this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
   /**
