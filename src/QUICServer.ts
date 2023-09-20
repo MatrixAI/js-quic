@@ -92,35 +92,66 @@ class QUICServer {
    * This means we are closing, but an error state may have already occurred.
    * Unlike node's net objects, `close` doesn't mean closed.
    */
-  protected handleEventQUICServerClose = async () => {
-    // Only stop the socket if it was encapsulated
-    if (!this.isSocketShared) {
-      // Remove the stopped listener, as we intend to stop the socket
-      this.socket.removeEventListener(
-        events.EventQUICSocketStopped.name,
-        this.handleEventQUICSocketStopped
-      );
-      try {
-        // Force stop of the socket even if it had a connection map
-        // This is because we will be stopping this `QUICServer` which
-        // which will stop all the relevant connections
-        await this.socket.stop({ force: true });
-      } catch (e) {
-        // Caller error would mean a domain error here
-        const e_ = new errors.ErrorQUICServerInternal(
-          'Failed to stop QUICSocket',
-          { cause: e }
+  protected handleEventQUICServerClose = async (
+    evt: events.EventQUICServerClose
+  ) => {
+    const error = evt.detail;
+
+    // ERROR could be socket not running or undefined
+    // This means if the socket is not running, the socket is already stopped
+    // If it is undefined, it means it's a regular normal stop of the quic server
+
+    // So here we are saying that if we are doing a normal stop
+    // Connections are first shutdown, then close event is dispatched
+    // We end up stopping the socket if it is encapsulated
+
+    if (!(error instanceof errors.ErrorQUICServerSocketNotRunning)) {
+      // Only stop the socket if it was encapsulated
+      if (!this.isSocketShared) {
+        // Remove the stopped listener, as we intend to stop the socket
+        this.socket.removeEventListener(
+          events.EventQUICSocketStopped.name,
+          this.handleEventQUICSocketStopped
         );
-        this.dispatchEvent(
-          new events.EventQUICServerError({ detail: e_ })
-        );
+        try {
+          // Force stop of the socket even if it had a connection map
+          // This is because we will be stopping this `QUICServer` which
+          // which will stop all the relevant connections
+          await this.socket.stop({ force: true });
+        } catch (e) {
+          // Caller error would mean a domain error here
+          const e_ = new errors.ErrorQUICServerInternal(
+            'Failed to stop QUICSocket',
+            { cause: e }
+          );
+          this.dispatchEvent(
+            new events.EventQUICServerError({ detail: e_ })
+          );
+        }
       }
     }
     this._closed = true;
     this.resolveClosedP();
     if (this[running] && this[status] !== 'stopping') {
-      // Failing this is a software error
-      await this.stop({ force: true });
+      if (error !== undefined) {
+        // Failing this is a software error
+        await this.stop({
+          isApp: true,
+          errorCode: 1, // 1 is reserved for general application error
+          reason: Buffer.from(error.message),
+          force: true,
+        });
+      } else {
+        // Failing this is a software error
+        await this.stop({ force: true });
+      }
+    }
+  };
+
+  // This should only be done if it is encapsulated
+  protected handleEventQUICSocket = (evt: EventAll) => {
+    if (evt.detail instanceof AbstractEvent) {
+      this.dispatchEvent(evt.detail.clone());
     }
   };
 
@@ -131,11 +162,21 @@ class QUICServer {
    */
   protected handleEventQUICSocketStopped = () => {
     const e = new errors.ErrorQUICServerSocketNotRunning();
+    this.removeEventListener(
+      EventAll.name,
+      this.handleEventQUICSocket
+    );
     this.dispatchEvent(
       new events.EventQUICServerError({
         detail: e,
       }),
     );
+  };
+
+  protected handleEventQUICConnection = (evt: EventAll) => {
+    if (evt.detail instanceof AbstractEvent) {
+      this.dispatchEvent(evt.detail.clone());
+    }
   };
 
   /**
@@ -174,20 +215,11 @@ class QUICServer {
       events.EventQUICConnectionSend.name,
       this.handleEventQUICConnectionSend
     );
+    quicConnection.removeEventListener(
+      EventAll.name,
+      this.handleEventQUICConnection
+    );
     this.socket.connectionMap.delete(quicConnection.connectionId);
-  };
-
-  protected handleEventQUICConnection = (evt: EventAll) => {
-    if (evt.detail instanceof AbstractEvent) {
-      this.dispatchEvent(evt.detail.clone());
-    }
-  };
-
-  // This should only be done if it is encapsulated
-  protected handleEventQUICSocket = (evt: EventAll) => {
-    if (evt.detail instanceof AbstractEvent) {
-      this.dispatchEvent(evt.detail.clone());
-    }
   };
 
   public constructor(opts: {

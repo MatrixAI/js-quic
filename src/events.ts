@@ -64,7 +64,12 @@ class EventQUICClientError extends EventQUICClient<
   | ErrorQUICConnectionInternal<unknown>
 > {}
 
-class EventQUICClientClose extends EventQUICClient {}
+class EventQUICClientClose extends EventQUICClient<
+  | ErrorQUICClientSocketNotRunning<unknown>
+  | ErrorQUICConnectionLocal<unknown>
+  | ErrorQUICConnectionPeer<unknown>
+  | ErrorQUICConnectionIdleTimeout<unknown>
+> {}
 
 // Server events
 
