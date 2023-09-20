@@ -165,7 +165,7 @@ class QUICSocket {
         if (
           errorsUtils.checkError(
             e,
-            (e) => e instanceof errors.ErrorQUICConnectionStartTimeout,
+            (e) => e instanceof errors.ErrorQUICServerNewConnection,
           )
         ) {
           // This is a legitimate state transition
