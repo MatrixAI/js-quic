@@ -564,14 +564,28 @@ const bufferArb = (constraints?: fc.IntArrayConstraints) => {
 };
 
 /**
- * Use this on every client or server. It is essential for cleaning them up.
+ * Creates two socket handling functions.
+ * `extractSocket` is used to extract a socket out of a client or server.
+ * `stopSockets` is used to stop all sockets that were extracted.
+ *
+ * This is used as a failsafe cleanup for active sockets.
+ * Failing to clean up sockets in a test will cause CI jobs to hang for 1 hour.
  */
-function extractSocket(
-  thing: QUICClient | QUICServer,
-  sockets: Set<QUICSocket>,
-) {
-  // @ts-ignore: kidnap protected property
-  sockets.add(thing.socket);
+function socketCleanupFactory() {
+  const sockets = new Set<QUICSocket>;
+  return {
+    extractSocket: (thing: QUICClient | QUICServer) => {
+      // @ts-ignore: kidnap protected property
+      sockets.add(thing.socket);
+    },
+    stopSockets: async () => {
+      const stopProms: Array<Promise<void>> = [];
+      for (const socket of sockets) {
+        stopProms.push(socket.stop({ force: true }));
+      }
+      await Promise.all(stopProms);
+    }
+  }
 }
 
 type Messages = Array<Uint8Array>;
@@ -823,7 +837,7 @@ export {
   verifyHMAC,
   bufferWrap,
   bufferArb,
-  extractSocket,
+  socketCleanupFactory,
   handleStreamProm,
   waitForTimeoutNull,
   connStats,
