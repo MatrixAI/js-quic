@@ -521,7 +521,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
             cause: reason
           }
         );
-        this.readableController.error(e_);
+        this.readableController.error(reason);
         this.dispatchEvent(
           new events.EventQUICStreamError({
             detail: e_
@@ -660,7 +660,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
               cause: reason
             }
           );
-          this.writableController.error(e_);
+          this.writableController.error(reason);
           this.dispatchEvent(
             new events.EventQUICStreamError({
               detail: e_
@@ -764,7 +764,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
           }
         );
         // Close method doesn't get access to the controller
-        this.writableController.error(e_);
+        this.writableController.error(reason);
         this.dispatchEvent(
           new events.EventQUICStreamError({
             detail: e_
@@ -962,7 +962,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         cause: reason
       }
     );
-    this.writableController.error(e);
+    this.writableController.error(reason);
     // This will reject the writable call
     // But at the same time, it means the writable stream transitions to errored state
     // But the whole writable stream is going to be closed anyway
