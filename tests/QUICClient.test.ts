@@ -87,7 +87,7 @@ describe(QUICClient.name, () => {
       expect(conn.localHost).toBe('127.0.0.1');
       expect(conn.localPort).toBe(server.port);
       expect(conn.remoteHost).toBe('127.0.0.1');
-      expect(conn.remotePort).toBe(client.port);
+      expect(conn.remotePort).toBe(client.localPort);
       await client.destroy();
       await server.stop();
     });
@@ -133,7 +133,7 @@ describe(QUICClient.name, () => {
       expect(conn.localHost).toBe('::1');
       expect(conn.localPort).toBe(server.port);
       expect(conn.remoteHost).toBe('::1');
-      expect(conn.remotePort).toBe(client.port);
+      expect(conn.remotePort).toBe(client.localPort);
       await client.destroy();
       await server.stop();
     });
@@ -179,7 +179,7 @@ describe(QUICClient.name, () => {
       expect(conn.localHost).toBe('::');
       expect(conn.localPort).toBe(server.port);
       expect(conn.remoteHost).toBe('::1');
-      expect(conn.remotePort).toBe(client.port);
+      expect(conn.remotePort).toBe(client.localPort);
       await client.destroy();
       await server.stop();
     });
@@ -729,7 +729,7 @@ describe(QUICClient.name, () => {
           while (running) {
             await socket.send(
               data[count % data.length],
-              client.port,
+              client.localPort,
               '127.0.0.1',
             );
             await sleep(5);
@@ -837,7 +837,7 @@ describe(QUICClient.name, () => {
           while (running) {
             await socket.send(
               data[count % data.length],
-              client.port,
+              client.localPort,
               '127.0.0.1',
             );
             await sleep(5);

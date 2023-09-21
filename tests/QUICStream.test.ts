@@ -1,5 +1,4 @@
 import type { ClientCryptoOps, ServerCryptoOps } from '@';
-import type QUICSocket from '@/QUICSocket';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import { destroyed } from '@matrixai/async-init';
 import * as events from '@/events';
@@ -28,6 +27,20 @@ describe(QUICStream.name, () => {
     randomBytes: testsUtils.randomBytes,
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+
+  const testReason = Symbol('TestReason');
+  const testCodeToReason = (type, code) => {
+    switch (code) {
+      case 2:
+        return testReason;
+      default:
+        return new Error(`${type.toString()} ${code.toString()}`);
+    }
+  };
+  const testReasonToCode = (type, reason) => {
+    if (reason === testReason) return 2;
+    return 1;
+  };
 
   // We need to test the stream making
   beforeEach(async () => {
@@ -260,19 +273,6 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for writable', async () => {
-    const testReason = Symbol('TestReason');
-    const codeToReason = (type, code) => {
-      switch (code) {
-        case 2:
-          return testReason;
-        default:
-          return new Error(`${type.toString()} ${code.toString()}`);
-      }
-    };
-    const reasonToCode = (type, reason) => {
-      if (reason === testReason) return 2;
-      return 1;
-    };
     const tlsConfig = await generateConfig(defaultType);
     const server = new QUICServer({
       crypto: {
@@ -280,8 +280,8 @@ describe(QUICStream.name, () => {
         ops: serverCrypto,
       },
       logger: logger.getChild(QUICServer.name),
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
       config: {
         key: tlsConfig.key,
         cert: tlsConfig.cert,
@@ -350,19 +350,6 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for readable', async () => {
-    const testReason = Symbol('TestReason');
-    const codeToReason = (type, code) => {
-      switch (code) {
-        case 2:
-          return testReason;
-        default:
-          return new Error(`${type.toString()} ${code.toString()}`);
-      }
-    };
-    const reasonToCode = (type, reason) => {
-      if (reason === testReason) return 2;
-      return 1;
-    };
     const tlsConfig = await generateConfig(defaultType);
     const server = new QUICServer({
       crypto: {
@@ -370,8 +357,8 @@ describe(QUICStream.name, () => {
         ops: serverCrypto,
       },
       logger: logger.getChild(QUICServer.name),
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
       config: {
         key: tlsConfig.key,
         cert: tlsConfig.cert,
@@ -413,8 +400,8 @@ describe(QUICStream.name, () => {
       config: {
         verifyPeer: false,
       },
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
     });
     socketCleanMethods.extractSocket(client);
 
@@ -431,19 +418,13 @@ describe(QUICStream.name, () => {
     await serverReader.read();
 
     // forward write error
-    console.log('cancelling')
     await clientReader.cancel(testReason);
-    // await serverReader.cancel(testReason);
+    await serverReader.cancel(testReason);
     // takes some time for reader cancel to propagate to the writer
-    console.log('awaiting');
-    // await clientStream.closedP;
-    // await serverStream.closedP;
-    await sleep(2000);
-    console.log('checking');
+    await clientStream.closedP;
+    await serverStream.closedP;
     await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(testReason);
-    console.log('checking');
     await expect(clientWriter.write(Buffer.from('hello'))).rejects.toBe(testReason);
-    console.log('done');
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -854,7 +835,6 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('streams can be cancelled with no data sent', async () => {
-    const cancelReason = Symbol('CancelReason');
     const connectionEventProm =
       utils.promise<events.EventQUICServerConnection>();
     const tlsConfig1 = await generateConfig(defaultType);
@@ -909,12 +889,12 @@ describe(QUICStream.name, () => {
     );
     // Let's make a new streams.
     const clientStream = await client.connection.newStream();
-    clientStream.cancel(cancelReason);
+    clientStream.cancel(testReason);
     await expect(clientStream.readable.getReader().read()).rejects.toBe(
-      cancelReason,
+      testReason,
     );
     await expect(clientStream.writable.getWriter().write()).rejects.toBe(
-      cancelReason,
+      testReason,
     );
 
     // Let's check that the server side ended
@@ -924,15 +904,15 @@ describe(QUICStream.name, () => {
         // Just consume until stream throws
       }
     })();
-    await expect(serverReadProm).rejects.toBe(cancelReason);
+    await expect(serverReadProm).rejects.toBe(testReason);
     const serverWriter = serverStream.writable.getWriter();
     // Should throw
     await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(
-      cancelReason,
+      testReason,
     );
 
     // And client stream should've cleaned up
-    await testsUtils.sleep(100);
+    await clientStream.closedP;
     expect(clientStream[destroyed]).toBeTrue();
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -1078,6 +1058,7 @@ describe(QUICStream.name, () => {
 
     // Drain the readable buffer
     const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
     serverReader.releaseLock();
 
     // Closing stream with no buffered data should be responsive
@@ -1156,8 +1137,8 @@ describe(QUICStream.name, () => {
     await clientWriter.write(message);
 
     // Closing stream with no buffered data should be responsive
-    await clientWriter.abort(Error('some error'));
-    await serverWriter.abort(Error('some error'));
+    await clientWriter.abort(testReason);
+    await serverWriter.abort(testReason);
 
     // Both streams are destroyed even without reading till close
     await Promise.all([clientStream.closedP, serverStream.closedP]);
