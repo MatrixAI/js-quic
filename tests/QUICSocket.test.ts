@@ -816,7 +816,7 @@ describe(QUICSocket.name, () => {
       async (message) => {
         const quicServer = {
           acceptConnection: jest.fn().mockRejectedValue(
-            new errors.ErrorQUICConnectionStartTimeout()
+            new errors.ErrorQUICServerNewConnection(undefined, { cause: new errors.ErrorQUICConnectionStartTimeout() }),
           )
         };
         const socket = new QUICSocket({
