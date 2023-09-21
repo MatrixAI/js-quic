@@ -466,6 +466,47 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public write(): void {
+    // TODO: temp fix, needs review
+    // We need to proactivity handle write stream errors here
+    try {
+      this.connection.conn.streamWritable(this.streamId, 0);
+    } catch (e) {
+      this.logger.warn(e.message);
+      let code: number | false;
+      if ((code = utils.isStreamStopped(e)) !== false) {
+        // Stream was stopped by the peer
+        const reason = this.codeToReason('write', code);
+        const e_ = new errors.ErrorQUICStreamPeerWrite(
+          'Peer stopped the writable stream',
+          {
+            data: { code },
+            cause: reason
+          }
+        );
+        this.writableController.error(reason);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+      } else {
+        // This could happen due to `InvalidStreamState`
+        // or something else that is unknown
+        // I think invalid stream state shouldn't really happen
+        // Cause anything blocked and waiting would have been rejected
+        const e_ = new errors.ErrorQUICStreamInternal(
+          'Local stream writable could not `streamSend`',
+          { cause: e }
+        );
+        // Ensure state transitions to error first before event handlers
+        this.writableController.error(e_);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e_
+          })
+        );
+      }
+    }
     // Resolve the write blocking promise if exists
     // If already resolved, this is a noop
     this.resolveWritableP?.();
