@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@matrixai/async-cancellable": "^1.1.1",
-    "@matrixai/async-init": "^1.9.4",
+    "@matrixai/async-init": "^1.10.0",
     "@matrixai/async-locks": "^4.0.0",
     "@matrixai/contexts": "^1.2.0",
     "@matrixai/errors": "^1.2.0",
