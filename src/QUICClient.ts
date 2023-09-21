@@ -454,6 +454,8 @@ class QUICClient extends EventTarget {
    */
   protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
     try {
+      // we want to skip this if the socket has already ended
+      if (!(this.socket[running] && this.socket[status] !== 'stopping')) return;
       await this.socket.send_(
         evt.detail.msg,
         evt.detail.port,

@@ -183,6 +183,8 @@ class QUICServer {
    * This must be attached multiple times.
    */
   protected handleEventQUICConnectionSend = async (evt: events.EventQUICConnectionSend) => {
+    // we want to skip this if the socket has already ended
+    if (!(this.socket[running] && this.socket[status] !== 'stopping')) return;
     try {
       await this.socket.send_(
         evt.detail.msg,
