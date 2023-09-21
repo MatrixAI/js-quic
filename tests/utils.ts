@@ -584,7 +584,8 @@ function socketCleanupFactory() {
         stopProms.push(socket.stop({ force: true }));
       }
       await Promise.all(stopProms);
-    }
+    },
+    sockets,
   }
 }
 

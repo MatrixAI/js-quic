@@ -23,7 +23,8 @@ describe('Concurrency tests', () => {
   let ServerCryptoOps: ServerCryptoOps;
 
   // Tracking resources
-  let sockets: Array<QUICSocket>;
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+  // Normally we'd bind to a random port, but we need to know it before creating the server for these tests
   const socketPort1 = 50001;
 
   const reasonToCode = (type: 'read' | 'write', reason?: any) => {
@@ -40,16 +41,11 @@ describe('Concurrency tests', () => {
       sign: testsUtils.signHMAC,
       verify: testsUtils.verifyHMAC,
     };
-    sockets = [];
+    socketCleanMethods = testsUtils.socketCleanupFactory();
   });
 
   afterEach(async () => {
-    logger.info('AFTER EACH');
-    const stopProms: Array<Promise<void>> = [];
-    for (const socket of sockets) {
-      stopProms.push(socket.stop({ force: true }));
-    }
-    await Promise.allSettled(stopProms);
+    await socketCleanMethods.stopSockets();
   });
 
   const handleClientProm = async (
@@ -137,6 +133,7 @@ describe('Concurrency tests', () => {
             verifyPeer: false,
           },
         });
+        socketCleanMethods.extractSocket(server);
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
           events.EventQUICServerConnection.name,
@@ -210,6 +207,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms.push(clientProm);
@@ -259,6 +257,7 @@ describe('Concurrency tests', () => {
             verifyPeer: false,
           },
         });
+        socketCleanMethods.extractSocket(server);
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
           events.EventQUICServerConnection.name,
@@ -339,6 +338,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms.push(clientProm);
@@ -398,6 +398,7 @@ describe('Concurrency tests', () => {
       config,
       reasonToCode,
     });
+    socketCleanMethods.extractSocket(server);
     const connProms: Array<Promise<void>> = [];
     server.addEventListener(
       events.EventQUICServerConnection.name,
@@ -467,8 +468,8 @@ describe('Concurrency tests', () => {
       const socket2 = new QUICSocket({
         logger: logger.getChild('socket'),
       });
-      sockets.push(socket1);
-      sockets.push(socket2);
+      socketCleanMethods.sockets.add(socket1);
+      socketCleanMethods.sockets.add(socket2);
       await socket1.start({
         host: '127.0.0.1',
       });
@@ -528,6 +529,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms1.push(clientProm);
@@ -552,6 +554,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms2.push(clientProm);
