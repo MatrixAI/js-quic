@@ -1,9 +1,9 @@
-import type * as events from '@/events';
 import type { ClientCryptoOps, ServerCryptoOps, StreamReasonToCode } from '@';
 import type { Messages, StreamData } from './utils';
 import type { QUICConfig } from '@';
 import { fc, testProp } from '@fast-check/jest';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
+import * as events from '@/events';
 import QUICServer from '@/QUICServer';
 import { promise } from '@/utils';
 import QUICClient from '@/QUICClient';
@@ -26,7 +26,7 @@ describe('Concurrency tests', () => {
   let sockets: Array<QUICSocket>;
   const socketPort1 = 50001;
 
-  const reasonToCode = (type: 'recv' | 'send', reason?: any) => {
+  const reasonToCode = (type: 'read' | 'write', reason?: any) => {
     logger.error(type, reason);
     return 0;
   };
@@ -60,7 +60,7 @@ describe('Concurrency tests', () => {
     try {
       for (const streamData of connectionData.streams) {
         const streamProm = sleep(streamData.startDelay)
-          .then(() => client.connection.streamNew())
+          .then(() => client.connection.newStream())
           .then((stream) => {
             return handleStreamProm(stream, streamData);
           });
@@ -139,13 +139,13 @@ describe('Concurrency tests', () => {
         });
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'connectionStream',
+                events.EventQUICConnectionStream.name,
                 (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
@@ -261,13 +261,13 @@ describe('Concurrency tests', () => {
         });
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'serverConnection',
+          events.EventQUICServerConnection.name,
           async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'connectionStream',
+                events.EventQUICConnectionStream.name,
                 (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
@@ -378,7 +378,7 @@ describe('Concurrency tests', () => {
     serverStreams,
     reasonToCode,
   }: {
-    socket: QUICSocket | undefined;
+    socket: QUICSocket;
     port: number | undefined;
     cleanUpHoldProm: Promise<void>;
     config: Partial<QUICConfig> & {
@@ -400,13 +400,13 @@ describe('Concurrency tests', () => {
     });
     const connProms: Array<Promise<void>> = [];
     server.addEventListener(
-      'serverConnection',
+      events.EventQUICServerConnection.name,
       async (e: events.EventQUICServerConnection) => {
         const conn = e.detail;
         const connProm = (async () => {
           const serverStreamProms: Array<Promise<void>> = [];
           conn.addEventListener(
-            'connectionStream',
+            events.EventQUICConnectionStream.name,
             (streamEvent: events.EventQUICConnectionStream) => {
               const stream = streamEvent.detail;
               const streamData =
