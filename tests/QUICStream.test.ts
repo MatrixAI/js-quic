@@ -7,7 +7,7 @@ import QUICServer from '@/QUICServer';
 import QUICClient from '@/QUICClient';
 import QUICStream from '@/QUICStream';
 import * as testsUtils from './utils';
-import { generateConfig, sleep } from './utils';
+import { generateConfig } from './utils';
 
 describe(QUICStream.name, () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.INFO, [
@@ -217,7 +217,6 @@ describe(QUICStream.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 58888,
     });
     const client = await QUICClient.createQUICClient({
       host: localhost,
@@ -309,7 +308,6 @@ describe(QUICStream.name, () => {
 
     await server.start({
       host: localhost,
-      port: 59999,
     });
 
     const client = await QUICClient.createQUICClient({
@@ -323,8 +321,8 @@ describe(QUICStream.name, () => {
       config: {
         verifyPeer: false,
       },
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
     });
     socketCleanMethods.extractSocket(client);
 
@@ -386,7 +384,6 @@ describe(QUICStream.name, () => {
 
     await server.start({
       host: localhost,
-      port: 59999,
     });
 
     const client = await QUICClient.createQUICClient({

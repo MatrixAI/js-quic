@@ -81,7 +81,7 @@ class QUICServer {
       throw error;
     }
     this.dispatchEvent(
-      new events.EventQUICConnectionClose({
+      new events.EventQUICServerClose({
         detail: error
       })
     );
@@ -198,10 +198,10 @@ class QUICServer {
         {
           data: evt.detail,
           cause: e,
-        }
+        },
       );
       this.dispatchEvent(
-        new events.EventQUICServerError({ detail: e_ })
+        new events.EventQUICServerError({ detail: e_ }),
       );
     }
   };
