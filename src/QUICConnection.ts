@@ -254,14 +254,7 @@ class QUICConnection {
   };
 
   protected handleEventQUICStreamSend = async () => {
-    try {
-      if (this[running]) await this.send();
-      this.logger.warn('!sent!')
-    } catch(e) {
-      console.error(e);
-      this.logger.warn(`!send errored with! ${e.message}`);
-      throw e;
-    }
+    if (this[running]) await this.send();
   };
 
   /**
