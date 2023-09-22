@@ -401,46 +401,6 @@ function isStreamBidirectional(streamId: StreamId): boolean {
 }
 
 /**
- * Useful for debug printing stream state
- */
-function streamStats(
-  connection: Connection,
-  streamId: number,
-  label: string,
-): string {
-  let streamWritable: string;
-  try {
-    streamWritable = `${connection.streamWritable(streamId, 0)}`;
-  } catch (e) {
-    streamWritable = `threw ${e.message}`;
-  }
-  let streamCapacity: string;
-  try {
-    streamCapacity = `${connection.streamCapacity(streamId)}`;
-  } catch (e) {
-    streamCapacity = `threw ${e.message}`;
-  }
-  let readableIterator = false;
-  for (const streamIterElement of connection.readable()) {
-    if (streamIterElement === streamId) readableIterator = true;
-  }
-  let writableIterator = false;
-  for (const streamIterElement of connection.writable()) {
-    if (streamIterElement === streamId) writableIterator = true;
-  }
-  return `
-  ---${label}---
-  isReadable: ${connection.isReadable()},
-  readable iterator: ${readableIterator},
-  streamReadable: ${connection.streamReadable(streamId)},
-  streamFinished: ${connection.streamFinished(streamId)},
-  writable iterator: ${writableIterator},
-  streamWritable: ${streamWritable},
-  streamCapacity: ${streamCapacity},
-`;
-}
-
-/**
  * Collects PEM arrays specified in `QUICConfig` into a PEM chain array.
  * This can be used for keys, certs and ca.
  */
@@ -556,7 +516,6 @@ export {
   isStreamServerInitiated,
   isStreamBidirectional,
   isStreamUnidirectional,
-  streamStats,
   collectPEMs,
   pemToDER,
   derToPEM,

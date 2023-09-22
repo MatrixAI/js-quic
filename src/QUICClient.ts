@@ -163,6 +163,16 @@ class QUICClient extends EventTarget {
       }
     }
 
+    // IF WE ARE DUAL STACK
+    // We're going to auto-upgrade IPv4 to mapped addresses
+
+    // IF WE ARE IPv6
+    // Do nothing, be strict, ONLY ipv6
+
+    // IF WE ARE IPV4
+    // We're going to auto-downgrade IPv4 mapped IPv6 addresses to IPv4
+
+
     try {
       // Check that the target `host` is compatible with the bound socket host
       if (
