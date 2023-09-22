@@ -21,7 +21,7 @@ import { StartStop, ready, running, status } from '@matrixai/async-init/dist/Sta
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
-import { quiche, ConnectionErrorCode, CryptoError } from './native';
+import { quiche, ConnectionErrorCode } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -945,7 +945,11 @@ class QUICConnection {
           ? 'application'
           : 'transport'
         } code ${peerError.errorCode}`;
-        if (peerError.errorCode <= 0x0100 || peerError.errorCode >= 0x01FF) {
+        if (
+          peerError.errorCode >= quiche.CRYPTO_ERROR_START
+          &&
+          peerError.errorCode <= quiche.CRYPTO_ERROR_STOP
+        ) {
           this.dispatchEvent(
             new events.EventQUICConnectionError({
               detail: new errors.ErrorQUICConnectionPeerTLS(

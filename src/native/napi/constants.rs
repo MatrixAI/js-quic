@@ -34,6 +34,12 @@ pub const MAX_CONNECTION_WINDOW: i64 = 24 * 1024 * 1024;
 #[napi]
 pub const MAX_STREAM_WINDOW: i64 = 16 * 1024 * 1024;
 
+#[napi]
+pub const CRYPTO_ERROR_START: u16 = 0x0100;
+
+#[napi]
+pub const CRYPTO_ERROR_STOP: u16 = 0x01FF;
+
 // We don't need this anymore...
 // pub const HTTP_3: [&[u8]; 4] = [b"h3", b"h3-29", b"h3-28", b"h3-27"];
 // let alpns: Vec<&'static [u8]> = HTTP_3.to_vec();
