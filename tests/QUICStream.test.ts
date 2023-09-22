@@ -833,7 +833,7 @@ describe(QUICStream.name, () => {
   });
   test('streams can be cancelled with no data sent', async () => {
     const connectionEventProm =
-      utils.promise<events.EventQUICServerConnection>();
+      utils.promise<QUICConnection>();
     const tlsConfig1 = await generateConfig(defaultType);
     const tlsConfig2 = await generateConfig(defaultType);
     const reasonConverters = testsUtils.createReasonConverters();
@@ -854,7 +854,7 @@ describe(QUICStream.name, () => {
     socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
-      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+      (evt: events.EventQUICServerConnection) => connectionEventProm.resolveP(evt.detail),
     );
     await server.start({
       host: localhost,
@@ -875,7 +875,7 @@ describe(QUICStream.name, () => {
       ...reasonConverters,
     });
     socketCleanMethods.extractSocket(client);
-    const conn = (await connectionEventProm.p).detail;
+    const conn = await connectionEventProm.p;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
     conn.addEventListener(
@@ -910,6 +910,7 @@ describe(QUICStream.name, () => {
 
     // And client stream should've cleaned up
     await clientStream.closedP;
+    await serverStream.closedP;
     expect(clientStream[destroyed]).toBeTrue();
     await client.destroy({ force: true });
     await server.stop({ force: true });

@@ -450,6 +450,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public read(): void {
+    // Checking if writable has closed,
+    //  only needed here in case processing the read will clean up the quiche stream state.
+    this.checkWritableClosed();
+    // checking if readable finished
     if (this.connection.conn.streamFinished(this.streamId)) {
       // stream has finished, clean up
     let result: [number, boolean] | null;
@@ -565,10 +569,18 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public write(): void {
+    this.checkWritableClosed();
+    // Resolve the write blocking promise if exists
+    // If already resolved, this is a noop
+    this.resolveWritableP?.();
+  }
+
+  protected checkWritableClosed() {
     // TODO: temp fix, needs review
     // We need to proactivity handle write stream errors here
+    this.logger.warn('checking write!');
     try {
-      this.connection.conn.streamWritable(this.streamId, 0);
+      this.logger.warn(this.connection.conn.streamWritable(this.streamId, 0));
     } catch (e) {
       this.logger.warn(e.message);
       let code: number | false;
@@ -606,9 +618,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         );
       }
     }
-    // Resolve the write blocking promise if exists
-    // If already resolved, this is a noop
-    this.resolveWritableP?.();
   }
 
   protected readableStart(controller: ReadableStreamDefaultController): void {
@@ -673,7 +682,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         );
         // The pull doesn't need to throw it upwards, the controller.error already ensures errored state
         // And any read operation will end up throwing
-        // But we do it here for symmetricity with write
+        // But we do it here for symmetric with write
         throw reason;
       } else {
         // In all other cases, this is an internal error
