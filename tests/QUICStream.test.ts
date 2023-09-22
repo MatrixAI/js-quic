@@ -1,4 +1,4 @@
-import type { ClientCryptoOps, ServerCryptoOps } from '@';
+import type { ClientCryptoOps, QUICConnection, ServerCryptoOps } from '@';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import { destroyed } from '@matrixai/async-init';
 import * as events from '@/events';
@@ -10,7 +10,7 @@ import * as testsUtils from './utils';
 import { generateConfig } from './utils';
 
 describe(QUICStream.name, () => {
-  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.INFO, [
+  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -46,6 +46,7 @@ describe(QUICStream.name, () => {
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
     socketCleanMethods = testsUtils.socketCleanupFactory();
+    logger.warn('------BEFORE-------');
   });
   afterEach(async () => {
     logger.warn('------AFTER-------');
@@ -658,8 +659,7 @@ describe(QUICStream.name, () => {
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
-  // fixme:
-  test.skip('streams should contain metadata', async () => {
+  test('streams should contain metadata', async () => {
     const connectionEventProm =
       utils.promise<events.EventQUICServerConnection>();
     const tlsConfig1 = await generateConfig(defaultType);
@@ -719,27 +719,27 @@ describe(QUICStream.name, () => {
     writer.releaseLock();
     await serverStreamProm.p;
     const clientMetadata = clientStream.meta;
-    expect(clientMetadata.localHost).toBe(client.host);
-    expect(clientMetadata.localPort).toBe(client.port);
+    expect(clientMetadata.localHost).toBe(client.localHost);
+    expect(clientMetadata.localPort).toBe(client.localPort);
     expect(clientMetadata.remoteHost).toBe(server.host);
     expect(clientMetadata.remotePort).toBe(server.port);
-    expect(clientMetadata.remoteCertificates?.length).toBeGreaterThan(0);
-    const clientPemChain = utils.certificatePEMsToCertChainPem(
-      clientMetadata.remoteCertificates!,
+    expect(clientMetadata.remoteCertsChain?.length).toBeGreaterThan(0);
+    const clientPemChain = utils.collectPEMs(
+      clientMetadata.remoteCertsChain.map(v => utils.derToPEM(v)),
     );
-    expect(clientPemChain).toEqual(tlsConfig1.cert);
+    expect(clientPemChain[0]).toEqual(tlsConfig1.cert);
 
     const serverStream = await serverStreamProm.p;
     const serverMetadata = serverStream.meta;
     expect(serverMetadata.localHost).toBe(server.host);
     expect(serverMetadata.localPort).toBe(server.port);
-    expect(serverMetadata.remoteHost).toBe(client.host);
-    expect(serverMetadata.remotePort).toBe(client.port);
-    expect(serverMetadata.remoteCertificates?.length).toBeGreaterThan(0);
-    const serverPemChain = utils.certificatePEMsToCertChainPem(
-      serverMetadata.remoteCertificates!,
+    expect(serverMetadata.remoteHost).toBe(client.localHost);
+    expect(serverMetadata.remotePort).toBe(client.localPort);
+    expect(serverMetadata.remoteCertsChain?.length).toBeGreaterThan(0);
+    const serverPemChain = utils.collectPEMs(
+      serverMetadata.remoteCertsChain.map(v => utils.derToPEM(v)),
     );
-    expect(serverPemChain).toEqual(tlsConfig2.cert);
+    expect(serverPemChain[0]).toEqual(tlsConfig2.cert);
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
