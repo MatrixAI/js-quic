@@ -16,13 +16,6 @@ serde = { version = "1.0", features = ["derive"] }
 napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.17.1", features = ["boringssl-boring-crate", "boringssl-vendored"] }
 boring = "2.1.0"
-# FIXME: temp for testing
-log = { version = "0.4", features = ["std"] }
-ring = "0.16"
 
 [build-dependencies]
 napi-build = "2"
-
-# FIXME: included for flamegraph, remove later?
-[profile.release]
-debug = true

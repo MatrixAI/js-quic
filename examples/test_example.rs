@@ -1,7 +1,5 @@
-extern crate log;
 use std::*;
 use std::net::*;
-use ring::rand::*;
 
 const MAX_DATAGRAM_SIZE: usize = 1350;
 
@@ -99,9 +97,7 @@ fn main() {
 
 
   // Generate a random source connection ID for the connection.
-  let mut scid = [0; quiche::MAX_CONN_ID_LEN];
-  SystemRandom::new().fill(&mut scid[..]).unwrap();
-
+  let scid = [1; quiche::MAX_CONN_ID_LEN];
   let scid = quiche::ConnectionId::from_ref(&scid);
 
   // Get local address.
@@ -136,13 +132,8 @@ fn main() {
     },
   };
 
-  let rng = SystemRandom::new();
-  let conn_id_seed =
-    ring::hmac::Key::generate(ring::hmac::HMAC_SHA256, &rng).unwrap();
 
-  let server_conn_id = ring::hmac::sign(&conn_id_seed, &hdr.dcid);
-  let server_conn_id = &server_conn_id.as_ref()[..quiche::MAX_CONN_ID_LEN];
-  // let server_conn_id: [u8] = server_conn_id.to_vec().into();
+  let server_conn_id = [0; quiche::MAX_CONN_ID_LEN];
 
   let mut scid: [u8; quiche::MAX_CONN_ID_LEN] = [0; quiche::MAX_CONN_ID_LEN];
   scid.copy_from_slice(&server_conn_id);

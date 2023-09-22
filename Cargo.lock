@@ -345,12 +345,10 @@ name = "quic"
 version = "0.0.21"
 dependencies = [
  "boring",
- "log",
  "napi",
  "napi-build",
  "napi-derive",
  "quiche",
- "ring",
  "serde",
 ]
 
