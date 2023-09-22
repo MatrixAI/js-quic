@@ -29,9 +29,11 @@ describe('native/stream', () => {
   function sendPacket(
     connectionSource: Connection,
     connectionDestination: Connection,
-  ) {
+  ): null | void {
     const dataBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    const [serverSendLength, sendInfo] = connectionSource.send(dataBuffer);
+    const result = connectionSource.send(dataBuffer);
+    if (result === null) return null;
+    const [serverSendLength, sendInfo] = result;
     connectionDestination.recv(dataBuffer.subarray(0, serverSendLength), {
       to: sendInfo.to,
       from: sendInfo.from,
@@ -90,7 +92,9 @@ describe('native/stream', () => {
     );
 
     const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-    let [clientSendLength] = clientConn.send(clientBuffer);
+    let result = clientConn.send(clientBuffer);
+    expect(result).not.toBeNull();
+    let [clientSendLength] = result!;
     const clientHeaderInitial = quiche.Header.fromSlice(
       clientBuffer.subarray(0, clientSendLength),
       quiche.MAX_CONN_ID_LEN,
@@ -123,7 +127,9 @@ describe('native/stream', () => {
     });
 
     // Client will retry the initial packet with the token
-    [clientSendLength] = clientConn.send(clientBuffer);
+    result = clientConn.send(clientBuffer);
+    expect(result).not.toBeNull();
+    [clientSendLength] = result!;
 
     // Server accept
     serverConn = quiche.Connection.accept(
@@ -173,7 +179,7 @@ describe('native/stream', () => {
     test('initializing stream with 0-len message', () => {
       clientConn.streamSend(0, new Uint8Array(0), false);
       // No data is sent
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
       expect(iterToArray(clientConn.readable())).not.toContain(0);
       expect(iterToArray(clientConn.writable())).toContain(0);
 
@@ -184,8 +190,8 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('Server state does not exist yet', () => {
       expect(iterToArray(serverConn.readable())).not.toContain(0);
@@ -220,7 +226,9 @@ describe('native/stream', () => {
 
       // Reading the message
 
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(message.byteLength);
       expect(fin).toBe(false);
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -240,8 +248,8 @@ describe('native/stream', () => {
       sendPacket(serverConn, clientConn);
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('reverse data can be sent', () => {
       // Server state before sending
@@ -289,7 +297,9 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // Read message
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(message.byteLength);
       expect(fin).toBe(false);
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -314,8 +324,8 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with 0-len fin', () => {
@@ -366,7 +376,11 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
+
       // Message is empty but exists due to fin flag
       expect(bytes).toEqual(0);
       expect(fin).toBe(true);
@@ -376,7 +390,7 @@ describe('native/stream', () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       // Further reads throw `Done`
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Server sends ack back
       sendPacket(serverConn, clientConn);
@@ -400,8 +414,8 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('closing reverse stream with 0-len fin frame', async () => {
       serverConn.streamSend(0, new Uint8Array(0), true);
@@ -437,7 +451,9 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(0);
       expect(fin).toBe(true);
 
@@ -465,9 +481,8 @@ describe('native/stream', () => {
       expect(() => serverConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() =>
-        serverConn.streamSend(0, Buffer.from('message'), false),
-      ).toThrow('Done');
+      expect(serverConn.streamSend(0, Buffer.from('message'), false),
+      ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
@@ -485,17 +500,16 @@ describe('native/stream', () => {
       expect(() => clientConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() =>
-        clientConn.streamSend(0, Buffer.from('message'), false),
-      ).toThrow('Done');
+      expect(clientConn.streamSend(0, Buffer.from('message'), false),
+      ).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with data fin', () => {
@@ -540,7 +554,9 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       // Message is empty but exists due to fin flag
       expect(bytes).toEqual(7);
       expect(fin).toBe(true);
@@ -550,7 +566,7 @@ describe('native/stream', () => {
       // Nothing left to read
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Server sends ack back
       sendPacket(serverConn, clientConn);
@@ -574,8 +590,8 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('closing reverse stream with data fin frame', async () => {
       serverConn.streamSend(0, Buffer.from('message'), true);
@@ -611,7 +627,9 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(7);
       expect(fin).toBe(true);
       expect(streamBuf.subarray(0, bytes).toString()).toEqual('message');
@@ -658,8 +676,8 @@ describe('native/stream', () => {
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with buffered data and data fin', () => {
@@ -678,8 +696,8 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(clientConn, serverConn);
       sendPacket(serverConn, clientConn); // Ack
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
 
       expect(serverConn.streamReadable(0)).toBeTrue();
       expect(serverConn.streamFinished(0)).toBeFalse();
@@ -692,12 +710,14 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(clientConn, serverConn);
       sendPacket(serverConn, clientConn); // Ack
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
 
       expect(serverConn.streamReadable(0)).toBeTrue();
       expect(serverConn.streamFinished(0)).toBeFalse();
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(54);
       expect(fin).toBeTrue();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -713,9 +733,9 @@ describe('native/stream', () => {
       expect(() =>
         clientConn.streamSend(0, Buffer.from('invalid2'), true),
       ).toThrow('FinalSize');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('sending multiple messages on reverse stream', async () => {
       serverConn.streamSend(0, Buffer.from('Message1 '), false);
@@ -725,8 +745,8 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(serverConn, clientConn);
       sendPacket(clientConn, serverConn); // Ack
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       expect(clientConn.streamReadable(0)).toBeTrue();
       expect(clientConn.streamFinished(0)).toBeFalse();
@@ -739,12 +759,14 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(serverConn, clientConn);
       sendPacket(clientConn, serverConn); // Ack
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       expect(clientConn.streamReadable(0)).toBeTrue();
       expect(clientConn.streamFinished(0)).toBeFalse();
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(54);
       expect(fin).toBeTrue();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -766,9 +788,8 @@ describe('native/stream', () => {
       expect(() => serverConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() =>
-        serverConn.streamSend(0, Buffer.from('message'), false),
-      ).toThrow('Done');
+      expect(serverConn.streamSend(0, Buffer.from('message'), false),
+      ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
@@ -786,17 +807,16 @@ describe('native/stream', () => {
       expect(() => clientConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() =>
-        clientConn.streamSend(0, Buffer.from('message'), false),
-      ).toThrow('Done');
+      expect(clientConn.streamSend(0, Buffer.from('message'), false),
+      ).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with buffered data and 0-len fin', () => {
@@ -819,8 +839,8 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(clientConn, serverConn);
       sendPacket(serverConn, clientConn); // Ack
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
 
       expect(serverConn.streamReadable(0)).toBeTrue();
       expect(serverConn.streamFinished(0)).toBeFalse();
@@ -831,13 +851,15 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(clientConn, serverConn);
       sendPacket(serverConn, clientConn); // Ack
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
 
       expect(serverConn.streamReadable(0)).toBeTrue();
       // Finished is still false
       expect(serverConn.streamFinished(0)).toBeFalse();
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(27);
       expect(fin).toBeTrue();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -853,9 +875,9 @@ describe('native/stream', () => {
       expect(() =>
         clientConn.streamSend(0, Buffer.from('invalid2'), true),
       ).toThrow('FinalSize');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('sending multiple messages on reverse stream', async () => {
       serverConn.streamSend(0, Buffer.from('Message1 '), false);
@@ -865,8 +887,8 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(serverConn, clientConn);
       sendPacket(clientConn, serverConn); // Ack
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       expect(clientConn.streamReadable(0)).toBeTrue();
       expect(clientConn.streamFinished(0)).toBeFalse();
@@ -877,13 +899,15 @@ describe('native/stream', () => {
       // Only one packet is sent
       sendPacket(serverConn, clientConn);
       sendPacket(clientConn, serverConn); // Ack
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       expect(clientConn.streamReadable(0)).toBeTrue();
       // Finished is still false due to buffered data
       expect(clientConn.streamFinished(0)).toBeFalse();
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(27);
       expect(fin).toBeTrue();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
@@ -922,8 +946,8 @@ describe('native/stream', () => {
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with 0-len fin before any data', () => {
@@ -941,11 +965,11 @@ describe('native/stream', () => {
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
 
       // No packets are sent, therefor no remote state created
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('closing forward stream with 0-len fin frame', async () => {
       clientConn.streamSend(0, new Uint8Array(0), true);
@@ -986,7 +1010,9 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       // Message is empty but exists due to fin flag
       expect(bytes).toEqual(0);
       expect(fin).toBe(true);
@@ -995,7 +1021,7 @@ describe('native/stream', () => {
       // Nothing left to read
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Server sends ack back
       sendPacket(serverConn, clientConn);
@@ -1019,8 +1045,8 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('closing reverse stream with 0-len fin frame', async () => {
       serverConn.streamSend(0, new Uint8Array(0), true);
@@ -1056,7 +1082,9 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(0);
       expect(fin).toBe(true);
 
@@ -1102,8 +1130,8 @@ describe('native/stream', () => {
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream finishes with data fin before any data', () => {
@@ -1121,11 +1149,11 @@ describe('native/stream', () => {
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
 
       // No packets are sent, therefor no remote state created
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('closing forward stream with data fin frame', async () => {
       clientConn.streamSend(0, Buffer.from('message'), true);
@@ -1161,7 +1189,9 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       // Message is empty but exists due to fin flag
       expect(bytes).toEqual(7);
       expect(fin).toBe(true);
@@ -1170,7 +1200,7 @@ describe('native/stream', () => {
       // Nothing left to read
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Server sends ack back
       sendPacket(serverConn, clientConn);
@@ -1194,8 +1224,8 @@ describe('native/stream', () => {
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('closing reverse stream with data fin frame', async () => {
       serverConn.streamSend(0, Buffer.from('message'), true);
@@ -1231,7 +1261,9 @@ describe('native/stream', () => {
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
 
       // Reading message
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toEqual(7);
       expect(fin).toBe(true);
 
@@ -1277,8 +1309,8 @@ describe('native/stream', () => {
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
 
@@ -1295,19 +1327,19 @@ describe('native/stream', () => {
       test('client closes writable', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).toContain(0);
 
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(() =>
+        expect(
           clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toThrow('Done');
+        ).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         // No longer in writable iterator
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
@@ -1322,7 +1354,7 @@ describe('native/stream', () => {
 
         // Still seen as writable
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
       test('server receives packet and updates state', async () => {
@@ -1331,7 +1363,7 @@ describe('native/stream', () => {
         expect(serverConn.streamFinished(0)).toBeFalse();
         expect(iterToArray(serverConn.readable())).not.toContain(0);
 
-        expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
         sendPacket(clientConn, serverConn);
         // Stream is both readable and finished
         expect(serverConn.isReadable()).toBeTrue();
@@ -1359,7 +1391,7 @@ describe('native/stream', () => {
       test('client receives response packet and updates state', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
@@ -1376,15 +1408,15 @@ describe('native/stream', () => {
 
         // Client changes
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
         ).toThrow('FinalSize');
       });
       test('no further packets sent', async () => {
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     describe('closing readable from client', () => {
@@ -1398,9 +1430,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Read, 42);
         // Further shutdowns throw done
-        expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-          'Done',
-        );
+        expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
 
         // No state change
         expect(clientConn.isReadable()).toBeFalse();
@@ -1409,7 +1439,7 @@ describe('native/stream', () => {
         expect(iterToArray(clientConn.readable())).not.toContain(0);
       });
       test('Stream is still readable for client', async () => {
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeFalse();
@@ -1418,12 +1448,12 @@ describe('native/stream', () => {
       test('server receives packet and updates state', async () => {
         // Initial state
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).toContain(0);
 
         // Sending packet
         sendPacket(clientConn, serverConn);
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // Stream writable and capacity now throws
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -1462,7 +1492,7 @@ describe('native/stream', () => {
 
         // Response is sent
         sendPacket(serverConn, clientConn);
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
 
         // No changes to stream state on server
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -1488,7 +1518,7 @@ describe('native/stream', () => {
       });
       test('client responds', async () => {
         sendPacket(clientConn, serverConn); // Ack?
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // No changes to stream state on server
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -1507,7 +1537,7 @@ describe('native/stream', () => {
       });
       test('stream still readable on client', async () => {
         // Reading stream will never throw, but it does finish.
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeTrue();
@@ -1515,8 +1545,8 @@ describe('native/stream', () => {
       });
       test('no more packets sent', async () => {
         // No new packets
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     test('server final stream state', async () => {
@@ -1528,18 +1558,13 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(() =>
-        serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toThrow('Done');
+      expect(serverConn.streamSend(0, Buffer.from('message'), true),
+      ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
@@ -1553,31 +1578,27 @@ describe('native/stream', () => {
     });
     test('client final stream state', async () => {
       // Client never reaches invalid state?
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeTrue();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream forced closed by server after initial message', () => {
@@ -1595,19 +1616,18 @@ describe('native/stream', () => {
       test('server closes writable', async () => {
         // Initial writable states
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).toContain(0);
 
         // After shutting down
         serverConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(() =>
-          serverConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toThrow('Done');
+        expect(serverConn.streamShutdown(0, Shutdown.Write, 42),
+        ).toBeNull();
 
         // States are unchanged
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         // No longer in writable iterator
         expect(iterToArray(serverConn.writable())).not.toContain(0);
       });
@@ -1622,7 +1642,7 @@ describe('native/stream', () => {
 
         // Still seen as writable
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).not.toContain(0);
       });
       test('client receives packet and updates state', async () => {
@@ -1631,7 +1651,7 @@ describe('native/stream', () => {
         expect(clientConn.streamFinished(0)).toBeFalse();
         expect(iterToArray(clientConn.readable())).not.toContain(0);
 
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         sendPacket(serverConn, clientConn);
         // Stream is both readable and finished
         expect(clientConn.isReadable()).toBeTrue();
@@ -1659,7 +1679,7 @@ describe('native/stream', () => {
       test('server receives response packet and updates state', async () => {
         // Initial writable states
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).not.toContain(0);
         expect(() =>
           serverConn.streamSend(0, Buffer.from('hello'), false),
@@ -1676,15 +1696,15 @@ describe('native/stream', () => {
 
         // Client changes?
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).not.toContain(0);
         expect(() =>
           serverConn.streamSend(0, Buffer.from('hello'), false),
         ).toThrow('FinalSize');
       });
       test('no further packets sent', async () => {
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     describe('closing readable from server', () => {
@@ -1698,9 +1718,7 @@ describe('native/stream', () => {
         // After shutting down
         serverConn.streamShutdown(0, Shutdown.Read, 42);
         // Further shutdowns throw done
-        expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-          'Done',
-        );
+        expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
 
         // No state change
         expect(serverConn.isReadable()).toBeFalse();
@@ -1709,7 +1727,7 @@ describe('native/stream', () => {
         expect(iterToArray(serverConn.readable())).not.toContain(0);
       });
       test('Stream is still readable for server', async () => {
-        expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.streamReadable(0)).toBeFalse();
         expect(serverConn.streamFinished(0)).toBeFalse();
@@ -1718,12 +1736,12 @@ describe('native/stream', () => {
       test('client receives packet and updates state', async () => {
         // Initial state
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).toContain(0);
 
         // Sending packet
         sendPacket(serverConn, clientConn);
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
 
         // Stream writable and capacity now throws
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
@@ -1762,7 +1780,7 @@ describe('native/stream', () => {
 
         // Response is sent
         sendPacket(clientConn, serverConn);
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // Client changes
         expect(serverConn.isReadable()).toBeFalse();
@@ -1788,7 +1806,7 @@ describe('native/stream', () => {
       });
       test('server stream now finished', async () => {
         // Reading still results in done
-        expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.streamReadable(0)).toBeFalse();
         expect(serverConn.streamFinished(0)).toBeTrue();
@@ -1796,7 +1814,7 @@ describe('native/stream', () => {
       });
       test('server responds', async () => {
         sendPacket(serverConn, clientConn); // Ack?
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
 
         // No changes to stream state on client
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
@@ -1815,7 +1833,7 @@ describe('native/stream', () => {
       });
       test('stream still readable on server', async () => {
         // Reading stream will never throw, but it does finish.
-        expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
         expect(serverConn.isReadable()).toBeFalse();
         expect(serverConn.streamReadable(0)).toBeFalse();
         expect(serverConn.streamFinished(0)).toBeTrue();
@@ -1823,8 +1841,8 @@ describe('native/stream', () => {
       });
       test('no more packets sent', async () => {
         // No new packets
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
       });
     });
     test('client final stream state', async () => {
@@ -1836,18 +1854,14 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(() =>
+      expect(
         clientConn.streamSend(0, Buffer.from('message'), true),
-      ).toThrow('Done');
+      ).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
@@ -1861,31 +1875,27 @@ describe('native/stream', () => {
     });
     test('server final stream state', async () => {
       // Client never reaches invalid state?
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         serverConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         serverConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeTrue();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBe(12000);
+      expect(serverConn.streamCapacity(0)).toBe(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream forced closed by client before initial message', () => {
@@ -1906,29 +1916,28 @@ describe('native/stream', () => {
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
 
       // No packets are sent, therefor no remote state created
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     describe('closing writable from client', () => {
       test('client closes writable', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).toContain(0);
 
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(() =>
-          clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toThrow('Done');
+        expect(clientConn.streamShutdown(0, Shutdown.Write, 42),
+        ).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         // No longer in writable iterator
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
@@ -1943,7 +1952,7 @@ describe('native/stream', () => {
 
         // Still seen as writable
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
       test('server receives packet and creates state', async () => {
@@ -1985,7 +1994,7 @@ describe('native/stream', () => {
       test('client receives response packet and updates state', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
@@ -2002,15 +2011,15 @@ describe('native/stream', () => {
 
         // Client changes?
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
         ).toThrow('FinalSize');
       });
       test('no further packets sent', async () => {
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     describe('closing readable from client', () => {
@@ -2024,9 +2033,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Read, 42);
         // Further shutdowns throw done
-        expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-          'Done',
-        );
+        expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
 
         // No state change
         expect(clientConn.isReadable()).toBeFalse();
@@ -2035,7 +2042,7 @@ describe('native/stream', () => {
         expect(iterToArray(clientConn.readable())).not.toContain(0);
       });
       test('Stream is still readable for client', async () => {
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeFalse();
@@ -2044,12 +2051,12 @@ describe('native/stream', () => {
       test('server receives packet and updates state', async () => {
         // Initial state
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).toContain(0);
 
         // Sending packet
         sendPacket(clientConn, serverConn);
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // Stream writable and capacity now throws
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -2088,7 +2095,7 @@ describe('native/stream', () => {
 
         // Response is sent
         sendPacket(serverConn, clientConn);
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
 
         // No changes to stream state on server
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -2114,7 +2121,7 @@ describe('native/stream', () => {
       });
       test('client responds', async () => {
         sendPacket(clientConn, serverConn); // Ack?
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // No changes to stream state on server
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -2133,7 +2140,7 @@ describe('native/stream', () => {
       });
       test('stream still readable on client', async () => {
         // Reading stream will never throw, but it does finish.
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeTrue();
@@ -2141,8 +2148,8 @@ describe('native/stream', () => {
       });
       test('no more packets sent', async () => {
         // No new packets
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     test('server final stream state', async () => {
@@ -2154,18 +2161,13 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(() =>
-        serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toThrow('Done');
+      expect(serverConn.streamSend(0, Buffer.from('message'), true),
+      ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
@@ -2179,31 +2181,27 @@ describe('native/stream', () => {
     });
     test('client final stream state', async () => {
       // Client never reaches invalid state?
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeTrue();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('stream forced closed by client with buffered data', () => {
@@ -2228,26 +2226,25 @@ describe('native/stream', () => {
       sendPacket(clientConn, serverConn);
 
       // No more packets to send
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     describe('closing writable from client', () => {
       test('client closes writable', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).toContain(0);
 
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(() =>
-          clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toThrow('Done');
+        expect(clientConn.streamShutdown(0, Shutdown.Write, 42),
+        ).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         // No longer in writable iterator
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
@@ -2262,7 +2259,7 @@ describe('native/stream', () => {
 
         // Still seen as writable
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
       test('server receives packet and updates state', async () => {
@@ -2298,7 +2295,7 @@ describe('native/stream', () => {
       test('client receives response packet and updates state', async () => {
         // Initial writable states
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
@@ -2315,15 +2312,15 @@ describe('native/stream', () => {
 
         // Client changes?
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
-        expect(clientConn.streamCapacity(0)).toBe(12000);
+        expect(clientConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(clientConn.writable())).not.toContain(0);
         expect(() =>
           clientConn.streamSend(0, Buffer.from('hello'), false),
         ).toThrow('FinalSize');
       });
       test('no further packets sent', async () => {
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     describe('closing readable from client', () => {
@@ -2338,9 +2335,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Read, 42);
         // Further shutdowns throw done
-        expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-          'Done',
-        );
+        expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
 
         // Client ceases to be readable
         expect(clientConn.isReadable()).toBeFalse();
@@ -2349,7 +2344,7 @@ describe('native/stream', () => {
         expect(iterToArray(clientConn.readable())).not.toContain(0);
       });
       test('Stream is still readable for client', async () => {
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeFalse();
@@ -2358,12 +2353,12 @@ describe('native/stream', () => {
       test('server receives packet and updates state', async () => {
         // Initial state
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
-        expect(serverConn.streamCapacity(0)).toBe(12000);
+        expect(serverConn.streamCapacity(0)).toBe(13500);
         expect(iterToArray(serverConn.writable())).toContain(0);
 
         // Sending packet
         sendPacket(clientConn, serverConn);
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // Stream writable and capacity now throws
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -2402,7 +2397,7 @@ describe('native/stream', () => {
 
         // Response is sent
         sendPacket(serverConn, clientConn);
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
 
         // Client changes
         expect(clientConn.isReadable()).toBeFalse();
@@ -2435,7 +2430,7 @@ describe('native/stream', () => {
       });
       test('client responds', async () => {
         sendPacket(clientConn, serverConn); // Ack?
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
 
         // No changes to stream state on server
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
@@ -2454,7 +2449,7 @@ describe('native/stream', () => {
       });
       test('stream still readable on client', async () => {
         // Reading stream will never throw, but it does finish.
-        expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+        expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
         expect(clientConn.isReadable()).toBeFalse();
         expect(clientConn.streamReadable(0)).toBeFalse();
         expect(clientConn.streamFinished(0)).toBeTrue();
@@ -2462,8 +2457,8 @@ describe('native/stream', () => {
       });
       test('no more packets sent', async () => {
         // No new packets
-        expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-        expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+        expect(sendPacket(serverConn, clientConn)).toBeNull();
+        expect(sendPacket(clientConn, serverConn)).toBeNull();
       });
     });
     test('server final stream state', async () => {
@@ -2475,18 +2470,13 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(() =>
-        serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toThrow('Done');
+      expect(serverConn.streamSend(0, Buffer.from('message'), true),
+      ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
@@ -2500,31 +2490,27 @@ describe('native/stream', () => {
     });
     test('client final stream state', async () => {
       // Client never reaches invalid state?
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), true),
       ).toThrow('FinalSize');
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeTrue();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
 
@@ -2550,8 +2536,8 @@ describe('native/stream', () => {
 
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('client closing connection', async () => {
       clientConn.close(true, 42, Buffer.from('some reason'));
@@ -2564,38 +2550,38 @@ describe('native/stream', () => {
       expect(serverConn.isClosed()).toBeFalse();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('client stream still functions', async () => {
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
 
       // Can still send
       expect(clientConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
 
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('server stream still functions', async () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBe(12000);
+      expect(serverConn.streamCapacity(0)).toBe(13500);
 
       // Can still send
       expect(serverConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('waiting for closed state', async () => {
       await sleep(100);
@@ -2615,112 +2601,104 @@ describe('native/stream', () => {
       expect(serverConn.isDraining()).toBeTrue();
       expect(serverConn.isClosed()).toBeTrue();
 
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('client stream still functions', async () => {
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can still send
       expect(clientConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('server stream still functions', async () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can still send
       expect(serverConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('manually clean up client stream state', async () => {
       clientConn.streamShutdown(0, Shutdown.Read, 42);
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
       clientConn.streamShutdown(0, Shutdown.Write, 42);
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       // No change
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can't send
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), false),
       ).toThrow('FinalSize');
       // Can still recv
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Still no change
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
     });
     test('manually clean up server stream state', async () => {
       serverConn.streamShutdown(0, Shutdown.Read, 42);
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
       serverConn.streamShutdown(0, Shutdown.Write, 42);
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       // No change
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(13500);
 
       // Can't send
       expect(() =>
         serverConn.streamSend(0, Buffer.from('message'), false),
       ).toThrow('FinalSize');
       // Can still recv
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Still no change
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
   describe('connection closes with active stream, with buffered stream data', () => {
@@ -2746,8 +2724,8 @@ describe('native/stream', () => {
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('client closing connection', async () => {
       clientConn.close(true, 42, Buffer.from('some reason'));
@@ -2760,60 +2738,64 @@ describe('native/stream', () => {
       expect(serverConn.isClosed()).toBeFalse();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('client stream still functions', async () => {
       expect(clientConn.isReadable()).toBeTrue();
       expect(clientConn.streamReadable(0)).toBeTrue();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBe(12000);
+      expect(clientConn.streamCapacity(0)).toBe(13500);
 
       // Can still send
       expect(clientConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      const [bytes, fin] = clientConn.streamRecv(0, streamBuf);
+      const result = clientConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(24);
       expect(fin).toBeFalse();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
         'Message1Message2Message3',
       );
 
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
     });
     test('server stream still functions', async () => {
       expect(serverConn.isReadable()).toBeTrue();
       expect(serverConn.streamReadable(0)).toBeTrue();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBe(12000);
+      expect(serverConn.streamCapacity(0)).toBe(13500);
 
       // Can still send
       expect(serverConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      const [bytes, fin] = serverConn.streamRecv(0, streamBuf);
+      const result = serverConn.streamRecv(0, streamBuf);
+      expect(result).not.toBeNull();
+      const [bytes, fin] = result!;
       expect(bytes).toBe(24);
       expect(fin).toBeFalse();
       expect(streamBuf.subarray(0, bytes).toString()).toEqual(
         'Message1Message2Message3',
       );
 
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
 
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThan(13500);
     });
     test('waiting for closed state', async () => {
       await sleep(100);
@@ -2833,112 +2815,104 @@ describe('native/stream', () => {
       expect(serverConn.isDraining()).toBeTrue();
       expect(serverConn.isClosed()).toBeTrue();
 
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('client stream still functions', async () => {
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can still send
       expect(clientConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('server stream still functions', async () => {
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can still send
       expect(serverConn.streamSend(0, Buffer.from('message'), false)).toBe(7);
       // Can still recv
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
     test('manually clean up client stream state', async () => {
       clientConn.streamShutdown(0, Shutdown.Read, 42);
-      expect(() => clientConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
       clientConn.streamShutdown(0, Shutdown.Write, 42);
-      expect(() => clientConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       // No change
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
 
       // Can't send
       expect(() =>
         clientConn.streamSend(0, Buffer.from('message'), false),
       ).toThrow('FinalSize');
       // Can still recv
-      expect(() => clientConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(clientConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Still no change
       expect(clientConn.isReadable()).toBeFalse();
       expect(clientConn.streamReadable(0)).toBeFalse();
       expect(clientConn.streamFinished(0)).toBeFalse();
       expect(clientConn.streamWritable(0, 0)).toBeTrue();
-      expect(clientConn.streamCapacity(0)).toBeLessThan(12000);
+      expect(clientConn.streamCapacity(0)).toBeLessThan(13500);
     });
     test('manually clean up server stream state', async () => {
       serverConn.streamShutdown(0, Shutdown.Read, 42);
-      expect(() => serverConn.streamShutdown(0, Shutdown.Read, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Read, 42)).toBeNull();
       serverConn.streamShutdown(0, Shutdown.Write, 42);
-      expect(() => serverConn.streamShutdown(0, Shutdown.Write, 42)).toThrow(
-        'Done',
-      );
+      expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
 
       // No change
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(13500);
 
       // Can't send
       expect(() =>
         serverConn.streamSend(0, Buffer.from('message'), false),
       ).toThrow('FinalSize');
       // Can still recv
-      expect(() => serverConn.streamRecv(0, streamBuf)).toThrow('Done');
+      expect(serverConn.streamRecv(0, streamBuf)).toBeNull();
 
       // Still no change
       expect(serverConn.isReadable()).toBeFalse();
       expect(serverConn.streamReadable(0)).toBeFalse();
       expect(serverConn.streamFinished(0)).toBeFalse();
       expect(serverConn.streamWritable(0, 0)).toBeTrue();
-      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(12000);
+      expect(serverConn.streamCapacity(0)).toBeLessThanOrEqual(13500);
     });
     test('no new packets', async () => {
       // No new packets
-      expect(() => sendPacket(serverConn, clientConn)).toThrow('Done');
-      expect(() => sendPacket(clientConn, serverConn)).toThrow('Done');
+      expect(sendPacket(serverConn, clientConn)).toBeNull();
+      expect(sendPacket(clientConn, serverConn)).toBeNull();
     });
   });
 });

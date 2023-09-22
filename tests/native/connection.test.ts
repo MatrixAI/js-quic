@@ -134,7 +134,7 @@ describe('native/connection', () => {
           from: serverHost,
         });
         const clientBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull();
         expect(clientConn.isClosed()).toBeTrue();
       });
     });
@@ -172,7 +172,7 @@ describe('native/connection', () => {
           _serverQuicheConfig = buildQuicheConfig(serverConfig);
         });
         test('client connect', async () => {
-          // Randomly genrate the client SCID
+          // Randomly generate the client SCID
           const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
           await crypto.ops.randomBytes(scidBuffer);
           clientScid = new QUICConnectionId(scidBuffer);
@@ -185,14 +185,16 @@ describe('native/connection', () => {
           );
         });
         test('client dialing timeout', async () => {
-          [_clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
-          expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-          // Exahust the timeout
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [_clientSendLength, _clientSendInfo] = result!;
+          expect(clientConn.send(clientBuffer)).toBeNull();
+          // Exhaust the timeout
           await testsUtils.waitForTimeoutNull(clientConn);
-          // After max idle timeout, you cannot artifically close the connection
+          // After max idle timeout, you cannot artificially close the connection
           expect(
-            () => clientConn.close(true, 0, Buffer.from('abc'))
-          ).toThrow('Done');
+            clientConn.close(true, 0, Buffer.from('abc'))
+          ).toBeNull();
           // Connection has timed out
           expect(clientConn.isTimedOut()).toBeTrue();
           expect(clientConn.isInEarlyData()).toBeFalse();
@@ -246,7 +248,7 @@ describe('native/connection', () => {
           serverQuicheConfig = buildQuicheConfig(serverConfig);
         });
         test('client connect', async () => {
-          // Randomly genrate the client SCID
+          // Randomly generate the client SCID
           const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
           await crypto.ops.randomBytes(scidBuffer);
           clientScid = new QUICConnectionId(scidBuffer);
@@ -259,7 +261,9 @@ describe('native/connection', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -291,7 +295,9 @@ describe('native/connection', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -324,7 +330,9 @@ describe('native/connection', () => {
         });
         test('client <-initial- server timeout', async () => {
           // Server tries sending the initial frame
-          [_serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [_serverSendLength, _serverSendInfo] = result!;
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
@@ -396,7 +404,7 @@ describe('native/connection', () => {
           serverQuicheConfig = buildQuicheConfig(serverConfig);
         });
         test('client connect', async () => {
-          // Randomly genrate the client SCID
+          // Randomly generate the client SCID
           const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
           await crypto.ops.randomBytes(scidBuffer);
           clientScid = new QUICConnectionId(scidBuffer);
@@ -409,7 +417,9 @@ describe('native/connection', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -441,7 +451,9 @@ describe('native/connection', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -473,21 +485,27 @@ describe('native/connection', () => {
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
-          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [serverSendLength, _serverSendInfo] = result!;
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
           });
         });
         test('client -initial-> server', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
           });
         });
         test('client <-handshake- server timeout', async () => {
-          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [serverSendLength, _serverSendInfo] = result!;
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
@@ -554,7 +572,7 @@ describe('native/connection', () => {
           serverQuicheConfig = buildQuicheConfig(serverConfig);
         });
         test('client connect', async () => {
-          // Randomly genrate the client SCID
+          // Randomly generate the client SCID
           const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
           await crypto.ops.randomBytes(scidBuffer);
           clientScid = new QUICConnectionId(scidBuffer);
@@ -567,7 +585,9 @@ describe('native/connection', () => {
           );
         });
         test('client dialing', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
         });
         test('client and server negotiation', async () => {
           const clientHeaderInitial = quiche.Header.fromSlice(
@@ -599,7 +619,9 @@ describe('native/connection', () => {
             to: clientHost,
             from: serverHost,
           });
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           const clientHeaderInitialRetry = quiche.Header.fromSlice(
             clientBuffer.subarray(0, clientSendLength),
             quiche.MAX_CONN_ID_LEN,
@@ -631,21 +653,27 @@ describe('native/connection', () => {
           expect(serverConn.timeout()).not.toBeNull();
         });
         test('client <-initial- server', async () => {
-          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [serverSendLength, _serverSendInfo] = result!;
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
           });
         });
         test('client -initial-> server', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
           });
         });
         test('client <-handshake- server', async () => {
-          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [serverSendLength, _serverSendInfo] = result!;
           clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
             to: clientHost,
             from: serverHost,
@@ -655,7 +683,9 @@ describe('native/connection', () => {
           expect(clientConn.isEstablished()).toBeTrue();
         });
         test('client -handshake-> sever', async () => {
-          [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+          const result = clientConn.send(clientBuffer);
+          expect(result).not.toBeNull();
+          [clientSendLength, _clientSendInfo] = result!;
           serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
             to: serverHost,
             from: clientHost,
@@ -665,7 +695,9 @@ describe('native/connection', () => {
           expect(serverConn.isEstablished()).toBeTrue();
         });
         test('client <-short- server timeout', async () => {
-          [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+          const result = serverConn.send(serverBuffer);
+          expect(result).not.toBeNull();
+          [serverSendLength, _serverSendInfo] = result!;
           expect(clientConn.timeout()).not.toBeNull();
           expect(serverConn.timeout()).not.toBeNull();
           expect(clientConn.isTimedOut()).toBeFalse();
