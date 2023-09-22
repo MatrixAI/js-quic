@@ -21,7 +21,7 @@ import { StartStop, ready, running, status } from '@matrixai/async-init/dist/Sta
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
-import { quiche, ConnectionErrorCode } from './native';
+import { quiche, ConnectionErrorCode, CryptoError } from './native';
 import * as events from './events';
 import * as utils from './utils';
 import * as errors from './errors';
@@ -278,10 +278,16 @@ class QUICConnection {
     this.streamMap.delete(quicStream.streamId);
   };
 
+  /**
+   * Server name is optional, if set it will perform a server name check
+   * if verifying the peer. However if `config.verifyCallback` is set,
+   * then it will not automatically do a server name check.
+   */
   public constructor({
     type,
     scid,
     dcid,
+    serverName = null,
     remoteInfo,
     config,
     socket,
@@ -292,7 +298,8 @@ class QUICConnection {
     | {
         type: 'client';
         scid: QUICConnectionId;
-        dcid?: undefined;
+        dcid?: void;
+        serverName?: string | null;
         remoteInfo: RemoteInfo;
         config: QUICConfig;
         socket: QUICSocket;
@@ -304,6 +311,7 @@ class QUICConnection {
         type: 'server';
         scid: QUICConnectionId;
         dcid: QUICConnectionId;
+        serverName?: void;
         remoteInfo: RemoteInfo;
         config: QUICConfig;
         socket: QUICSocket;
@@ -328,7 +336,7 @@ class QUICConnection {
       // This message will be connected to the `this.start`
       this.logger.info(`Connect ${this.constructor.name}`);
       conn = quiche.Connection.connect(
-        null,
+        serverName,
         scid,
         {
           host: socket.host,
@@ -778,13 +786,24 @@ class QUICConnection {
         } else {
           // This is a legitimate state transition of the connection
           // So it is not a caller error, therefore we do not throw it up
-          const e_ = new errors.ErrorQUICConnectionLocal(
-            'Failed connection due to local error',
-            {
-              cause: e,
-              data: localError,
-            }
-          );
+          let e_: errors.ErrorQUICConnectionLocal<unknown>;
+          if (e.message === 'TlsFail') {
+            e_ = new errors.ErrorQUICConnectionLocalTLS(
+              'Failed connection due to native TLS verification',
+              {
+                cause: e,
+                data: localError
+              }
+            );
+          } else {
+            e_ = new errors.ErrorQUICConnectionLocal(
+              'Failed connection due to local error',
+              {
+                cause: e,
+                data: localError,
+              }
+            );
+          }
           this.dispatchEvent(
             new events.EventQUICConnectionError({ detail: e_ })
           );
@@ -889,23 +908,20 @@ class QUICConnection {
       this.config.verifyCallback != null
     ) {
       const peerCertsChain = this.conn.peerCertChain()!;
-      try {
-        await this.config.verifyCallback(
-          peerCertsChain,
-          this.caDERs
-        );
-      } catch (e) {
-        // This simulates `TlsFail` due to the certificate failing verification
+      const cryptoError = await this.config.verifyCallback(
+        peerCertsChain,
+        this.caDERs
+      );
+      if (cryptoError != null) {
         this.conn.close(
           false,
-          304,
+          cryptoError,
           Buffer.from('')
         );
         const localError = this.conn.localError()!;
-        const e_ = new errors.ErrorQUICConnectionLocal(
-          'Failed connection due to custom verification callback',
+        const e_ = new errors.ErrorQUICConnectionLocalTLS(
+          'Failed connection due to custom TLS verification',
           {
-            cause: e,
             data: localError
           }
         );

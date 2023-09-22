@@ -1,5 +1,5 @@
 import type { POJO } from '@matrixai/errors';
-import type { ConnectionError } from './native';
+import type { ConnectionError, CryptoError } from './native';
 import AbstractError from '@matrixai/errors/dist/AbstractError';
 
 class ErrorQUIC<T> extends AbstractError<T> {
@@ -124,6 +124,25 @@ class ErrorQUICConnectionLocal<T> extends ErrorQUICConnection<T> {
     options: {
       timestamp?: Date;
       data: POJO & ConnectionError;
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICConnectionLocalTLS<T> extends ErrorQUICConnectionLocal<T> {
+  static description = 'QUIC Connection local TLS error';
+  declare data: POJO & ConnectionError & {
+    errorCode: CryptoError;
+  };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError & {
+        errorCode: CryptoError;
+      };
       cause?: T;
     }
   ) {
@@ -310,17 +329,11 @@ export {
   ErrorQUICConnectionStartData,
   ErrorQUICConnectionStartTimeout,
   ErrorQUICConnectionConfigInvalid,
-
-  // This is useful for understanding what kind of error `ErrorQUICConnection` is
-  ErrorQUICConnectionLocal, // Use this one for the secure established P
+  ErrorQUICConnectionLocal,
+  ErrorQUICConnectionLocalTLS,
   ErrorQUICConnectionPeer,
   ErrorQUICConnectionIdleTimeout,
   ErrorQUICConnectionInternal,
-
-  // // This is useful for internal errors
-  // ErrorQUICConnectionRecv,
-  // ErrorQUICConnectionSend,
-
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
   ErrorQUICStreamLocalRead,

@@ -204,6 +204,7 @@ class QUICClient extends EventTarget {
       connection = new QUICConnection({
         type: 'client',
         scid,
+        serverName: host,
         socket,
         remoteInfo: {
           host: host_,

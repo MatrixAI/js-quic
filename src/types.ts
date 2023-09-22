@@ -1,4 +1,5 @@
 import type QUICStream from './QUICStream';
+import type { CryptoError } from './native';
 
 /**
  * Opaque types are wrappers of existing types
@@ -321,13 +322,12 @@ type StreamCodeToReason = (
  * The CA certs will also be available as a second parameter.
  * The certs are in DER binary format.
  * It will be an empty array if there were no CA certs.
- * It is expected that the callback will throw an error if the verification
- * fails.
+ * If it fails, return a `CryptoError` code.
  */
 type TLSVerifyCallback = (
   certs: Array<Uint8Array>,
   ca: Array<Uint8Array>
-) => PromiseLike<void>;
+) => PromiseLike<CryptoError | undefined>;
 
 type ConnectionId = Opaque<'ConnectionId', Buffer>;
 

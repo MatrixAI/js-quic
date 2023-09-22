@@ -184,6 +184,13 @@ enum Type {
   Short = 5,
 }
 
+/**
+ * QUIC transport error codes
+ * https://www.rfc-editor.org/rfc/rfc9000#section-20.1
+ * Note that `CryptoError` is a range of error codes.
+ * Therefore it is not featured in this enum.
+ * You can instead fetch it from the constants.
+ */
 enum ConnectionErrorCode {
   NoError = 0,
   InternalError = 1,
@@ -203,6 +210,43 @@ enum ConnectionErrorCode {
   AEADLimitReached = 15,
   NoViablePath = 16,
 }
+
+/**
+ * CryptoError is a range from `0x100` to `0x01FF`.
+ * It maps from the TLS `AlertDescription` codes, offset
+ * by `0x100`. These are known codes of TLS 1.3 hardcoded in
+ * QUIC RFC 9000.
+ * See the TLS 1.3 codes in: https://www.rfc-editor.org/rfc/rfc8446#section-6
+ */
+enum CryptoError {
+  CloseNotify = 256,
+  UnexpectedMessage = 266,
+  BadRecordMac = 276,
+  RecordOverflow = 278,
+  HandshakeFailure = 296,
+  BadCertificate = 298,
+  UnsupportedCertificate = 299,
+  CertificateRevoked = 300,
+  CertificateExpired = 301,
+  CertificateUnknown = 302,
+  IllegalParameter = 303,
+  UnknownCA = 304,
+  AccessDenied = 305,
+  DecodeError = 306,
+  DecryptError = 307,
+  ProtocolVersion = 326,
+  InsufficientSecurity = 327,
+  InternalError = 336,
+  InappropriateFallback = 342,
+  UserCanceled = 346,
+  MissingExtension = 365,
+  UnsupportedExtension = 366,
+  UnrecognizedName = 368,
+  BadCertificateStatusResponse = 369,
+  UnknownPSKIdentity = 371,
+  CertificateRequired = 372,
+  NoApplicationProtocol = 376,
+};
 
 type ConnectionError = {
   isApp: boolean;
@@ -314,7 +358,13 @@ type PathStatsIter = {
   [Symbol.iterator](): Iterator<PathStats, void, void>;
 };
 
-export { CongestionControlAlgorithm, Shutdown, Type, ConnectionErrorCode };
+export {
+  CongestionControlAlgorithm,
+  Shutdown,
+  Type,
+  ConnectionErrorCode,
+  CryptoError
+};
 
 export type {
   QuicheTimeInstant,

@@ -463,6 +463,18 @@ async function generateCertificate({
         extendedKeyUsageFlags.timeStamping,
         extendedKeyUsageFlags.ocspSigning,
       ]),
+      new x509.SubjectAlternativeNameExtension(
+        [
+          {
+            type: 'ip',
+            value: '127.0.0.1',
+          },
+          {
+            type: 'ip',
+            value: '::1',
+          }
+        ]
+      ),
       await x509.SubjectKeyIdentifierExtension.create(subjectPublicCryptoKey),
     ] as Array<x509.Extension>,
   };
