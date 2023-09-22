@@ -12,6 +12,7 @@ import { promise } from '@/utils';
 import * as events from '@/events';
 import * as testsUtils from './utils';
 import { generateConfig, sleep } from './utils';
+import { CryptoError } from '@/native';
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
@@ -331,7 +332,9 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: async () => {},
+          verifyCallback: async () => {
+            return undefined;
+          },
         },
       });
       socketCleanMethods.extractSocket(client1);
@@ -376,7 +379,9 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: async () => {},
+          verifyCallback: async () => {
+            return undefined;
+          },
         },
       });
       socketCleanMethods.extractSocket(client1);
@@ -396,7 +401,9 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: async () => {},
+          verifyCallback: async () => {
+            return undefined;
+          },
         },
       });
       socketCleanMethods.extractSocket(client2);
@@ -1449,7 +1456,7 @@ describe(QUICClient.name, () => {
         host: localhost,
       });
       // Connection should succeed
-      const verifyProm = promise<Array<string> | undefined>();
+      const verifyProm = promise<Array<Uint8Array> | undefined>();
       const client = await QUICClient.createQUICClient({
         host: localhost,
         port: server.port,
@@ -1462,6 +1469,7 @@ describe(QUICClient.name, () => {
           verifyPeer: true,
           verifyCallback: async (certs) => {
             verifyProm.resolveP(certs);
+            return undefined;
           },
         },
       });
@@ -1506,8 +1514,8 @@ describe(QUICClient.name, () => {
         logger: logger.getChild(QUICClient.name),
         config: {
           verifyPeer: true,
-          verifyCallback: () => {
-            throw Error('SOME ERROR');
+          verifyCallback: async () => {
+            return CryptoError.BadCertificate
           },
         },
       });
@@ -1529,7 +1537,7 @@ describe(QUICClient.name, () => {
     });
     test('client succeeds custom verification', async () => {
       const tlsConfigs = await generateConfig(type);
-      const verifyProm = promise<Array<string> | undefined>();
+      const verifyProm = promise<Array<Uint8Array> | undefined>();
       const server = new QUICServer({
         crypto: {
           key,
@@ -1542,6 +1550,7 @@ describe(QUICClient.name, () => {
           verifyPeer: true,
           verifyCallback: async (certs) => {
             verifyProm.resolveP(certs);
+            return undefined;
           },
         },
       });
@@ -1587,8 +1596,8 @@ describe(QUICClient.name, () => {
           key: tlsConfigs.key,
           cert: tlsConfigs.cert,
           verifyPeer: true,
-          verifyCallback: () => {
-            throw Error('SOME ERROR');
+          verifyCallback: async () => {
+            return CryptoError.BadCertificate;
           },
         },
       });
