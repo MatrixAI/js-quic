@@ -945,14 +945,25 @@ class QUICConnection {
           ? 'application'
           : 'transport'
         } code ${peerError.errorCode}`;
-        this.dispatchEvent(
-          new events.EventQUICConnectionError({
-            detail: new errors.ErrorQUICConnectionPeer(
-              message,
-              { data: peerError }
-            )
-          })
-        );
+        if (peerError.errorCode <= 0x0100 || peerError.errorCode >= 0x01FF) {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionPeerTLS(
+                message,
+                { data: peerError }
+              )
+            })
+          );
+        } else {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionPeer(
+                message,
+                { data: peerError }
+              )
+            })
+          );
+        }
         // This is a legitimate state transition
         // and will result stop being called
         return;

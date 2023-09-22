@@ -169,6 +169,25 @@ class ErrorQUICConnectionPeer<T> extends ErrorQUICConnection<T> {
   }
 }
 
+class ErrorQUICConnectionPeerTLS<T> extends ErrorQUICConnectionLocal<T> {
+  static description = 'QUIC Connection local TLS error';
+  declare data: POJO & ConnectionError & {
+    errorCode: CryptoError;
+  };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError & {
+        errorCode: CryptoError;
+      };
+      cause?: T;
+    }
+  ) {
+    super(message, options);
+  }
+}
+
 /**
  * If the connection times out, the `quiche` library does not send a
  * `CONNECTION_CLOSE` frame, the connection is immediately closed.
@@ -332,6 +351,8 @@ export {
   ErrorQUICConnectionLocal,
   ErrorQUICConnectionLocalTLS,
   ErrorQUICConnectionPeer,
+  ErrorQUICConnectionPeerTLS,
+
   ErrorQUICConnectionIdleTimeout,
   ErrorQUICConnectionInternal,
   ErrorQUICStream,
