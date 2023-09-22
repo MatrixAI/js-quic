@@ -342,8 +342,9 @@ type QUICConnectionMetadata = {
   localPort: number;
   remoteHost: string;
   remotePort: number;
-  localCertificates: Array<string>;
-  remoteCertificates: Array<string>;
+  localCertsChain: Array<Uint8Array>;
+  localCACertsChain: Array<Uint8Array>;
+  remoteCertsChain: Array<Uint8Array>;
 };
 
 export type {

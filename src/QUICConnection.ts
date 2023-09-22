@@ -175,6 +175,7 @@ class QUICConnection {
     | null
   ) = null;
 
+  protected certDERs: Array<Uint8Array> = [];
   protected caDERs: Array<Uint8Array> = [];
 
   /**
@@ -365,6 +366,11 @@ class QUICConnection {
     this.connectionId = scid;
     this.socket = socket;
     this.config = config;
+
+    if (this.config.cert != null) {
+      const certPEMs = utils.collectPEMs(this.config.cert);
+      this.certDERs = certPEMs.map(utils.pemToDER);
+    }
 
     if (this.config.ca != null) {
       const caPEMs = utils.collectPEMs(this.config.ca)
@@ -635,33 +641,21 @@ class QUICConnection {
   }
 
   /**
-   * Gets an array of certificates in PEM format starting on the leaf.
+   * Gets an array of certificates in DER format starting on the leaf.
    */
-  public getLocalCertsChain(): Array<string> {
-    const certs: Array<string> = [];
-    if (typeof this.config.cert === 'string') {
-      certs.push(this.config.cert);
-    } else if (this.config.cert instanceof Uint8Array) {
-      certs.push(utils.derToPEM(this.config.cert));
-    } else if (Array.isArray(this.config.cert)) {
-      for (const cert of this.config.cert) {
-        if (typeof cert === 'string') {
-          certs.push(cert);
-        } else if (cert instanceof Uint8Array) {
-          certs.push(utils.derToPEM(cert));
-        }
-      }
-    }
-    return certs;
+  public getLocalCertsChain(): Array<Uint8Array> {
+    return this.certDERs;
+  }
+
+  public getLocalCACertsChain(): Array<Uint8Array> {
+    return this.caDERs;
   }
 
   /**
-   * Gets an array of certificates in PEM format starting on the leaf.
+   * Gets an array of certificates in DER format starting on the leaf.
    */
-  public getRemoteCertsChain(): Array<string> {
-    const certsDER = this.conn.peerCertChain();
-    if (certsDER == null) return [];
-    return certsDER.map(utils.derToPEM);
+  public getRemoteCertsChain(): Array<Uint8Array> {
+    return this.conn.peerCertChain() ?? [];
   }
 
   public meta(): QUICConnectionMetadata {
@@ -670,8 +664,9 @@ class QUICConnection {
       localPort: this.localPort,
       remoteHost: this.remoteHost,
       remotePort: this.remotePort,
-      localCertificates: this.getLocalCertsChain(),
-      remoteCertificates: this.getRemoteCertsChain(),
+      localCertsChain: this.certDERs,
+      localCACertsChain: this.caDERs,
+      remoteCertsChain: this.getRemoteCertsChain(),
     };
   }
 
