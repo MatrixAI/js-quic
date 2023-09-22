@@ -454,106 +454,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     //  only needed here in case processing the read will clean up the quiche stream state.
     this.checkWritableClosed();
     // checking if readable finished
-    if (this.connection.conn.streamFinished(this.streamId)) {
-      // stream has finished, clean up
-    let result: [number, boolean] | null;
-    try {
-      result = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
-    } catch (e) {
-      let code: number | false;
-      if ((code = utils.isStreamReset(e)) !== false) {
-        // Use the reason as the cause
-        const reason = this.codeToReason('read', code);
-        const e_ = new errors.ErrorQUICStreamPeerRead(
-          'Peer reset the readable stream',
-          {
-            data: { code },
-            cause: reason
-          }
-        );
-        this.readableController.error(reason);
-        this.dispatchEvent(
-          new events.EventQUICStreamError({
-            detail: e_
-          })
-        );
-        // If the pull is awaiting then we need to end it
-          this.rejectReadableP?.(e_);
-          return;
-      } else {
-        // In all other cases, this is an internal error
-        // Error messages might be `Done`, `InvalidStreamState`
-        const e_ = new errors.ErrorQUICStreamInternal(
-          'Failed `streamRecv` on the readable stream',
-          { cause: e }
-        );
-        this.readableController.error(e_);
-        this.dispatchEvent(
-          new events.EventQUICStreamError({
-            detail: e_
-          })
-        );
-        this.rejectReadableP?.(e_);
-        throw e_;
-      }
-    }
-
-    if (result === null) {
-      // This is an error, because this must be readable at this point
-      const e = new errors.ErrorQUICStreamInternal(
-        'Failed `streamRecv` on the readable stream because it is not readable',
-      );
-      this.readableController.error(e);
-      this.dispatchEvent(
-        new events.EventQUICStreamError({
-          detail: e
-        })
-      );
-      throw e;
-    }
-    const [recvLength, fin] = result;
-
-    // If it is 0-length message, the `fin` should be true
-    // But even if it isn't, we can just ignore the chunk
-    // Readers shouldn't be reading a 0-length message
-    if (recvLength > 0) {
-      this.readableController.enqueue(this.readableChunk!.subarray(0, recvLength));
-    }
-    // Generally a recv length of 0 will come with a fin being true
-    // QUIC stream should not in fact give you a 0-length message with
-    // fin being false, however if the implementation is buggy, we just
-    // drop that frame
-    if (fin) {
-      // Reader will receive `{ value: undefined, done: true }`
-      this.readableController.close();
-      this.rejectReadableP?.(Error('TMP STREAM ENDED, clean up blocked pull'));
-      // If fin is true, then that means, the stream is CLOSED
-      this.dispatchEvent(
-        new events.EventQUICStreamCloseRead()
-      );
-
-      this.dispatchEvent(
-        new events.EventQUICStreamSend()
-      );
-
-      return;
-    }
-
-    // otherwise we have a problem
-    const e_ = new errors.ErrorQUICStreamInternal(
-      'Readable stream expected to end',
-    );
-    this.readableController.error(e_);
-    this.dispatchEvent(
-      new events.EventQUICStreamError({
-        detail: e_
-      })
-    );
-    this.rejectReadableP?.(e_);
-    throw e_;
-    } else {
-      this.resolveReadableP?.();
-    }
+    // Checking readable must come after checking write to avoid a corner case
+    this.checkReadableClosed();
+    // Resolve the read blocking promise if exists
+    // If already resolved, this is a noop
+    this.resolveReadableP?.();
   }
 
   /**
@@ -569,11 +474,118 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
    */
   @ready(new errors.ErrorQUICStreamDestroyed(), false, ['destroying'])
   public write(): void {
+    // Checking if writable has closed
     this.checkWritableClosed();
+    // For symmetry, we're checking the readable here as well.
+    this.checkReadableClosed();
     // Resolve the write blocking promise if exists
     // If already resolved, this is a noop
     this.resolveWritableP?.();
   }
+
+  protected checkReadableClosed() {
+    if (
+      this.connection.conn.streamFinished(this.streamId) &&
+      this.connection.conn.streamReadable(this.streamId)
+    ) {
+      // stream has finished, clean up
+      let result: [number, boolean] | null;
+      try {
+        result = this.connection.conn.streamRecv(this.streamId, this.readableChunk!);
+      } catch (e) {
+        let code: number | false;
+        if ((code = utils.isStreamReset(e)) !== false) {
+          // Use the reason as the cause
+          const reason = this.codeToReason('read', code);
+          const e_ = new errors.ErrorQUICStreamPeerRead(
+            'Peer reset the readable stream',
+            {
+              data: { code },
+              cause: reason
+            }
+          );
+          this.readableController.error(reason);
+          this.dispatchEvent(
+            new events.EventQUICStreamError({
+              detail: e_
+            })
+          );
+          // If the pull is awaiting then we need to end it
+          this.rejectReadableP?.(e_);
+          return;
+        } else {
+          // In all other cases, this is an internal error
+          // Error messages might be `Done`, `InvalidStreamState`
+          const e_ = new errors.ErrorQUICStreamInternal(
+            'Failed `streamRecv` on the readable stream',
+            { cause: e }
+          );
+          this.readableController.error(e_);
+          this.dispatchEvent(
+            new events.EventQUICStreamError({
+              detail: e_
+            })
+          );
+          this.rejectReadableP?.(e_);
+          throw e_;
+        }
+      }
+
+      if (result === null) {
+        // This is an error, because this must be readable at this point
+        const e = new errors.ErrorQUICStreamInternal(
+          'Failed `streamRecv` on the readable stream because it is not readable',
+        );
+        this.readableController.error(e);
+        this.dispatchEvent(
+          new events.EventQUICStreamError({
+            detail: e
+          })
+        );
+        throw e;
+      }
+      const [recvLength, fin] = result;
+
+      // If it is 0-length message, the `fin` should be true
+      // But even if it isn't, we can just ignore the chunk
+      // Readers shouldn't be reading a 0-length message
+      if (recvLength > 0) {
+        this.readableController.enqueue(this.readableChunk!.subarray(0, recvLength));
+      }
+      // Generally a recv length of 0 will come with a fin being true
+      // QUIC stream should not in fact give you a 0-length message with
+      // fin being false, however if the implementation is buggy, we just
+      // drop that frame
+      if (fin) {
+        // Reader will receive `{ value: undefined, done: true }`
+        this.readableController.close();
+        this.rejectReadableP?.(Error('TMP STREAM ENDED, clean up blocked pull'));
+        // If fin is true, then that means, the stream is CLOSED
+        this.dispatchEvent(
+          new events.EventQUICStreamCloseRead()
+        );
+
+        this.dispatchEvent(
+          new events.EventQUICStreamSend()
+        );
+
+        return;
+      }
+
+      // otherwise we have a problem
+      const e_ = new errors.ErrorQUICStreamInternal(
+        'Readable stream expected to end',
+      );
+      this.readableController.error(e_);
+      this.dispatchEvent(
+        new events.EventQUICStreamError({
+          detail: e_
+        })
+      );
+      this.rejectReadableP?.(e_);
+      throw e_;
+    }
+  };
 
   protected checkWritableClosed() {
     // We need to proactivity handle write stream errors here
@@ -615,7 +627,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         );
       }
     }
-  }
+  };
 
   protected readableStart(controller: ReadableStreamDefaultController): void {
     this.readableController = controller;
