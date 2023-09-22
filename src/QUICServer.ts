@@ -551,7 +551,7 @@ class QUICServer {
       dcid: dcidOriginal,
       socket: this.socket,
       remoteInfo,
-      config: this.config,
+      config: {...this.config}, // Config must be copied in case it is updated
       reasonToCode: this.reasonToCode,
       codeToReason: this.codeToReason,
       logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString()}`),

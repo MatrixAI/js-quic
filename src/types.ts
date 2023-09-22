@@ -319,16 +319,14 @@ type StreamCodeToReason = (
  * Custom TLS verification callback.
  * The peer cert chain will be passed as the first parameter.
  * The CA certs will also be available as a second parameter.
+ * The certs are in DER binary format.
  * It will be an empty array if there were no CA certs.
  * It is expected that the callback will throw an error if the verification
  * fails.
- * Processing the `ctx.signal` is optional. If you want to process it,
- * make sure you eagerly reject the promise, so that TLS failure occurred.
- * Note that, it's only relevant if the callback is asynchronous.
  */
 type TLSVerifyCallback = (
-  certs: Array<string>,
-  ca: Array<string>
+  certs: Array<Uint8Array>,
+  ca: Array<Uint8Array>
 ) => PromiseLike<void>;
 
 type ConnectionId = Opaque<'ConnectionId', Buffer>;

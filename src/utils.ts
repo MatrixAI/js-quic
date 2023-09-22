@@ -441,7 +441,7 @@ function streamStats(
 }
 
 /**
- * Collects PEMs into a PEM chain array.
+ * Collects PEM arrays specified in `QUICConfig` into a PEM chain array.
  * This can be used for keys, certs and ca.
  */
 function collectPEMs(
@@ -465,7 +465,19 @@ function collectPEMs(
 }
 
 /**
- * QUIC produces DER encoded certificates when requesting for peer certificates
+ * Converts PEM strings to DER Uint8Array
+ */
+function pemToDER(pem: string): Uint8Array {
+  const pemB64 = pem
+    .replace(/-----BEGIN .*-----/, '')
+    .replace(/-----END .*-----/, '')
+    .replace(/\s+/g, '');
+  const der = Buffer.from(pemB64, 'base64');
+  return new Uint8Array(der);
+}
+
+/**
+ * Converts DER Uint8Array to PEM string
  */
 function derToPEM(der: Uint8Array): string {
   const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
@@ -546,6 +558,7 @@ export {
   isStreamUnidirectional,
   streamStats,
   collectPEMs,
+  pemToDER,
   derToPEM,
   formatError,
   isStreamStopped,

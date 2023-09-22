@@ -175,6 +175,8 @@ class QUICConnection {
     | null
   ) = null;
 
+  protected caDERs: Array<Uint8Array> = [];
+
   /**
    * Handle `EventQUICConnectionError`.
    * This may run multiple times, if in the process of handling
@@ -363,6 +365,12 @@ class QUICConnection {
     this.connectionId = scid;
     this.socket = socket;
     this.config = config;
+
+    if (this.config.ca != null) {
+      const caPEMs = utils.collectPEMs(this.config.ca)
+      this.caDERs = caPEMs.map(utils.pemToDER);
+    }
+
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
     this._remoteHost = remoteInfo.host;
@@ -888,8 +896,8 @@ class QUICConnection {
       const peerCertsChain = this.conn.peerCertChain()!;
       try {
         await this.config.verifyCallback(
-          peerCertsChain.map(utils.derToPEM),
-          utils.collectPEMs(this.config.ca)
+          peerCertsChain,
+          this.caDERs
         );
       } catch (e) {
         // This simulates `TlsFail` due to the certificate failing verification
