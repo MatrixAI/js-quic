@@ -12,6 +12,7 @@ import { clientDefault, serverDefault, buildQuicheConfig } from '@/config';
 import QUICConnectionId from '@/QUICConnectionId';
 import * as utils from '@/utils';
 import * as testsUtils from '../../utils';
+import { CryptoError } from '@/native/types';
 
 describe('native/tls/ed25519', () => {
   let crypto: {
@@ -521,7 +522,7 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isClosed()).toBeTrue();
     });
   });
-  describe('Ed25519 fail verifying client with bad client certificate (TlsFail 304)', () => {
+  describe('Ed25519 fail verifying client with bad client certificate (TlsFail CryptoError.UnknownCA)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
       host: '127.0.0.1' as Host,
@@ -671,11 +672,11 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isClosed()).toBeFalse();
       expect(serverConn.isDraining()).toBeFalse();
     });
-    test('server has local error TlsFail 304', async () => {
-      // 304 means the client supplied certificates that failed verification
+    test('server has local error TlsFail CryptoError.UnknownCA', async () => {
+      // CryptoError.UnknownCA means the client supplied certificates that failed verification
       expect(serverConn.localError()).toEqual({
         isApp: false,
-        errorCode: 304,
+        errorCode: CryptoError.UnknownCA,
         reason: new Uint8Array(),
       });
     });
@@ -712,10 +713,10 @@ describe('native/tls/ed25519', () => {
       // Client is in draining state now
       expect(clientConn.isDraining()).toBeTrue();
     });
-    test('client has peer error TlsFail 304', async () => {
+    test('client has peer error TlsFail CryptoError.UnknownCA', async () => {
       expect(clientConn.peerError()).toEqual({
         isApp: false,
-        errorCode: 304,
+        errorCode: CryptoError.UnknownCA,
         reason: new Uint8Array(),
       });
     });
@@ -730,7 +731,7 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isClosed()).toBeTrue();
     });
   });
-  describe('Ed25519 fail verifying client with no client certificate (TlsFail 372)', () => {
+  describe('Ed25519 fail verifying client with no client certificate (TlsFail CryptoError.CertificateRequired)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
       host: '127.0.0.1' as Host,
@@ -885,11 +886,11 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isClosed()).toBeFalse();
       expect(serverConn.isDraining()).toBeFalse();
     });
-    test('server has local error TlsFail 372', async () => {
-      // 372 means the client did not supply any certificates
+    test('server has local error TlsFail CryptoError.CertificateRequired', async () => {
+      // CryptoError.CertificateRequired means the client did not supply any certificates
       expect(serverConn.localError()).toEqual({
         isApp: false,
-        errorCode: 372,
+        errorCode: CryptoError.CertificateRequired,
         reason: new Uint8Array(),
       });
     });
@@ -926,10 +927,10 @@ describe('native/tls/ed25519', () => {
       // Client is in draining state now
       expect(clientConn.isDraining()).toBeTrue();
     });
-    test('client has peer error TlsFail 372', async () => {
+    test('client has peer error TlsFail CryptoError.CertificateRequired', async () => {
       expect(clientConn.peerError()).toEqual({
         isApp: false,
-        errorCode: 372,
+        errorCode: CryptoError.CertificateRequired,
         reason: new Uint8Array(),
       });
     });
@@ -944,7 +945,7 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isClosed()).toBeTrue();
     });
   });
-  describe('Ed25519 fail verifying server bad server certificate (TlsFail 304)', () => {
+  describe('Ed25519 fail verifying server bad server certificate (TlsFail CryptoError.UnknownCA)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
       host: '127.0.0.1' as Host,
@@ -1083,10 +1084,10 @@ describe('native/tls/ed25519', () => {
       expect(clientConn.isClosed()).toBeFalse();
       expect(clientConn.isDraining()).toBeFalse();
     });
-    test('client has local error TlsFail 304', async () => {
+    test('client has local error TlsFail CryptoError.UnknownCA', async () => {
       expect(clientConn.localError()).toEqual({
         isApp: false,
-        errorCode: 304,
+        errorCode: CryptoError.UnknownCA,
         reason: new Uint8Array(),
       });
     });
@@ -1123,10 +1124,10 @@ describe('native/tls/ed25519', () => {
       // Server is in draining state now
       expect(serverConn.isDraining()).toBeTrue();
     });
-    test('server has peer error TlsFail 304', async () => {
+    test('server has peer error TlsFail CryptoError.UnknownCA', async () => {
       expect(serverConn.peerError()).toEqual({
         isApp: false,
-        errorCode: 304,
+        errorCode: CryptoError.UnknownCA,
         reason: new Uint8Array(),
       });
     });
@@ -1354,7 +1355,7 @@ describe('native/tls/ed25519', () => {
       let serverConn: Connection;
       const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        return;
+        return undefined;
       };
       beforeAll(async () => {
         clientConfig = {
@@ -1598,7 +1599,7 @@ describe('native/tls/ed25519', () => {
       let serverConn: Connection;
       const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        return;
+        return undefined;
       };
       beforeAll(async () => {
         clientConfig = {
@@ -1801,7 +1802,7 @@ describe('native/tls/ed25519', () => {
         expect(serverConn.isClosed()).toBeTrue();
       });
     });
-    describe('Ed25519 fail verifying client with bad client certificate (TlsFail 304)', () => {
+    describe('Ed25519 fail verifying client with bad client certificate (TlsFail CryptoError.UnknownCA)', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -1828,7 +1829,7 @@ describe('native/tls/ed25519', () => {
       let serverConn: Connection;
       const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        throw new Error('Verification failed');
+        return CryptoError.BadCertificate;
       };
       beforeAll(async () => {
         clientConfig = {
@@ -1959,14 +1960,14 @@ describe('native/tls/ed25519', () => {
           'string',
         );
         // We can imagine that our verify callback fails on the bad certificate
-        expect(
+        await expect(
           verifyCallback(
             serverPeerCertChain,
             serverConfig.ca
           )
-        ).rejects.toThrow();
-        // Simulate a 304 as it means the client supplied a bad certificate
-        serverConn.close(false, 304, Buffer.from(''));
+        ).resolves.toBe(CryptoError.BadCertificate);
+        // Simulate a CryptoError.UnknownCA as it means the client supplied a bad certificate
+        serverConn.close(false, CryptoError.UnknownCA, Buffer.from(''));
         expect(serverConn.peerError()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -1976,11 +1977,11 @@ describe('native/tls/ed25519', () => {
         expect(serverConn.isClosed()).toBeFalse();
         expect(serverConn.isDraining()).toBeFalse();
       });
-      test('server has local error TlsFail 304', async () => {
-        // 304 means the client supplied certificates that failed verification
+      test('server has local error TlsFail CryptoError.UnknownCA', async () => {
+        // CryptoError.UnknownCA means the client supplied certificates that failed verification
         expect(serverConn.localError()).toEqual({
           isApp: false,
-          errorCode: 304,
+          errorCode: CryptoError.UnknownCA,
           reason: new Uint8Array(),
         });
       });
@@ -2017,10 +2018,10 @@ describe('native/tls/ed25519', () => {
         // Client is in draining state now
         expect(clientConn.isDraining()).toBeTrue();
       });
-      test('client has peer error TlsFail 304', async () => {
+      test('client has peer error TlsFail CryptoError.UnknownCA', async () => {
         expect(clientConn.peerError()).toEqual({
           isApp: false,
-          errorCode: 304,
+          errorCode: CryptoError.UnknownCA,
           reason: new Uint8Array(),
         });
       });
@@ -2062,7 +2063,7 @@ describe('native/tls/ed25519', () => {
       let serverConn: Connection;
       const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(0);
-        throw new Error('Verification failed');
+        return CryptoError.BadCertificate;
       };
       beforeAll(async () => {
         clientConfig = {
@@ -2195,12 +2196,12 @@ describe('native/tls/ed25519', () => {
         const serverPeerCertChain = serverConn.peerCertChain()!;
         expect(serverPeerCertChain).toBeNull();
         // There's no need to do this, but for symmetry
-        expect(
+        await expect(
           verifyCallback(
             serverPeerCertChain ?? [],
             serverConfig.ca,
           )
-        ).rejects.toThrow();
+        ).resolves.toBe(CryptoError.BadCertificate);
         expect(serverConn.peerError()).toBeNull();
         expect(serverConn.isTimedOut()).toBeFalse();
         expect(serverConn.isInEarlyData()).toBeFalse();
@@ -2269,7 +2270,7 @@ describe('native/tls/ed25519', () => {
         expect(serverConn.isClosed()).toBeTrue();
       });
     });
-    describe('Ed25519 fail verifying server bad server certificate (TlsFail 304)', () => {
+    describe('Ed25519 fail verifying server bad server certificate (TlsFail CryptoError.UnknownCA)', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
         host: '127.0.0.1' as Host,
@@ -2296,7 +2297,7 @@ describe('native/tls/ed25519', () => {
       let serverConn: Connection;
       const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        throw new Error('Verification failed');
+        return CryptoError.BadCertificate;
       };
       beforeAll(async () => {
         clientConfig = {
@@ -2416,19 +2417,19 @@ describe('native/tls/ed25519', () => {
           'string',
         );
         // We can imagine that our verify callback fails on the bad certificate
-        expect(
+        await expect(
           verifyCallback(
             clientPeerCertChain,
             serverConfig.ca,
           )
-        ).rejects.toThrow();
-        // Due to an upstream bug, if we were to simulate a close with 304 code
+        ).resolves.toBe(CryptoError.BadCertificate);
+        // Due to an upstream bug, if we were to simulate a close with CryptoError.UnknownCA code
         // it would actually break the server connection, the client connection
         // would successfully drain and then close, but the server connection is
         // left to idle until it times out.
         // Therefore instead of closing immediately here, we have to complete the
-        // handshake by sending a the handshake frame to the server, and then
-        // simulate a close with 304 as the code
+        // handshake by sending a handshake frame to the server, and then
+        // simulate a close with CryptoError.UnknownCA as the code
       });
       test('client -initial-> server', async () => {
         const result = clientConn.send(clientBuffer);
@@ -2443,8 +2444,8 @@ describe('native/tls/ed25519', () => {
           to: serverHost,
           from: clientHost,
         });
-        // Simulate a 304 as it means the client supplied a bad certificate
-        clientConn.close(false, 304, Buffer.from(''));
+        // Simulate a CryptoError.UnknownCA as it means the client supplied a bad certificate
+        clientConn.close(false, CryptoError.UnknownCA, Buffer.from(''));
         expect(clientConn.peerError()).toBeNull();
         expect(clientConn.isTimedOut()).toBeFalse();
         expect(clientConn.isInEarlyData()).toBeFalse();
@@ -2454,10 +2455,10 @@ describe('native/tls/ed25519', () => {
         expect(clientConn.isClosed()).toBeFalse();
         expect(clientConn.isDraining()).toBeFalse();
       });
-      test('client has local error TlsFail 304', async () => {
+      test('client has local error TlsFail CryptoError.UnknownCA', async () => {
         expect(clientConn.localError()).toEqual({
           isApp: false,
-          errorCode: 304,
+          errorCode: CryptoError.UnknownCA,
           reason: new Uint8Array(),
         });
       });
@@ -2493,10 +2494,10 @@ describe('native/tls/ed25519', () => {
         // Client is in draining state now
         expect(serverConn.isDraining()).toBeTrue();
       });
-      test('server has peer error TlsFail 304', async () => {
+      test('server has peer error TlsFail CryptoError.UnknownCA', async () => {
         expect(serverConn.peerError()).toEqual({
           isApp: false,
-          errorCode: 304,
+          errorCode: CryptoError.UnknownCA,
           reason: new Uint8Array(),
         });
       });
