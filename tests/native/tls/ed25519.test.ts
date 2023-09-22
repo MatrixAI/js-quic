@@ -104,7 +104,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -134,7 +136,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -164,7 +168,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -180,7 +186,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -196,7 +204,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client <-short- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       const serverHeaderShort = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -208,7 +218,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client -short-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderShort = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -251,7 +263,9 @@ describe('native/tls/ed25519', () => {
         reason: new Uint8Array(),
       });
       expect(clientConn.peerError()).toBeNull();
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientBufferCopy = Buffer.from(clientBuffer);
       expect(clientConn.isDraining()).toBeTrue();
       expect(clientConn.isClosed()).toBeFalse();
@@ -273,13 +287,13 @@ describe('native/tls/ed25519', () => {
       expect(serverConn.isDraining()).toBeTrue();
       expect(serverConn.isClosed()).toBeFalse();
       // There is no acknowledgement after receiving close
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(serverConn.send(serverBuffer)).toBeNull()
       // Quiche has not implemented a stateless reset
       serverConn.recv(clientBufferCopy, {
         to: serverHost,
         from: clientHost,
       });
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(serverConn.send(serverBuffer)).toBeNull()
       await testsUtils.sleep(serverConn.timeout()!);
       serverConn.onTimeout();
       await testsUtils.waitForTimeoutNull(serverConn);
@@ -342,7 +356,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -372,7 +388,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -402,7 +420,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -418,7 +438,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
         to: serverHost,
         from: clientHost,
@@ -432,7 +454,9 @@ describe('native/tls/ed25519', () => {
       expect(serverPeerCertChain).toBeNull();
     });
     test('client <-short- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       const serverHeaderShort = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -444,7 +468,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client -short-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderShort = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -476,7 +502,9 @@ describe('native/tls/ed25519', () => {
     });
     test('client close', async () => {
       clientConn.close(true, 0, Buffer.from(''));
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       await testsUtils.sleep(clientConn.timeout()!);
       clientConn.onTimeout();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -549,7 +577,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -579,7 +609,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -609,7 +641,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -619,7 +653,9 @@ describe('native/tls/ed25519', () => {
       expect(clientConn.isEstablished()).toBeTrue();
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       expect(() =>
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
@@ -644,7 +680,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       const serverHeaderHandshake = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -682,8 +720,8 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -747,7 +785,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -777,7 +817,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -807,7 +849,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
         to: clientHost,
         from: serverHost,
@@ -823,7 +867,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       expect(() =>
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
@@ -848,7 +894,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-handshake- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       const serverHeaderHandshake = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -886,8 +934,8 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -952,7 +1000,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -982,7 +1032,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1012,7 +1064,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       // Client rejects server initial
       expect(() =>
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
@@ -1037,7 +1091,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client -initial-> server', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitial = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1075,8 +1131,8 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1140,7 +1196,9 @@ describe('native/tls/ed25519', () => {
       );
     });
     test('client dialing', async () => {
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
     });
     test('client and server negotiation', async () => {
       const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1170,7 +1228,9 @@ describe('native/tls/ed25519', () => {
         from: serverHost,
       });
       // Client will retry the initial packet with the token
-      [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       const clientHeaderInitialRetry = quiche.Header.fromSlice(
         clientBuffer.subarray(0, clientSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1217,7 +1277,9 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client <-initial- server', async () => {
-      [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
       const serverHeaderInitial = quiche.Header.fromSlice(
         serverBuffer.subarray(0, serverSendLength),
         quiche.MAX_CONN_ID_LEN,
@@ -1254,8 +1316,8 @@ describe('native/tls/ed25519', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1290,9 +1352,8 @@ describe('native/tls/ed25519', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         return;
       };
       beforeAll(async () => {
@@ -1331,7 +1392,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client dialing', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       });
       test('client and server negotiation', async () => {
         const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1361,7 +1424,9 @@ describe('native/tls/ed25519', () => {
           from: serverHost,
         });
         // Client will retry the initial packet with the token
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1391,7 +1456,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
           to: clientHost,
           from: serverHost,
@@ -1406,12 +1473,14 @@ describe('native/tls/ed25519', () => {
           'string',
         );
         await verifyCallback(
-          clientPeerCertChain.map(utils.derToPEM),
-          utils.collectPEMs(clientConfig.ca)
+          clientPeerCertChain,
+          clientConfig.ca
         );
       });
       test('client -initial-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
           from: clientHost,
@@ -1426,12 +1495,14 @@ describe('native/tls/ed25519', () => {
           'string',
         );
         await verifyCallback(
-          serverPeerCertChain.map(utils.derToPEM),
+          serverPeerCertChain,
           utils.collectPEMs(serverConfig.ca)
         );
       });
       test('client <-short- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1443,7 +1514,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client -short-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1479,7 +1552,9 @@ describe('native/tls/ed25519', () => {
       });
       test('client close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         await testsUtils.sleep(clientConn.timeout()!);
         clientConn.onTimeout();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -1521,9 +1596,8 @@ describe('native/tls/ed25519', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         return;
       };
       beforeAll(async () => {
@@ -1558,7 +1632,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client dialing', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       });
       test('client and server negotiation', async () => {
         const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1588,7 +1664,9 @@ describe('native/tls/ed25519', () => {
           from: serverHost,
         });
         // Client will retry the initial packet with the token
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1618,7 +1696,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
           to: clientHost,
           from: serverHost,
@@ -1633,12 +1713,14 @@ describe('native/tls/ed25519', () => {
           'string',
         );
         await verifyCallback(
-          clientPeerCertChain.map(utils.derToPEM),
-          utils.collectPEMs(clientConfig.ca)
+          clientPeerCertChain,
+          clientConfig.ca
         );
       });
       test('client -initial-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
           from: clientHost,
@@ -1652,7 +1734,9 @@ describe('native/tls/ed25519', () => {
         expect(serverPeerCertChain).toBeNull();
       });
       test('client <-short- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1664,7 +1748,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client -short-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1696,7 +1782,9 @@ describe('native/tls/ed25519', () => {
       });
       test('client close', async () => {
         clientConn.close(true, 0, Buffer.from(''));
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         await testsUtils.sleep(clientConn.timeout()!);
         clientConn.onTimeout();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -1738,9 +1826,8 @@ describe('native/tls/ed25519', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -1778,7 +1865,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client dialing', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       });
       test('client and server negotiation', async () => {
         const clientHeaderInitial = quiche.Header.fromSlice(
@@ -1808,7 +1897,9 @@ describe('native/tls/ed25519', () => {
           from: serverHost,
         });
         // Client will retry the initial packet with the token
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1838,7 +1929,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
           to: clientHost,
           from: serverHost,
@@ -1848,7 +1941,9 @@ describe('native/tls/ed25519', () => {
         expect(clientConn.isEstablished()).toBeTrue();
       });
       test('client -initial-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         // Server will accept the client's bad certificate due to the verify callback
         serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
           to: serverHost,
@@ -1866,8 +1961,8 @@ describe('native/tls/ed25519', () => {
         // We can imagine that our verify callback fails on the bad certificate
         expect(
           verifyCallback(
-            serverPeerCertChain.map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            serverPeerCertChain,
+            serverConfig.ca
           )
         ).rejects.toThrow();
         // Simulate a 304 as it means the client supplied a bad certificate
@@ -1890,7 +1985,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-short- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         const serverHeaderShort = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -1928,8 +2025,8 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -1963,9 +2060,8 @@ describe('native/tls/ed25519', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(0);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -2002,7 +2098,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client dialing', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       });
       test('client and server negotiation', async () => {
         const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2032,7 +2130,9 @@ describe('native/tls/ed25519', () => {
           from: serverHost,
         });
         // Client will retry the initial packet with the token
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -2062,7 +2162,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
           to: clientHost,
           from: serverHost,
@@ -2078,7 +2180,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client -initial-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         // Even with the custom verify callback, requiring the certificates
         // will make the `recv` fail with `TlsFail`
         expect(() =>
@@ -2093,8 +2197,8 @@ describe('native/tls/ed25519', () => {
         // There's no need to do this, but for symmetry
         expect(
           verifyCallback(
-            (serverPeerCertChain ?? []).map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            serverPeerCertChain ?? [],
+            serverConfig.ca,
           )
         ).rejects.toThrow();
         expect(serverConn.peerError()).toBeNull();
@@ -2115,7 +2219,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-handshake- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         const serverHeaderHandshake = quiche.Header.fromSlice(
           serverBuffer.subarray(0, serverSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -2153,8 +2259,8 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -2188,9 +2294,8 @@ describe('native/tls/ed25519', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -2229,7 +2334,9 @@ describe('native/tls/ed25519', () => {
         );
       });
       test('client dialing', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
       });
       test('client and server negotiation', async () => {
         const clientHeaderInitial = quiche.Header.fromSlice(
@@ -2259,7 +2366,9 @@ describe('native/tls/ed25519', () => {
           from: serverHost,
         });
         // Client will retry the initial packet with the token
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitialRetry = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -2289,7 +2398,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client <-initial- server', async () => {
-        [serverSendLength, _serverSendInfo] = serverConn.send(serverBuffer);
+        const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
         // Client will accept the server's bad certificate due to the verify callback
         clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
           to: clientHost,
@@ -2307,8 +2418,8 @@ describe('native/tls/ed25519', () => {
         // We can imagine that our verify callback fails on the bad certificate
         expect(
           verifyCallback(
-            clientPeerCertChain.map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            clientPeerCertChain,
+            serverConfig.ca,
           )
         ).rejects.toThrow();
         // Due to an upstream bug, if we were to simulate a close with 304 code
@@ -2320,7 +2431,9 @@ describe('native/tls/ed25519', () => {
         // simulate a close with 304 as the code
       });
       test('client -initial-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderInitial = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -2349,7 +2462,9 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client -short-> server', async () => {
-        [clientSendLength, _clientSendInfo] = clientConn.send(clientBuffer);
+        const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
         const clientHeaderShort = quiche.Header.fromSlice(
           clientBuffer.subarray(0, clientSendLength),
           quiche.MAX_CONN_ID_LEN,
@@ -2386,8 +2501,8 @@ describe('native/tls/ed25519', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);

@@ -576,13 +576,10 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   }
 
   protected checkWritableClosed() {
-    // TODO: temp fix, needs review
     // We need to proactivity handle write stream errors here
-    this.logger.warn('checking write!');
     try {
-      this.logger.warn(this.connection.conn.streamWritable(this.streamId, 0));
+      this.connection.conn.streamWritable(this.streamId, 0)
     } catch (e) {
-      this.logger.warn(e.message);
       let code: number | false;
       if ((code = utils.isStreamStopped(e)) !== false) {
         // Stream was stopped by the peer

@@ -4,7 +4,7 @@ import type {
   Host,
   Port,
   ClientCryptoOps,
-  ServerCryptoOps,
+  ServerCryptoOps, TLSVerifyCallback
 } from '@/types';
 import type { Config, Connection, SendInfo } from '@/native/types';
 import { quiche } from '@/native';
@@ -287,13 +287,13 @@ describe('native/tls/ecdsa', () => {
       expect(serverConn.isDraining()).toBeTrue();
       expect(serverConn.isClosed()).toBeFalse();
       // There is no acknowledgement after receiving close
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(serverConn.send(serverBuffer)).toBeNull()
       // Quiche has not implemented a stateless reset
       serverConn.recv(clientBufferCopy, {
         to: serverHost,
         from: clientHost,
       });
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(serverConn.send(serverBuffer)).toBeNull()
       await testsUtils.sleep(serverConn.timeout()!);
       serverConn.onTimeout();
       await testsUtils.waitForTimeoutNull(serverConn);
@@ -720,8 +720,8 @@ describe('native/tls/ecdsa', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -934,8 +934,8 @@ describe('native/tls/ecdsa', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1131,8 +1131,8 @@ describe('native/tls/ecdsa', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1316,8 +1316,8 @@ describe('native/tls/ecdsa', () => {
       });
     });
     test('client and server close', async () => {
-      expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-      expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+      expect(clientConn.send(clientBuffer)).toBeNull()
+      expect(serverConn.send(serverBuffer)).toBeNull()
       expect(clientConn.timeout()).not.toBeNull();
       expect(serverConn.timeout()).not.toBeNull();
       await testsUtils.waitForTimeoutNull(clientConn);
@@ -1352,9 +1352,8 @@ describe('native/tls/ecdsa', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback: TLSVerifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         return;
       };
       beforeAll(async () => {
@@ -1474,8 +1473,8 @@ describe('native/tls/ecdsa', () => {
           'string',
         );
         await verifyCallback(
-          clientPeerCertChain.map(utils.derToPEM),
-          utils.collectPEMs(clientConfig.ca)
+          clientPeerCertChain,
+          clientConfig.ca as Array<Uint8Array>,
         );
       });
       test('client -initial-> server', async () => {
@@ -1496,8 +1495,8 @@ describe('native/tls/ecdsa', () => {
           'string',
         );
         await verifyCallback(
-          serverPeerCertChain.map(utils.derToPEM),
-          utils.collectPEMs(serverConfig.ca)
+          serverPeerCertChain,
+          serverConfig.ca as Array<Uint8Array>,
         );
       });
       test('client <-short- server', async () => {
@@ -1597,9 +1596,8 @@ describe('native/tls/ecdsa', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         return;
       };
       beforeAll(async () => {
@@ -1715,8 +1713,8 @@ describe('native/tls/ecdsa', () => {
           'string',
         );
         await verifyCallback(
-          clientPeerCertChain.map(utils.derToPEM),
-          utils.collectPEMs(clientConfig.ca)
+          clientPeerCertChain,
+          clientConfig.ca as Array<Uint8Array>,
         );
       });
       test('client -initial-> server', async () => {
@@ -1828,9 +1826,8 @@ describe('native/tls/ecdsa', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -1962,10 +1959,10 @@ describe('native/tls/ecdsa', () => {
           'string',
         );
         // We can imagine that our verify callback fails on the bad certificate
-        expect(
+        await expect(
           verifyCallback(
-            serverPeerCertChain.map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            serverPeerCertChain,
+            serverConfig.ca as Array<Uint8Array> ,
           )
         ).rejects.toThrow();
         // Simulate a 304 as it means the client supplied a bad certificate
@@ -2028,8 +2025,8 @@ describe('native/tls/ecdsa', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -2063,9 +2060,8 @@ describe('native/tls/ecdsa', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(0);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -2199,10 +2195,10 @@ describe('native/tls/ecdsa', () => {
         const serverPeerCertChain = serverConn.peerCertChain()!;
         expect(serverPeerCertChain).toBeNull();
         // There's no need to do this, but for symmetry
-        expect(
+        await expect(
           verifyCallback(
-            (serverPeerCertChain ?? []).map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            serverPeerCertChain ?? [],
+            serverConfig.ca as Array<Uint8Array>,
           )
         ).rejects.toThrow();
         expect(serverConn.peerError()).toBeNull();
@@ -2263,8 +2259,8 @@ describe('native/tls/ecdsa', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);
@@ -2298,9 +2294,8 @@ describe('native/tls/ecdsa', () => {
       let serverDcid: QUICConnectionId;
       let clientConn: Connection;
       let serverConn: Connection;
-      const verifyCallback = async (certs: Array<string>, ca: Array<string>) => {
+      const verifyCallback = async (certs: Array<Uint8Array>, _ca) => {
         expect(certs).toHaveLength(1);
-        expect(ca).toHaveLength(1);
         throw new Error('Verification failed');
       };
       beforeAll(async () => {
@@ -2421,10 +2416,10 @@ describe('native/tls/ecdsa', () => {
           'string',
         );
         // We can imagine that our verify callback fails on the bad certificate
-        expect(
+        await expect(
           verifyCallback(
-            clientPeerCertChain.map(utils.derToPEM),
-            utils.collectPEMs(serverConfig.ca)
+            clientPeerCertChain,
+            serverConfig.ca as Array<Uint8Array>
           )
         ).rejects.toThrow();
         // Due to an upstream bug, if we were to simulate a close with 304 code
@@ -2432,7 +2427,7 @@ describe('native/tls/ecdsa', () => {
         // would successfully drain and then close, but the server connection is
         // left to idle until it times out.
         // Therefore instead of closing immediately here, we have to complete the
-        // handshake by sending a the handshake frame to the server, and then
+        // handshake by sending a handshake frame to the server, and then
         // simulate a close with 304 as the code
       });
       test('client -initial-> server', async () => {
@@ -2506,8 +2501,8 @@ describe('native/tls/ecdsa', () => {
         });
       });
       test('client and server close', async () => {
-        expect(() => clientConn.send(clientBuffer)).toThrow('Done');
-        expect(() => serverConn.send(serverBuffer)).toThrow('Done');
+        expect(clientConn.send(clientBuffer)).toBeNull()
+        expect(serverConn.send(serverBuffer)).toBeNull()
         expect(clientConn.timeout()).not.toBeNull();
         expect(serverConn.timeout()).not.toBeNull();
         await testsUtils.waitForTimeoutNull(clientConn);

@@ -46,10 +46,8 @@ describe(QUICStream.name, () => {
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
     socketCleanMethods = testsUtils.socketCleanupFactory();
-    logger.warn('------BEFORE-------');
   });
   afterEach(async () => {
-    logger.warn('------AFTER-------');
     await socketCleanMethods.stopSockets();
   });
 
