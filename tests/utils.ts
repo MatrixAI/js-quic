@@ -518,11 +518,23 @@ async function generateCertificate({
         [
           {
             type: 'dns',
-            value: 'localhost',
+            value: subjectNodeIdEncoded,
           },
           {
             type: 'dns',
-            value: subjectNodeIdEncoded,
+            value: 'localhost',
+          },
+          // Quiche doesn't support IP SANs,
+          // instead we hack these in as DNS SANs for testing purposes
+          {
+            type: 'dns',
+            value: '127.0.0.1',
+          },
+          // Quiche doesn't support IP SANs,
+          // instead we hack these in as DNS SANs for testing purposes
+          {
+            type: 'dns',
+            value: '::1',
           },
           {
             type: 'ip',

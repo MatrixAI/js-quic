@@ -1,4 +1,5 @@
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
+import { CryptoError } from './src/native';
 import QUICClient from './src/QUICClient';
 import QUICServer from './src/QUICServer';
 import * as events from './src/events';
@@ -35,6 +36,7 @@ async function main() {
       verifyPeer: false,
       key: tlsConfig.leafKeyPairPEM.privateKey,
       cert: tlsConfig.leafCertPEM,
+      ca: tlsConfig.caCertPEM
     },
     crypto: {
       key: await testsUtils.generateKeyHMAC(),
@@ -92,19 +94,28 @@ async function main() {
   );
 
   await quicServer.start();
-  const quicClient = await QUICClient.createQUICClient({
-    host: utils.resolvesZeroIP(quicServer.host),
-    port: quicServer.port,
-    config: {
-      verifyPeer: false,
-    },
-    crypto: {
-      ops: {
-        randomBytes: testsUtils.randomBytes,
+  let quicClient: QUICClient;
+  try {
+    const host = utils.resolvesZeroIP(quicServer.host);
+    quicClient = await QUICClient.createQUICClient({
+      host: host,
+      port: quicServer.port,
+      config: {
+        verifyPeer: true,
+        ca: tlsConfig.caCertPEM
       },
-    },
-    logger: logger.getChild('QUICClient'),
-  });
+      crypto: {
+        ops: {
+          randomBytes: testsUtils.randomBytes,
+        },
+      },
+      logger: logger.getChild('QUICClient'),
+    });
+  } catch (e) {
+    console.log('FAILED TO CREATE QUIC CLIENT', e.name, e.data);
+    console.log('CRYPTO ERROR', CryptoError[e.data.errorCode]);
+    throw e;
+  }
 
   const stream = quicClient.connection.newStream();
   const reader = stream.readable.getReader();
