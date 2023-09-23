@@ -379,6 +379,28 @@ describe(QUICSocket.name, () => {
         },
       ]);
     });
+    test('to ipv4 mapped ipv6 succeeds', async () => {
+      await socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
+      await socket.send(msg, dualStackSocketPort, '::ffff:7f00:1');
+      await expect(dualStackSocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '::ffff:127.0.0.1',
+          family: 'IPv6',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
+    });
   });
   describe('ipv6', () => {
     const socket = new QUICSocket({
@@ -412,10 +434,6 @@ describe(QUICSocket.name, () => {
       await expect(
         socket.send(msg, ipv4SocketPort, '127.0.0.1'),
       ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
-      // Does not work with IPv4 mapped IPv6 addresses
-      await expect(
-        socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1'),
-      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     });
     test('to dual stack succeeds', async () => {
       await socket.send(msg, dualStackSocketPort, '::1');
@@ -428,9 +446,13 @@ describe(QUICSocket.name, () => {
           size: msg.byteLength,
         },
       ]);
-      // Does not work with IPv4 mapped IPv6 addresses
+    });
+    test('to ipv4 mapped ipv6 fails', async () => {
       await expect(
-        socket.send(msg, dualStackSocketPort, '::ffff:127.0.0.1'),
+        socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1'),
+      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+      await expect(
+        socket.send(msg, dualStackSocketPort, '::ffff:7f00:1'),
       ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     });
   });
@@ -471,7 +493,7 @@ describe(QUICSocket.name, () => {
         },
       ]);
     });
-    test('to dual stack succeds', async () => {
+    test('to dual stack succeeds', async () => {
       await socket.send(msg, dualStackSocketPort, '::1');
       await expect(dualStackSocketMessageP).resolves.toEqual([
         msg,
@@ -482,6 +504,14 @@ describe(QUICSocket.name, () => {
           size: msg.byteLength,
         },
       ]);
+    });
+    test('to ipv4 mapped ipv6 fails', async () => {
+      await expect(
+        socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1'),
+      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+      await expect(
+        socket.send(msg, dualStackSocketPort, '::ffff:7f00:1'),
+      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
     });
   });
   describe('dual stack', () => {
@@ -501,10 +531,16 @@ describe(QUICSocket.name, () => {
       expect(socket.type).toBe('ipv4&ipv6');
     });
     test('to ipv4 succeeds', async () => {
-      // Fail if send to IPv4
-      await expect(
-        socket.send(msg, ipv4SocketPort, '127.0.0.1'),
-      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+      await socket.send(msg, ipv4SocketPort, '127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
       // Succeeds if sent with IPv4 mapped IPv6 address
       await socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1');
       await expect(ipv4SocketMessageP).resolves.toEqual([
@@ -530,9 +566,16 @@ describe(QUICSocket.name, () => {
       ]);
     });
     test('to dual stack succeeds', async () => {
-      await expect(
-        socket.send(msg, dualStackSocketPort, '127.0.0.1'),
-      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+      await socket.send(msg, dualStackSocketPort, '127.0.0.1');
+      await expect(dualStackSocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '::ffff:127.0.0.1',
+          family: 'IPv6',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
       await socket.send(msg, dualStackSocketPort, '::ffff:127.0.0.1');
       await expect(dualStackSocketMessageP).resolves.toEqual([
         msg,
@@ -548,6 +591,28 @@ describe(QUICSocket.name, () => {
         msg,
         {
           address: '::1',
+          family: 'IPv6',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
+    });
+    test('to ipv4 mapped ipv6 succeeds', async () => {
+      await socket.send(msg, ipv4SocketPort, '::ffff:127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
+      await socket.send(msg, dualStackSocketPort, '::ffff:7f00:1');
+      await expect(dualStackSocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '::ffff:127.0.0.1',
           family: 'IPv6',
           port: socket.port,
           size: msg.byteLength,
@@ -571,10 +636,17 @@ describe(QUICSocket.name, () => {
     test('type will be `ipv4`', async () => {
       expect(socket.type).toBe('ipv4');
     });
-    test('to ipv4 fails', async () => {
-      await expect(
-        socket.send(msg, ipv4SocketPort, '127.0.0.1'),
-      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+    test('to ipv4 succeeds', async () => {
+      await socket.send(msg, ipv4SocketPort, '127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
     });
     test('to ipv6 fails', async () => {
       await expect(socket.send(msg, ipv6SocketPort, '::1')).rejects.toThrow(
@@ -592,12 +664,12 @@ describe(QUICSocket.name, () => {
           size: msg.byteLength,
         },
       ]);
-      await socket.send(msg, ipv4SocketPort, '::ffff:7f00:1');
-      await expect(ipv4SocketMessageP).resolves.toEqual([
+      await socket.send(msg, dualStackSocketPort, '::ffff:7f00:1');
+      await expect(dualStackSocketMessageP).resolves.toEqual([
         msg,
         {
-          address: '127.0.0.1',
-          family: 'IPv4',
+          address: '::ffff:127.0.0.1',
+          family: 'IPv6',
           port: socket.port,
           size: msg.byteLength,
         },
@@ -622,10 +694,17 @@ describe(QUICSocket.name, () => {
       // Node dgram will resolve to dotted decimal variant
       expect(socket.host).toBe('::ffff:127.0.0.1');
     });
-    test('to ipv4 fails', async () => {
-      await expect(
-        socket.send(msg, ipv4SocketPort, '127.0.0.1'),
-      ).rejects.toThrow(errors.ErrorQUICSocketInvalidSendAddress);
+    test('to ipv4 succeeds', async () => {
+      await socket.send(msg, ipv4SocketPort, '127.0.0.1');
+      await expect(ipv4SocketMessageP).resolves.toEqual([
+        msg,
+        {
+          address: '127.0.0.1',
+          family: 'IPv4',
+          port: socket.port,
+          size: msg.byteLength,
+        },
+      ]);
     });
     test('to ipv6 fails', async () => {
       await expect(socket.send(msg, ipv6SocketPort, '::1')).rejects.toThrow(
@@ -643,12 +722,12 @@ describe(QUICSocket.name, () => {
           size: msg.byteLength,
         },
       ]);
-      await socket.send(msg, ipv4SocketPort, '::ffff:7f00:1');
-      await expect(ipv4SocketMessageP).resolves.toEqual([
+      await socket.send(msg, dualStackSocketPort, '::ffff:7f00:1');
+      await expect(dualStackSocketMessageP).resolves.toEqual([
         msg,
         {
-          address: '127.0.0.1',
-          family: 'IPv4',
+          address: '::ffff:127.0.0.1',
+          family: 'IPv6',
           port: socket.port,
           size: msg.byteLength,
         },

@@ -421,44 +421,19 @@ class QUICSocket {
       );
     }
     const host = params[index] as Host | Hostname;
-    const [host_, udpType] = await utils.resolveHost(
+    let host_: Host, udpType: 'udp4' | 'udp6';
+    [host_, udpType] = await utils.resolveHost(
       host,
       this.resolveHostname,
     );
-    if (
-      this._type === 'ipv4' &&
-      udpType !== 'udp4' &&
-      !utils.isIPv4MappedIPv6(host_)
-    ) {
-      throw new errors.ErrorQUICSocketInvalidSendAddress(
-        `Cannot send to ${host_} on an IPv4 QUICSocket`,
-      );
-    } else if (
-      this._type === 'ipv6' &&
-      (udpType !== 'udp6' || utils.isIPv4MappedIPv6(host_))
-    ) {
-      throw new errors.ErrorQUICSocketInvalidSendAddress(
-        `Cannot send to ${host_} on an IPv6 QUICSocket`,
-      );
-    } else if (this._type === 'ipv4&ipv6' && udpType !== 'udp6') {
-      throw new errors.ErrorQUICSocketInvalidSendAddress(
-        `Cannot send to ${host_} on a dual stack QUICSocket`,
-      );
-    } else if (
-      this._type === 'ipv4' &&
-      utils.isIPv4MappedIPv6(this._host) &&
-      !utils.isIPv4MappedIPv6(host_)
-    ) {
-      throw new errors.ErrorQUICSocketInvalidSendAddress(
-        `Cannot send to ${host_} an IPv4 mapped IPv6 QUICSocket`,
-      );
-    }
+    host_ = this.validateTarget(host_, udpType);
     params[index] = host_;
     return this.socketSend(...params);
   }
 
   /**
    * This is an internal send that is faster.
+   * It does not do any resolution or validation of the target.
    * @internal
    */
   public async send_(
@@ -484,6 +459,62 @@ class QUICSocket {
 
   public unsetServer() {
     delete this.server;
+  }
+
+  protected validateTarget(host: Host, udpType: 'udp4' | 'udp6'): Host {
+    if (utils.isHostWildcard(host)) {
+      throw new errors.ErrorQUICSocketInvalidSendAddress(
+        `Cannot send to ${host} on QUICSocket`,
+      );
+    }
+    const isSocketHostIPv4Mapped = utils.isIPv4MappedIPv6(this._host);
+    const isTargetHostIPv4Mapped = utils.isIPv4MappedIPv6(host);
+    if (this._type === 'ipv4&ipv6' && udpType === 'udp4') {
+      // If socket is IPv4 and IPv6 then:
+      //   If target is IPv4 - wrap and pass
+      //   If target is IPv6 - pass
+      //   If target is IPv4 mapped IPv6 - pass
+      return utils.toIPv4MappedIPv6Dec(host);
+    }
+    if (this._type === 'ipv4') {
+      if (!isSocketHostIPv4Mapped) {
+        // If socket is IPv4 then:
+        //   if target is IPv4 - pass
+        //   if target is IPv6 - fail
+        //   if target is IPv4 mapped IPv6 - unwrap and pass
+        if (udpType === 'udp6') {
+          if (isTargetHostIPv4Mapped) return utils.fromIPv4MappedIPv6(host);
+          else throw new errors.ErrorQUICSocketInvalidSendAddress(
+            `Cannot send to ${host} on an IPv4 QUICSocket`,
+          );
+        }
+      } else {
+        // If socket is IPv4 but uses IPv4 mapped IPv6 bound address then:
+        //   If target is IPv4 - wrap and pass
+        //   If target is IPv6 - fail
+        //   If target is IPv4 mapped IPv6 - pass
+        if (udpType === 'udp4') return utils.toIPv4MappedIPv6Dec(host);
+        else if (udpType === 'udp6' && !isTargetHostIPv4Mapped) {
+          throw new errors.ErrorQUICSocketInvalidSendAddress(
+            `Cannot send to ${host} on an IPv4 QUICSocket`,
+          );
+        }
+      }
+      return host;
+    }
+    if (this._type === 'ipv6') {
+      // If socket is IPv6 then:
+      //   If target is IPv4 - fail
+      //   If target is IPv6 - pass
+      //   If target is IPv4 mapped IPv6 - fail
+      if (udpType === 'udp4' || isTargetHostIPv4Mapped) {
+        throw new errors.ErrorQUICSocketInvalidSendAddress(
+          `Cannot send to ${host} on an IPv6 QUICSocket`,
+        );
+      }
+      return host;
+    }
+    return host;
   }
 }
 
