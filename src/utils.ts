@@ -134,7 +134,7 @@ function fromIPv4MappedIPv6(host: string): Host {
  * This converts all `IPv4` formats to the `IPv4` decimal format.
  * `IPv4` decimal and `IPv6` hex formatted IPs are left unchanged.
  */
-function toCanonicalIp(host: string) {
+function toCanonicalIP(host: string) {
   if (isIPv4MappedIPv6(host)) {
     return fromIPv4MappedIPv6(host);
   }
@@ -559,7 +559,7 @@ export {
   toIPv4MappedIPv6Dec,
   toIPv4MappedIPv6Hex,
   fromIPv4MappedIPv6,
-  toCanonicalIp,
+  toCanonicalIP,
   resolveHostname,
   resolveHost,
   isPort,
