@@ -8,6 +8,8 @@ import type { CryptoError } from './native';
 type Opaque<K, T> = T & { readonly [brand]: K };
 declare const brand: unique symbol;
 
+type Class<T> = new (...args: any[]) => T;
+
 /**
  * Generic callback
  */
@@ -349,6 +351,7 @@ type QUICConnectionMetadata = {
 
 export type {
   Opaque,
+  Class,
   Callback,
   PromiseDeconstructed,
   Host,

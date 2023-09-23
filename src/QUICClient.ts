@@ -127,7 +127,7 @@ class QUICClient extends EventTarget {
     await crypto.ops.randomBytes(scidBuffer);
     const scid = new QUICConnectionId(scidBuffer);
     // Validating host and port types
-    let [host_] = await utils.resolveHost(
+    let [host_, udpType] = await utils.resolveHost(
       host,
       resolveHostname
     );
@@ -162,47 +162,16 @@ class QUICClient extends EventTarget {
         throw new errors.ErrorQUICServerSocketNotRunning();
       }
     }
-
-    // IF WE ARE DUAL STACK
-    // We're going to auto-upgrade IPv4 to mapped addresses
-
-    // IF WE ARE IPv6
-    // Do nothing, be strict, ONLY ipv6
-
-    // IF WE ARE IPV4
-    // We're going to auto-downgrade IPv4 mapped IPv6 addresses to IPv4
-
-
     try {
       // Check that the target `host` is compatible with the bound socket host
-      if (
-        socket.type === 'ipv4' &&
-        !utils.isIPv4(host_) &&
-        !utils.isIPv4MappedIPv6(host_)
-      ) {
-        throw new errors.ErrorQUICClientInvalidHost(
-          `Cannot connect to ${host_} on an IPv4 QUICClient`,
-        );
-      } else if (
-        socket.type === 'ipv6' &&
-        (!utils.isIPv6(host_) || utils.isIPv4MappedIPv6(host_))
-      ) {
-        throw new errors.ErrorQUICClientInvalidHost(
-          `Cannot connect to ${host_} on an IPv6 QUICClient`,
-        );
-      } else if (socket.type === 'ipv4&ipv6' && !utils.isIPv6(host_)) {
-        throw new errors.ErrorQUICClientInvalidHost(
-          `Cannot send to ${host_} on a dual stack QUICClient`,
-        );
-      } else if (
-        socket.type === 'ipv4' &&
-        utils.isIPv4MappedIPv6(socket.host) &&
-        !utils.isIPv4MappedIPv6(host_)
-      ) {
-        throw new errors.ErrorQUICClientInvalidHost(
-          `Cannot connect to ${host_} an IPv4 mapped IPv6 QUICClient`,
-        );
-      }
+      // Also transform it if need be
+      host_ = utils.validateTarget(
+        socket.host,
+        socket.type,
+        host_,
+        udpType,
+        errors.ErrorQUICClientInvalidHost
+      );
     } catch (e) {
       if (!isSocketShared) {
         await socket.stop({ force: true });

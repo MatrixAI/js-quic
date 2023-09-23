@@ -94,9 +94,13 @@ async function main() {
   );
 
   await quicServer.start();
+
   let quicClient: QUICClient;
   try {
-    const host = utils.resolvesZeroIP(quicServer.host);
+    // const host = utils.resolvesZeroIP(quicServer.host);
+    // Because it is dual stack this should work
+    const host = '127.0.0.1';
+
     quicClient = await QUICClient.createQUICClient({
       host: host,
       port: quicServer.port,
@@ -112,8 +116,7 @@ async function main() {
       logger: logger.getChild('QUICClient'),
     });
   } catch (e) {
-    console.log('FAILED TO CREATE QUIC CLIENT', e.name, e.data);
-    console.log('CRYPTO ERROR', CryptoError[e.data.errorCode]);
+    console.log('FAILED TO CREATE QUIC CLIENT', e);
     throw e;
   }
 

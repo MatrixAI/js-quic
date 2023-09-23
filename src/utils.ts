@@ -1,4 +1,5 @@
 import type {
+  Class,
   Callback,
   PromiseDeconstructed,
   ConnectionId,
@@ -193,6 +194,68 @@ function isPort(port: any): port is Port {
 function toPort(port: any): Port {
   if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
   return port;
+}
+
+function validateTarget(
+  socketHost: Host,
+  socketType: 'ipv4' | 'ipv6' | 'ipv4&ipv6',
+  targetHost: Host,
+  targetUdpType: 'udp4' | 'udp6',
+  errorClass: Class<Error>,
+): Host {
+  if (isHostWildcard(targetHost)) {
+    throw new errorClass(
+      `Invalid wildcard target host ${targetHost}`,
+    );
+  }
+  const isSocketHostIPv4Mapped = isIPv4MappedIPv6(socketHost);
+  const isTargetHostIPv4Mapped = isIPv4MappedIPv6(targetHost);
+  if (socketType === 'ipv4&ipv6' && targetUdpType === 'udp4') {
+    // If socket is IPv4 and IPv6 then:
+    //   If target is IPv4 - wrap and pass
+    //   If target is IPv6 - pass
+    //   If target is IPv4 mapped IPv6 - pass
+    return toIPv4MappedIPv6Dec(targetHost);
+  }
+  if (socketType === 'ipv4') {
+    if (!isSocketHostIPv4Mapped) {
+      // If socket is IPv4 then:
+      //   if target is IPv4 - pass
+      //   if target is IPv6 - fail
+      //   if target is IPv4 mapped IPv6 - unwrap and pass
+      if (targetUdpType === 'udp6') {
+        if (isTargetHostIPv4Mapped) return fromIPv4MappedIPv6(targetHost);
+        else throw new errorClass(
+          `Invalid target host ${targetHost} from an IPv4 socket`,
+        );
+      }
+    } else {
+      // If socket is IPv4 but uses IPv4 mapped IPv6 bound address then:
+      //   If target is IPv4 - wrap and pass
+      //   If target is IPv6 - fail
+      //   If target is IPv4 mapped IPv6 - pass
+      if (targetUdpType === 'udp4') return toIPv4MappedIPv6Dec(targetHost);
+      else if (targetUdpType === 'udp6' && !isTargetHostIPv4Mapped) {
+        throw new errorClass(
+          `Invalid target host ${targetHost} from an IPv4 socket`,
+        );
+      }
+    }
+    return targetHost;
+  }
+  if (socketType === 'ipv6') {
+    // If socket is IPv6 then:
+    //   If target is IPv4 - fail
+    //   If target is IPv6 - pass
+    //   If target is IPv4 mapped IPv6 - fail
+    if (targetUdpType === 'udp4' || isTargetHostIPv4Mapped) {
+      throw new errorClass(
+        `Invalid target host ${targetHost} from an IPv6 socket`,
+      );
+    }
+    return targetHost;
+  }
+  return targetHost;
 }
 
 /**
@@ -501,6 +564,7 @@ export {
   resolveHost,
   isPort,
   toPort,
+  validateTarget,
   promisify,
   promise,
   bufferWrap,
