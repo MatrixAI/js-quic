@@ -305,18 +305,12 @@ type ResolveHostname = (hostname: string) => string | PromiseLike<string>;
  * Maps reason (most likely an exception) to a stream code.
  * Use `0` to indicate unknown/default reason.
  */
-type StreamReasonToCode = (
-  type: 'read' | 'write',
-  reason?: any,
-) => number;
+type StreamReasonToCode = (type: 'read' | 'write', reason?: any) => number;
 
 /**
  * Maps code to a reason. 0 usually indicates unknown/default reason.
  */
-type StreamCodeToReason = (
-  type: 'read' | 'write',
-  code: number,
-) => any;
+type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
 
 /**
  * Custom TLS verification callback.
@@ -328,7 +322,7 @@ type StreamCodeToReason = (
  */
 type TLSVerifyCallback = (
   certs: Array<Uint8Array>,
-  ca: Array<Uint8Array>
+  ca: Array<Uint8Array>,
 ) => PromiseLike<CryptoError | undefined>;
 
 type ConnectionId = Opaque<'ConnectionId', Buffer>;

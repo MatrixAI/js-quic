@@ -1,6 +1,6 @@
 import type QUICConnection from './QUICConnection';
 import type QUICStream from './QUICStream';
-import {
+import type {
   ErrorQUICConnectionLocal,
   ErrorQUICConnectionPeer,
   ErrorQUICConnectionInternal,
@@ -16,7 +16,6 @@ import {
   ErrorQUICClientSocketNotRunning,
   ErrorQUICClientInternal,
 } from './errors';
-import type { ConnectionError } from './native';
 import { AbstractEvent } from '@matrixai/events';
 
 abstract class EventQUIC<T = undefined> extends AbstractEvent<T> {}
@@ -38,8 +37,7 @@ class EventQUICSocketError extends EventQUICSocket<
 > {}
 
 class EventQUICSocketClose extends EventQUICSocket<
-  | ErrorQUICSocketInternal<unknown>
-  | undefined
+  ErrorQUICSocketInternal<unknown> | undefined
 > {}
 
 // Client events
@@ -86,13 +84,11 @@ class EventQUICServerStop extends EventQUICServer {}
 class EventQUICServerStopped extends EventQUICServer {}
 
 class EventQUICServerError extends EventQUICServer<
-  | ErrorQUICServerSocketNotRunning<unknown>
-  | ErrorQUICServerInternal<unknown>
+  ErrorQUICServerSocketNotRunning<unknown> | ErrorQUICServerInternal<unknown>
 > {}
 
 class EventQUICServerClose extends EventQUICServer<
-  | ErrorQUICServerSocketNotRunning<unknown>
-  | undefined
+  ErrorQUICServerSocketNotRunning<unknown> | undefined
 > {}
 
 // Connection events
@@ -108,10 +104,11 @@ class EventQUICConnectionStop extends EventQUICConnection {}
 class EventQUICConnectionStopped extends EventQUICConnection {}
 
 /**
- * Closing a quic connection is always an error no matter if it is graceful or not.
- * This is due to the utilisation of the error code and error message during connection close.
- * Additionally it is also possible that that the QUIC connection times out. In this case,
- * quiche does not send a `CONNECTION_CLOSE` frame. That is a timeout error.
+ * Closing a quic connection is always an error no matter if it is graceful or
+ * not. This is due to the utilisation of the error code and reason during
+ * connection close. Additionally it is also possible that that the QUIC
+ * connection times out. In this case, quiche does will not send a
+ * `CONNECTION_CLOSE` frame.
  */
 class EventQUICConnectionError extends EventQUICConnection<
   | ErrorQUICConnectionLocal<unknown>
@@ -120,24 +117,19 @@ class EventQUICConnectionError extends EventQUICConnection<
   | ErrorQUICConnectionInternal<unknown>
 > {}
 
-/**
- * Once a connection is closing, this event is dispatched.
- * For `QUICConnection` the connection cannot close without a preceding
- * error event. Therefore all exceptions are passed through here.
- * Note that in the circumstance of `ErrorQUICConnectionInternal` it should
- * be expected that the underlying `quiche` connection is broken.
- * If so, then a close here will still try to close the `QUICConnection`.
- */
 class EventQUICConnectionClose extends EventQUICConnection<
   | ErrorQUICConnectionLocal<unknown>
   | ErrorQUICConnectionPeer<unknown>
   | ErrorQUICConnectionIdleTimeout<unknown>
 > {}
 
-/**
- * When a QUICStream is created, it is ready to be used.
- */
 class EventQUICConnectionStream extends EventQUICConnection<QUICStream> {}
+
+class EventQUICConnectionSend extends EventQUICConnection<{
+  msg: Uint8Array;
+  port: number;
+  address: string;
+}> {}
 
 // Stream events
 
@@ -148,10 +140,7 @@ class EventQUICStreamDestroy extends EventQUICStream {}
 class EventQUICStreamDestroyed extends EventQUICStream {}
 
 /**
- * QUIC stream encountered an error.
- * Unlike QUICConnection, you can just have graceful close without any error event at all.
- * This is because streams can just be finished with no code.
- * But QUICConnection closure always comes with some error code and reason, even if the code is 0.
+ * Gracefully closing a QUIC stream does not require an error event.
  */
 class EventQUICStreamError extends EventQUICStream<
   | ErrorQUICStreamLocalRead<unknown>
@@ -162,18 +151,12 @@ class EventQUICStreamError extends EventQUICStream<
 > {}
 
 /**
- * QUIC stream readable side was closed
- * Local means I closed my readable side - there must be an error code.
- * Peer means the peer closed my readable side by closing their writable side - there may not be an error code.
- * If no code, it means it was graceful.
+ * QUIC stream readable side is closed.
  *
- * Unlike QUICConnection.
- * You can close without there being an error.
- * That's because a graceful close has no error.
- * It does have a "direction" though.
- * And are we propagating it into the close event too?
- *
- * Undefined means that it was gracefully closed.
+ * `ErrorQUICStreamLocalRead` - readable side cancelled locally with code.
+ * `ErrorQUICStreamPeerRead` - readable side cancelled by peer aborting the
+ *                             remote writable side.
+ * `undefined` - readable side closed gracefully.
  */
 class EventQUICStreamCloseRead extends EventQUICStream<
   | ErrorQUICStreamLocalRead<unknown>
@@ -182,10 +165,12 @@ class EventQUICStreamCloseRead extends EventQUICStream<
 > {}
 
 /**
- * QUIC stream writable side was closed
- * Local means I closed my writable side - there may not be an error code.
- * Peer means the peer closed my writable side by closing their readable side - there must be an error code.
- * If no code, it means it was graceful.
+ * QUIC stream writable side is closed.
+ *
+ * `ErrorQUICStreamLocalWrite` - writable side aborted locally with code.
+ * `ErrorQUICStreamPeerWrite` - writable side aborted by peer cancelling the
+ *                             remote readable side.
+ * `undefined` - writable side closed gracefully.
  */
 class EventQUICStreamCloseWrite extends EventQUICStream<
   | ErrorQUICStreamLocalWrite<unknown>
@@ -193,34 +178,7 @@ class EventQUICStreamCloseWrite extends EventQUICStream<
   | undefined
 > {}
 
-/**
- * This means there is data enqueued on the stream buffer to be sent.
- * The `QUICConnection` needs to listen on this event to know when to send data.
- * Also includes `EventQUICStreamCloseRead` event
- * And `EventQUICStreamCloseWrite` event
- * All 3 events means that there is data on the stream buffer to be sent.
- * Honestly you could just use this, and dispatch it again.
- */
 class EventQUICStreamSend extends EventQUICStream {}
-
-/**
- * This means there's data to be sent from the quic connection
- * This means scheduling something to the QUICSocket.send
- * We would want to schedule the details of the call here
- *
- * Remember this means the `this.socket.send` is then called in
- * QUICServer or QUICClient, and is therefore completely async
- * In relation to the while loop. Because multiple calls to this
- * can be scheduled. It means it can be scheduled up before being
- * flushed. There's no guarantee the other side received it.
- * That's fine though. Errors are then managed by QUICServer
- * or QUICClient
- */
-class EventQUICConnectionSend extends EventQUICConnection<{
-  msg: Uint8Array;
-  port: number;
-  address: string;
-}> {}
 
 export {
   EventQUIC,
@@ -231,22 +189,19 @@ export {
   EventQUICSocketStopped,
   EventQUICSocketError,
   EventQUICSocketClose,
-
   EventQUICClient,
   EventQUICClientDestroy,
   EventQUICClientDestroyed,
   EventQUICClientError,
   EventQUICClientClose,
-
   EventQUICServer,
   EventQUICServerStart,
   EventQUICServerStarted,
   EventQUICServerStop,
   EventQUICServerStopped,
-  EventQUICServerConnection,
   EventQUICServerError,
   EventQUICServerClose,
-
+  EventQUICServerConnection,
   EventQUICConnection,
   EventQUICConnectionStart,
   EventQUICConnectionStarted,
@@ -255,16 +210,12 @@ export {
   EventQUICConnectionError,
   EventQUICConnectionClose,
   EventQUICConnectionStream,
-
   EventQUICConnectionSend,
-
   EventQUICStream,
   EventQUICStreamDestroy,
   EventQUICStreamDestroyed,
   EventQUICStreamError,
   EventQUICStreamCloseRead,
   EventQUICStreamCloseWrite,
-
   EventQUICStreamSend,
-
 };

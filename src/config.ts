@@ -25,15 +25,19 @@ const sigalgs = [
 ].join(':');
 
 /**
- * Usually we would create separate timeouts for connecting vs idling.
+ * Usually we would create separate timeouts for starting vs keep-alive.
  * Unfortunately quiche only has 1 config option that controls both.
  * And it is not possible to mutate this option after connecting.
- * Therefore, this option is just a way to set a shorter connecting timeout
+ * Therefore, this option is just a way to set a shorter start timeout
  * compared to the idling timeout.
- * If this is the larger than the `maxIdleTimeout` (remember that `0` is `Infinity`) for `maxIdleTimeout`, then this has no effect.
- * This only has an effect if this is set to a number less than `maxIdleTimeout`.
- * Thus, it is the "minimum boundary" of the timeout during connecting.
- * While the `maxIdleTimeout` is still the "maximum boundary" during connecting.
+ * If this is the larger than the `maxIdleTimeout` (where `0` means `Infinity`),
+ * then this has no effect. This only has an effect if this is set to a number
+ * less than `maxIdleTimeout`. Thus, it is the "minimum boundary" of the
+ * timeout when starting. While the `maxIdleTimeout` is still the "maximum
+ * boundary" when starting.
+ * Both `minIdleTimeout` and `maxIdleTimeout` defaults to `Infinity` (where `0`
+ * means `Infinity` for `maxIdleTimeout`), thus by default connections will not
+ * timeout when starting or during keep-alive.
  */
 const minIdleTimeout = Infinity;
 

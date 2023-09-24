@@ -69,7 +69,11 @@ interface Connection {
   streamRecv(streamId: number, data: Uint8Array): [number, boolean] | null;
   streamSend(streamId: number, data: Uint8Array, fin: boolean): number | null;
   streamPriority(streamId: number, urgency: number, incremental: boolean): void;
-  streamShutdown(streamId: number, direction: Shutdown, err: number): void | null;
+  streamShutdown(
+    streamId: number,
+    direction: Shutdown,
+    err: number,
+  ): void | null;
   streamCapacity(streamId: number): number;
   streamReadable(streamId: number): boolean;
   streamWritable(streamId: number, len: number): boolean;
@@ -246,7 +250,7 @@ enum CryptoError {
   UnknownPSKIdentity = 371,
   CertificateRequired = 372,
   NoApplicationProtocol = 376,
-};
+}
 
 type ConnectionError = {
   isApp: boolean;
@@ -363,7 +367,7 @@ export {
   Shutdown,
   Type,
   ConnectionErrorCode,
-  CryptoError
+  CryptoError,
 };
 
 export type {

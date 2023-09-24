@@ -40,6 +40,11 @@
       }
     ],
     "prefer-rest-params": 0,
+    "prefer-const": [
+      "error", {
+        "destructuring": "all"
+      }
+    ],
     "require-yield": 0,
     "eqeqeq": ["error", "smart"],
     "spaced-comment": [

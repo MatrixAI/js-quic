@@ -8,8 +8,8 @@ import { utils as errorsUtils } from '@matrixai/errors';
 import QUICConnectionId from './QUICConnectionId';
 import QUICConnectionMap from './QUICConnectionMap';
 import { quiche } from './native';
-import * as events from './events';
 import * as utils from './utils';
+import * as events from './events';
 import * as errors from './errors';
 
 interface QUICSocket extends StartStop {}
@@ -46,27 +46,15 @@ class QUICSocket {
   protected _host: Host;
   protected _port: Port;
   protected _type: 'ipv4' | 'ipv6' | 'ipv4&ipv6';
-
-  /**
-   * UDP socket.
-   * This is the only IO that this library uses.
-   */
+  protected closedP: Promise<void>;
+  protected _closed: boolean = false;
+  protected resolveClosedP: () => void;
   protected socket: dgram.Socket;
-
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  public readonly closedP: Promise<void>;
-  protected _closed: boolean = false;
-  protected resolveClosedP: () => void;
-
-  /**
-   * Upon a QUIC socket error, stop this socket.
-   */
-  protected handleEventQUICSocketError = (
-    evt: events.EventQUICSocketError,
-  ) => {
+  protected handleEventQUICSocketError = (evt: events.EventQUICSocketError) => {
     const error = evt.detail;
     this.logger.error(utils.formatError(error));
   };
@@ -76,13 +64,13 @@ class QUICSocket {
     this._closed = true;
     this.resolveClosedP();
     if (this[running]) {
-      // Failing this is a software error
       await this.stop({ force: true });
     }
   };
 
   /**
-   * Handle the datagram from UDP socket
+   * Handles UDP socket message.
+   *
    * The `data` buffer could be multiple coalesced QUIC packets.
    * It could also be a non-QUIC packet data.
    * If it is non-QUIC, we can discard the data.
@@ -121,16 +109,11 @@ class QUICSocket {
     };
     const connection = this.connectionMap.get(dcid);
     if (connection != null) {
-      // Remember if the connection is stopped, then the @ready decorator prevent calls
-      // If it is stopping, then this can still be called, and quiche might just be ignoring
-      // But if the connection is stopped, it could not have been acquired here
-
       // In the QUIC protocol, acknowledging packets while in a draining
       // state is optional. We can respond with `STATELESS_RESET`
       // but it's not necessary, and ignoring is simpler
       // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
       await connection.recv(data, remoteInfo_);
-      // Failing this is a software error (not a caller error)
     } else {
       // If the server is not registered, we cannot attempt to create a new
       // connection for this packet.
@@ -147,52 +130,41 @@ class QUICSocket {
         // These concurrent `recv` and `send` pairs occur in this same handler,
         // but just in the other branch of the current `if` statement where
         // the connection object already exists in the connection map.
-        await this.server.acceptConnection(
-          remoteInfo_,
-          header,
-          dcid,
-          data,
-        );
+        await this.server.acceptConnection(remoteInfo_, header, dcid, data);
       } catch (e) {
-        // The acceptConnection is a caller error
-        // Now we have to handle this and decide
-        // Whether this is to be dropped
-        // OR that it's a domain error
-
-        // Translate the caller error to a domain error
         if (
           errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)
         ) {
-          // This would mean the `this.send` call somewhere failed
           const e_ = new errors.ErrorQUICSocketInternal(
             'Failed to call accept connection due to socket send',
-            { cause: e }
+            { cause: e },
           );
           this.dispatchEvent(
             new events.EventQUICSocketError({
-              detail: e_
-            })
+              detail: e_,
+            }),
           );
-          this.dispatchEvent(
-            new events.EventQUICSocketClose()
-          );
+          this.dispatchEvent(new events.EventQUICSocketClose());
           return;
         }
         // If the connection timed out during start, this is an expected
         // possibility, because the remote peer might have become unavailable,
         // in which case we can just ignore the error here.
         if (e instanceof errors.ErrorQUICServerNewConnection) {
-          // This is a legitimate state transition
-          // The caller error is ignored
           return;
         }
-
-        // Software error - throw upwards
         throw e;
       }
     }
   };
 
+  /**
+   * Constructs a QUIC socket.
+   *
+   * @param opts
+   * @param opts.resolveHostname - defaults to using OS DNS resolver
+   * @param opts.logger
+   */
   public constructor({
     resolveHostname = utils.resolveHostname,
     logger,
@@ -202,19 +174,9 @@ class QUICSocket {
   }) {
     this.logger = logger ?? new Logger(this.constructor.name);
     this.resolveHostname = resolveHostname;
-    const {
-      p: closedP,
-      resolveP: resolveClosedP,
-    } = utils.promise();
+    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-  }
-
-  /**
-   * Socket is closed!
-   */
-  public get closed() {
-    return this._closed;
   }
 
   /**
@@ -246,6 +208,10 @@ class QUICSocket {
   @ready(new errors.ErrorQUICSocketNotRunning())
   public get type(): 'ipv4' | 'ipv6' | 'ipv4&ipv6' {
     return this._type;
+  }
+
+  public get closed() {
+    return this._closed;
   }
 
   /**
@@ -342,7 +308,7 @@ class QUICSocket {
     this.addEventListener(
       events.EventQUICSocketClose.name,
       this.handleEventQUICSocketClose,
-      { once: true }
+      { once: true },
     );
     address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
@@ -351,10 +317,10 @@ class QUICSocket {
   /**
    * Stop this QUICSocket.
    *
-   * @param force - Stop the socket even if the connection map is not empty.
+   * @param opts
+   * @param opts.force - Stop the socket even if the connection map is not empty.
    *
-   * @throws {errors.ErrorQUICSocketConnectionsActive} if the connection map is
-   * not empty and `force` is `false`.
+   * @throws {errors.ErrorQUICSocketConnectionsActive}
    */
   public async stop({
     force = false,
@@ -376,7 +342,7 @@ class QUICSocket {
     );
     this.removeEventListener(
       events.EventQUICSocketClose.name,
-      this.handleEventQUICSocketClose
+      this.handleEventQUICSocketClose,
     );
     this.socket.off('message', this.handleSocketMessage);
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
@@ -389,12 +355,7 @@ class QUICSocket {
    * internal because it can be used for hole punching, which is an application
    * concern. Therefore if this method throws an exception, it does necessarily
    * mean that this `QUICSocket` is an error state. It could be the caller's
-   * fault. However, if one of the internal procedures in this library receives
-   * an error, then that would be considered a runtime IO error for this
-   * `QUICSocket`. At this point we cannot know who is calling this method, so
-   * we expect such exceptions to bubble up eventually to one of the root event
-   * handlers in this `QUICSocket` which will convert the exception to a
-   * `EventQUICSocketError`.
+   * fault.
    */
   public async send(
     msg: string | Uint8Array | ReadonlyArray<any>,
@@ -421,16 +382,13 @@ class QUICSocket {
       );
     }
     const host = params[index] as Host | Hostname;
-    let [host_, udpType] = await utils.resolveHost(
-      host,
-      this.resolveHostname,
-    );
+    let [host_, udpType] = await utils.resolveHost(host, this.resolveHostname);
     host_ = utils.validateTarget(
       this._host,
       this._type,
       host_,
       udpType,
-      errors.ErrorQUICSocketInvalidSendAddress
+      errors.ErrorQUICSocketInvalidSendAddress,
     );
     params[index] = host_;
     return this.socketSend(...params);
@@ -439,6 +397,9 @@ class QUICSocket {
   /**
    * This is an internal send that is faster.
    * It does not do any resolution or validation of the target.
+   * If one of the internal procedures in this library calls this method and it
+   * throws up a caller error, then it could be considered an internal error.
+   * There are no known intermittent runtime errors from sending UDP packets.
    * @internal
    */
   public async send_(

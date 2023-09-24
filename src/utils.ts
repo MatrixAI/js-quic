@@ -9,7 +9,6 @@ import type {
   QUICServerCrypto,
   StreamId,
 } from './types';
-import type { Connection } from './native';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import QUICConnectionId from './QUICConnectionId';
@@ -204,9 +203,7 @@ function validateTarget(
   errorClass: Class<Error>,
 ): Host {
   if (isHostWildcard(targetHost)) {
-    throw new errorClass(
-      `Invalid wildcard target host ${targetHost}`,
-    );
+    throw new errorClass(`Invalid wildcard target host ${targetHost}`);
   }
   const isSocketHostIPv4Mapped = isIPv4MappedIPv6(socketHost);
   const isTargetHostIPv4Mapped = isIPv4MappedIPv6(targetHost);
@@ -224,18 +221,22 @@ function validateTarget(
       //   if target is IPv6 - fail
       //   if target is IPv4 mapped IPv6 - unwrap and pass
       if (targetUdpType === 'udp6') {
-        if (isTargetHostIPv4Mapped) return fromIPv4MappedIPv6(targetHost);
-        else throw new errorClass(
-          `Invalid target host ${targetHost} from an IPv4 socket`,
-        );
+        if (isTargetHostIPv4Mapped) {
+          return fromIPv4MappedIPv6(targetHost);
+        } else {
+          throw new errorClass(
+            `Invalid target host ${targetHost} from an IPv4 socket`,
+          );
+        }
       }
     } else {
       // If socket is IPv4 but uses IPv4 mapped IPv6 bound address then:
       //   If target is IPv4 - wrap and pass
       //   If target is IPv6 - fail
       //   If target is IPv4 mapped IPv6 - pass
-      if (targetUdpType === 'udp4') return toIPv4MappedIPv6Dec(targetHost);
-      else if (targetUdpType === 'udp6' && !isTargetHostIPv4Mapped) {
+      if (targetUdpType === 'udp4') {
+        return toIPv4MappedIPv6Dec(targetHost);
+      } else if (targetUdpType === 'udp6' && !isTargetHostIPv4Mapped) {
         throw new errorClass(
           `Invalid target host ${targetHost} from an IPv4 socket`,
         );
@@ -468,7 +469,7 @@ function isStreamBidirectional(streamId: StreamId): boolean {
  * This can be used for keys, certs and ca.
  */
 function collectPEMs(
-  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>
+  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>,
 ): Array<string> {
   const pemsChain: Array<string> = [];
   if (typeof pems === 'string') {
@@ -504,9 +505,11 @@ function pemToDER(pem: string): Uint8Array {
  */
 function derToPEM(der: Uint8Array): string {
   const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
-  const contents = data.toString('base64')
-    .replace(/(.{64})/g, '$1\n')
-    .trimEnd() + '\n';
+  const contents =
+    data
+      .toString('base64')
+      .replace(/(.{64})/g, '$1\n')
+      .trimEnd() + '\n';
   return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
 }
 
@@ -515,9 +518,9 @@ function derToPEM(der: Uint8Array): string {
  * Example: `Error: description - message`
  */
 function formatError(error: Error): string {
-  return `${error.name}${'description' in error ? `: ${error.description}` : ''}${
-    error.message !== undefined ? ` - ${error.message}` : ''
-  }`;
+  return `${error.name}${
+    'description' in error ? `: ${error.description}` : ''
+  }${error.message !== undefined ? ` - ${error.message}` : ''}`;
 }
 
 /**

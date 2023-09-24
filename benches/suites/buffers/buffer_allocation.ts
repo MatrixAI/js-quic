@@ -4,42 +4,27 @@ import { summaryName, suiteCommon } from '../../utils';
 async function main() {
   const summary = await b.suite(
     summaryName(__filename),
-    b.add(
-      'Buffer.alloc',
-      () => {
-        Buffer.alloc(1350);
-      }
-    ),
-    b.add(
-      'Buffer.allocUnsafe',
-      () => {
-        const b = Buffer.allocUnsafe(1350);
-      }
-    ),
-    b.add(
-      'Buffer.allocUnsafeSlow',
-      () => {
-        Buffer.allocUnsafeSlow(1350);
-      }
-    ),
-    b.add(
-      'Buffer.from subarray',
-      () => {
-        const b = Buffer.allocUnsafe(1350);
-        return () => {
-          Buffer.from(b.subarray(0, b.byteLength));
-        };
-      }
-    ),
-    b.add(
-      'Buffer.copyBytesFrom',
-      () => {
-        const b = Buffer.allocUnsafe(1350);
-        return () => {
-          Buffer.copyBytesFrom(b, 0, b.byteLength);
-        };
-      }
-    ),
+    b.add('Buffer.alloc', () => {
+      Buffer.alloc(1350);
+    }),
+    b.add('Buffer.allocUnsafe', () => {
+      Buffer.allocUnsafe(1350);
+    }),
+    b.add('Buffer.allocUnsafeSlow', () => {
+      Buffer.allocUnsafeSlow(1350);
+    }),
+    b.add('Buffer.from subarray', () => {
+      const b = Buffer.allocUnsafe(1350);
+      return () => {
+        Buffer.from(b.subarray(0, b.byteLength));
+      };
+    }),
+    b.add('Buffer.copyBytesFrom', () => {
+      const b = Buffer.allocUnsafe(1350);
+      return () => {
+        Buffer.copyBytesFrom(b, 0, b.byteLength);
+      };
+    }),
     b.add('Uint8Array', () => {
       new Uint8Array(1350);
     }),
