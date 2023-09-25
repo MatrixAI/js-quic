@@ -60,7 +60,6 @@ class QUICServer {
   protected crypto: QUICServerCrypto;
   protected config: QUICConfig;
   protected _closed: boolean = false;
-  protected closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**
