@@ -172,7 +172,7 @@ describe(QUICServer.name, () => {
       expect(quicServer.host).toBe('::');
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
-    })
+    });
   });
   describe('binding to host and port', () => {
     test('listen on IPv4', async () => {
