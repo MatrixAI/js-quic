@@ -858,11 +858,6 @@ impl Connection {
   }
 
   #[napi]
-  pub fn max_active_source_cids(&self) -> i64 {
-    return self.0.max_active_source_cids() as i64;
-  }
-
-  #[napi]
   pub fn source_cids_left(&self) -> i64 {
     return self.0.source_cids_left() as i64;
   }
