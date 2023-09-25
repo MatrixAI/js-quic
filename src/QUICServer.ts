@@ -2,10 +2,10 @@ import type {
   Host,
   Port,
   RemoteInfo,
-  QUICConfig,
   QUICServerCrypto,
-  QUICServerConfigInput,
   ResolveHostname,
+  QUICConfig,
+  QUICServerConfigInput,
   StreamCodeToReason,
   StreamReasonToCode,
 } from './types';

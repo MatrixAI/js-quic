@@ -52,6 +52,54 @@ type RemoteInfo = {
   port: Port;
 };
 
+/**
+ * Client crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
+ */
+type ClientCryptoOps = {
+  randomBytes(data: ArrayBuffer): Promise<void>;
+};
+
+/**
+ * Server crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
+ */
+type ServerCryptoOps = {
+  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+  verify(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+    sig: ArrayBuffer,
+  ): Promise<boolean>;
+};
+
+type QUICClientCrypto = {
+  ops: ClientCryptoOps;
+};
+
+type QUICServerCrypto = {
+  key: ArrayBuffer;
+  ops: ServerCryptoOps;
+};
+
+/**
+ * Custom hostname resolution. It is expected this returns an IP address.
+ */
+type ResolveHostname = (hostname: string) => string | PromiseLike<string>;
+
+/**
+ * Custom TLS verification callback.
+ * The peer cert chain will be passed as the first parameter.
+ * The CA certs will also be available as a second parameter.
+ * The certs are in DER binary format.
+ * It will be an empty array if there were no CA certs.
+ * If it fails, return a `CryptoError` code.
+ */
+type TLSVerifyCallback = (
+  certs: Array<Uint8Array>,
+  ca: Array<Uint8Array>,
+) => PromiseLike<CryptoError | undefined>;
+
 type QUICConfig = {
   /**
    * Certificate authority certificate in PEM format or Uint8Array buffer
@@ -266,40 +314,21 @@ type QUICServerConfigInput = Partial<QUICConfig> & {
   cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
 };
 
-/**
- * Client crypto utility object
- * Remember every Node Buffer is an ArrayBuffer
- */
-type ClientCryptoOps = {
-  randomBytes(data: ArrayBuffer): Promise<void>;
+type ConnectionId = Opaque<'ConnectionId', Buffer>;
+
+type ConnectionIdString = Opaque<'ConnectionIdString', string>;
+
+type ConnectionMetadata = {
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+  localCertsChain: Array<Uint8Array>;
+  localCACertsChain: Array<Uint8Array>;
+  remoteCertsChain: Array<Uint8Array>;
 };
 
-/**
- * Server crypto utility object
- * Remember every Node Buffer is an ArrayBuffer
- */
-type ServerCryptoOps = {
-  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-  verify(
-    key: ArrayBuffer,
-    data: ArrayBuffer,
-    sig: ArrayBuffer,
-  ): Promise<boolean>;
-};
-
-type QUICClientCrypto = {
-  ops: ClientCryptoOps;
-};
-
-type QUICServerCrypto = {
-  key: ArrayBuffer;
-  ops: ServerCryptoOps;
-};
-
-/**
- * Custom hostname resolution. It is expected this returns an IP address.
- */
-type ResolveHostname = (hostname: string) => string | PromiseLike<string>;
+type StreamId = Opaque<'StreamId', number>;
 
 /**
  * Maps reason (most likely an exception) to a stream code.
@@ -312,36 +341,7 @@ type StreamReasonToCode = (type: 'read' | 'write', reason?: any) => number;
  */
 type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
 
-/**
- * Custom TLS verification callback.
- * The peer cert chain will be passed as the first parameter.
- * The CA certs will also be available as a second parameter.
- * The certs are in DER binary format.
- * It will be an empty array if there were no CA certs.
- * If it fails, return a `CryptoError` code.
- */
-type TLSVerifyCallback = (
-  certs: Array<Uint8Array>,
-  ca: Array<Uint8Array>,
-) => PromiseLike<CryptoError | undefined>;
-
-type ConnectionId = Opaque<'ConnectionId', Buffer>;
-
-type ConnectionIdString = Opaque<'ConnectionIdString', string>;
-
-type StreamId = Opaque<'StreamId', number>;
-
 type QUICStreamMap = Map<StreamId, QUICStream>;
-
-type QUICConnectionMetadata = {
-  localHost: string;
-  localPort: number;
-  remoteHost: string;
-  remotePort: number;
-  localCertsChain: Array<Uint8Array>;
-  localCACertsChain: Array<Uint8Array>;
-  remoteCertsChain: Array<Uint8Array>;
-};
 
 export type {
   Opaque,
@@ -353,20 +353,20 @@ export type {
   Port,
   Address,
   RemoteInfo,
-  QUICConfig,
-  QUICClientConfigInput,
-  QUICServerConfigInput,
   ClientCryptoOps,
   ServerCryptoOps,
   QUICClientCrypto,
   QUICServerCrypto,
   ResolveHostname,
-  StreamReasonToCode,
-  StreamCodeToReason,
   TLSVerifyCallback,
+  QUICConfig,
+  QUICClientConfigInput,
+  QUICServerConfigInput,
   ConnectionId,
   ConnectionIdString,
+  ConnectionMetadata,
   StreamId,
+  StreamReasonToCode,
+  StreamCodeToReason,
   QUICStreamMap,
-  QUICConnectionMetadata,
 };

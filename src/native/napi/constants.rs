@@ -39,10 +39,3 @@ pub const CRYPTO_ERROR_START: u16 = 0x0100;
 
 #[napi]
 pub const CRYPTO_ERROR_STOP: u16 = 0x01FF;
-
-// We don't need this anymore...
-// pub const HTTP_3: [&[u8]; 4] = [b"h3", b"h3-29", b"h3-28", b"h3-27"];
-// let alpns: Vec<&'static [u8]> = HTTP_3.to_vec();
-// config.set_application_protos(&alpns).or_else(
-//   |err| Err(Error::from_reason(err.to_string()))
-// )?;

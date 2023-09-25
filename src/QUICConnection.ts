@@ -7,7 +7,7 @@ import type {
   Port,
   RemoteInfo,
   QUICConfig,
-  QUICConnectionMetadata,
+  ConnectionMetadata,
   StreamId,
   StreamCodeToReason,
   StreamReasonToCode,
@@ -659,7 +659,7 @@ class QUICConnection {
     return this.conn.peerCertChain() ?? [];
   }
 
-  public meta(): QUICConnectionMetadata {
+  public meta(): ConnectionMetadata {
     return {
       localHost: this.localHost,
       localPort: this.localPort,

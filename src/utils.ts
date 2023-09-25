@@ -2,11 +2,11 @@ import type {
   Class,
   Callback,
   PromiseDeconstructed,
-  ConnectionId,
-  ConnectionIdString,
   Host,
   Port,
   QUICServerCrypto,
+  ConnectionId,
+  ConnectionIdString,
   StreamId,
 } from './types';
 import dns from 'dns';
@@ -16,6 +16,78 @@ import * as errors from './errors';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8');
+
+/**
+ * Convert callback-style to promise-style
+ * If this is applied to overloaded function
+ * it will only choose one of the function signatures to use
+ */
+function promisify<
+  T extends Array<unknown>,
+  P extends Array<unknown>,
+  R extends T extends [] ? void : T extends [unknown] ? T[0] : T,
+>(
+  f: (...args: [...params: P, callback: Callback<T>]) => unknown,
+): (...params: P) => Promise<R> {
+  // Uses a regular function so that `this` can be bound
+  return function (...params: P): Promise<R> {
+    return new Promise((resolve, reject) => {
+      const callback = (error, ...values) => {
+        if (error != null) {
+          return reject(error);
+        }
+        if (values.length === 0) {
+          (resolve as () => void)();
+        } else if (values.length === 1) {
+          resolve(values[0] as R);
+        } else {
+          resolve(values as R);
+        }
+        return;
+      };
+      params.push(callback);
+      f.apply(this, params);
+    });
+  };
+}
+
+/**
+ * Deconstructed promise
+ */
+function promise<T = void>(): PromiseDeconstructed<T> {
+  let resolveP, rejectP;
+  const p = new Promise<T>((resolve, reject) => {
+    resolveP = resolve;
+    rejectP = reject;
+  });
+  return {
+    p,
+    resolveP,
+    rejectP,
+  };
+}
+
+/**
+ * Zero-copy wraps ArrayBuffer-like objects into Buffer
+ * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
+ */
+function bufferWrap(
+  array: BufferSource,
+  offset?: number,
+  length?: number,
+): Buffer {
+  if (Buffer.isBuffer(array)) {
+    return array;
+  } else if (ArrayBuffer.isView(array)) {
+    return Buffer.from(
+      array.buffer,
+      offset ?? array.byteOffset,
+      length ?? array.byteLength,
+    );
+  } else {
+    return Buffer.from(array, offset, length);
+  }
+}
 
 /**
  * Is it an IPv4 address?
@@ -129,6 +201,16 @@ function fromIPv4MappedIPv6(host: string): Host {
   return ipv4Decs.join('.') as Host;
 }
 
+function isHostWildcard(host: Host): boolean {
+  return (
+    host === '0.0.0.0' ||
+    host === '::' ||
+    host === '::0' ||
+    host === '::ffff:0.0.0.0' ||
+    host === '::ffff:0:0'
+  );
+}
+
 /**
  * This converts all `IPv4` formats to the `IPv4` decimal format.
  * `IPv4` decimal and `IPv6` hex formatted IPs are left unchanged.
@@ -141,6 +223,29 @@ function toCanonicalIP(host: string) {
     return host;
   }
   throw new TypeError('Invalid IP address');
+}
+
+/**
+ * Zero IPs should be resolved to localhost when used as the target
+ */
+function resolvesZeroIP(host: Host): Host {
+  const zeroIPv4 = new IPv4('0.0.0.0');
+  // This also covers `::0`
+  const zeroIPv6 = new IPv6('::');
+  if (isIPv4MappedIPv6(host)) {
+    const ipv4 = fromIPv4MappedIPv6(host);
+    if (new IPv4(ipv4).isEquals(zeroIPv4)) {
+      return toIPv4MappedIPv6Dec('127.0.0.1');
+    } else {
+      return host;
+    }
+  } else if (isIPv4(host) && new IPv4(host).isEquals(zeroIPv4)) {
+    return '127.0.0.1' as Host;
+  } else if (isIPv6(host) && new IPv6(host).isEquals(zeroIPv6)) {
+    return '::1' as Host;
+  } else {
+    return host;
+  }
 }
 
 /**
@@ -193,6 +298,21 @@ function isPort(port: any): port is Port {
 function toPort(port: any): Port {
   if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
   return port;
+}
+
+/**
+ * Given host and port, create an address string.
+ */
+function buildAddress(host: string, port: number = 0): string {
+  let address: string;
+  if (isIPv4(host)) {
+    address = `${host}:${port}`;
+  } else if (isIPv6(host)) {
+    address = `[${host}]:${port}`;
+  } else {
+    address = `${host}:${port}`;
+  }
+  return address;
 }
 
 function validateTarget(
@@ -260,123 +380,62 @@ function validateTarget(
 }
 
 /**
- * Convert callback-style to promise-style
- * If this is applied to overloaded function
- * it will only choose one of the function signatures to use
+ * Collects PEM arrays specified in `QUICConfig` into a PEM chain array.
+ * This can be used for keys, certs and ca.
  */
-function promisify<
-  T extends Array<unknown>,
-  P extends Array<unknown>,
-  R extends T extends [] ? void : T extends [unknown] ? T[0] : T,
->(
-  f: (...args: [...params: P, callback: Callback<T>]) => unknown,
-): (...params: P) => Promise<R> {
-  // Uses a regular function so that `this` can be bound
-  return function (...params: P): Promise<R> {
-    return new Promise((resolve, reject) => {
-      const callback = (error, ...values) => {
-        if (error != null) {
-          return reject(error);
-        }
-        if (values.length === 0) {
-          (resolve as () => void)();
-        } else if (values.length === 1) {
-          resolve(values[0] as R);
-        } else {
-          resolve(values as R);
-        }
-        return;
-      };
-      params.push(callback);
-      f.apply(this, params);
-    });
-  };
-}
-
-/**
- * Deconstructed promise
- */
-function promise<T = void>(): PromiseDeconstructed<T> {
-  let resolveP, rejectP;
-  const p = new Promise<T>((resolve, reject) => {
-    resolveP = resolve;
-    rejectP = reject;
-  });
-  return {
-    p,
-    resolveP,
-    rejectP,
-  };
-}
-
-/**
- * Zero-copy wraps ArrayBuffer-like objects into Buffer
- * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
- */
-function bufferWrap(
-  array: BufferSource,
-  offset?: number,
-  length?: number,
-): Buffer {
-  if (Buffer.isBuffer(array)) {
-    return array;
-  } else if (ArrayBuffer.isView(array)) {
-    return Buffer.from(
-      array.buffer,
-      offset ?? array.byteOffset,
-      length ?? array.byteLength,
-    );
-  } else {
-    return Buffer.from(array, offset, length);
-  }
-}
-
-/**
- * Given host and port, create an address string.
- */
-function buildAddress(host: string, port: number = 0): string {
-  let address: string;
-  if (isIPv4(host)) {
-    address = `${host}:${port}`;
-  } else if (isIPv6(host)) {
-    address = `[${host}]:${port}`;
-  } else {
-    address = `${host}:${port}`;
-  }
-  return address;
-}
-
-function isHostWildcard(host: Host): boolean {
-  return (
-    host === '0.0.0.0' ||
-    host === '::' ||
-    host === '::0' ||
-    host === '::ffff:0.0.0.0' ||
-    host === '::ffff:0:0'
-  );
-}
-
-/**
- * Zero IPs should be resolved to localhost when used as the target
- */
-function resolvesZeroIP(host: Host): Host {
-  const zeroIPv4 = new IPv4('0.0.0.0');
-  // This also covers `::0`
-  const zeroIPv6 = new IPv6('::');
-  if (isIPv4MappedIPv6(host)) {
-    const ipv4 = fromIPv4MappedIPv6(host);
-    if (new IPv4(ipv4).isEquals(zeroIPv4)) {
-      return toIPv4MappedIPv6Dec('127.0.0.1');
-    } else {
-      return host;
+function collectPEMs(
+  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>,
+): Array<string> {
+  const pemsChain: Array<string> = [];
+  if (typeof pems === 'string') {
+    pemsChain.push(pems.trim() + '\n');
+  } else if (pems instanceof Uint8Array) {
+    pemsChain.push(textDecoder.decode(pems).trim() + '\n');
+  } else if (Array.isArray(pems)) {
+    for (const c of pems) {
+      if (typeof c === 'string') {
+        pemsChain.push(c.trim() + '\n');
+      } else {
+        pemsChain.push(textDecoder.decode(c).trim() + '\n');
+      }
     }
-  } else if (isIPv4(host) && new IPv4(host).isEquals(zeroIPv4)) {
-    return '127.0.0.1' as Host;
-  } else if (isIPv6(host) && new IPv6(host).isEquals(zeroIPv6)) {
-    return '::1' as Host;
-  } else {
-    return host;
   }
+  return pemsChain;
+}
+
+/**
+ * Converts PEM strings to DER Uint8Array
+ */
+function pemToDER(pem: string): Uint8Array {
+  const pemB64 = pem
+    .replace(/-----BEGIN .*-----/, '')
+    .replace(/-----END .*-----/, '')
+    .replace(/\s+/g, '');
+  const der = Buffer.from(pemB64, 'base64');
+  return new Uint8Array(der);
+}
+
+/**
+ * Converts DER Uint8Array to PEM string
+ */
+function derToPEM(der: Uint8Array): string {
+  const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
+  const contents =
+    data
+      .toString('base64')
+      .replace(/(.{64})/g, '$1\n')
+      .trimEnd() + '\n';
+  return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
+}
+
+/**
+ * Formats error exceptions.
+ * Example: `Error: description - message`
+ */
+function formatError(error: Error): string {
+  return `${error.name}${
+    'description' in error ? `: ${error.description}` : ''
+  }${error.message !== undefined ? ` - ${error.message}` : ''}`;
 }
 
 function encodeConnectionId(connId: ConnectionId): ConnectionIdString {
@@ -444,10 +503,6 @@ async function validateToken(
   return QUICConnectionId.fromString(msgData.dcid);
 }
 
-async function sleep(ms: number): Promise<void> {
-  return await new Promise<void>((r) => setTimeout(r, ms));
-}
-
 function isStreamClientInitiated(streamId: StreamId): boolean {
   return (streamId & 0b01) === 0;
 }
@@ -462,65 +517,6 @@ function isStreamUnidirectional(streamId: StreamId): boolean {
 
 function isStreamBidirectional(streamId: StreamId): boolean {
   return (streamId & 0b10) === 0;
-}
-
-/**
- * Collects PEM arrays specified in `QUICConfig` into a PEM chain array.
- * This can be used for keys, certs and ca.
- */
-function collectPEMs(
-  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>,
-): Array<string> {
-  const pemsChain: Array<string> = [];
-  if (typeof pems === 'string') {
-    pemsChain.push(pems.trim() + '\n');
-  } else if (pems instanceof Uint8Array) {
-    pemsChain.push(textDecoder.decode(pems).trim() + '\n');
-  } else if (Array.isArray(pems)) {
-    for (const c of pems) {
-      if (typeof c === 'string') {
-        pemsChain.push(c.trim() + '\n');
-      } else {
-        pemsChain.push(textDecoder.decode(c).trim() + '\n');
-      }
-    }
-  }
-  return pemsChain;
-}
-
-/**
- * Converts PEM strings to DER Uint8Array
- */
-function pemToDER(pem: string): Uint8Array {
-  const pemB64 = pem
-    .replace(/-----BEGIN .*-----/, '')
-    .replace(/-----END .*-----/, '')
-    .replace(/\s+/g, '');
-  const der = Buffer.from(pemB64, 'base64');
-  return new Uint8Array(der);
-}
-
-/**
- * Converts DER Uint8Array to PEM string
- */
-function derToPEM(der: Uint8Array): string {
-  const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
-  const contents =
-    data
-      .toString('base64')
-      .replace(/(.{64})/g, '$1\n')
-      .trimEnd() + '\n';
-  return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
-}
-
-/**
- * Formats error exceptions.
- * Example: `Error: description - message`
- */
-function formatError(error: Error): string {
-  return `${error.name}${
-    'description' in error ? `: ${error.description}` : ''
-  }${error.message !== undefined ? ` - ${error.message}` : ''}`;
 }
 
 /**
@@ -554,6 +550,9 @@ function isStreamReset(e: Error): number | false {
 export {
   textEncoder,
   textDecoder,
+  promisify,
+  promise,
+  bufferWrap,
   isIPv4,
   isIPv6,
   isIPv4MappedIPv6,
@@ -562,31 +561,27 @@ export {
   toIPv4MappedIPv6Dec,
   toIPv4MappedIPv6Hex,
   fromIPv4MappedIPv6,
+  isHostWildcard,
   toCanonicalIP,
+  resolvesZeroIP,
   resolveHostname,
   resolveHost,
   isPort,
   toPort,
-  validateTarget,
-  promisify,
-  promise,
-  bufferWrap,
   buildAddress,
-  resolvesZeroIP,
-  isHostWildcard,
-  encodeConnectionId,
-  decodeConnectionId,
-  mintToken,
-  validateToken,
-  sleep,
-  isStreamClientInitiated,
-  isStreamServerInitiated,
-  isStreamBidirectional,
-  isStreamUnidirectional,
+  validateTarget,
   collectPEMs,
   pemToDER,
   derToPEM,
   formatError,
+  encodeConnectionId,
+  decodeConnectionId,
+  mintToken,
+  validateToken,
+  isStreamClientInitiated,
+  isStreamServerInitiated,
+  isStreamBidirectional,
+  isStreamUnidirectional,
   isStreamStopped,
   isStreamReset,
 };

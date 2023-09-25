@@ -4,8 +4,8 @@ import type {
   Host,
   Port,
   QUICClientCrypto,
-  QUICClientConfigInput,
   ResolveHostname,
+  QUICClientConfigInput,
   StreamCodeToReason,
   StreamReasonToCode,
 } from './types';
