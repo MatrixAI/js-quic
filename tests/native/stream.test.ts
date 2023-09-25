@@ -4,7 +4,6 @@ import { quiche, Shutdown } from '@/native';
 import QUICConnectionId from '@/QUICConnectionId';
 import { buildQuicheConfig, clientDefault, serverDefault } from '@/config';
 import * as utils from '@/utils';
-import { sleep } from '@/utils';
 import * as testsUtils from '../utils';
 
 describe('native/stream', () => {
@@ -2546,15 +2545,8 @@ describe('native/stream', () => {
       expect(sendPacket(serverConn, clientConn)).toBeNull();
     });
     test('waiting for closed state', async () => {
-      await sleep(100);
-      await Promise.all([
-        sleep((clientConn.timeout() ?? 0) + 1).then(() =>
-          clientConn.onTimeout(),
-        ),
-        sleep((serverConn.timeout() ?? 0) + 1).then(() =>
-          serverConn.onTimeout(),
-        ),
-      ]);
+      await testsUtils.waitForTimeoutNull(clientConn);
+      await testsUtils.waitForTimeoutNull(serverConn);
       expect(clientConn.timeout()).toBeNull();
       expect(serverConn.timeout()).toBeNull();
 
@@ -2760,15 +2752,8 @@ describe('native/stream', () => {
       expect(serverConn.streamCapacity(0)).toBeLessThan(13500);
     });
     test('waiting for closed state', async () => {
-      await sleep(100);
-      await Promise.all([
-        sleep((clientConn.timeout() ?? 0) + 1).then(() =>
-          clientConn.onTimeout(),
-        ),
-        sleep((serverConn.timeout() ?? 0) + 1).then(() =>
-          serverConn.onTimeout(),
-        ),
-      ]);
+      await testsUtils.waitForTimeoutNull(clientConn);
+      await testsUtils.waitForTimeoutNull(serverConn);
       expect(clientConn.timeout()).toBeNull();
       expect(serverConn.timeout()).toBeNull();
 
