@@ -5,51 +5,40 @@ import type QUICConnectionId from './QUICConnectionId';
 import type {
   Host,
   Port,
-  QUICConfig,
   RemoteInfo,
-  StreamCodeToReason,
+  QUICConfig,
+  ConnectionMetadata,
   StreamId,
+  StreamCodeToReason,
   StreamReasonToCode,
-  VerifyCallback,
 } from './types';
-import type { Connection, ConnectionErrorCode, SendInfo } from './native/types';
-import type { Monitor } from '@matrixai/async-locks';
-import { Lock, LockBox, RWLockWriter } from '@matrixai/async-locks';
-import {
-  ready,
-  running,
-  StartStop,
-  status,
-} from '@matrixai/async-init/dist/StartStop';
+import type { Connection, ConnectionError, SendInfo } from './native/types';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
-import { context, timedCancellable } from '@matrixai/contexts/dist/decorators';
-import { withF } from '@matrixai/resources';
-import { utils as contextsUtils } from '@matrixai/contexts';
+import { Lock } from '@matrixai/async-locks';
+import { AbstractEvent, EventAll } from '@matrixai/events';
+import {
+  StartStop,
+  ready,
+  running,
+  status,
+} from '@matrixai/async-init/dist/StartStop';
+import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICStream from './QUICStream';
-import { quiche } from './native';
-import * as events from './events';
+import { quiche, ConnectionErrorCode } from './native';
 import * as utils from './utils';
-import { never, promise } from './utils';
+import * as events from './events';
 import * as errors from './errors';
 
-const timerCleanupReasonSymbol = Symbol('timerCleanupReasonSymbol');
-
-/**
- * Think of this as equivalent to `net.Socket`.
- * Errors here are emitted to the connection only.
- * Not to the server.
- *
- * Events (events are executed post-facto):
- * - connectionStream
- * - connectionStop
- * - connectionError - can occur due to a timeout too
- * - streamDestroy
- */
 interface QUICConnection extends StartStop {}
-@StartStop()
-class QUICConnection extends EventTarget {
+@StartStop({
+  eventStart: events.EventQUICConnectionStart,
+  eventStarted: events.EventQUICConnectionStarted,
+  eventStop: events.EventQUICConnectionStop,
+  eventStopped: events.EventQUICConnectionStopped,
+})
+class QUICConnection {
   /**
    * This determines when it is a client or server connection.
    */
@@ -61,6 +50,11 @@ class QUICConnection extends EventTarget {
   public readonly connectionId: QUICConnectionId;
 
   /**
+   * Resolves once the connection has closed.
+   */
+  public readonly closedP: Promise<void>;
+
+  /**
    * Internal native connection object.
    * @internal
    */
@@ -68,39 +62,22 @@ class QUICConnection extends EventTarget {
 
   /**
    * Internal stream map.
-   * This is also used by `QUICStream`.
    * @internal
    */
   public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
-  /**
-   * Logger.
-   */
   protected logger: Logger;
-
-  /**
-   * Underlying socket.
-   */
   protected socket: QUICSocket;
-
   protected config: QUICConfig;
-
-  /**
-   * Converts reason to code.
-   * Used during `QUICStream` creation.
-   */
   protected reasonToCode: StreamReasonToCode;
-
-  /**
-   * Converts code to reason.
-   * Used during `QUICStream` creation.
-   */
   protected codeToReason: StreamCodeToReason;
 
   /**
-   * Stream ID increment lock.
+   * This ensures that `recv` is serialised.
+   * Prevents a new `recv` call intercepting the previous `recv` call that is
+   * still finishing up with a `send` call.
    */
-  protected streamIdLock: Lock = new Lock();
+  protected recvLock: Lock = new Lock();
 
   /**
    * Client initiated bidirectional stream starts at 0.
@@ -117,260 +94,260 @@ class QUICConnection extends EventTarget {
   /**
    * Client initiated unidirectional stream starts at 2.
    * Increment by 4 to get the next ID.
-   * Currently unsupported.
    */
-  protected _streamIdClientUni: StreamId = 0b10 as StreamId;
+  protected streamIdClientUni: StreamId = 0b10 as StreamId;
 
   /**
    * Server initiated unidirectional stream starts at 3.
    * Increment by 4 to get the next ID.
-   * Currently unsupported.
    */
-  protected _streamIdServerUni: StreamId = 0b11 as StreamId;
+  protected streamIdServerUni: StreamId = 0b11 as StreamId;
 
   /**
-   * Internal conn timer. This is used to tick the state transitions on the
-   * connection.
+   * Quiche connection timer. This performs time delayed state transitions.
    */
-  protected connTimeOutTimer?: Timer;
+  protected connTimeoutTimer?: Timer;
 
   /**
    * Keep alive timer.
-   * If the max idle time is set to >0, the connection can time out on idleness.
-   * Idleness is where there is no response from the other side. This can happen
-   * from the beginning to the establishment of the connection and while the
-   * connection is established. Normally there is nothing that will keep the
-   * connection alive if there is no activity. This keep alive mechanism will
-   * trigger ping frames to ensure that there is connection activity.
-   * If the max idle time is set to 0, the connection never times out on idleness.
-   * However, this keep alive mechanism will continue to work in case you need
-   * activity on the connection for some reason.
-   * Note that the timer used for the `ContextTimed` in `QUICClient.createQUICClient`
-   * is independent of the max idle time. This keep alive mechanism will only
-   * start working after secure establishment.
+   *
+   * Quiche does not natively ensure activity on the connection. This interval
+   * timer guarantees that there will be activity on the connection by sending
+   * acknowlegement eliciting frames, which will cause the peer to acknowledge.
+   *
+   * This is still useful even if the `config.maxIdleTimeout` is set to 0, which
+   * means the connection will never timeout due to being idle.
+   *
+   * This mechanism will only start working after `secureEstablishedP`.
    */
   protected keepAliveIntervalTimer?: Timer;
 
   /**
-   * This can change on every `recv` call
+   * Remote host which can change on every `QUICConnection.recv`.
    */
   protected _remoteHost: Host;
 
   /**
-   * This can change on every `recv` call
+   * Remote port which can change on every `QUICConnection.recv`.
    */
   protected _remotePort: Port;
 
   /**
-   * Bubble up stream destroy event
+   * Chain of local certificates from leaf to root in DER format.
    */
-  protected handleQUICStreamDestroyEvent = () => {
-    this.dispatchEvent(new events.QUICStreamDestroyEvent());
+  protected certDERs: Array<Uint8Array> = [];
+
+  /**
+   * Array of independent CA certificates in DER format.
+   */
+  protected caDERs: Array<Uint8Array> = [];
+
+  /**
+   * Secure connection establishment means that this connection has completed
+   * peer certificate verification, and the connection is ready to be used.
+   */
+  protected secureEstablished = false;
+
+  /**
+   * Resolves after connection is established and peer certs have been verified.
+   */
+  protected secureEstablishedP: Promise<void>;
+  protected resolveSecureEstablishedP: () => void;
+  protected rejectSecureEstablishedP: (reason?: any) => void;
+
+  protected resolveClosedP: () => void;
+
+  /**
+   * Stores the last dispatched error. If no error, it will be `null`.
+   *
+   * `QUICConnection.stop` will need this if it is called by the user concurrent
+   * with handling `EventQUICConnectionError`. It ensures that `this.stop` uses
+   * the original error when force destroying the streams.
+   */
+  protected errorLast:
+    | errors.ErrorQUICConnectionLocal<unknown>
+    | errors.ErrorQUICConnectionPeer<unknown>
+    | errors.ErrorQUICConnectionIdleTimeout<unknown>
+    | errors.ErrorQUICConnectionInternal<unknown>
+    | null = null;
+
+  /**
+   * Handle `EventQUICConnectionError`.
+   *
+   * QUIC connections always close with errors. Graceful errors are logged out
+   * at INFO level, while non-graceful errors are logged out at ERROR level.
+   *
+   * Internal errors will be thrown upwards to become an uncaught exception.
+   *
+   * @throws {errors.ErrorQUICConnectionInternal}
+   */
+  protected handleEventQUICConnectionError = (
+    evt: events.EventQUICConnectionError,
+  ) => {
+    const error = evt.detail;
+    this.errorLast = error;
+    if (
+      (error instanceof errors.ErrorQUICConnectionLocal ||
+        error instanceof errors.ErrorQUICConnectionPeer) &&
+      ((!error.data.isApp &&
+        error.data.errorCode === ConnectionErrorCode.NoError) ||
+        (error.data.isApp && error.data.errorCode === 0))
+    ) {
+      // Log out the excpetion as an info when it is graceful
+      this.logger.info(utils.formatError(error));
+    } else {
+      // Log out the exception as an error when it is not graceful
+      this.logger.error(utils.formatError(error));
+    }
+    if (error instanceof errors.ErrorQUICConnectionInternal) {
+      throw error;
+    }
+    this.dispatchEvent(
+      new events.EventQUICConnectionClose({
+        detail: error,
+      }),
+    );
   };
 
   /**
-   * Connection establishment.
-   * This can resolve or reject.
-   * Rejections cascade down to `secureEstablishedP` and `closedP`.
+   * Handles `EventQUICConnectionClose`.
+   * Registered once.
+   *
+   * This event means that `this.conn.close()` is already called.
+   * It does not mean that `this.closedP` is resolved. The resolving of
+   * `this.closedP` depends on the `this.connTimeoutTimer`.
    */
-  protected establishedP: Promise<void>;
-
-  /**
-   * Connection has been verified and secured.
-   * This can only happen after `establishedP`.
-   * On the server side, being established means it is also secure established.
-   * On the client side, after being established, the client must wait for the
-   * first short frame before it is also secure established.
-   * This can resolve or reject.
-   * Rejections cascade down to `closedP`.
-   */
-  protected secureEstablishedP: Promise<void>;
-
-  /**
-   * Connection closed promise.
-   * This can resolve or reject.
-   */
-  protected closedP: Promise<void>;
-
-  protected resolveEstablishedP: () => void;
-  protected rejectEstablishedP: (reason?: any) => void;
-  protected resolveSecureEstablishedP: () => void;
-  protected rejectSecureEstablishedP: (reason?: any) => void;
-  protected resolveClosedP: () => void;
-  protected rejectClosedP: (reason?: any) => void;
-
-  public readonly lockbox = new LockBox<RWLockWriter>();
-  public readonly lockCode = 'ConnectionEventLockId';
-
-  protected customVerified = false;
-  protected shortReceived = false;
-  protected secured = false;
-  protected count = 0;
-  protected verifyCallback: VerifyCallback | undefined;
-
-  public static createQUICConnection(
-    args:
-      | {
-          type: 'client';
-          scid: QUICConnectionId;
-          dcid?: undefined;
-          remoteInfo: RemoteInfo;
-          config: QUICConfig;
-          socket: QUICSocket;
-          reasonToCode?: StreamReasonToCode;
-          codeToReason?: StreamCodeToReason;
-          verifyCallback?: VerifyCallback;
-          logger?: Logger;
-        }
-      | {
-          type: 'server';
-          scid: QUICConnectionId;
-          dcid: QUICConnectionId;
-          remoteInfo: RemoteInfo;
-          data: Uint8Array;
-          config: QUICConfig;
-          socket: QUICSocket;
-          reasonToCode?: StreamReasonToCode;
-          codeToReason?: StreamCodeToReason;
-          verifyCallback?: VerifyCallback;
-          logger?: Logger;
-        },
-    ctx?: Partial<ContextTimedInput>,
-  ): PromiseCancellable<QUICConnection>;
-  @timedCancellable(
-    true,
-    minIdleTimeout,
-    errors.ErrorQUICConnectionStartTimeOut,
-  )
-  public static async createQUICConnection(
-    args:
-      | {
-          type: 'client';
-          scid: QUICConnectionId;
-          dcid?: undefined;
-          remoteInfo: RemoteInfo;
-          config: QUICConfig;
-          socket: QUICSocket;
-          reasonToCode?: StreamReasonToCode;
-          codeToReason?: StreamCodeToReason;
-          verifyCallback?: VerifyCallback;
-          logger?: Logger;
-        }
-      | {
-          type: 'server';
-          scid: QUICConnectionId;
-          dcid: QUICConnectionId;
-          remoteInfo: RemoteInfo;
-          data: Uint8Array;
-          config: QUICConfig;
-          socket: QUICSocket;
-          reasonToCode?: StreamReasonToCode;
-          codeToReason?: StreamCodeToReason;
-          verifyCallback?: VerifyCallback;
-          logger?: Logger;
-        },
-    @context ctx: ContextTimed,
-  ): Promise<QUICConnection> {
-    ctx.signal.throwIfAborted();
-    const abortProm = promise<never>();
-    const abortHandler = () => {
-      abortProm.rejectP(ctx.signal.reason);
-    };
-    ctx.signal.addEventListener('abort', abortHandler);
-    const connection = new this(args);
-    // If it's a server connection we want to pass the initial packet
-    const data = args.type === 'server' ? args.data : undefined;
-    // This ensures that TLS has been established and verified on both sides
-    try {
-      await Promise.race([
-        Promise.all([
-          connection.start(data),
-          connection.establishedP,
-          connection.secureEstablishedP,
-        ]),
-        abortProm.p,
-      ]);
-    } catch (e) {
-      const code =
-        args.reasonToCode != null ? (await args.reasonToCode(e)) ?? 0 : 0;
-      await connection.stop({
-        applicationError: false,
-        errorCode: code,
-        errorMessage: e.message,
+  protected handleEventQUICConnectionClose = async (
+    evt: events.EventQUICConnectionClose,
+  ) => {
+    const error = evt.detail;
+    // Reject the secure established promise
+    // This will allow `this.start()` to reject with the error.
+    // No effect if this connection is running.
+    if (!this.secureEstablished) {
+      this.rejectSecureEstablishedP(error);
+    }
+    // Complete the final send call if it was a local close
+    if (error instanceof errors.ErrorQUICConnectionLocal) {
+      await this.send();
+    }
+    // If the connection is still running, we will force close the connection
+    if (this[running] && this[status] !== 'stopping') {
+      // The `stop` will need to retrieve the error from `this.errorLast`
+      await this.stop({
         force: true,
       });
-      throw e;
-    } finally {
-      ctx.signal.removeEventListener('abort', abortHandler);
     }
-    connection.logger.debug('secureEstablishedP');
-    // After this is done
-    // We need to establish the keep alive interval time
-    if (connection.config.keepAliveIntervalTime != null) {
-      connection.startKeepAliveIntervalTimer(
-        connection.config.keepAliveIntervalTime,
-      );
+  };
+
+  /**
+   * Handles all `EventQUICStream` events.
+   */
+  protected handleEventQUICStream = (evt: EventAll) => {
+    if (evt.detail instanceof AbstractEvent) {
+      this.dispatchEvent(evt.detail.clone());
     }
+  };
 
-    return connection;
-  }
+  /**
+   * Handles `EventQUICStreamSend`.
+   *
+   * This handler will trigger `this.send` when there is data in the writable
+   * stream buffer. As this is asynchronous, it is necessary to check if this
+   * `QUICConnection` is still running.
+   */
+  protected handleEventQUICStreamSend = async () => {
+    if (this[running]) await this.send();
+  };
 
+  /**
+   * Handles `EventQUICStreamDestroyed`.
+   * Registered once.
+   */
+  protected handleEventQUICStreamDestroyed = (
+    evt: events.EventQUICStreamDestroyed,
+  ) => {
+    const quicStream = evt.target as QUICStream;
+    quicStream.removeEventListener(
+      events.EventQUICStreamSend.name,
+      this.handleEventQUICStreamSend,
+    );
+    quicStream.removeEventListener(EventAll.name, this.handleEventQUICStream);
+    this.streamMap.delete(quicStream.streamId);
+  };
+
+  /**
+   * Constructs a QUIC connection.
+   *
+   * @param opts
+   * @param opts.type - client or server connection
+   * @param opts.scid - source connection ID
+   * @param opts.dcid - destination connection ID
+   * @param opts.serverName - client connections can use server name for
+   *                          verifying the server's certificate, however if
+   *                          `config.verifyCallback` is set, this will have no
+   *                          effect
+   * @param opts.remoteInfo - remote host and port
+   * @param opts.config - QUIC config
+   * @param opts.socket - injected socket
+   * @param opts.reasonToCode - maps stream error reasons to stream error codes
+   * @param opts.codeToReason - maps stream error codes to reasons
+   * @param opts.logger
+   *
+   * @throws {errors.ErrorQUICConnectionConfigInvalid}
+   */
   public constructor({
     type,
     scid,
     dcid,
+    serverName = null,
     remoteInfo,
     config,
     socket,
     reasonToCode = () => 0,
     codeToReason = (type, code) => new Error(`${type} ${code}`),
-    verifyCallback,
     logger,
   }:
     | {
         type: 'client';
         scid: QUICConnectionId;
-        dcid?: undefined;
+        dcid?: void;
+        serverName?: string | null;
         remoteInfo: RemoteInfo;
         config: QUICConfig;
         socket: QUICSocket;
         reasonToCode?: StreamReasonToCode;
         codeToReason?: StreamCodeToReason;
-        verifyCallback?: VerifyCallback;
         logger?: Logger;
       }
     | {
         type: 'server';
         scid: QUICConnectionId;
         dcid: QUICConnectionId;
+        serverName?: void;
         remoteInfo: RemoteInfo;
         config: QUICConfig;
         socket: QUICSocket;
         reasonToCode?: StreamReasonToCode;
         codeToReason?: StreamCodeToReason;
-        verifyCallback?: VerifyCallback;
         logger?: Logger;
       }) {
-    super();
     this.logger = logger ?? new Logger(`${this.constructor.name} ${scid}`);
-    // Checking constraints
     if (
       config.keepAliveIntervalTime != null &&
       config.maxIdleTimeout !== 0 &&
       config.keepAliveIntervalTime >= config.maxIdleTimeout
     ) {
-      throw new errors.ErrorQUICConnectionInvalidConfig(
-        'keepAliveIntervalTime must be shorter than maxIdleTimeout',
+      throw new errors.ErrorQUICConnectionConfigInvalid(
+        '`keepAliveIntervalTime` must be less than `maxIdleTimeout`',
       );
     }
-
     const quicheConfig = buildQuicheConfig(config);
     let conn: Connection;
     if (type === 'client') {
-      // This message will be connected to the `this.start`
       this.logger.info(`Connect ${this.constructor.name}`);
       conn = quiche.Connection.connect(
-        null,
+        serverName,
         scid,
         {
           host: socket.host,
@@ -383,7 +360,6 @@ class QUICConnection extends EventTarget {
         quicheConfig,
       );
     } else if (type === 'server') {
-      // This message will be connected to `this.start`
       this.logger.info(`Accept ${this.constructor.name}`);
       conn = quiche.Connection.accept(
         scid,
@@ -408,279 +384,317 @@ class QUICConnection extends EventTarget {
     this.connectionId = scid;
     this.socket = socket;
     this.config = config;
+    if (this.config.cert != null) {
+      const certPEMs = utils.collectPEMs(this.config.cert);
+      this.certDERs = certPEMs.map(utils.pemToDER);
+    }
+    if (this.config.ca != null) {
+      const caPEMs = utils.collectPEMs(this.config.ca);
+      this.caDERs = caPEMs.map(utils.pemToDER);
+    }
     this.reasonToCode = reasonToCode;
     this.codeToReason = codeToReason;
-    this.verifyCallback = verifyCallback;
     this._remoteHost = remoteInfo.host;
     this._remotePort = remoteInfo.port;
-    const {
-      p: establishedP,
-      resolveP: resolveEstablishedP,
-      rejectP: rejectEstablishedP,
-    } = utils.promise();
-    this.establishedP = establishedP;
-    this.resolveEstablishedP = resolveEstablishedP;
-    this.rejectEstablishedP = rejectEstablishedP;
-
     const {
       p: secureEstablishedP,
       resolveP: resolveSecureEstablishedP,
       rejectP: rejectSecureEstablishedP,
     } = utils.promise();
     this.secureEstablishedP = secureEstablishedP;
-    this.resolveSecureEstablishedP = resolveSecureEstablishedP;
+    this.resolveSecureEstablishedP = () => {
+      // This is an idempotent mutation
+      this.secureEstablished = true;
+      resolveSecureEstablishedP();
+    };
     this.rejectSecureEstablishedP = rejectSecureEstablishedP;
-    const {
-      p: closedP,
-      resolveP: resolveClosedP,
-      rejectP: rejectClosedP,
-    } = utils.promise();
+    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-    this.rejectClosedP = rejectClosedP;
   }
 
-  public get remoteHost(): string {
-    return utils.fromHost(this._remoteHost);
+  public get remoteHost(): Host {
+    return this._remoteHost;
   }
 
-  public get remotePort(): number {
-    return utils.fromPort(this._remotePort);
+  public get remotePort(): Port {
+    return this._remotePort;
   }
 
-  public get localHost(): string {
+  public get localHost(): Host {
     return this.socket.host;
   }
 
-  public get localPort(): number {
+  public get localPort(): Port {
     return this.socket.port;
   }
 
+  public get closed() {
+    return this.conn.isClosed();
+  }
+
   /**
-   * This will set up the connection initiate sending
-   * @param data - the initial packet that triggered the creation of the connection.
+   * Starts the QUIC connection.
+   *
+   * This will complete the handshake and verify the peer's certificate.
+   * The connection will be ready to be used after this resolves. The peer's
+   * verification of the local certificate occurs concurrently.
+   *
+   * @param opts
+   * @param opts.data - server connections receive initial data
+   * @param opts.remoteInfo - server connections receive remote host and port
+   * @param ctx - timed context overrides `config.minIdleTimeout` which only
+   *              works if `config.maxIdleTimeout` is greater than
+   *              `config.minIdleTimeout`
+   *
+   * @throws {errors.ErrorQUICConnectionStartTimeout} - if timed out due to `ctx.timer` or `config.minIdleTimeout`
+   * @throws {errors.ErrorQUICConnectionStartData} - if no initial data for server connection
+   * @throws {errors.ErrorQUICConnection} - all other connection failure errors
    */
-  public async start(data?: Uint8Array): Promise<void> {
+  public start(
+    opts?: {
+      data?: Uint8Array;
+      remoteInfo?: RemoteInfo;
+    },
+    ctx?: Partial<ContextTimedInput>,
+  ): PromiseCancellable<void>;
+  @timedCancellable(
+    true,
+    minIdleTimeout,
+    errors.ErrorQUICConnectionStartTimeout,
+  )
+  public async start(
+    {
+      data,
+      remoteInfo,
+    }: {
+      data?: Uint8Array;
+      remoteInfo?: RemoteInfo;
+    } = {},
+    @context ctx: ContextTimed,
+  ): Promise<void> {
     this.logger.info(`Start ${this.constructor.name}`);
-    // Set the connection up
-    this.socket.connectionMap.set(this.connectionId, this);
-    await withF(
-      [contextsUtils.monitor(this.lockbox, RWLockWriter)],
-      async ([mon]) => {
-        if (data != null) {
-          await this.recv(
-            data,
-            { host: this._remoteHost, port: this._remotePort },
-            mon,
-          );
-        }
-        await this.send(mon);
-      },
+    // If the connection has already been closed, we cannot start it again
+    if (this.conn.isClosed()) {
+      throw new errors.ErrorQUICConnectionClosed();
+    }
+    ctx.signal.throwIfAborted();
+    const { p: abortP, rejectP: rejectAbortP } = utils.promise<never>();
+    const abortHandler = () => {
+      rejectAbortP(ctx.signal.reason);
+    };
+    ctx.signal.addEventListener('abort', abortHandler);
+    this.addEventListener(
+      events.EventQUICConnectionError.name,
+      this.handleEventQUICConnectionError,
     );
+    this.addEventListener(
+      events.EventQUICConnectionClose.name,
+      this.handleEventQUICConnectionClose,
+      { once: true },
+    );
+    if (this.type === 'client') {
+      await this.send();
+    } else if (this.type === 'server') {
+      if (data == null || remoteInfo == null) {
+        throw new errors.ErrorQUICConnectionStartData(
+          'Starting a server connection requires initial data and remote information',
+        );
+      }
+      await this.recv(data, remoteInfo);
+    }
+    try {
+      // This will block until the connection is established
+      await Promise.race([this.secureEstablishedP, abortP]);
+    } catch (e) {
+      if (ctx.signal.aborted) {
+        // No `QUICStream` objects could have been created, however quiche stream
+        // state should be cleaned up, and this can be done synchronously
+        for (const streamId of this.conn.readable() as Iterable<StreamId>) {
+          this.conn.streamShutdown(streamId, quiche.Shutdown.Read, 0);
+        }
+        for (const streamId of this.conn.writable() as Iterable<StreamId>) {
+          this.conn.streamShutdown(streamId, quiche.Shutdown.Write, 0);
+        }
+        // According to RFC9000, closing while in the middle of a handshake
+        // should use a transport error code `APPLICATION_ERROR`.
+        // For this library we extend this "handshake" phase to include the
+        // the TLS handshake too.
+        // This is also the behaviour of quiche when the connection is not
+        // in a "safe" state to send application errors (where `app` parameter is true).
+        // https://www.rfc-editor.org/rfc/rfc9000.html#section-10.2.3-3
+        this.conn.close(
+          false,
+          ConnectionErrorCode.ApplicationError,
+          Buffer.from(''),
+        );
+        const localError = this.conn.localError()!;
+        const e_ = new errors.ErrorQUICConnectionLocal(
+          'Failed to start QUIC connection due to start timeout',
+          {
+            data: localError,
+            cause: e,
+          },
+        );
+        this.dispatchEvent(
+          new events.EventQUICConnectionError({
+            detail: e_,
+          }),
+        );
+      }
+      // Wait for the connection to be fully closed by the `this.connTimeoutTimer`
+      await this.closedP;
+      // Throws original exception
+      throw e;
+    } finally {
+      ctx.signal.removeEventListener('abort', abortHandler);
+    }
+    if (this.config.keepAliveIntervalTime != null) {
+      this.startKeepAliveIntervalTimer(this.config.keepAliveIntervalTime);
+    }
     this.logger.info(`Started ${this.constructor.name}`);
   }
 
   /**
-   * The `applicationError` if the connection close is due to the transport
-   * layer or due to the application layer.
-   * If `applicationError` is true, you can use any number as the `errorCode`.
-   * The other peer must should understand the `errorCode`.
-   * If `applicationError` is false, you must use `errorCode` from
-   * `ConnectionErrorCode`.
-   * The default `applicationError` is true because a normal graceful close
-   * is an application error.
-   * The default `errorCode` of 0 means general error.
-   * This is the same as basically waiting for `closedP`.
+   * Stops the QUIC connection.
    *
-   * Providing error details is only used if the connection still needs to be
-   * closed. If stop was triggered internally then the error details are obtained
-   * by the connection.
+   * @param opts
+   * @param opts.isApp - whether the destroy is initiated by the application
+   * @param opts.errorCode - the error code to send to the peer, use
+   *                         `ConnectionErrorCode` if `isApp` is false,
+   *                         otherwise any unsigned integer is fine.
+   * @param opts.reason - the reason to send to the peer
+   * @param opts.force - force controls whether to cancel streams or wait for
+   *                     streams to close gracefully
+   *
+   * The provided error parameters is only used if the quiche connection is not
+   * draining or closed.
    */
-  public async stop(
-    {
-      applicationError = true,
-      errorCode = 0,
-      errorMessage = '',
-      force = false,
-    }:
-      | {
-          applicationError?: false;
-          errorCode?: ConnectionErrorCode;
-          errorMessage?: string;
-          force?: boolean;
-        }
-      | {
-          applicationError: true;
-          errorCode?: number;
-          errorMessage?: string;
-          force?: boolean;
-        } = {},
-    mon?: Monitor<RWLockWriter>,
-  ) {
-    this.logger.info(`Stop ${this.constructor.name}`);
-    // Cleaning up existing streams
-    const streamsDestroyP: Array<Promise<void>> = [];
-    this.logger.debug('triggering stream destruction');
-    for (const stream of this.streamMap.values()) {
-      // If we're draining then streams will never end on their own.
-      // We must force them to end.
-      if (this.conn.isDraining() || this.conn.isClosed() || force) {
-        await stream.destroy();
+  public async stop({
+    isApp = true,
+    errorCode = 0,
+    reason = new Uint8Array(),
+    force = true,
+  }:
+    | {
+        isApp: false;
+        errorCode?: ConnectionErrorCode;
+        reason?: Uint8Array;
+        force?: boolean;
       }
-      streamsDestroyP.push(stream.destroyedP);
-    }
-    this.logger.debug('waiting for streams to destroy');
-    await Promise.all(streamsDestroyP);
-    this.logger.debug('streams destroyed');
+    | {
+        isApp?: true;
+        errorCode?: number;
+        reason?: Uint8Array;
+        force?: boolean;
+      } = {}) {
+    this.logger.info(`Stop ${this.constructor.name}`);
     this.stopKeepAliveIntervalTimer();
-
-    // Trigger closing connection in the background and await close later.
-    void this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
-      await mon.withF(this.lockCode, async (mon) => {
-        // If this is already closed, then `Done` will be thrown
-        // Otherwise it can send `CONNECTION_CLOSE` frame
-        // This can be 0x1c close at the QUIC layer or no errors
-        // Or it can be 0x1d for application close with an error
-        // Upon receiving a `CONNECTION_CLOSE`, you can send back
-        // 1 packet containing a `CONNECTION_CLOSE` frame too
-        // (with `NO_ERROR` code if appropriate)
-        // It must enter into a draining state, and no other packets can be sent
-        try {
-          this.conn.close(
-            applicationError,
-            errorCode,
-            Buffer.from(errorMessage),
-          );
-          // If we get a `Done` exception we don't bother calling send
-          // The send only gets sent if the `Done` is not the case
-          await this.send(mon);
-        } catch (e) {
-          // Ignore 'Done' if already closed
-          if (e.message !== 'Done') {
-            // No other exceptions are expected
-            never();
-          }
-        }
+    // Closing the connection first to avoid accepting new streams
+    if (!this.conn.isDraining() && !this.conn.isClosed()) {
+      // If `this.conn.close` is already called, the connection will be draining,
+      // in that case we just skip doing this local close.
+      // If `this.conn.isTimedOut` is true, then the connection will be closed,
+      // in that case we skip doing this local close.
+      this.conn.close(isApp, errorCode, reason);
+      const localError = this.conn.localError()!;
+      const message = `Locally closed with ${
+        localError.isApp ? 'application' : 'transport'
+      } code ${localError.errorCode}`;
+      const e = new errors.ErrorQUICConnectionLocal(message, {
+        data: localError,
       });
-    });
-
-    if (this.conn.isClosed()) {
-      this.resolveClosedP();
+      this.dispatchEvent(new events.EventQUICConnectionError({ detail: e }));
     }
-    this.setConnTimeOutTimer();
-    // Now we await for the closedP
-    this.logger.debug('awaiting closedP');
+    // Destroy all streams
+    const streamsDestroyP: Array<Promise<void>> = [];
+    for (const quicStream of this.streamMap.values()) {
+      // The reason is only used if `force` is `true`
+      // If `force` is not true, this will gracefully wait for
+      // both readable and writable to gracefully close
+      streamsDestroyP.push(
+        quicStream.destroy({
+          reason: this.errorLast,
+          force: force || this.conn.isDraining() || this.conn.isClosed(),
+        }),
+      );
+    }
+    await Promise.all(streamsDestroyP);
+    // Waiting for `closedP` to resolve
+    // Only the `this.connTimeoutTimer` will resolve this promise
     await this.closedP;
-    this.logger.debug('closedP');
-    this.connTimeOutTimer?.cancel(timerCleanupReasonSymbol);
-
-    // Removing the connection from the socket's connection map
-    this.socket.connectionMap.delete(this.connectionId);
-
-    // Checking for errors and emitting them as events
-    // Emit error if connection timed out
-    if (this.conn.isTimedOut()) {
-      const error = this.secured
-        ? new errors.ErrorQUICConnectionIdleTimeOut()
-        : new errors.ErrorQUICConnectionStartTimeOut();
-
-      this.rejectEstablishedP(error);
-      this.rejectSecureEstablishedP(error);
-      this.dispatchEvent(
-        new events.QUICConnectionErrorEvent({
-          detail: error,
-        }),
-      );
-    }
-
-    // Emit error if peer error
-    const peerError = this.conn.peerError();
-    if (peerError != null) {
-      const message = `Connection errored out with peerError ${Buffer.from(
-        peerError.reason,
-      ).toString()}(${peerError.errorCode})`;
-      this.logger.info(message);
-      const error = new errors.ErrorQUICConnectionInternal(message, {
-        data: {
-          type: 'local',
-          ...peerError,
-        },
-      });
-      this.rejectEstablishedP(error);
-      this.rejectSecureEstablishedP(error);
-      this.dispatchEvent(
-        new events.QUICConnectionErrorEvent({
-          detail: error,
-        }),
-      );
-    }
-
-    // Emit error if local error
-    const localError = this.conn.localError();
-    if (localError != null) {
-      const message = `connection failed with localError ${Buffer.from(
-        localError.reason,
-      ).toString()}(${localError.errorCode})`;
-      this.logger.info(message);
-      const error = new errors.ErrorQUICConnectionInternal(message, {
-        data: {
-          type: 'local',
-          ...localError,
-        },
-      });
-      this.rejectEstablishedP(error);
-      this.rejectSecureEstablishedP(error);
-      this.dispatchEvent(
-        new events.QUICConnectionErrorEvent({
-          detail: error,
-        }),
-      );
-    }
-
-    this.dispatchEvent(new events.QUICConnectionStopEvent());
+    this.removeEventListener(
+      events.EventQUICConnectionError.name,
+      this.handleEventQUICConnectionError,
+    );
+    this.removeEventListener(
+      events.EventQUICConnectionClose.name,
+      this.handleEventQUICConnectionClose,
+    );
     this.logger.info(`Stopped ${this.constructor.name}`);
   }
 
   /**
-   * Gets an array of certificates in PEM format start on the leaf.
+   * Get connection error.
+   * This could be `undefined` if connection timed out.
    */
-  @ready(new errors.ErrorQUICConnectionNotRunning())
-  public getRemoteCertsChain(): Array<string> {
-    const certsDER = this.conn.peerCertChain();
-    if (certsDER == null) return [];
-    return certsDER.map(utils.certificateDERToPEM);
+  public getConnectionError(): ConnectionError | undefined {
+    return this.conn.localError() ?? this.conn.peerError() ?? undefined;
   }
 
   /**
-   * Called when the socket receives data from the remote side intended for this connection.
-   * UDP -> Connection -> Stream
-   * This pushes data to the streams.
-   * When the connection is draining, we can still receive data.
-   * However, no streams are allowed to read or write.
+   * Array of independent CA certificates in DER format.
+   */
+  public getLocalCACertsChain(): Array<Uint8Array> {
+    return this.caDERs;
+  }
+
+  /**
+   * Chain of local certificates from leaf to root in DER format.
+   */
+  public getLocalCertsChain(): Array<Uint8Array> {
+    return this.certDERs;
+  }
+
+  /**
+   * Chain of remote certificates from leaf to root in DER format.
+   */
+  public getRemoteCertsChain(): Array<Uint8Array> {
+    return this.conn.peerCertChain() ?? [];
+  }
+
+  public meta(): ConnectionMetadata {
+    return {
+      localHost: this.localHost,
+      localPort: this.localPort,
+      remoteHost: this.remoteHost,
+      remotePort: this.remotePort,
+      localCertsChain: this.certDERs,
+      localCACertsChain: this.caDERs,
+      remoteCertsChain: this.getRemoteCertsChain(),
+    };
+  }
+
+  /**
+   * Receives data from the socket for this connection.
    *
-   * This method must not throw any exceptions.
-   * Any errors must be emitted as events.
+   * The data flows from the socket this connection to streams.
+   * This takes data from the quiche connection and pushes to the
+   * `QUICStream` collection.
+   *
+   * This function is callable during `this.start` and `this.stop`.
+   * When the connection is draining, we can still receive data.
+   * However no streams are allowed to read or write data.
+   *
    * @internal
    */
-  public async recv(
-    data: Uint8Array,
-    remoteInfo: RemoteInfo,
-    mon?: Monitor<RWLockWriter>,
-  ): Promise<void> {
-    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
-      if (!mon.isLocked(this.lockCode)) {
-        return mon.withF(this.lockCode, async (mon) => {
-          return this.recv(data, remoteInfo, mon);
-        });
-      }
-    });
-
-    try {
-      // The remote information may be changed on each receive
-      // However to do so would mean connection migration,
-      // which is not yet supported
-      this._remoteHost = remoteInfo.host;
-      this._remotePort = remoteInfo.port;
+  @ready(new errors.ErrorQUICConnectionNotRunning(), false, [
+    'starting',
+    'stopping',
+  ])
+  public async recv(data: Uint8Array, remoteInfo: RemoteInfo): Promise<void> {
+    // Enforce mutual exclusion for an atomic pair of `this.recv` and `this.send`.
+    await this.recvLock.withF(async () => {
       const recvInfo = {
         to: {
           host: this.localHost,
@@ -692,352 +706,434 @@ class QUICConnection extends EventTarget {
         },
       };
       try {
-        this.logger.debug(`recv ${data.byteLength} bytes`);
-        // This can process concatenated QUIC packets
-        // This may mutate `data`
+        // This can process multiple QUIC packets.
+        // Remember that 1 QUIC packet can have multiple QUIC frames.
+        // Expect the `data` is mutated here due to in-place decryption,
+        // so do not re-use the `data` afterwards.
         this.conn.recv(data, recvInfo);
       } catch (e) {
-        // Should only be a `TLSFail` if we fail here.
-        // The error details will be available as a local error.
-        if (e.message !== 'TlsFail') {
-          // No other exceptions are expected
-          never();
+        // If `config.verifyPeer` is true and `config.verifyCallback` is undefined,
+        // then during the TLS handshake, a `TlsFail` exception will only be thrown
+        // if the peer did not supply a certificate or that its certificate failed
+        // the default certificate verification procedure.
+        // If `config.verifyPeer` is true and `config.verifyCallback` is defined,
+        // then during the TLS handshake, a `TlsFail` exception will only be thrown
+        // if the peer did not supply a peer certificate.
+        const localError = this.conn.localError();
+        if (localError == null) {
+          // If there was no local error, then this is an internal error.
+          const e_ = new errors.ErrorQUICConnectionInternal(
+            'Failed connection recv due with unknown error',
+            { cause: e },
+          );
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({ detail: e_ }),
+          );
+          throw e_;
+        } else {
+          // Quiche connection recv will automatically close with local
+          // connection error and start draining.
+          // This is a legitimate state transition.
+          let e_: errors.ErrorQUICConnectionLocal<unknown>;
+          if (e.message === 'TlsFail') {
+            e_ = new errors.ErrorQUICConnectionLocalTLS(
+              'Failed connection due to native TLS verification',
+              {
+                cause: e,
+                data: localError,
+              },
+            );
+          } else {
+            e_ = new errors.ErrorQUICConnectionLocal(
+              'Failed connection due to local error',
+              {
+                cause: e,
+                data: localError,
+              },
+            );
+          }
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({ detail: e_ }),
+          );
+          return;
         }
       }
-
-      // Checking if the packet was a short frame.
-      // Short indicates that the peer has completed TLS verification
-      if (!this.shortReceived) {
-        const header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
-        // If short frame
-        if (header.ty === 5) {
-          this.shortReceived = true;
-        }
-      }
-      // Checks if `secureEstablishedP` should be resolved. The condition for
-      //  this is if a short frame has been received and 1 extra frame has been
-      //  received. This allows for the remote to close the connection.
-      if (!this.secured && this.shortReceived && !this.conn.isDraining()) {
-        if (this.count >= 1) {
-          this.secured = true;
-          this.resolveSecureEstablishedP();
-        }
-        this.count += 1;
-      }
-
-      // We don't actually "fail"
-      // the closedP until we proceed
-      // But note that if there's an error
-
-      if (this.conn.isEstablished()) {
-        this.resolveEstablishedP();
-      }
-
-      if (this.conn.isClosed()) {
-        this.resolveClosedP();
-        return;
-      }
-
-      if (this.conn.isInEarlyData() || this.conn.isEstablished()) {
-        await this.processStreams();
-      }
-    } finally {
-      this.logger.debug('RECV FINALLY');
+      // The remote information may be changed on each received packet.
+      // If it changes, this would mean the connection has migrated.
+      this._remoteHost = remoteInfo.host;
+      this._remotePort = remoteInfo.port;
+      // If `config.verifyCallback` is not defined, simply being established is
+      // sufficient to mean we are securely established, however if it is defined
+      // then secure establishment occurs only after custom TLS verification has
+      // passed.
       if (
-        this[status] !== 'destroying' &&
-        (this.conn.isClosed() || this.conn.isDraining())
+        !this.secureEstablished &&
+        this.conn.isEstablished() &&
+        this.config.verifyCallback == null
       ) {
-        this.logger.debug('calling stop due to closed or draining');
-        // Destroy in the background, we still need to process packets.
-        // Draining means no more packets are sent, so streams must be force closed.
-        void this.stop({ force: true }, mon).catch(() => {});
+        this.resolveSecureEstablishedP();
       }
-    }
+      // If we are securely established we can process streams.
+      if (this.secureEstablished) {
+        this.processStreams();
+      }
+      // After every recv, there must be a send.
+      await this.send();
+    });
   }
 
   /**
-   * Called when the socket has to send back data on this connection.
-   * This is better understood as "flushing" the connection send buffer.
-   * This is because the data to send actually comes from the quiche library
-   * and any data that is currently buffered on the streams.
-   * It will send everything into the UDP socket.
+   * Sends data to the socket from this connection.
    *
-   * UDP <- Connection <- Stream
+   * This takes the data from the quiche connection that is on the send buffer.
+   * The data flows from the streams to this connection to the socket.
    *
-   * Call this if `recv` is called.
-   * Call this if timer expires.
-   * Call this if stream is written.
-   * Call this if stream is read.
+   * - Call this if connecting to a server.
+   * - Call this if `recv` is called.
+   * - Call this if `connTimeoutTimer` ticks.
+   * - Call this if stream is written.
+   * - Call this if stream is read.
    *
-   * We can push the connection into the stream.
-   * The streams have access to the connection object.
+   * This function is callable during `this.start` and `this.stop`.
+   * When the connection is draining, we can still receive data.
+   * However no streams are allowed to read or write data.
    *
-   * This method must not throw any exceptions.
-   * Any errors must be emitted as events.
    * @internal
    */
-  public async send(mon?: Monitor<RWLockWriter>): Promise<void> {
-    await this.withMonitor(mon, this.lockbox, RWLockWriter, async (mon) => {
-      if (!mon.isLocked(this.lockCode)) {
-        return mon.withF(this.lockCode, async (mon) => {
-          return this.send(mon);
-        });
-      }
-    });
-
-    const sendBuffer = new Uint8Array(quiche.MAX_DATAGRAM_SIZE);
+  @ready(new errors.ErrorQUICConnectionNotRunning(), false, [
+    'starting',
+    'stopping',
+  ])
+  public async send(): Promise<void> {
     let sendLength: number;
     let sendInfo: SendInfo;
-    try {
-      // Send until `Done`
-      while (true) {
-        try {
-          [sendLength, sendInfo] = this.conn.send(sendBuffer);
-        } catch (e) {
-          if (e.message === 'Done') {
-            break;
-          }
-          throw e;
+    // Send until `Done`
+    while (true) {
+      // Fastest way of allocating a buffer, which will be dispatched
+      const sendBuffer = Buffer.allocUnsafe(this.config.maxSendUdpPayloadSize);
+      try {
+        const result = this.conn.send(sendBuffer);
+        if (result === null) {
+          // Break the loop
+          break;
         }
-        await this.socket.send(
-          sendBuffer,
-          0,
-          sendLength,
-          sendInfo.to.port,
-          sendInfo.to.host,
+        [sendLength, sendInfo] = result;
+      } catch (e) {
+        // Internal error if send failed
+        const e_ = new errors.ErrorQUICConnectionInternal(
+          'Failed connection send with unknown internal error',
+          { cause: e },
         );
-        this.logger.debug(`sent ${sendLength} bytes`);
-
-        // Handling custom TLS verification, this must be done after the following conditions.
-        //  1. Connection established.
-        //  2. Certs available.
-        //  3. Sent after connection has established.
-        if (
-          !this.customVerified &&
-          this.conn.isEstablished() &&
-          this.conn.peerCertChain() != null
-        ) {
-          this.customVerified = true;
-          const peerCerts = this.conn.peerCertChain();
-          if (peerCerts == null) never();
-          const peerCertsPem = peerCerts.map((c) =>
-            utils.certificateDERToPEM(c),
-          );
-          try {
-            // Running verify callback if available
-            if (this.verifyCallback != null) {
-              await this.verifyCallback(peerCertsPem);
-            }
-            this.logger.debug('TLS verification succeeded');
-            // Generate ack frame to satisfy the short + 1 condition of secure establishment
-            this.conn.sendAckEliciting();
-          } catch (e) {
-            // Force the connection to end.
-            // Error 304 indicates cert chain failed verification.
-            // Error 372 indicates cert chain was missing.
-            this.logger.debug(
-              `TLS fail due to [${e.message}], closing connection`,
-            );
-            this.conn.close(
-              false,
-              304,
-              Buffer.from(`Custom TLSFail: ${e.message}`),
-            );
-          }
-        }
+        this.dispatchEvent(new events.EventQUICConnectionError({ detail: e_ }));
+        throw e_;
       }
-    } catch (e) {
-      // An error here means a hard failure in sending, we must force clean up
-      //  since any further communication is expected to fail.
-      this.logger.debug(`Calling stop due to sending error [${e.message}]`);
-      const code = await this.reasonToCode('send', e);
-      await this.stop(
-        {
-          applicationError: false,
-          errorCode: code,
-          errorMessage: e.message,
-          force: true,
-        },
-        mon,
-      );
-      // We need to finish without any exceptions
-      return;
-    }
-    if (this.conn.isClosed()) {
-      // Handle stream clean up if closed
-      this.resolveClosedP();
-      await this.stop(
-        this.conn.localError() ?? this.conn.peerError() ?? {},
-        mon,
+      this.dispatchEvent(
+        new events.EventQUICConnectionSend({
+          detail: {
+            msg: sendBuffer.subarray(0, sendLength),
+            port: sendInfo.to.port,
+            address: sendInfo.to.host,
+          },
+        }),
       );
     }
-    this.setConnTimeOutTimer();
+    // Resets the `this.connTimeoutTimer` because quiche timeout becomes
+    // non-null after the first send call is made, and subsequently, each
+    // send call may end up resetting the quiche timeout value.
+    this.setConnTimeoutTimer();
+    if (
+      !this.secureEstablished &&
+      !this.conn.isDraining() &&
+      !this.conn.isClosed() &&
+      this.conn.isEstablished() &&
+      this.config.verifyPeer &&
+      this.config.verifyCallback != null
+    ) {
+      const peerCertsChain = this.conn.peerCertChain()!;
+      // Custom TLS verification
+      const cryptoError = await this.config.verifyCallback(
+        peerCertsChain,
+        this.caDERs,
+      );
+      if (cryptoError != null) {
+        // This simulates the crypto error that occurs natively
+        this.conn.close(false, cryptoError, Buffer.from(''));
+        const localError = this.conn.localError()!;
+        const e_ = new errors.ErrorQUICConnectionLocalTLS(
+          'Failed connection due to custom TLS verification',
+          {
+            data: localError,
+          },
+        );
+        this.dispatchEvent(
+          new events.EventQUICConnectionError({
+            detail: e_,
+          }),
+        );
+        return;
+      }
+      // If this succeeds, then we have securely established, and we can
+      // process all the streams, that would have originally occurred in
+      // `this.recv`. This will only be run on the first time, we perform
+      // the custom TLS verification
+      this.resolveSecureEstablishedP();
+      this.processStreams();
+    }
+    if (this[status] !== 'stopping') {
+      const peerError = this.conn.peerError();
+      if (peerError != null) {
+        const message = `Peer closed with ${
+          peerError.isApp ? 'application' : 'transport'
+        } code ${peerError.errorCode}`;
+        if (
+          peerError.errorCode >= quiche.CRYPTO_ERROR_START &&
+          peerError.errorCode <= quiche.CRYPTO_ERROR_STOP
+        ) {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionPeerTLS(message, {
+                data: peerError,
+              }),
+            }),
+          );
+        } else {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionPeer(message, {
+                data: peerError,
+              }),
+            }),
+          );
+        }
+        return;
+      }
+    }
   }
 
-  /**
-   * Keeps stream processing logic all in one place.
-   */
-  protected async processStreams() {
+  protected processStreams() {
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
-        // The creation will set itself to the stream map
-        quicStream = await QUICStream.createQUICStream({
+        quicStream = QUICStream.createQUICStream({
+          initiated: 'peer',
           streamId,
+          config: this.config,
           connection: this,
           codeToReason: this.codeToReason,
           reasonToCode: this.reasonToCode,
           logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
         });
+        this.streamMap.set(quicStream.streamId, quicStream);
         quicStream.addEventListener(
-          'streamDestroy',
-          this.handleQUICStreamDestroyEvent,
+          events.EventQUICStreamSend.name,
+          this.handleEventQUICStreamSend,
+        );
+        quicStream.addEventListener(
+          events.EventQUICStreamDestroyed.name,
+          this.handleEventQUICStreamDestroyed,
           { once: true },
         );
+        quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
         this.dispatchEvent(
-          new events.QUICConnectionStreamEvent({ detail: quicStream }),
+          new events.EventQUICConnectionStream({ detail: quicStream }),
         );
-        // No need to read after creation, doing so will throw during early cancellation
-      } else {
-        quicStream.read();
       }
+      quicStream.read();
     }
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-      const quicStream = this.streamMap.get(streamId);
+      let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
-        // This is a dead case, there are only two ways streams are created.
-        //  The QUICStream will always exist before processing it's writable.
-        //  1. First time it is seen in the readable iterator
-        //  2. created using `streamNew()`
-
-        // There is one condition where this can happen. That is when both sides of the stream cancel concurrently.
-        // Local state is cleaned up while the remote side still sends a closing frame.
-        try {
-          // Check if the stream can write 0 bytes, should throw if the stream has ended.
-          // We need to check if it's writable to trigger any state change for the stream.
-          this.conn.streamWritable(streamId, 0);
-          never(
-            'The stream should never be writable if a QUICStream does not exist for it',
-          );
-        } catch (e) {
-          // Stream should be stopped here, any other error is a never
-          if (e.message.match(/StreamStopped\((.+)\)/) == null) {
-            // We only expect a StreamStopped error here
-            throw e;
-          }
-          // If stopped we just ignore it, `streamWritable` should've cleaned up the native state
-          this.logger.debug(
-            `StreamId ${streamId} was writable without an existing stream and error ${e.message}`,
-          );
-        }
-      } else {
-        quicStream.write();
+        quicStream = QUICStream.createQUICStream({
+          initiated: 'peer',
+          streamId,
+          config: this.config,
+          connection: this,
+          codeToReason: this.codeToReason,
+          reasonToCode: this.reasonToCode,
+          logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
+        });
+        this.streamMap.set(quicStream.streamId, quicStream);
+        quicStream.addEventListener(
+          events.EventQUICStreamSend.name,
+          this.handleEventQUICStreamSend,
+        );
+        quicStream.addEventListener(
+          events.EventQUICStreamDestroyed.name,
+          this.handleEventQUICStreamDestroyed,
+          { once: true },
+        );
+        quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
+        this.dispatchEvent(
+          new events.EventQUICConnectionStream({ detail: quicStream }),
+        );
       }
+      quicStream.write();
     }
   }
 
-  protected setConnTimeOutTimer(): void {
-    const logger = this.logger.getChild('timer');
-    const connTimeOutHandler = async () => {
+  /**
+   * Sets up the connection timeout timer.
+   *
+   * This only gets called on the first `QUICConnection.send`.
+   * It's the responsiblity of this timer to resolve the `closedP`.
+   */
+  protected setConnTimeoutTimer(): void {
+    const connTimeoutHandler = async (signal: AbortSignal) => {
+      // If aborted, just immediately resolve
+      if (signal.aborted) return;
       // This can only be called when the timeout has occurred.
       // This transitions the connection state.
       // `conn.timeout()` is time aware, so calling `conn.onTimeout` will only
       //  trigger state transitions after the time has passed.
-      logger.debug('CALLING ON TIMEOUT');
       this.conn.onTimeout();
-
-      // Connection may have closed after timing out
+      // If it is closed, we can resolve, and we are done for this connection.
       if (this.conn.isClosed()) {
-        // If it was still starting waiting for the secure event, we need to
-        //  reject the `secureEstablishedP` promise.
-        if (this[status] === 'starting') {
-          this.rejectSecureEstablishedP(
-            new errors.ErrorQUICConnectionInternal('Connection has closed!'),
+        this.resolveClosedP();
+        // Check if the connection timed out due to the `maxIdleTimeout`
+        if (this.conn.isTimedOut()) {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionIdleTimeout(),
+            }),
           );
         }
-
-        logger.debug('resolving closedP');
-        // We resolve closing here, stop checks if the connection has timed out
-        //  and handles it.
-        this.resolveClosedP();
-        // If we are still running and not stopping then we need to stop
-        if (this[running] && this[status] !== 'stopping') {
-          // Background stopping, we don't want to block the timer resolving
-          void this.stop({ force: true });
-        }
-        logger.debug('CLEANING UP TIMER');
         return;
       }
-
-      // There may be data to send after timing out
-      void this.send();
-
+      await this.send();
       // Note that a `0` timeout is still a valid timeout
       const timeout = this.conn.timeout();
-      // If this is `null`, then quiche is requesting the timer to be cleaned up
+      // If the max idle timeout is 0, then the timeout may be `null`,
+      // and it would only be set when the connection is ready to be closed.
+      // If it is `null`, there is no need to setup the next timer
       if (timeout == null) {
-        logger.debug('CLEANING UP TIMER');
         return;
       }
-      // Allow an extra 1ms for the delay to fully complete, so we can avoid a repeated 0ms delay
-      logger.debug(`Recreating timer with ${timeout + 1} delay`);
-      this.connTimeOutTimer = new Timer({
+      // Allow an extra 1ms to compensate for clock desync with quiche
+      this.connTimeoutTimer = new Timer({
         delay: timeout + 1,
-        handler: connTimeOutHandler,
+        handler: connTimeoutHandler,
+        lazy: true,
       });
     };
     // Note that a `0` timeout is still a valid timeout
     const timeout = this.conn.timeout();
     // If this is `null`, then quiche is requesting the timer to be cleaned up
     if (timeout == null) {
-      // Clean up timer if it is running
-      if (
-        this.connTimeOutTimer != null &&
-        this.connTimeOutTimer.status === null
-      ) {
-        logger.debug('CLEANING UP TIMER');
-        this.connTimeOutTimer.cancel(timerCleanupReasonSymbol);
+      // Cancellation only matters if the timer status is `null` or settling
+      // If it is `null`, then the timer handler doesn't run
+      // If it is `settled`, then cancelling is a noop
+      // If it is `settling`, then cancelling only prevents it at the beginning of the handler
+      this.connTimeoutTimer?.cancel();
+      // The `this.connTimeoutTimer` is a lazy timer, so it's status may still
+      // be `null` or `settling`. So we have to delete it here to ensure that
+      // the timer will be recreated.
+      delete this.connTimeoutTimer;
+      if (this.conn.isClosed()) {
+        this.resolveClosedP();
+        if (this.conn.isTimedOut()) {
+          this.dispatchEvent(
+            new events.EventQUICConnectionError({
+              detail: new errors.ErrorQUICConnectionIdleTimeout(),
+            }),
+          );
+        }
       }
       return;
     }
-    // If there was an existing timer, we cancel it and set a new one
+    // If there's no timer, create it
+    // If the timer is settled, create it
+    // If the timer is null, reset it
+    // If the timer is settling, do nothing (it will recreate itself)
+    // Plus 1 to the `timeout` to compensate for clock desync with quiche
     if (
-      this.connTimeOutTimer != null &&
-      this.connTimeOutTimer.status === null
+      this.connTimeoutTimer == null ||
+      this.connTimeoutTimer.status === 'settled'
     ) {
-      logger.debug(`resetting timer with ${timeout + 1} delay`);
-      this.connTimeOutTimer.reset(timeout + 1);
-    } else {
-      logger.debug(`timeout created with delay ${timeout}`);
-      this.connTimeOutTimer = new Timer({
+      this.connTimeoutTimer = new Timer({
         delay: timeout + 1,
-        handler: connTimeOutHandler,
+        handler: connTimeoutHandler,
+        lazy: true,
       });
+    } else if (this.connTimeoutTimer.status == null) {
+      this.connTimeoutTimer.reset(timeout + 1);
     }
   }
 
   /**
+   * Creates a new QUIC stream on the connection.
+   */
+  @ready(new errors.ErrorQUICConnectionNotRunning())
+  public newStream(type: 'bidi' | 'uni' = 'bidi'): QUICStream {
+    let streamId: StreamId;
+    if (this.type === 'client' && type === 'bidi') {
+      streamId = this.streamIdClientBidi;
+    } else if (this.type === 'server' && type === 'bidi') {
+      streamId = this.streamIdServerBidi;
+    } else if (this.type === 'client' && type === 'uni') {
+      streamId = this.streamIdClientUni;
+    } else if (this.type === 'server' && type === 'uni') {
+      streamId = this.streamIdServerUni;
+    }
+    const quicStream = QUICStream.createQUICStream({
+      initiated: 'local',
+      streamId: streamId!,
+      connection: this,
+      config: this.config,
+      codeToReason: this.codeToReason,
+      reasonToCode: this.reasonToCode,
+      logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
+    });
+    this.streamMap.set(quicStream.streamId, quicStream);
+    quicStream.addEventListener(
+      events.EventQUICStreamSend.name,
+      this.handleEventQUICStreamSend,
+    );
+    quicStream.addEventListener(
+      events.EventQUICStreamDestroyed.name,
+      this.handleEventQUICStreamDestroyed,
+      { once: true },
+    );
+    quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
+    if (this.type === 'client' && type === 'bidi') {
+      this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
+    } else if (this.type === 'server' && type === 'bidi') {
+      this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
+    } else if (this.type === 'client' && type === 'uni') {
+      this.streamIdClientUni = (this.streamIdClientUni + 4) as StreamId;
+    } else if (this.type === 'server' && type === 'uni') {
+      this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
+    }
+    return quicStream;
+  }
+
+  /**
    * Starts the keep alive interval timer.
-   * Make sure to set the interval to be less than then the `maxIdleTime` unless
-   * if the `maxIdleTime` is `0`.
-   * If the `maxIdleTime` is `0`, then this is not needed to keep the connection
-   * open. However, it can still be useful to maintain liveliness for NAT purposes.
+   *
+   * Interval time should be less than `maxIdleTimeout` unless it is `0`, which
+   * means `Infinity`.
+   *
+   * If the `maxIdleTimeout` is `0`, this can still be useful to maintain
+   * activity on the connection.
    */
   protected startKeepAliveIntervalTimer(ms: number): void {
-    const keepAliveHandler = async () => {
+    const keepAliveHandler = async (signal: AbortSignal) => {
+      if (signal.aborted) return;
       // Intelligently schedule a PING frame.
       // If the connection has already sent ack-eliciting frames
       // then this is a noop.
       this.conn.sendAckEliciting();
       await this.send();
+      if (signal.aborted) return;
       this.keepAliveIntervalTimer = new Timer({
         delay: ms,
         handler: keepAliveHandler,
+        lazy: true,
       });
     };
     this.keepAliveIntervalTimer = new Timer({
       delay: ms,
       handler: keepAliveHandler,
+      lazy: true,
     });
   }
 
@@ -1045,65 +1141,7 @@ class QUICConnection extends EventTarget {
    * Stops the keep alive interval timer
    */
   protected stopKeepAliveIntervalTimer(): void {
-    this.keepAliveIntervalTimer?.cancel(timerCleanupReasonSymbol);
-  }
-
-  /**
-   * Creates a new stream on the connection.
-   * Only supports bidi streams atm.
-   * This is a serialised call, it must be blocking.
-   */
-  @ready(new errors.ErrorQUICConnectionNotRunning())
-  public async streamNew(streamType: 'bidi' = 'bidi'): Promise<QUICStream> {
-    // Using a lock on stream ID to prevent racing updates
-    return await this.streamIdLock.withF(async () => {
-      let streamId: StreamId;
-      if (this.type === 'client' && streamType === 'bidi') {
-        streamId = this.streamIdClientBidi;
-      } else if (this.type === 'server' && streamType === 'bidi') {
-        streamId = this.streamIdServerBidi;
-      }
-
-      const quicStream = await QUICStream.createQUICStream({
-        streamId: streamId!,
-        connection: this,
-        codeToReason: this.codeToReason,
-        reasonToCode: this.reasonToCode,
-        logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
-      });
-      quicStream.addEventListener(
-        'streamDestroy',
-        this.handleQUICStreamDestroyEvent,
-        { once: true },
-      );
-      // Ok the stream is opened and working
-      if (this.type === 'client' && streamType === 'bidi') {
-        this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
-      } else if (this.type === 'server' && streamType === 'bidi') {
-        this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
-      }
-      return quicStream;
-    });
-  }
-
-  /**
-   * Used as a clean way to create a new monitor if it doesn't exist, otherwise uses the existing one.
-   */
-  protected async withMonitor<T>(
-    mon: Monitor<RWLockWriter> | undefined,
-    lockBox: LockBox<RWLockWriter>,
-    lockConstructor: { new (): RWLockWriter },
-    f: (mon: Monitor<RWLockWriter>) => Promise<T>,
-    locksPending?: Map<string, { count: number }>,
-  ): Promise<T> {
-    if (mon == null) {
-      return await withF(
-        [contextsUtils.monitor(lockBox, lockConstructor, locksPending)],
-        ([mon]) => f(mon),
-      );
-    } else {
-      return f(mon);
-    }
+    this.keepAliveIntervalTimer?.cancel();
   }
 }
 

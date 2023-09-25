@@ -1,15 +1,25 @@
+import { testProp } from '@fast-check/jest';
 import { quiche } from '@/native';
 import * as testsUtils from '../utils';
 
-describe('quiche', () => {
-  test('frame parsing', async () => {
-    const frame = Buffer.from('hello world');
-    expect(() =>
-      quiche.Header.fromSlice(frame, quiche.MAX_CONN_ID_LEN),
-    ).toThrow('BufferTooShort');
-    // `InvalidPacket` is also possible but even random bytes can
-    // look like a packet, so it's not tested here
-  });
+describe('native/quiche', () => {
+  testProp(
+    'packet parsing',
+    [testsUtils.bufferArb({ minLength: 0, maxLength: 100 })],
+    (packet) => {
+      // Remember a UDP payload only has 1 QUIC packet
+      // But 1 QUIC packet can have multiple QUIC frames
+      try {
+        // The `quiche.MAX_CONN_ID_LEN` is 20 bytes
+        // From 21 bytes it is possible to bypass `BufferTooShort` but it is not guaranteed
+        // However 20 bytes and under is always `BufferTooShort`
+        quiche.Header.fromSlice(packet, quiche.MAX_CONN_ID_LEN);
+      } catch (e) {
+        expect(e.message).toBe('BufferTooShort');
+        // InvalidPacket seems very rare, save it as an example if you find one!
+      }
+    },
+  );
   test('version negotiation', async () => {
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
     await testsUtils.randomBytes(scidBuffer);

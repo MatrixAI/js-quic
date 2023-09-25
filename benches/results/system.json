@@ -30,8 +30,8 @@
   "osInfo": {
     "platform": "linux",
     "distro": "nixos",
-    "release": "22.11",
-    "kernel": "6.1.23",
+    "release": "23.05",
+    "kernel": "6.1.47",
     "arch": "x64"
   },
   "system": {

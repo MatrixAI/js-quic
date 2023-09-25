@@ -72,27 +72,27 @@ describe('utils', () => {
   });
   test('to canonical IP address', () => {
     // IPv4 -> IPv4
-    expect(utils.toCanonicalIp('127.0.0.1')).toBe('127.0.0.1');
-    expect(utils.toCanonicalIp('0.0.0.0')).toBe('0.0.0.0');
-    expect(utils.toCanonicalIp('255.255.255.255')).toBe('255.255.255.255');
-    expect(utils.toCanonicalIp('74.125.43.99')).toBe('74.125.43.99');
+    expect(utils.toCanonicalIP('127.0.0.1')).toBe('127.0.0.1');
+    expect(utils.toCanonicalIP('0.0.0.0')).toBe('0.0.0.0');
+    expect(utils.toCanonicalIP('255.255.255.255')).toBe('255.255.255.255');
+    expect(utils.toCanonicalIP('74.125.43.99')).toBe('74.125.43.99');
     // IPv4 mapped hex -> IPv4
-    expect(utils.toCanonicalIp('::ffff:7f00:1')).toBe('127.0.0.1');
-    expect(utils.toCanonicalIp('::ffff:0:0')).toBe('0.0.0.0');
-    expect(utils.toCanonicalIp('::ffff:ffff:ffff')).toBe('255.255.255.255');
-    expect(utils.toCanonicalIp('::ffff:4a7d:2b63')).toBe('74.125.43.99');
+    expect(utils.toCanonicalIP('::ffff:7f00:1')).toBe('127.0.0.1');
+    expect(utils.toCanonicalIP('::ffff:0:0')).toBe('0.0.0.0');
+    expect(utils.toCanonicalIP('::ffff:ffff:ffff')).toBe('255.255.255.255');
+    expect(utils.toCanonicalIP('::ffff:4a7d:2b63')).toBe('74.125.43.99');
     // IPv4 mapped dec -> IPv4
-    expect(utils.toCanonicalIp('::ffff:127.0.0.1')).toBe('127.0.0.1');
-    expect(utils.toCanonicalIp('::ffff:0.0.0.0')).toBe('0.0.0.0');
-    expect(utils.toCanonicalIp('::ffff:255.255.255.255')).toBe(
+    expect(utils.toCanonicalIP('::ffff:127.0.0.1')).toBe('127.0.0.1');
+    expect(utils.toCanonicalIP('::ffff:0.0.0.0')).toBe('0.0.0.0');
+    expect(utils.toCanonicalIP('::ffff:255.255.255.255')).toBe(
       '255.255.255.255',
     );
-    expect(utils.toCanonicalIp('::ffff:74.125.43.99')).toBe('74.125.43.99');
+    expect(utils.toCanonicalIP('::ffff:74.125.43.99')).toBe('74.125.43.99');
     // IPv6 -> IPv6
-    expect(utils.toCanonicalIp('::1234:7f00:1')).toBe('::1234:7f00:1');
-    expect(utils.toCanonicalIp('::1234:0:0')).toBe('::1234:0:0');
-    expect(utils.toCanonicalIp('::1234:ffff:ffff')).toBe('::1234:ffff:ffff');
-    expect(utils.toCanonicalIp('::1234:4a7d:2b63')).toBe('::1234:4a7d:2b63');
+    expect(utils.toCanonicalIP('::1234:7f00:1')).toBe('::1234:7f00:1');
+    expect(utils.toCanonicalIP('::1234:0:0')).toBe('::1234:0:0');
+    expect(utils.toCanonicalIP('::1234:ffff:ffff')).toBe('::1234:ffff:ffff');
+    expect(utils.toCanonicalIP('::1234:4a7d:2b63')).toBe('::1234:4a7d:2b63');
   });
   test('resolves zero IP to local IP', () => {
     expect(utils.resolvesZeroIP('0.0.0.0' as Host)).toBe('127.0.0.1');

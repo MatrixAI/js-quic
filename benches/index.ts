@@ -1,35 +1,43 @@
 #!/usr/bin/env ts-node
 
+import type { Summary } from 'benny/lib/internal/common-types';
 import fs from 'fs';
 import path from 'path';
 import si from 'systeminformation';
-import Stream1KB from './stream_1KB';
+import { fsWalk, resultsPath, suitesPath } from './utils';
 
 async function main(): Promise<void> {
   await fs.promises.mkdir(path.join(__dirname, 'results'), { recursive: true });
-  // Running benches
-  await Stream1KB();
-  const resultFilenames = await fs.promises.readdir(
-    path.join(__dirname, 'results'),
-  );
-  const metricsFile = await fs.promises.open(
-    path.join(__dirname, 'results', 'metrics.txt'),
-    'w',
-  );
-  let concatenating = false;
-  for (const resultFilename of resultFilenames) {
-    if (/.+_metrics\.txt$/.test(resultFilename)) {
-      const metricsData = await fs.promises.readFile(
-        path.join(__dirname, 'results', resultFilename),
-      );
-      if (concatenating) {
-        await metricsFile.write('\n');
-      }
-      await metricsFile.write(metricsData);
-      concatenating = true;
+  // Running all suites
+  for await (const suitePath of fsWalk(suitesPath)) {
+    // Skip over non-ts and non-js files
+    const ext = path.extname(suitePath);
+    if (ext !== '.ts' && ext !== '.js') {
+      continue;
+    }
+    const suite: () => Promise<Summary> = (await import(suitePath)).default;
+    // Skip default exports that are not functions and are not called "main"
+    // They might be utility files
+    if (typeof suite === 'function' && suite.name === 'main') {
+      await suite();
     }
   }
-  await metricsFile.close();
+  // Concatenating metrics
+  const metricsPath = path.join(resultsPath, 'metrics.txt');
+  await fs.promises.rm(metricsPath, { force: true });
+  let concatenating = false;
+  for await (const metricPath of fsWalk(resultsPath)) {
+    // Skip over non-metrics files
+    if (!metricPath.endsWith('_metrics.txt')) {
+      continue;
+    }
+    const metricData = await fs.promises.readFile(metricPath);
+    if (concatenating) {
+      await fs.promises.appendFile(metricsPath, '\n');
+    }
+    await fs.promises.appendFile(metricsPath, metricData);
+    concatenating = true;
+  }
   const systemData = await si.get({
     cpu: '*',
     osInfo: 'platform, distro, release, kernel, arch',
@@ -41,4 +49,8 @@ async function main(): Promise<void> {
   );
 }
 
-void main();
+if (require.main === module) {
+  void main();
+}
+
+export default main;

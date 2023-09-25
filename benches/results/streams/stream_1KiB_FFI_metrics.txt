@@ -1,0 +1,8 @@
+# TYPE streams.stream_1KiB_FFI_ops gauge
+streams.stream_1KiB_FFI_ops{name="send 1Kib of data over quiche FFI with no UDP socket"} 13144
+
+# TYPE streams.stream_1KiB_FFI_margin gauge
+streams.stream_1KiB_FFI_margin{name="send 1Kib of data over quiche FFI with no UDP socket"} 1.98
+
+# TYPE streams.stream_1KiB_FFI_samples counter
+streams.stream_1KiB_FFI_samples{name="send 1Kib of data over quiche FFI with no UDP socket"} 78

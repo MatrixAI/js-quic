@@ -2,7 +2,8 @@ use std::io;
 use std::fs::File;
 use std::net::{
   SocketAddr,
-  ToSocketAddrs,
+  Ipv4Addr,
+  Ipv6Addr,
 };
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
@@ -139,12 +140,18 @@ pub struct HostPort {
 impl TryFrom<HostPort> for SocketAddr {
   type Error = io::Error;
   fn try_from(host: HostPort) -> io::Result<Self> {
-    (host.host, host.port).to_socket_addrs()?.next().ok_or(
-      io::Error::new(
-        io::ErrorKind::Other,
-        "Could not convert host to socket address"
-      )
-    )
+    if let Ok(ipv4) = host.host.parse::<Ipv4Addr>() {
+      return Ok(SocketAddr::new(ipv4.into(), host.port));
+    }
+
+    if let Ok(ipv6) = host.host.parse::<Ipv6Addr>() {
+      return Ok(SocketAddr::new(ipv6.into(), host.port));
+    }
+
+    Err(io::Error::new(
+      io::ErrorKind::Other,
+      "Could not convert host to socket address",
+    ))
   }
 }
 
@@ -192,34 +199,13 @@ impl Connection {
     remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
-    // These addresses are passed in from the outside
-    // We expect that the local address has already been bound to
-    // On the UDP socket, we don't do any binding here
-    // Since the nodejs runtime will do the relevant binding
-    // When binding, it needs to bind to both IPv6 and IPv6
-
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // let local_addr = (local_host, local_port).to_socket_addrs().or_else(
-    //   |err| Err(napi::Error::from_reason(err.to_string()))
-    // )?.next().unwrap();
-
-    // eprintln!("Local address: {:?}", local_addr);
-
-    // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
-    //   |err| Err(napi::Error::from_reason(err.to_string()))
-    // )?.next().unwrap();
-
     let remote_addr: SocketAddr = remote_host.try_into().or_else(
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // eprintln!("Remote address: {:?}", remote_addr);
-
     let scid = quiche::ConnectionId::from_ref(&scid);
-
     let connection = quiche::connect(
       server_name.as_deref(),
       &scid,
@@ -229,9 +215,6 @@ impl Connection {
     ).or_else(
       |err| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // eprintln!("STDERR New connection with scid {:?}", scid);
-
     return Ok(Connection(connection));
   }
 
@@ -243,33 +226,16 @@ impl Connection {
     remote_host: HostPort,
     config: &mut config::Config,
   ) -> napi::Result<Self> {
-
-    // let local_addr = (local_host, local_port).to_socket_addrs().or_else(
-    //   |err| Err(napi::Error::from_reason(err.to_string()))
-    // )?.next().unwrap();
-
     let local_addr: SocketAddr = local_host.try_into().or_else(
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // eprintln!("Local address: {:?}", local_addr);
-
-    // let remote_addr = (remote_host, remote_port).to_socket_addrs().or_else(
-    //   |err| Err(napi::Error::from_reason(err.to_string()))
-    // )?.next().unwrap();
-
     let remote_addr: SocketAddr = remote_host.try_into().or_else(
       |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // eprintln!("Remote address: {:?}", remote_addr);
-
     let scid = quiche::ConnectionId::from_ref(&scid);
-
     let odcid = odcid.map(
       |dcid| quiche::ConnectionId::from_vec(dcid.to_vec())
     );
-
     let connection = quiche::accept(
       &scid,
       odcid.as_ref(),
@@ -279,9 +245,6 @@ impl Connection {
     ).or_else(
       |err| Err(napi::Error::from_reason(err.to_string()))
     )?;
-
-    // eprintln!("New connection with scid {:?}", scid);
-
     return Ok(Connection(connection));
   }
 
@@ -301,46 +264,20 @@ impl Connection {
     );
   }
 
-  // This data buffer must be the size of the entire largest packet...
-  // It is not the max datagram size, you have to potentially take
-  // A VERY large packet
-  // On the other hand, it's all dynamic in JS
-  // So it may not be a problem
   #[napi]
   pub fn recv(
     &mut self,
     mut data: Uint8Array,
     recv_info: RecvInfo,
   ) -> napi::Result<i64> {
-
-    // Parsing is kind of slow
-    // the from address has to be passed in from JS side
-    // but the local address here is already known here
-    // if we can keep track of it, it would work nicely
-    // In fact, for any given connection, don't we already have both the remote address and the local address already?
-    // Yea, exactly this information is technically already known
-
-    // recv_info.from
-
     let recv_info = quiche::RecvInfo {
       from: recv_info.from.try_into().or_else(
         |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
       )?,
-      // from: (recv_info.from.addr, recv_info.from.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next().unwrap(),
       to: recv_info.to.try_into().or_else(
         |err: io::Error| Err(napi::Error::from_reason(err.to_string()))
       )?,
-      // to: (recv_info.to.addr, recv_info.to.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next().unwrap(),
     };
-    // If there is an error, the JS side should continue to read
-    // But it can log out the error
-    // You may call this multiple times
-    // When receiving multiple packets
-    // Process potentially coalesced packets.
     let read = match self.0.recv(
       &mut data,
       recv_info
@@ -358,16 +295,13 @@ impl Connection {
   /// The buffer must be allocated to the size of MAX_DATAGRAM_SIZE.
   /// This will return a JS array of `[length, send_info]`.
   /// It is possible for the length to be 0.
-  /// You may then send a 0-lenght buffer.
+  /// You may then send a 0-length buffer.
   /// If there is nothing to be sent a Done error will be thrown.
   #[napi(ts_return_type = "[number, SendInfo]")]
-  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Array> {
-    // Convert the Done error into a 0-length write
-    // This would mean that there's nothing to send
-
+  pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Option<Array>> {
     let (write, send_info) = match self.0.send(&mut data) {
       Ok((write, send_info)) => (write, send_info),
-      // Err(quiche::Error::Done) => (0, None),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let send_info = {
@@ -385,11 +319,8 @@ impl Connection {
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
-    return Ok(write_and_send_info);
+    return Ok(Some(write_and_send_info));
   }
-
-  // So you can pass the SocketAddr
-  // But instead we provide a sort of conversion that is necessary
 
   #[napi(ts_return_type = "[number, SendInfo | null]")]
   pub fn send_on_path(
@@ -398,15 +329,7 @@ impl Connection {
     mut data: Uint8Array,
     from: Option<HostPort>,
     to: Option<HostPort>
-  ) -> napi::Result<Array> {
-    // If we want to "preserve" the error
-    // We have to then provide a Some(Result)
-    // Which means Option<Result<SocketAddr>>
-    // Then we have to "unwrap" it
-    // But I'm not sure how to do this here...
-    // Especially it seems so functional
-    // On the other hand... I think if we can unwrap it here
-
+  ) -> napi::Result<Option<Array>> {
     let from: Option<SocketAddr> = match from {
       Some(host) => Some(
         host.try_into().or_else(
@@ -415,9 +338,6 @@ impl Connection {
           )
         )?
       ),
-      // Some(host) => (host.addr, host.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next(),
       _ => None
     };
     let to: Option<SocketAddr> = match to {
@@ -425,36 +345,32 @@ impl Connection {
         host.try_into().or_else(
           |err: io::Error| Err(
             napi::Error::new(napi::Status::InvalidArg, err.to_string())
-            // napi::Error::from_reason(err.to_string())
           )
         )?
       ),
-      // Some(host) => (host.addr, host.port).to_socket_addrs().or_else(
-      //   |err| Err(napi::Error::from_reason(err.to_string()))
-      // )?.next(),
       _ => None
     };
     let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
-      Ok((write, send_info)) => (write, Some(send_info)),
-      // Err(quiche::Error::Done) => (0, None),
+      Ok((write, send_info)) => (write, send_info),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
-    let send_info = send_info.map(|info| {
+    let send_info = {
       let from = HostPort {
-        host: info.from.ip().to_string(),
-        port: info.from.port(),
+        host: send_info.from.ip().to_string(),
+        port: send_info.from.port(),
       };
       let to = HostPort {
-        host: info.to.ip().to_string(),
-        port: info.to.port(),
+        host: send_info.to.ip().to_string(),
+        port: send_info.to.port(),
       };
-      let at = External::new(info.at);
+      let at = External::new(send_info.at);
       SendInfo { from, to, at }
-    });
+    };
     let mut write_and_send_info = env.create_array(2)?;
     write_and_send_info.set(0, write as i64)?;
     write_and_send_info.set(1, send_info)?;
-    return Ok(write_and_send_info);
+    return Ok(Some(write_and_send_info));
   }
 
   #[napi]
@@ -483,25 +399,19 @@ impl Connection {
     env: Env,
     stream_id: i64,
     mut data: Uint8Array,
-  ) -> napi::Result<Array> {
+  ) -> napi::Result<Option<Array>> {
     let (read, fin) = match self.0.stream_recv(
       stream_id as u64,
       &mut data,
     ) {
       Ok((read, fin)) => (read, fin),
-      // Change this to an exception
-      // DONE means it's actually done!
-      // Done means there's no more data to receive
-      // Err(quiche::Error::Done) => (0, true),
-      // Which is different from receiving a 0-length buffer
-      // We can also change this to a different kind of thing?
-      // But if it is a result array or something else
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
     let mut read_and_fin = env.create_array(2)?;
     read_and_fin.set(0, read as i64)?;
     read_and_fin.set(1, fin)?;
-    return Ok(read_and_fin);
+    return Ok(Some(read_and_fin));
   }
 
   #[napi]
@@ -510,21 +420,14 @@ impl Connection {
     stream_id: i64,
     data: Uint8Array,
     fin: bool
-  ) -> napi::Result<i64> {
-    // 0-length buffer can be written with a fin being true
-    // this indicates that it has finished the stream
-
-    // number of written bytes may be lower than the length
-    // of hte input buffer when the stream doesn't have enough capacity
-    // the app should retry the operation once the stream reports it is writable again
+  ) -> napi::Result<Option<i64>> {
     match self.0.stream_send(
       stream_id as u64,
       &data,
       fin
     ) {
-      Ok(v) => return Ok(v as i64),
-      // We are going to just return Done
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -549,23 +452,16 @@ impl Connection {
     stream_id: i64,
     direction: Shutdown,
     err: i64
-  ) -> napi::Result<()> {
-    // The err is an application-supplied error code
-    // It's an application protocol error code
-    // https://datatracker.ietf.org/doc/html/rfc9000#section-20.2
-    // I think HTTP3 uses this a bit
-    // RESET_STREAM means we stop sending
-    // It can indicate to the peer WHY we have stopped sending
-    // STOP_SENDING means we stop receiving
-    // It can indicate to the peer WHY we have stopped receiving
-    // But this is at the transport layer remember
-    return self.0.stream_shutdown(
+  ) -> napi::Result<Option<()>> {
+    return match self.0.stream_shutdown(
       stream_id as u64,
       direction.into(),
       err as u64
-    ).or_else(
-      |err| Err(napi::Error::from_reason(err.to_string()))
-    );
+    ) {
+      Ok(()) => Ok(Some(())),
+      Err(quiche::Error::Done) => Ok(None),
+      Err(e) => Err(napi::Error::from_reason(e.to_string())),
+    };
   }
 
   #[napi]
@@ -638,12 +534,12 @@ impl Connection {
   pub fn dgram_recv(
     &mut self,
     mut data: Uint8Array
-  ) -> napi::Result<i64> {
+  ) -> napi::Result<Option<i64>> {
     match self.0.dgram_recv(
       &mut data,
     ) {
-      Ok(v) => return Ok(v as i64),
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -654,19 +550,19 @@ impl Connection {
   ) -> napi::Result<Option<Uint8Array>> {
     match self.0.dgram_recv_vec() {
       Ok(v) => return Ok(Some(v.into())),
-      // Err(quiche::Error::Done) => return Ok(None),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
 
   #[napi]
-  pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<i64> {
+  pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<Option<i64>> {
     match self.0.dgram_recv_peek(
       &mut data,
       len as usize,
     ) {
-      Ok(v) => return Ok(v as i64),
-      // Err(quiche::Error::Done) => return Ok(0),
+      Ok(v) => return Ok(Some(v as i64)),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string()))
     };
   }
@@ -710,13 +606,12 @@ impl Connection {
   pub fn dgram_send(
     &mut self,
     data: Uint8Array,
-  ) -> napi::Result<()> {
+  ) -> napi::Result<Option<()>> {
     match self.0.dgram_send(
       &data,
     ) {
-      Ok(v) => return Ok(v),
-      // If no data is sent, also return Ok
-      // Err(quiche::Error::Done) => return Ok(()),
+      Ok(v) => return Ok(Some(v)),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
@@ -725,23 +620,16 @@ impl Connection {
   pub fn dgram_send_vec(
     &mut self,
     data: Uint8Array
-  ) -> napi::Result<()> {
+  ) -> napi::Result<Option<()>> {
     match self.0.dgram_send_vec(
       data.to_vec()
     ) {
-      Ok(v) => return Ok(v),
-      // Err(quiche::Error::Done) => return Ok(()),
+      Ok(v) => return Ok(Some(v)),
+      Err(quiche::Error::Done) => return Ok(None),
       Err(e) => return Err(napi::Error::from_reason(e.to_string())),
     };
   }
 
-  // We have Task, AsyncTask and async fn that runs things in the tokio runtime
-  // It seems the async task could be used here
-  // but I'm unclear about how the streams and shit should be done
-  // It seems that this is all in-memory computation
-  // So we should just not bother any async unless there's REAL IO
-
-  // If an exception occurs, we have to convert to false
   #[napi]
   pub fn dgram_purge_outgoing<F: Fn(Uint8Array) -> napi::Result<bool>>(
     &mut self,
@@ -756,10 +644,6 @@ impl Connection {
     );
   }
 
-  /// Maximum dgram size
-  ///
-  /// Use this to determine the size of the dgrams being send and received
-  /// I'm not sure if this is also necessary for send and recv?
   #[napi]
   pub fn dgram_max_writable_len(&mut self) -> Option<i64> {
     return self.0.dgram_max_writable_len().map(|v| v as i64);
@@ -830,14 +714,6 @@ impl Connection {
     );
   }
 
-  // So the problem with ConnectionId
-  // is that I could make it External
-  // But at the same time it turns out that these are just buffers
-  // And the connection ID can just be maintained on the JS side
-  // So I can just reference those buffers
-  // One way is to provide a constructor
-  // That allows you pass a buffer in to construct it
-  // rather than just taking it
   #[napi]
   pub fn new_source_cid(
     &mut self,
@@ -860,11 +736,6 @@ impl Connection {
   }
 
   #[napi]
-  pub fn max_active_source_cids(&self) -> i64 {
-    return self.0.max_active_source_cids() as i64;
-  }
-
-  #[napi]
   pub fn source_cids_left(&self) -> i64 {
     return self.0.source_cids_left() as i64;
   }
@@ -876,7 +747,6 @@ impl Connection {
     );
   }
 
-  // Technically this is some sort of struct
   #[napi(ts_return_type = "object")]
   pub fn path_event_next(
     &mut self,
@@ -891,11 +761,6 @@ impl Connection {
   #[napi]
   pub fn retired_scid_next(&mut self) -> Option<Uint8Array> {
     return self.0.retired_scid_next().map(|v| v.into());
-    // return self.0.retired_scid_next().map(|v| ConnectionId(v));
-    // let connection_id = self.0.retired_scid_next();
-    // return connection_id.map(|v| ConnectionId {
-    //   id: v.as_ref().into()
-    // });
   }
 
   #[napi]
@@ -915,10 +780,12 @@ impl Connection {
   }
 
   #[napi]
-  pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<()> {
-    return self.0.close(app, err as u64, &reason).or_else(
-      |e| Err(napi::Error::from_reason(e.to_string()))
-    );
+  pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<Option<()>> {
+    return match self.0.close(app, err as u64, &reason) {
+      Ok(_) => Ok(Some(())),
+      Err(quiche::Error::Done) => Ok(None),
+      Err(e) => Err(napi::Error::from_reason(e.to_string())),
+    };
   }
 
   #[napi]
@@ -950,36 +817,14 @@ impl Connection {
     return self.0.session().map(|s| s.to_vec().into());
   }
 
-  // This requires working on a Buffer/Uint8Array
-  // We return the ConnectionId
-  // But the problem is that on the JS side
-  // ConnectionId is just an opaque object
-  // It should be "containing" an inherent buffer
-  // Or we just use Uint8Array as our ConnectionId
-  // And just do the conversion directly
-  // As on the JS side it makes more sense to just say that it is a buffer
-  // without further work
-  // We could do something like
-  // ConnectionId(Uint8Array)
-  // Thus wrapping it into something we can use outside
-  // and exposing it too?
-
   #[napi]
   pub fn source_id(&self) -> Uint8Array {
     return self.0.source_id().as_ref().into();
-    // return ConnectionId { id: self.0.source_id().as_ref().into() };
-    // return ConnectionId(
-    //   quiche::ConnectionId::from_vec(self.0.source_id().as_ref().to_vec())
-    // );
   }
 
   #[napi]
   pub fn destination_id(&self) -> Uint8Array {
     return self.0.destination_id().as_ref().into();
-    // return ConnectionId { id: self.0.destination_id().as_ref().into() };
-    // return ConnectionId(
-    //   quiche::ConnectionId::from_vec(self.0.destination_id().as_ref().to_vec())
-    // );
   }
 
   #[napi]
@@ -1030,9 +875,7 @@ impl Connection {
 
   #[napi]
   pub fn is_closed(&self) -> bool {
-    // eprintln!("RUST: CALLING IS_CLOSED");
     let x = self.0.is_closed();
-    // eprintln!("RUST: FINISH CALLING IS_CLOSED=======");
     return x;
   }
 

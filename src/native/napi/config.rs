@@ -136,10 +136,9 @@ impl Config {
         |e| Err(napi::Error::from_reason(e.to_string()))
       )?;
     }
-    let ssl_ctx= ssl_ctx_builder.build();
-    let config = quiche::Config::with_boring_ssl_ctx(
+    let config = quiche::Config::with_boring_ssl_ctx_builder(
       quiche::PROTOCOL_VERSION,
-      ssl_ctx,
+      ssl_ctx_builder,
     ).or_else(
       |e| Err(Error::from_reason(e.to_string()))
     )?;
@@ -339,6 +338,11 @@ impl Config {
       recv_queue_len as usize,
       send_queue_len as usize
     );
+  }
+
+  #[napi]
+  pub fn set_max_stream_window(&mut self, v: i64) {
+    return self.0.set_max_stream_window(v as u64);
   }
 
   #[napi]

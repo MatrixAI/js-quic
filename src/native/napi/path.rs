@@ -1,8 +1,5 @@
 use napi_derive::napi;
 use napi::bindgen_prelude::*;
-// use napi::bindgen_prelude::{
-//   Generator
-// };
 use serde::{Serialize, Deserialize};
 use crate::connection;
 
@@ -74,9 +71,6 @@ impl Generator for HostIter {
 }
 
 /// Equivalent to quiche::PathStats
-///
-/// This is missing the validation_state because it is in a private module
-/// that I cannot access
 #[napi(object)]
 pub struct PathStats {
   pub local_host: connection::HostPort,

@@ -1,4 +1,5 @@
 import type { POJO } from '@matrixai/errors';
+import type { ConnectionError, CryptoError } from './native';
 import AbstractError from '@matrixai/errors/dist/AbstractError';
 
 class ErrorQUIC<T> extends AbstractError<T> {
@@ -25,10 +26,6 @@ class ErrorQUICSocketNotRunning<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket is not running';
 }
 
-class ErrorQUICSocketServerDuplicate<T> extends ErrorQUICSocket<T> {
-  static description = 'QUIC Socket already has a server that is running';
-}
-
 class ErrorQUICSocketConnectionsActive<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket has active connections';
 }
@@ -39,6 +36,35 @@ class ErrorQUICSocketInvalidBindAddress<T> extends ErrorQUICSocket<T> {
 
 class ErrorQUICSocketInvalidSendAddress<T> extends ErrorQUICSocket<T> {
   static description = 'QUIC Socket cannot send to the specified address';
+}
+
+class ErrorQUICSocketInternal<T> extends ErrorQUICSocket<T> {
+  static description = 'QUIC Socket internal error';
+}
+
+class ErrorQUICClient<T> extends ErrorQUIC<T> {
+  static description = 'QUIC Client error';
+}
+
+class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client is destroyed';
+}
+
+class ErrorQUICClientCreateTimeout<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client create timeout';
+}
+
+class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICClient<T> {
+  static description =
+    'QUIC Client cannot be created with an unstarted shared QUIC socket';
+}
+
+class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client cannot be created with the specified host';
+}
+
+class ErrorQUICClientInternal<T> extends ErrorQUICClient<T> {
+  static description = 'QUIC Client internal error';
 }
 
 class ErrorQUICServer<T> extends ErrorQUIC<T> {
@@ -54,29 +80,12 @@ class ErrorQUICServerSocketNotRunning<T> extends ErrorQUICServer<T> {
     'QUIC Server cannot start with an unstarted shared QUIC socket';
 }
 
-class ErrorQUICServerConnectionFailed<T> extends ErrorQUICServer<T> {
-  static description = 'QUIC server failed to create or accept a connection';
+class ErrorQUICServerNewConnection<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Server creating a new connection';
 }
 
-class ErrorQUICClient<T> extends ErrorQUIC<T> {
-  static description = 'QUIC Client error';
-}
-
-class ErrorQUICClientCreateTimeOut<T> extends ErrorQUICClient<T> {
-  static description = 'QUICC Client create timeout';
-}
-
-class ErrorQUICClientDestroyed<T> extends ErrorQUICClient<T> {
-  static description = 'QUIC Client is destroyed';
-}
-
-class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICClient<T> {
-  static description =
-    'QUIC Client cannot be created with an unstarted shared QUIC socket';
-}
-
-class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
-  static description = 'QUIC Client cannot be created with the specified host';
+class ErrorQUICServerInternal<T> extends ErrorQUICServer<T> {
+  static description = 'QUIC Server internal error';
 }
 
 class ErrorQUICConnection<T> extends ErrorQUIC<T> {
@@ -87,44 +96,102 @@ class ErrorQUICConnectionNotRunning<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection is not running';
 }
 
-class ErrorQUICConnectionStartTimeOut<T> extends ErrorQUICConnection<T> {
+class ErrorQUICConnectionClosed<T> extends ErrorQUICConnection<T> {
+  static description =
+    'QUIC Connection cannot be restarted because it has already been closed';
+}
+
+class ErrorQUICConnectionStartData<T> extends ErrorQUIC<T> {
+  static description =
+    'QUIC Connection start requires data when it is a server connection';
+}
+
+class ErrorQUICConnectionStartTimeout<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection start timeout';
 }
 
-/**
- * Quiche does not create a local or peer error during idle timeout.
- */
-class ErrorQUICConnectionIdleTimeOut<T> extends ErrorQUICConnection<T> {
-  static description = 'QUIC Connection reached idle timeout';
-}
-
-/**
- * These errors arise from the internal quiche connection.
- * These can be local errors (as in the case of TLS verification failure).
- * Or they can be remote errors.
- * If the connection fails to verify the peer, it will be a local error.
- * The error code might be 304.
- * You may want a "cause" though?
- * But it's not always a cause
- * Plus it might be useless
- * Note that the reason can be buffer.
- * Which means it does not need to be a reason
- *
- * Note that TlsFail error codes are documented here:
- * https://github.com/google/boringssl/blob/master/include/openssl/ssl.h
- */
-class ErrorQUICConnectionInternal<T> extends ErrorQUICConnection<T> {
-  static description = 'QUIC Connection internal conn error';
-  public declare data: {
-    type: 'local' | 'remote';
-    isApp: boolean;
-    errorCode: number;
-    reason: Uint8Array;
-  } & POJO;
-}
-
-class ErrorQUICConnectionInvalidConfig<T> extends ErrorQUICConnection<T> {
+class ErrorQUICConnectionConfigInvalid<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC connection invalid configuration';
+}
+
+class ErrorQUICConnectionLocal<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection local error';
+  declare data: POJO & ConnectionError;
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError;
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICConnectionLocalTLS<T> extends ErrorQUICConnectionLocal<T> {
+  static description = 'QUIC Connection local TLS error';
+  declare data: POJO &
+    ConnectionError & {
+      errorCode: CryptoError;
+    };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO &
+        ConnectionError & {
+          errorCode: CryptoError;
+        };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICConnectionPeer<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection peer error';
+  declare data: POJO & ConnectionError;
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & ConnectionError;
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICConnectionPeerTLS<T> extends ErrorQUICConnectionLocal<T> {
+  static description = 'QUIC Connection local TLS error';
+  declare data: POJO &
+    ConnectionError & {
+      errorCode: CryptoError;
+    };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO &
+        ConnectionError & {
+          errorCode: CryptoError;
+        };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICConnectionIdleTimeout<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection max idle timeout exhausted';
+}
+
+class ErrorQUICConnectionInternal<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection internal error';
 }
 
 class ErrorQUICStream<T> extends ErrorQUIC<T> {
@@ -135,16 +202,76 @@ class ErrorQUICStreamDestroyed<T> extends ErrorQUICStream<T> {
   static description = 'QUIC Stream is destroyed';
 }
 
-class ErrorQUICStreamClose<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream force close';
+class ErrorQUICStreamLocalRead<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream locally closed readable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
 }
 
-class ErrorQUICStreamCancel<T> extends ErrorQUICStream<T> {
-  static description = 'QUIC Stream was cancelled without a provided reason';
+class ErrorQUICStreamLocalWrite<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream locally closed writable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
 }
 
-class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
-  static description = 'This should never happen';
+class ErrorQUICStreamPeerRead<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream peer closed readable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICStreamPeerWrite<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream peer closed writable side';
+  declare data: POJO & { code: number };
+  constructor(
+    message: string = '',
+    options: {
+      timestamp?: Date;
+      data: POJO & {
+        code: number;
+      };
+      cause?: T;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+class ErrorQUICStreamInternal<T> extends ErrorQUICStream<T> {
+  static description = 'QUIC Stream internal error';
 }
 
 export {
@@ -154,28 +281,38 @@ export {
   ErrorQUICConfig,
   ErrorQUICSocket,
   ErrorQUICSocketNotRunning,
-  ErrorQUICSocketServerDuplicate,
   ErrorQUICSocketConnectionsActive,
   ErrorQUICSocketInvalidBindAddress,
   ErrorQUICSocketInvalidSendAddress,
+  ErrorQUICSocketInternal,
+  ErrorQUICClient,
+  ErrorQUICClientDestroyed,
+  ErrorQUICClientCreateTimeout,
+  ErrorQUICClientSocketNotRunning,
+  ErrorQUICClientInvalidHost,
+  ErrorQUICClientInternal,
   ErrorQUICServer,
   ErrorQUICServerNotRunning,
   ErrorQUICServerSocketNotRunning,
-  ErrorQUICServerConnectionFailed,
-  ErrorQUICClient,
-  ErrorQUICClientCreateTimeOut,
-  ErrorQUICClientDestroyed,
-  ErrorQUICClientSocketNotRunning,
-  ErrorQUICClientInvalidHost,
+  ErrorQUICServerNewConnection,
+  ErrorQUICServerInternal,
   ErrorQUICConnection,
   ErrorQUICConnectionNotRunning,
-  ErrorQUICConnectionStartTimeOut,
-  ErrorQUICConnectionIdleTimeOut,
+  ErrorQUICConnectionClosed,
+  ErrorQUICConnectionStartData,
+  ErrorQUICConnectionStartTimeout,
+  ErrorQUICConnectionConfigInvalid,
+  ErrorQUICConnectionLocal,
+  ErrorQUICConnectionLocalTLS,
+  ErrorQUICConnectionPeer,
+  ErrorQUICConnectionPeerTLS,
+  ErrorQUICConnectionIdleTimeout,
   ErrorQUICConnectionInternal,
-  ErrorQUICConnectionInvalidConfig,
   ErrorQUICStream,
   ErrorQUICStreamDestroyed,
-  ErrorQUICStreamClose,
-  ErrorQUICStreamCancel,
-  ErrorQUICUndefinedBehaviour,
+  ErrorQUICStreamLocalRead,
+  ErrorQUICStreamLocalWrite,
+  ErrorQUICStreamPeerRead,
+  ErrorQUICStreamPeerWrite,
+  ErrorQUICStreamInternal,
 };

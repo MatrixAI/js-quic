@@ -1,17 +1,93 @@
 import type {
+  Class,
   Callback,
   PromiseDeconstructed,
-  ConnectionId,
-  ConnectionIdString,
   Host,
   Port,
-  ServerCrypto,
+  QUICServerCrypto,
+  ConnectionId,
+  ConnectionIdString,
+  StreamId,
 } from './types';
-import type { Connection } from './native';
 import dns from 'dns';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import QUICConnectionId from './QUICConnectionId';
 import * as errors from './errors';
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder('utf-8');
+
+/**
+ * Convert callback-style to promise-style
+ * If this is applied to overloaded function
+ * it will only choose one of the function signatures to use
+ */
+function promisify<
+  T extends Array<unknown>,
+  P extends Array<unknown>,
+  R extends T extends [] ? void : T extends [unknown] ? T[0] : T,
+>(
+  f: (...args: [...params: P, callback: Callback<T>]) => unknown,
+): (...params: P) => Promise<R> {
+  // Uses a regular function so that `this` can be bound
+  return function (...params: P): Promise<R> {
+    return new Promise((resolve, reject) => {
+      const callback = (error, ...values) => {
+        if (error != null) {
+          return reject(error);
+        }
+        if (values.length === 0) {
+          (resolve as () => void)();
+        } else if (values.length === 1) {
+          resolve(values[0] as R);
+        } else {
+          resolve(values as R);
+        }
+        return;
+      };
+      params.push(callback);
+      f.apply(this, params);
+    });
+  };
+}
+
+/**
+ * Deconstructed promise
+ */
+function promise<T = void>(): PromiseDeconstructed<T> {
+  let resolveP, rejectP;
+  const p = new Promise<T>((resolve, reject) => {
+    resolveP = resolve;
+    rejectP = reject;
+  });
+  return {
+    p,
+    resolveP,
+    rejectP,
+  };
+}
+
+/**
+ * Zero-copy wraps ArrayBuffer-like objects into Buffer
+ * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
+ */
+function bufferWrap(
+  array: BufferSource,
+  offset?: number,
+  length?: number,
+): Buffer {
+  if (Buffer.isBuffer(array)) {
+    return array;
+  } else if (ArrayBuffer.isView(array)) {
+    return Buffer.from(
+      array.buffer,
+      offset ?? array.byteOffset,
+      length ?? array.byteLength,
+    );
+  } else {
+    return Buffer.from(array, offset, length);
+  }
+}
 
 /**
  * Is it an IPv4 address?
@@ -125,173 +201,6 @@ function fromIPv4MappedIPv6(host: string): Host {
   return ipv4Decs.join('.') as Host;
 }
 
-/**
- * This converts all `IPv4` formats to the `IPv4` decimal format.
- * `IPv4` decimal and `IPv6` hex formatted IPs are left unchanged.
- */
-function toCanonicalIp(host: string) {
-  if (isIPv4MappedIPv6(host)) {
-    return fromIPv4MappedIPv6(host);
-  }
-  if (isIPv4(host) || isIPv6(host)) {
-    return host;
-  }
-  throw new TypeError('Invalid IP address');
-}
-
-/**
- * This will resolve a hostname to the first host.
- * It could be an IPv6 address or IPv4 address.
- * This uses the OS's DNS resolution system.
- */
-async function resolveHostname(hostname: string): Promise<Host> {
-  const result = await dns.promises.lookup(hostname, {
-    family: 0,
-    all: false,
-    verbatim: true,
-  });
-  return result.address as Host;
-}
-
-/**
- * This will resolve a Host or Hostname to Host and `udp4` or `udp6`.
- * The `resolveHostname` can be overridden.
- */
-async function resolveHost(
-  host: string,
-  resolveHostname: (hostname: string) => Host | PromiseLike<Host>,
-): Promise<[Host, 'udp4' | 'udp6']> {
-  if (isIPv4(host)) {
-    return [host as Host, 'udp4'];
-  } else if (isIPv6(host)) {
-    return [host as Host, 'udp6'];
-  } else {
-    try {
-      host = await resolveHostname(host);
-      return resolveHost(host, resolveHostname);
-    } catch {
-      throw new errors.ErrorQUICHostInvalid();
-    }
-  }
-}
-
-/**
- * Converts a Host back to a string.
- */
-function fromHost(host: Host): string {
-  return host;
-}
-
-/**
- * Is it a valid Port?
- */
-function isPort(port: any): port is Port {
-  if (typeof port !== 'number') return false;
-  return port >= 0 && port <= 65535;
-}
-
-/**
- * Throws if port is invalid, otherwise returns port as Port.
- */
-function toPort(port: any): Port {
-  if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
-  return port;
-}
-
-/**
- * Converts a Port back to a number.
- */
-function fromPort(port: Port): number {
-  return port;
-}
-
-/**
- * Convert callback-style to promise-style
- * If this is applied to overloaded function
- * it will only choose one of the function signatures to use
- */
-function promisify<
-  T extends Array<unknown>,
-  P extends Array<unknown>,
-  R extends T extends [] ? void : T extends [unknown] ? T[0] : T,
->(
-  f: (...args: [...params: P, callback: Callback<T>]) => unknown,
-): (...params: P) => Promise<R> {
-  // Uses a regular function so that `this` can be bound
-  return function (...params: P): Promise<R> {
-    return new Promise((resolve, reject) => {
-      const callback = (error, ...values) => {
-        if (error != null) {
-          return reject(error);
-        }
-        if (values.length === 0) {
-          (resolve as () => void)();
-        } else if (values.length === 1) {
-          resolve(values[0] as R);
-        } else {
-          resolve(values as R);
-        }
-        return;
-      };
-      params.push(callback);
-      f.apply(this, params);
-    });
-  };
-}
-
-/**
- * Deconstructed promise
- */
-function promise<T = void>(): PromiseDeconstructed<T> {
-  let resolveP, rejectP;
-  const p = new Promise<T>((resolve, reject) => {
-    resolveP = resolve;
-    rejectP = reject;
-  });
-  return {
-    p,
-    resolveP,
-    rejectP,
-  };
-}
-
-/**
- * Zero-copy wraps ArrayBuffer-like objects into Buffer
- * This supports ArrayBuffer, TypedArrays and the NodeJS Buffer
- */
-function bufferWrap(
-  array: BufferSource,
-  offset?: number,
-  length?: number,
-): Buffer {
-  if (Buffer.isBuffer(array)) {
-    return array;
-  } else if (ArrayBuffer.isView(array)) {
-    return Buffer.from(
-      array.buffer,
-      offset ?? array.byteOffset,
-      length ?? array.byteLength,
-    );
-  } else {
-    return Buffer.from(array, offset, length);
-  }
-}
-
-/**
- * Given host and port, create an address string.
- */
-function buildAddress(host: string, port: number = 0): string {
-  let address: string;
-  if (isIPv4(host)) {
-    address = `${host}:${port}`;
-  } else if (isIPv6(host)) {
-    address = `[${host}]:${port}`;
-  } else {
-    address = `${host}:${port}`;
-  }
-  return address;
-}
-
 function isHostWildcard(host: Host): boolean {
   return (
     host === '0.0.0.0' ||
@@ -300,6 +209,20 @@ function isHostWildcard(host: Host): boolean {
     host === '::ffff:0.0.0.0' ||
     host === '::ffff:0:0'
   );
+}
+
+/**
+ * This converts all `IPv4` formats to the `IPv4` decimal format.
+ * `IPv4` decimal and `IPv6` hex formatted IPs are left unchanged.
+ */
+function toCanonicalIP(host: string) {
+  if (isIPv4MappedIPv6(host)) {
+    return fromIPv4MappedIPv6(host);
+  }
+  if (isIPv4(host) || isIPv6(host)) {
+    return host;
+  }
+  throw new TypeError('Invalid IP address');
 }
 
 /**
@@ -325,20 +248,178 @@ function resolvesZeroIP(host: Host): Host {
   }
 }
 
-function encodeConnectionId(connId: ConnectionId): ConnectionIdString {
-  return connId.toString('hex') as ConnectionIdString;
+/**
+ * This will resolve a hostname to the first host.
+ * It could be an IPv6 address or IPv4 address.
+ * This uses the OS's DNS resolution system.
+ */
+async function resolveHostname(hostname: string): Promise<Host> {
+  const result = await dns.promises.lookup(hostname, {
+    family: 0,
+    all: false,
+    verbatim: true,
+  });
+  return result.address as Host;
 }
 
-function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
-  return Buffer.from(connIdString, 'hex') as ConnectionId;
+/**
+ * This will resolve a Host or Hostname to Host and `udp4` or `udp6`.
+ * The `resolveHostname` can be overridden.
+ */
+async function resolveHost(
+  host: string,
+  resolveHostname: (hostname: string) => string | PromiseLike<string>,
+): Promise<[Host, 'udp4' | 'udp6']> {
+  if (isIPv4(host)) {
+    return [host as Host, 'udp4'];
+  } else if (isIPv6(host)) {
+    return [host as Host, 'udp6'];
+  } else {
+    try {
+      host = await resolveHostname(host);
+      return resolveHost(host, resolveHostname);
+    } catch {
+      throw new errors.ErrorQUICHostInvalid();
+    }
+  }
 }
 
-function never(message?: string): never {
-  throw new errors.ErrorQUICUndefinedBehaviour(message);
+/**
+ * Is it a valid Port?
+ */
+function isPort(port: any): port is Port {
+  if (typeof port !== 'number') return false;
+  return port >= 0 && port <= 65535;
 }
 
-function certificateDERToPEM(der: Uint8Array): string {
-  const data = Buffer.from(der);
+/**
+ * Throws if port is invalid, otherwise returns port as Port.
+ */
+function toPort(port: any): Port {
+  if (!isPort(port)) throw new errors.ErrorQUICPortInvalid();
+  return port;
+}
+
+/**
+ * Given host and port, create an address string.
+ */
+function buildAddress(host: string, port: number = 0): string {
+  let address: string;
+  if (isIPv4(host)) {
+    address = `${host}:${port}`;
+  } else if (isIPv6(host)) {
+    address = `[${host}]:${port}`;
+  } else {
+    address = `${host}:${port}`;
+  }
+  return address;
+}
+
+function validateTarget(
+  socketHost: Host,
+  socketType: 'ipv4' | 'ipv6' | 'ipv4&ipv6',
+  targetHost: Host,
+  targetUdpType: 'udp4' | 'udp6',
+  errorClass: Class<Error>,
+): Host {
+  if (isHostWildcard(targetHost)) {
+    throw new errorClass(`Invalid wildcard target host ${targetHost}`);
+  }
+  const isSocketHostIPv4Mapped = isIPv4MappedIPv6(socketHost);
+  const isTargetHostIPv4Mapped = isIPv4MappedIPv6(targetHost);
+  if (socketType === 'ipv4&ipv6' && targetUdpType === 'udp4') {
+    // If socket is IPv4 and IPv6 then:
+    //   If target is IPv4 - wrap and pass
+    //   If target is IPv6 - pass
+    //   If target is IPv4 mapped IPv6 - pass
+    return toIPv4MappedIPv6Dec(targetHost);
+  }
+  if (socketType === 'ipv4') {
+    if (!isSocketHostIPv4Mapped) {
+      // If socket is IPv4 then:
+      //   if target is IPv4 - pass
+      //   if target is IPv6 - fail
+      //   if target is IPv4 mapped IPv6 - unwrap and pass
+      if (targetUdpType === 'udp6') {
+        if (isTargetHostIPv4Mapped) {
+          return fromIPv4MappedIPv6(targetHost);
+        } else {
+          throw new errorClass(
+            `Invalid target host ${targetHost} from an IPv4 socket`,
+          );
+        }
+      }
+    } else {
+      // If socket is IPv4 but uses IPv4 mapped IPv6 bound address then:
+      //   If target is IPv4 - wrap and pass
+      //   If target is IPv6 - fail
+      //   If target is IPv4 mapped IPv6 - pass
+      if (targetUdpType === 'udp4') {
+        return toIPv4MappedIPv6Dec(targetHost);
+      } else if (targetUdpType === 'udp6' && !isTargetHostIPv4Mapped) {
+        throw new errorClass(
+          `Invalid target host ${targetHost} from an IPv4 socket`,
+        );
+      }
+    }
+    return targetHost;
+  }
+  if (socketType === 'ipv6') {
+    // If socket is IPv6 then:
+    //   If target is IPv4 - fail
+    //   If target is IPv6 - pass
+    //   If target is IPv4 mapped IPv6 - fail
+    if (targetUdpType === 'udp4' || isTargetHostIPv4Mapped) {
+      throw new errorClass(
+        `Invalid target host ${targetHost} from an IPv6 socket`,
+      );
+    }
+    return targetHost;
+  }
+  return targetHost;
+}
+
+/**
+ * Collects PEM arrays specified in `QUICConfig` into a PEM chain array.
+ * This can be used for keys, certs and ca.
+ */
+function collectPEMs(
+  pems?: string | Array<string> | Uint8Array | Array<Uint8Array>,
+): Array<string> {
+  const pemsChain: Array<string> = [];
+  if (typeof pems === 'string') {
+    pemsChain.push(pems.trim() + '\n');
+  } else if (pems instanceof Uint8Array) {
+    pemsChain.push(textDecoder.decode(pems).trim() + '\n');
+  } else if (Array.isArray(pems)) {
+    for (const c of pems) {
+      if (typeof c === 'string') {
+        pemsChain.push(c.trim() + '\n');
+      } else {
+        pemsChain.push(textDecoder.decode(c).trim() + '\n');
+      }
+    }
+  }
+  return pemsChain;
+}
+
+/**
+ * Converts PEM strings to DER Uint8Array
+ */
+function pemToDER(pem: string): Uint8Array {
+  const pemB64 = pem
+    .replace(/-----BEGIN .*-----/, '')
+    .replace(/-----END .*-----/, '')
+    .replace(/\s+/g, '');
+  const der = Buffer.from(pemB64, 'base64');
+  return new Uint8Array(der);
+}
+
+/**
+ * Converts DER Uint8Array to PEM string
+ */
+function derToPEM(der: Uint8Array): string {
+  const data = Buffer.from(der.buffer, der.byteOffset, der.byteLength);
   const contents =
     data
       .toString('base64')
@@ -347,21 +428,28 @@ function certificateDERToPEM(der: Uint8Array): string {
   return `-----BEGIN CERTIFICATE-----\n${contents}-----END CERTIFICATE-----\n`;
 }
 
-function certificatePEMsToCertChainPem(pems: Array<string>): string {
-  let certChainPEM = '';
-  for (const pem of pems) {
-    certChainPEM += pem;
-  }
-  return certChainPEM;
+/**
+ * Formats error exceptions.
+ * Example: `Error: description - message`
+ */
+function formatError(error: Error): string {
+  return `${error.name}${
+    'description' in error ? `: ${error.description}` : ''
+  }${error.message !== undefined ? ` - ${error.message}` : ''}`;
+}
+
+function encodeConnectionId(connId: ConnectionId): ConnectionIdString {
+  return connId.toString('hex') as ConnectionIdString;
+}
+
+function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
+  return Buffer.from(connIdString, 'hex') as ConnectionId;
 }
 
 async function mintToken(
   dcid: QUICConnectionId,
   peerHost: Host,
-  crypto: {
-    key: ArrayBuffer;
-    ops: ServerCrypto;
-  },
+  crypto: QUICServerCrypto,
 ): Promise<Buffer> {
   const msgData = { dcid: dcid.toString(), host: peerHost };
   const msgJSON = JSON.stringify(msgData);
@@ -378,10 +466,7 @@ async function mintToken(
 async function validateToken(
   tokenBuffer: Buffer,
   peerHost: Host,
-  crypto: {
-    key: ArrayBuffer;
-    ops: ServerCrypto;
-  },
+  crypto: QUICServerCrypto,
 ): Promise<QUICConnectionId | undefined> {
   let tokenData;
   try {
@@ -418,51 +503,56 @@ async function validateToken(
   return QUICConnectionId.fromString(msgData.dcid);
 }
 
-async function sleep(ms: number): Promise<void> {
-  return await new Promise<void>((r) => setTimeout(r, ms));
+function isStreamClientInitiated(streamId: StreamId): boolean {
+  return (streamId & 0b01) === 0;
+}
+
+function isStreamServerInitiated(streamId: StreamId): boolean {
+  return (streamId & 0b01) === 1;
+}
+
+function isStreamUnidirectional(streamId: StreamId): boolean {
+  return (streamId & 0b10) !== 0;
+}
+
+function isStreamBidirectional(streamId: StreamId): boolean {
+  return (streamId & 0b10) === 0;
 }
 
 /**
- * Useful for debug printing stream state
+ * Note if the peer sends a corrupted `StreamStopped`, the `code` will be `NaN`
+ * Furthermore it is limited to 16 digits the stringified maximum integer size of JS.
  */
-function streamStats(
-  connection: Connection,
-  streamId: number,
-  label: string,
-): string {
-  let streamWritable: string;
-  try {
-    streamWritable = `${connection.streamWritable(streamId, 0)}`;
-  } catch (e) {
-    streamWritable = `threw ${e.message}`;
+function isStreamStopped(e: Error): number | false {
+  let match: RegExpMatchArray | null;
+  if ((match = e.message.match(/StreamStopped\((\d{1,16})\)/)) != null) {
+    const code = parseInt(match[1]);
+    return code;
+  } else {
+    return false;
   }
-  let streamCapacity: string;
-  try {
-    streamCapacity = `${connection.streamCapacity(streamId)}`;
-  } catch (e) {
-    streamCapacity = `threw ${e.message}`;
+}
+
+/**
+ * Note if the peer sends a corrupted `StreamReset`, the `code` will be `NaN`
+ * Furthermore it is limited to 16 digits the stringified maximum integer size of JS.
+ */
+function isStreamReset(e: Error): number | false {
+  let match: RegExpMatchArray | null;
+  if ((match = e.message.match(/StreamReset\((\d{1,16})\)/)) != null) {
+    const code = parseInt(match[1]);
+    return code;
+  } else {
+    return false;
   }
-  let readableIterator = false;
-  for (const streamIterElement of connection.readable()) {
-    if (streamIterElement === streamId) readableIterator = true;
-  }
-  let writableIterator = false;
-  for (const streamIterElement of connection.writable()) {
-    if (streamIterElement === streamId) writableIterator = true;
-  }
-  return `
-  ---${label}---
-  isReadable: ${connection.isReadable()},
-  readable iterator: ${readableIterator},
-  streamReadable: ${connection.streamReadable(streamId)},
-  streamFinished: ${connection.streamFinished(streamId)},
-  writable iterator: ${writableIterator},
-  streamWritable: ${streamWritable},
-  streamCapacity: ${streamCapacity},
-`;
 }
 
 export {
+  textEncoder,
+  textDecoder,
+  promisify,
+  promise,
+  bufferWrap,
   isIPv4,
   isIPv6,
   isIPv4MappedIPv6,
@@ -471,26 +561,27 @@ export {
   toIPv4MappedIPv6Dec,
   toIPv4MappedIPv6Hex,
   fromIPv4MappedIPv6,
-  toCanonicalIp,
+  isHostWildcard,
+  toCanonicalIP,
+  resolvesZeroIP,
   resolveHostname,
   resolveHost,
-  fromHost,
   isPort,
   toPort,
-  fromPort,
-  promisify,
-  promise,
-  bufferWrap,
   buildAddress,
-  resolvesZeroIP,
-  isHostWildcard,
+  validateTarget,
+  collectPEMs,
+  pemToDER,
+  derToPEM,
+  formatError,
   encodeConnectionId,
   decodeConnectionId,
-  never,
-  certificateDERToPEM,
-  certificatePEMsToCertChainPem,
   mintToken,
   validateToken,
-  sleep,
-  streamStats,
+  isStreamClientInitiated,
+  isStreamServerInitiated,
+  isStreamBidirectional,
+  isStreamUnidirectional,
+  isStreamStopped,
+  isStreamReset,
 };

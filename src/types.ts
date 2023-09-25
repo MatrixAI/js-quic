@@ -1,4 +1,5 @@
 import type QUICStream from './QUICStream';
+import type { CryptoError } from './native';
 
 /**
  * Opaque types are wrappers of existing types
@@ -6,6 +7,8 @@ import type QUICStream from './QUICStream';
  */
 type Opaque<K, T> = T & { readonly [brand]: K };
 declare const brand: unique symbol;
+
+type Class<T> = new (...args: any[]) => T;
 
 /**
  * Generic callback
@@ -23,33 +26,6 @@ type PromiseDeconstructed<T> = {
   resolveP: (value: T | PromiseLike<T>) => void;
   rejectP: (reason?: any) => void;
 };
-
-type ConnectionId = Opaque<'ConnectionId', Buffer>;
-
-type ConnectionIdString = Opaque<'ConnectionIdString', string>;
-
-/**
- * Client crypto utility object
- * Remember every Node Buffer is an ArrayBuffer
- */
-type ClientCrypto = {
-  randomBytes(data: ArrayBuffer): Promise<void>;
-};
-
-/**
- * Server crypto utility object
- * Remember every Node Buffer is an ArrayBuffer
- */
-type ServerCrypto = {
-  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
-  verify(
-    key: ArrayBuffer,
-    data: ArrayBuffer,
-    sig: ArrayBuffer,
-  ): Promise<boolean>;
-};
-
-type StreamId = Opaque<'StreamId', number>;
 
 /**
  * Host is always an IP address
@@ -71,37 +47,58 @@ type Port = Opaque<'Port', number>;
  */
 type Address = Opaque<'Address', string>;
 
-type QUICStreamMap = Map<StreamId, QUICStream>;
-
 type RemoteInfo = {
   host: Host;
   port: Port;
 };
 
 /**
- * Maps reason (most likely an exception) to a stream code.
- * Use `0` to indicate unknown/default reason.
+ * Client crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
  */
-type StreamReasonToCode = (
-  type: 'recv' | 'send',
-  reason?: any,
-) => number | PromiseLike<number>;
+type ClientCryptoOps = {
+  randomBytes(data: ArrayBuffer): Promise<void>;
+};
 
 /**
- * Maps code to a reason. 0 usually indicates unknown/default reason.
+ * Server crypto utility object
+ * Remember every Node Buffer is an ArrayBuffer
  */
-type StreamCodeToReason = (
-  type: 'recv' | 'send',
-  code: number,
-) => any | PromiseLike<any>;
-
-type ConnectionMetadata = {
-  remoteCertificates: Array<string> | null;
-  localHost: string;
-  localPort: number;
-  remoteHost: string;
-  remotePort: number;
+type ServerCryptoOps = {
+  sign(key: ArrayBuffer, data: ArrayBuffer): Promise<ArrayBuffer>;
+  verify(
+    key: ArrayBuffer,
+    data: ArrayBuffer,
+    sig: ArrayBuffer,
+  ): Promise<boolean>;
 };
+
+type QUICClientCrypto = {
+  ops: ClientCryptoOps;
+};
+
+type QUICServerCrypto = {
+  key: ArrayBuffer;
+  ops: ServerCryptoOps;
+};
+
+/**
+ * Custom hostname resolution. It is expected this returns an IP address.
+ */
+type ResolveHostname = (hostname: string) => string | PromiseLike<string>;
+
+/**
+ * Custom TLS verification callback.
+ * The peer cert chain will be passed as the first parameter.
+ * The CA certs will also be available as a second parameter.
+ * The certs are in DER binary format.
+ * It will be an empty array if there were no CA certs.
+ * If it fails, return a `CryptoError` code.
+ */
+type TLSVerifyCallback = (
+  certs: Array<Uint8Array>,
+  ca: Array<Uint8Array>,
+) => PromiseLike<CryptoError | undefined>;
 
 type QUICConfig = {
   /**
@@ -165,10 +162,12 @@ type QUICConfig = {
   verifyPeer: boolean;
 
   /**
-   * Will allow insecure TLS certs, allowing for certs to be requested
-   * but the verification result is ignored.
+   * Custom TLS verification callback.
+   * It is expected that the callback will throw an error if the verification
+   * fails.
+   * Will be ignored if `verifyPeer` is false.
    */
-  verifyAllowFail: boolean;
+  verifyCallback?: TLSVerifyCallback;
 
   /**
    * Enables the logging of secret keys to a file path.
@@ -275,6 +274,16 @@ type QUICConfig = {
   initialMaxStreamsUni: number;
 
   /**
+   * This defaults to 24 MiB.
+   */
+  maxConnectionWindow: number;
+
+  /**
+   * This defaults to 16 MiB.
+   */
+  maxStreamWindow: number;
+
+  /**
    * Enables receiving dgram.
    * The 2 numbers are receive queue length and send queue length.
    * This defaults to `[false, 0, 0]`.
@@ -298,26 +307,66 @@ type QUICConfig = {
   enableEarlyData: boolean;
 };
 
-type VerifyCallback = (certs: Array<string>) => Promise<void> | void;
+type QUICClientConfigInput = Partial<QUICConfig>;
+
+type QUICServerConfigInput = Partial<QUICConfig> & {
+  key: string | Array<string> | Uint8Array | Array<Uint8Array>;
+  cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
+};
+
+type ConnectionId = Opaque<'ConnectionId', Buffer>;
+
+type ConnectionIdString = Opaque<'ConnectionIdString', string>;
+
+type ConnectionMetadata = {
+  localHost: string;
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
+  localCertsChain: Array<Uint8Array>;
+  localCACertsChain: Array<Uint8Array>;
+  remoteCertsChain: Array<Uint8Array>;
+};
+
+type StreamId = Opaque<'StreamId', number>;
+
+/**
+ * Maps reason (most likely an exception) to a stream code.
+ * Use `0` to indicate unknown/default reason.
+ */
+type StreamReasonToCode = (type: 'read' | 'write', reason?: any) => number;
+
+/**
+ * Maps code to a reason. 0 usually indicates unknown/default reason.
+ */
+type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
+
+type QUICStreamMap = Map<StreamId, QUICStream>;
 
 export type {
   Opaque,
+  Class,
   Callback,
   PromiseDeconstructed,
-  ConnectionId,
-  ConnectionIdString,
-  ClientCrypto,
-  ServerCrypto,
-  StreamId,
   Host,
   Hostname,
   Port,
   Address,
-  QUICStreamMap,
   RemoteInfo,
+  ClientCryptoOps,
+  ServerCryptoOps,
+  QUICClientCrypto,
+  QUICServerCrypto,
+  ResolveHostname,
+  TLSVerifyCallback,
+  QUICConfig,
+  QUICClientConfigInput,
+  QUICServerConfigInput,
+  ConnectionId,
+  ConnectionIdString,
+  ConnectionMetadata,
+  StreamId,
   StreamReasonToCode,
   StreamCodeToReason,
-  ConnectionMetadata,
-  QUICConfig,
-  VerifyCallback,
+  QUICStreamMap,
 };

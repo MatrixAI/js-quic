@@ -1,14 +1,13 @@
-import type * as events from '@/events';
-import type { ClientCrypto, ServerCrypto } from '@';
-import type QUICSocket from '@/QUICSocket';
+import type { ClientCryptoOps, QUICConnection, ServerCryptoOps } from '@';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import { destroyed } from '@matrixai/async-init';
+import * as events from '@/events';
 import * as utils from '@/utils';
 import QUICServer from '@/QUICServer';
 import QUICClient from '@/QUICClient';
 import QUICStream from '@/QUICStream';
 import * as testsUtils from './utils';
-import { generateConfig } from './utils';
+import { generateTLSConfig } from './utils';
 
 describe(QUICStream.name, () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
@@ -19,34 +18,44 @@ describe(QUICStream.name, () => {
   const defaultType = 'RSA';
   const localhost = '127.0.0.1';
   // This has to be setup asynchronously due to key generation
-  const serverCrypto: ServerCrypto = {
+  const serverCrypto: ServerCryptoOps = {
     sign: testsUtils.signHMAC,
     verify: testsUtils.verifyHMAC,
   };
   let key: ArrayBuffer;
-  const clientCrypto: ClientCrypto = {
+  const clientCrypto: ClientCryptoOps = {
     randomBytes: testsUtils.randomBytes,
   };
-  let sockets: Set<QUICSocket>;
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+
+  const testReason = Symbol('TestReason');
+  const testCodeToReason = (type, code) => {
+    switch (code) {
+      case 2:
+        return testReason;
+      default:
+        return new Error(`${type.toString()} ${code.toString()}`);
+    }
+  };
+  const testReasonToCode = (type, reason) => {
+    if (reason === testReason) return 2;
+    return 1;
+  };
 
   // We need to test the stream making
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    sockets = new Set();
+    socketCleanMethods = testsUtils.socketCleanupFactory();
   });
   afterEach(async () => {
-    const stopProms: Array<Promise<void>> = [];
-    for (const socket of sockets) {
-      stopProms.push(socket.stop({ force: true }));
-    }
-    await Promise.allSettled(stopProms);
+    await socketCleanMethods.stopSockets();
   });
 
   test('should create streams', async () => {
     const streamsNum = 10;
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -54,15 +63,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -79,12 +88,12 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCount = 0;
     const streamCreationProm = utils.promise();
-    conn.addEventListener('connectionStream', () => {
+    conn.addEventListener(events.EventQUICConnectionStream.name, () => {
       streamCount += 1;
       if (streamCount >= streamsNum) streamCreationProm.resolveP();
     });
@@ -92,7 +101,7 @@ describe(QUICStream.name, () => {
     // const message = Buffer.from('hello!');
     const message = Buffer.from('Hello!');
     for (let i = 0; i < streamsNum; i++) {
-      const stream = await client.connection.streamNew();
+      const stream = client.connection.newStream();
       const writer = stream.writable.getWriter();
       await writer.write(message);
       writer.releaseLock();
@@ -106,8 +115,8 @@ describe(QUICStream.name, () => {
     const message = Buffer.from('Message!');
     const streamsNum = 10;
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const streams: Array<QUICStream> = [];
     const server = new QUICServer({
       crypto: {
@@ -116,15 +125,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -141,7 +150,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -149,8 +158,8 @@ describe(QUICStream.name, () => {
     const streamCreationProm = utils.promise();
     const streamEndedProm = utils.promise();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         const stream = event.detail;
         streamCreatedCount += 1;
         if (streamCreatedCount >= streamsNum) streamCreationProm.resolveP();
@@ -166,7 +175,7 @@ describe(QUICStream.name, () => {
     );
     // Let's make a new streams.
     for (let i = 0; i < streamsNum; i++) {
-      const stream = await client.connection.streamNew();
+      const stream = client.connection.newStream();
       streams.push(stream);
       const writer = stream.writable.getWriter();
       await writer.write(message);
@@ -186,8 +195,8 @@ describe(QUICStream.name, () => {
     const numStreams = 10;
     const numMessage = 10;
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -195,19 +204,18 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
-      port: 58888,
     });
     const client = await QUICClient.createQUICClient({
       host: localhost,
@@ -221,13 +229,13 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const activeServerStreams: Array<Promise<void>> = [];
     conn.addEventListener(
-      'connectionStream',
-      (streamEvent: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (streamEvent: events.EventQUICConnectionStream) => {
         const stream = streamEvent.detail;
         const streamProm = stream.readable.pipeTo(stream.writable);
         activeServerStreams.push(streamProm);
@@ -239,7 +247,7 @@ describe(QUICStream.name, () => {
     for (let i = 0; i < numStreams; i++) {
       activeClientStreams.push(
         (async () => {
-          const stream = await client.connection.streamNew();
+          const stream = client.connection.newStream();
           const writer = stream.writable.getWriter();
           const reader = stream.readable.getReader();
           // Do write and read messages here.
@@ -263,46 +271,43 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for writable', async () => {
-    const streamsNum = 10;
-    const testReason = Symbol('TestReason');
-    const codeToReason = (type, code) => {
-      switch (code) {
-        case 2:
-          return testReason;
-        default:
-          return new Error(`${type.toString()} ${code.toString()}`);
-      }
-    };
-    const reasonToCode = (type, reason) => {
-      if (reason === testReason) return 2;
-      return 1;
-    };
-    const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
         ops: serverCrypto,
       },
       logger: logger.getChild(QUICServer.name),
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
+
+    const streamProm = utils.promise<QUICStream>();
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (evt: events.EventQUICServerConnection) => {
+        const conn = evt.detail;
+        conn.addEventListener(
+          events.EventQUICConnectionStream.name,
+          (evt: events.EventQUICConnectionStream) => {
+            streamProm.resolveP(evt.detail);
+          },
+          { once: true },
+        );
+      },
+      { once: true },
     );
+
     await server.start({
       host: localhost,
-      port: 59999,
     });
+
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
@@ -314,97 +319,70 @@ describe(QUICStream.name, () => {
       config: {
         verifyPeer: false,
       },
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
     });
-    testsUtils.extractSocket(client, sockets);
-    const conn = (await connectionEventProm.p).detail;
-    // Do the test
-    const activeServerStreams: Array<Promise<void>> = [];
-    conn.addEventListener(
-      'connectionStream',
-      (streamEvent: events.QUICConnectionStreamEvent) => {
-        const stream = streamEvent.detail;
-        const streamProm = stream.readable.pipeTo(stream.writable);
-        // Ignore unhandled errors
-        streamProm.catch(() => {});
-        activeServerStreams.push(streamProm);
-      },
-    );
-    // Let's make a new streams.
-    const activeClientStreams: Array<Promise<void>> = [];
-    const message = Buffer.from('Hello!');
-    for (let i = 0; i < streamsNum; i++) {
-      activeClientStreams.push(
-        (async () => {
-          const stream = await client.connection.streamNew();
-          const writer = stream.writable.getWriter();
-          // Do write and read messages here.
-          await writer.write(message);
-          await writer.abort(testReason);
-          try {
-            for await (const _ of stream.readable) {
-              // Do nothing, wait for finish
-            }
-          } catch (e) {
-            expect(e).toBe(testReason);
-          }
-        })(),
-      );
-    }
-    const expectationProms = activeServerStreams.map(async (v) => {
-      await v.catch((e) => {
-        expect(e).toBe(testReason);
-      });
-    });
-    await Promise.all([
-      Promise.all(activeClientStreams),
-      Promise.all(expectationProms),
-    ]);
+    socketCleanMethods.extractSocket(client);
+
+    // Create a stream
+    const clientStream = client.connection.newStream();
+
+    const clientWriter = clientStream.writable.getWriter();
+    const clientReader = clientStream.readable.getReader();
+    await clientWriter.write(Buffer.from('hello'));
+
+    const serverStream = await streamProm.p;
+    const serverWriter = serverStream.writable.getWriter();
+    const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
+
+    // Forward write error
+    await clientWriter.abort(testReason);
+    await expect(serverReader.read()).rejects.toBe(testReason);
+    await serverWriter.abort(testReason);
+    await expect(clientReader.read()).rejects.toBe(testReason);
+
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
   test('should propagate errors over stream for readable', async () => {
-    const streamsNum = 1;
-    const testReason = Symbol('TestReason');
-    const codeToReason = (type, code) => {
-      switch (code) {
-        case 2:
-          return testReason;
-        default:
-          return new Error(`${type.toString()} ${code.toString()}`);
-      }
-    };
-    const reasonToCode = (type, reason) => {
-      if (reason === testReason) return 2;
-      return 1;
-    };
-    const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
         ops: serverCrypto,
       },
       logger: logger.getChild(QUICServer.name),
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
+
+    const streamProm = utils.promise<QUICStream>();
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (evt: events.EventQUICServerConnection) => {
+        const conn = evt.detail;
+        conn.addEventListener(
+          events.EventQUICConnectionStream.name,
+          (evt: events.EventQUICConnectionStream) => {
+            streamProm.resolveP(evt.detail);
+          },
+          { once: true },
+        );
+      },
+      { once: true },
     );
+
     await server.start({
       host: localhost,
-      port: 60000,
     });
+
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
@@ -416,62 +394,36 @@ describe(QUICStream.name, () => {
       config: {
         verifyPeer: false,
       },
-      codeToReason,
-      reasonToCode,
+      codeToReason: testCodeToReason,
+      reasonToCode: testReasonToCode,
     });
-    testsUtils.extractSocket(client, sockets);
-    const conn = (await connectionEventProm.p).detail;
-    // Do the test
-    const activeServerStreams: Array<Promise<void>> = [];
-    const serverStreamsProm = utils.promise<void>();
-    let serverStreamNum = 0;
-    conn.addEventListener(
-      'connectionStream',
-      (streamEvent: events.QUICConnectionStreamEvent) => {
-        const stream = streamEvent.detail;
-        const streamProm = stream.readable
-          .pipeTo(stream.writable)
-          .catch((e) => {
-            expect(e).toBe(testReason);
-          });
-        activeServerStreams.push(streamProm);
-        serverStreamNum += 1;
-        if (serverStreamNum >= streamsNum) serverStreamsProm.resolveP();
-      },
+    socketCleanMethods.extractSocket(client);
+
+    // Create a stream
+    const clientStream = client.connection.newStream();
+
+    const clientWriter = clientStream.writable.getWriter();
+    const clientReader = clientStream.readable.getReader();
+    await clientWriter.write(Buffer.from('hello'));
+
+    const serverStream = await streamProm.p;
+    const serverWriter = serverStream.writable.getWriter();
+    const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
+
+    // Forward write error
+    await clientReader.cancel(testReason);
+    await serverReader.cancel(testReason);
+    // Takes some time for reader cancel to propagate to the writer
+    await clientStream.closedP;
+    await serverStream.closedP;
+    await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(
+      testReason,
     );
-    // Let's make a new streams.
-    const activeClientStreams: Array<Promise<void>> = [];
-    const message = Buffer.from('Hello!');
-    const serverStreamsDoneProm = utils.promise();
-    for (let i = 0; i < streamsNum; i++) {
-      const clientProm = (async () => {
-        const stream = await client.connection.streamNew();
-        const writer = stream.writable.getWriter();
-        // Do write and read messages here.
-        await writer.write(message);
-        await stream.readable.cancel(testReason);
-        await serverStreamsDoneProm.p;
-        // Need time for packets to send/recv
-        await testsUtils.sleep(100);
-        const writeProm = writer.write(message);
-        await writeProm.then(
-          () => {
-            throw Error('write did not throw');
-          },
-          (e) => expect(e).toBe(testReason),
-        );
-      })();
-      // ClientProm.catch(e => logger.error(e));
-      activeClientStreams.push(clientProm);
-    }
-    // Wait for streams to be created before mapping
-    await serverStreamsProm.p;
-    await Promise.all([
-      Promise.all(activeClientStreams),
-      Promise.all(activeServerStreams).finally(() => {
-        serverStreamsDoneProm.resolveP();
-      }),
-    ]);
+    await expect(clientWriter.write(Buffer.from('hello'))).rejects.toBe(
+      testReason,
+    );
+
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
@@ -479,8 +431,8 @@ describe(QUICStream.name, () => {
     const streamsNum = 10;
     const message = Buffer.from('The quick brown fox jumped over the lazy dog');
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -488,15 +440,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -513,7 +465,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -521,8 +473,8 @@ describe(QUICStream.name, () => {
     const streamCreationProm = utils.promise();
     const streamEndedProm = utils.promise();
     conn.addEventListener(
-      'connectionStream',
-      (asd: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (asd: events.EventQUICConnectionStream) => {
         const stream = asd.detail;
         streamCreatedCount += 1;
         if (streamCreatedCount >= streamsNum) streamCreationProm.resolveP();
@@ -538,7 +490,7 @@ describe(QUICStream.name, () => {
     );
     // Let's make a new streams.
     for (let i = 0; i < streamsNum; i++) {
-      const stream = await client.connection.streamNew();
+      const stream = client.connection.newStream();
       const writer = stream.writable.getWriter();
       await writer.write(message);
       writer.releaseLock();
@@ -557,8 +509,8 @@ describe(QUICStream.name, () => {
     const streamsNum = 10;
     const message = Buffer.from('The quick brown fox jumped over the lazy dog');
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -566,15 +518,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -591,7 +543,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -599,8 +551,8 @@ describe(QUICStream.name, () => {
     const streamCreationProm = utils.promise();
     const streamEndedProm = utils.promise();
     conn.addEventListener(
-      'connectionStream',
-      (asd: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (asd: events.EventQUICConnectionStream) => {
         const stream = asd.detail;
         streamCreatedCount += 1;
         if (streamCreatedCount >= streamsNum) streamCreationProm.resolveP();
@@ -616,7 +568,7 @@ describe(QUICStream.name, () => {
     );
     // Let's make a new streams.
     for (let i = 0; i < streamsNum; i++) {
-      const stream = await client.connection.streamNew();
+      const stream = client.connection.newStream();
       const writer = stream.writable.getWriter();
       await writer.write(message);
       writer.releaseLock();
@@ -634,8 +586,8 @@ describe(QUICStream.name, () => {
     const streamsNum = 10;
     const message = Buffer.from('The quick brown fox jumped over the lazy dog');
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -643,16 +595,16 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
       { once: true },
     );
     await server.start({
@@ -670,7 +622,7 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     let streamCreatedCount = 0;
@@ -678,8 +630,8 @@ describe(QUICStream.name, () => {
     const streamCreationProm = utils.promise();
     const streamEndedProm = utils.promise();
     conn.addEventListener(
-      'connectionStream',
-      (asd: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (asd: events.EventQUICConnectionStream) => {
         const stream = asd.detail;
         streamCreatedCount += 1;
         if (streamCreatedCount >= streamsNum) streamCreationProm.resolveP();
@@ -695,7 +647,7 @@ describe(QUICStream.name, () => {
     );
     // Let's make a new streams.
     for (let i = 0; i < streamsNum; i++) {
-      const stream = await client.connection.streamNew();
+      const stream = client.connection.newStream();
       const writer = stream.writable.getWriter();
       await writer.write(message);
       writer.releaseLock();
@@ -709,9 +661,9 @@ describe(QUICStream.name, () => {
   });
   test('streams should contain metadata', async () => {
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig1 = await generateConfig(defaultType);
-    const tlsConfig2 = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -719,17 +671,17 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig1.key,
-        cert: tlsConfig1.cert,
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
         verifyPeer: true,
-        ca: tlsConfig2.ca,
+        ca: tlsConfig2.caCertPEM,
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -744,59 +696,59 @@ describe(QUICStream.name, () => {
       logger: logger.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
-        key: tlsConfig2.key,
-        cert: tlsConfig2.cert,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
         maxIdleTimeout: 100,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         serverStreamProm.resolveP(event.detail);
       },
     );
     // Let's make a new streams.
     const message = Buffer.from('Hello!');
-    const clientStream = await client.connection.streamNew();
+    const clientStream = client.connection.newStream();
     const writer = clientStream.writable.getWriter();
     await writer.write(message);
     writer.releaseLock();
     await serverStreamProm.p;
-    const clientMetadata = clientStream.remoteInfo;
-    expect(clientMetadata.localHost).toBe(client.host);
-    expect(clientMetadata.localPort).toBe(client.port);
+    const clientMetadata = clientStream.meta;
+    expect(clientMetadata.localHost).toBe(client.localHost);
+    expect(clientMetadata.localPort).toBe(client.localPort);
     expect(clientMetadata.remoteHost).toBe(server.host);
     expect(clientMetadata.remotePort).toBe(server.port);
-    expect(clientMetadata.remoteCertificates?.length).toBeGreaterThan(0);
-    const clientPemChain = utils.certificatePEMsToCertChainPem(
-      clientMetadata.remoteCertificates!,
+    expect(clientMetadata.remoteCertsChain?.length).toBeGreaterThan(0);
+    const clientPemChain = utils.collectPEMs(
+      clientMetadata.remoteCertsChain.map((v) => utils.derToPEM(v)),
     );
-    expect(clientPemChain).toEqual(tlsConfig1.cert);
+    expect(clientPemChain[0]).toEqual(tlsConfig1.leafCertPEM);
 
     const serverStream = await serverStreamProm.p;
-    const serverMetadata = serverStream.remoteInfo;
+    const serverMetadata = serverStream.meta;
     expect(serverMetadata.localHost).toBe(server.host);
     expect(serverMetadata.localPort).toBe(server.port);
-    expect(serverMetadata.remoteHost).toBe(client.host);
-    expect(serverMetadata.remotePort).toBe(client.port);
-    expect(serverMetadata.remoteCertificates?.length).toBeGreaterThan(0);
-    const serverPemChain = utils.certificatePEMsToCertChainPem(
-      serverMetadata.remoteCertificates!,
+    expect(serverMetadata.remoteHost).toBe(client.localHost);
+    expect(serverMetadata.remotePort).toBe(client.localPort);
+    expect(serverMetadata.remoteCertsChain?.length).toBeGreaterThan(0);
+    const serverPemChain = utils.collectPEMs(
+      serverMetadata.remoteCertsChain.map((v) => utils.derToPEM(v)),
     );
-    expect(serverPemChain).toEqual(tlsConfig2.cert);
+    expect(serverPemChain[0]).toEqual(tlsConfig2.leafCertPEM);
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
   test('streams can be cancelled after data sent', async () => {
     const cancelReason = Symbol('CancelReason');
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig1 = await generateConfig(defaultType);
-    const tlsConfig2 = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
     const reasonConverters = testsUtils.createReasonConverters();
     const server = new QUICServer({
       crypto: {
@@ -805,17 +757,17 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig1.key,
-        cert: tlsConfig1.cert,
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
         verifyPeer: true,
-        ca: tlsConfig2.ca,
+        ca: tlsConfig2.caCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -830,24 +782,24 @@ describe(QUICStream.name, () => {
       logger: logger.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
-        key: tlsConfig2.key,
-        cert: tlsConfig2.cert,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         serverStreamProm.resolveP(event.detail);
       },
     );
     // Let's make a new streams.
     const message = Buffer.from('Hello!');
-    const clientStream = await client.connection.streamNew();
+    const clientStream = client.connection.newStream();
     const writer = clientStream.writable.getWriter();
     await writer.write(message);
     writer.releaseLock();
@@ -880,11 +832,9 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
   });
   test('streams can be cancelled with no data sent', async () => {
-    const cancelReason = Symbol('CancelReason');
-    const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig1 = await generateConfig(defaultType);
-    const tlsConfig2 = await generateConfig(defaultType);
+    const connectionEventProm = utils.promise<QUICConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
     const reasonConverters = testsUtils.createReasonConverters();
     const server = new QUICServer({
       crypto: {
@@ -893,17 +843,18 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig1.key,
-        cert: tlsConfig1.cert,
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
         verifyPeer: true,
-        ca: tlsConfig2.ca,
+        ca: tlsConfig2.caCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (evt: events.EventQUICServerConnection) =>
+        connectionEventProm.resolveP(evt.detail),
     );
     await server.start({
       host: localhost,
@@ -918,29 +869,29 @@ describe(QUICStream.name, () => {
       logger: logger.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
-        key: tlsConfig2.key,
-        cert: tlsConfig2.cert,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
-    const conn = (await connectionEventProm.p).detail;
+    socketCleanMethods.extractSocket(client);
+    const conn = await connectionEventProm.p;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         serverStreamProm.resolveP(event.detail);
       },
     );
     // Let's make a new streams.
-    const clientStream = await client.connection.streamNew();
-    clientStream.cancel(cancelReason);
+    const clientStream = client.connection.newStream();
+    clientStream.cancel(testReason);
     await expect(clientStream.readable.getReader().read()).rejects.toBe(
-      cancelReason,
+      testReason,
     );
     await expect(clientStream.writable.getWriter().write()).rejects.toBe(
-      cancelReason,
+      testReason,
     );
 
     // Let's check that the server side ended
@@ -950,15 +901,16 @@ describe(QUICStream.name, () => {
         // Just consume until stream throws
       }
     })();
-    await expect(serverReadProm).rejects.toBe(cancelReason);
+    await expect(serverReadProm).rejects.toBe(testReason);
     const serverWriter = serverStream.writable.getWriter();
     // Should throw
     await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(
-      cancelReason,
+      testReason,
     );
 
     // And client stream should've cleaned up
-    await testsUtils.sleep(100);
+    await clientStream.closedP;
+    await serverStream.closedP;
     expect(clientStream[destroyed]).toBeTrue();
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -966,9 +918,9 @@ describe(QUICStream.name, () => {
   test('streams can be cancelled concurrently after data sent', async () => {
     const cancelReason = Symbol('CancelReason');
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig1 = await generateConfig(defaultType);
-    const tlsConfig2 = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
     const reasonConverters = testsUtils.createReasonConverters();
     const server = new QUICServer({
       crypto: {
@@ -977,17 +929,17 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig1.key,
-        cert: tlsConfig1.cert,
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
         verifyPeer: true,
-        ca: tlsConfig2.ca,
+        ca: tlsConfig2.caCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -1002,24 +954,24 @@ describe(QUICStream.name, () => {
       logger: logger.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
-        key: tlsConfig2.key,
-        cert: tlsConfig2.cert,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
       },
       ...reasonConverters,
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const serverStreamProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         serverStreamProm.resolveP(event.detail);
       },
     );
     // Let's make a new streams.
     const message = Buffer.from('Hello!');
-    const clientStream = await client.connection.streamNew();
+    const clientStream = client.connection.newStream();
     const writer = clientStream.writable.getWriter();
     await writer.write(message);
     writer.releaseLock();
@@ -1051,8 +1003,8 @@ describe(QUICStream.name, () => {
     // Needed to check that the pull based reading of data doesn't break when we
     // temporarily run out of data to read
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -1060,15 +1012,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -1085,18 +1037,18 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const streamCreationProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         streamCreationProm.resolveP(event.detail);
       },
     );
     const message = Buffer.from('Hello!');
-    const clientStream = await client.connection.streamNew();
+    const clientStream = client.connection.newStream();
     const clientWriter = clientStream.writable.getWriter();
     await clientWriter.write(message);
     await streamCreationProm.p;
@@ -1104,6 +1056,7 @@ describe(QUICStream.name, () => {
 
     // Drain the readable buffer
     const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
     serverReader.releaseLock();
 
     // Closing stream with no buffered data should be responsive
@@ -1111,7 +1064,7 @@ describe(QUICStream.name, () => {
     await serverStream.writable.close();
 
     // Both streams are destroyed even without reading till close
-    await Promise.all([clientStream.destroyedP, serverStream.destroyedP]);
+    await Promise.all([clientStream.closedP, serverStream.closedP]);
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
@@ -1121,8 +1074,8 @@ describe(QUICStream.name, () => {
     // we will still respond to an error in the readable stream
 
     const connectionEventProm =
-      utils.promise<events.QUICServerConnectionEvent>();
-    const tlsConfig = await generateConfig(defaultType);
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
       crypto: {
         key,
@@ -1130,15 +1083,15 @@ describe(QUICStream.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfig.key,
-        cert: tlsConfig.cert,
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(server, sockets);
+    socketCleanMethods.extractSocket(server);
     server.addEventListener(
-      'serverConnection',
-      (e: events.QUICServerConnectionEvent) => connectionEventProm.resolveP(e),
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
     );
     await server.start({
       host: localhost,
@@ -1155,18 +1108,18 @@ describe(QUICStream.name, () => {
         verifyPeer: false,
       },
     });
-    testsUtils.extractSocket(client, sockets);
+    socketCleanMethods.extractSocket(client);
     const conn = (await connectionEventProm.p).detail;
     // Do the test
     const streamCreationProm = utils.promise<QUICStream>();
     conn.addEventListener(
-      'connectionStream',
-      (event: events.QUICConnectionStreamEvent) => {
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
         streamCreationProm.resolveP(event.detail);
       },
     );
     const message = Buffer.from('Hello!');
-    const clientStream = await client.connection.streamNew();
+    const clientStream = client.connection.newStream();
     const clientWriter = clientStream.writable.getWriter();
     await clientWriter.write(message);
     await streamCreationProm.p;
@@ -1182,11 +1135,11 @@ describe(QUICStream.name, () => {
     await clientWriter.write(message);
 
     // Closing stream with no buffered data should be responsive
-    await clientWriter.abort(Error('some error'));
-    await serverWriter.abort(Error('some error'));
+    await clientWriter.abort(testReason);
+    await serverWriter.abort(testReason);
 
     // Both streams are destroyed even without reading till close
-    await Promise.all([clientStream.destroyedP, serverStream.destroyedP]);
+    await Promise.all([clientStream.closedP, serverStream.closedP]);
 
     await client.destroy({ force: true });
     await server.stop({ force: true });

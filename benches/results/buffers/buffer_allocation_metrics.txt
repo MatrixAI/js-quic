@@ -1,0 +1,26 @@
+# TYPE buffers.buffer_allocation_ops gauge
+buffers.buffer_allocation_ops{name="Buffer.alloc"} 737442
+buffers.buffer_allocation_ops{name="Buffer.allocUnsafe"} 3112051
+buffers.buffer_allocation_ops{name="Buffer.allocUnsafeSlow"} 949633
+buffers.buffer_allocation_ops{name="Buffer.from subarray"} 1700664
+buffers.buffer_allocation_ops{name="Buffer.copyBytesFrom"} 517646
+buffers.buffer_allocation_ops{name="Uint8Array"} 777665
+buffers.buffer_allocation_ops{name="Uint8Array slice"} 704702
+
+# TYPE buffers.buffer_allocation_margin gauge
+buffers.buffer_allocation_margin{name="Buffer.alloc"} 2.08
+buffers.buffer_allocation_margin{name="Buffer.allocUnsafe"} 2.56
+buffers.buffer_allocation_margin{name="Buffer.allocUnsafeSlow"} 3.18
+buffers.buffer_allocation_margin{name="Buffer.from subarray"} 2.07
+buffers.buffer_allocation_margin{name="Buffer.copyBytesFrom"} 1.49
+buffers.buffer_allocation_margin{name="Uint8Array"} 5.5
+buffers.buffer_allocation_margin{name="Uint8Array slice"} 3.28
+
+# TYPE buffers.buffer_allocation_samples counter
+buffers.buffer_allocation_samples{name="Buffer.alloc"} 78
+buffers.buffer_allocation_samples{name="Buffer.allocUnsafe"} 80
+buffers.buffer_allocation_samples{name="Buffer.allocUnsafeSlow"} 79
+buffers.buffer_allocation_samples{name="Buffer.from subarray"} 86
+buffers.buffer_allocation_samples{name="Buffer.copyBytesFrom"} 85
+buffers.buffer_allocation_samples{name="Uint8Array"} 43
+buffers.buffer_allocation_samples{name="Uint8Array slice"} 56

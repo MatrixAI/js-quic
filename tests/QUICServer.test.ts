@@ -1,8 +1,14 @@
 import type { X509Certificate } from '@peculiar/x509';
-import type { Host, ServerCrypto } from '@/types';
+import type { Host, ServerCryptoOps } from '@/types';
+import type QUICConnection from '@/QUICConnection';
+import type { ClientCryptoOps } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import * as utils from '@/utils';
+import { promise } from '@/utils';
+import * as events from '@/events';
+import QUICClient from '@/QUICClient';
+import * as errors from '@/errors';
 import * as testsUtils from './utils';
 
 describe(QUICServer.name, () => {
@@ -71,21 +77,26 @@ describe(QUICServer.name, () => {
     certEd25519PEM = testsUtils.certToPEM(certEd25519);
   });
   // This has to be setup asynchronously due to key generation
-  let serverCrypto: ServerCrypto;
+  let serverCryptoOps: ServerCryptoOps;
   let key: ArrayBuffer;
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    serverCrypto = {
+    serverCryptoOps = {
       sign: testsUtils.signHMAC,
       verify: testsUtils.verifyHMAC,
     };
+    socketCleanMethods = testsUtils.socketCleanupFactory();
+  });
+  afterEach(async () => {
+    await socketCleanMethods.stopSockets();
   });
   describe('start and stop', () => {
     test('with RSA', async () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairRSAPEM.privateKey,
@@ -93,6 +104,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start();
       // Default to dual-stack
       expect(quicServer.host).toBe('::');
@@ -103,7 +115,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairECDSAPEM.privateKey,
@@ -111,6 +123,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start();
       // Default to dual-stack
       expect(quicServer.host).toBe('::');
@@ -121,7 +134,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -129,6 +142,31 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
+      await quicServer.start();
+      // Default to dual-stack
+      expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    });
+    test('repeated stop and start', async () => {
+      const quicServer = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        config: {
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      socketCleanMethods.extractSocket(quicServer);
+      await quicServer.start();
+      // Default to dual-stack
+      expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
       await quicServer.start();
       // Default to dual-stack
       expect(quicServer.host).toBe('::');
@@ -141,7 +179,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -149,6 +187,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start({
         host: '127.0.0.1',
       });
@@ -160,7 +199,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -168,6 +207,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start({
         host: '::1',
       });
@@ -179,7 +219,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -187,6 +227,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start({
         host: '::',
       });
@@ -200,7 +241,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -208,6 +249,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start({
         host: '::ffff:127.0.0.1',
       });
@@ -226,7 +268,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -234,6 +276,7 @@ describe(QUICServer.name, () => {
         },
         logger: logger.getChild('QUICServer'),
       });
+      socketCleanMethods.extractSocket(quicServer);
       await quicServer.start({
         host: 'localhost',
       });
@@ -247,7 +290,7 @@ describe(QUICServer.name, () => {
       const quicServer = new QUICServer({
         crypto: {
           key,
-          ops: serverCrypto,
+          ops: serverCryptoOps,
         },
         config: {
           key: keyPairEd25519PEM.privateKey,
@@ -264,13 +307,14 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
+  // TODO: what is this? re-enable?
   // Describe.only('connection bootstrap', () => {
   //   // Test without peer verification
   //   test.only('', async () => {
   //     const quicServer = new QUICServer({
   //       crypto: {
   //         key,
-  //         ops: serverCrypto,
+  //         ops: serverCryptoOps,
   //       },
   //       config: {
   //         key: keyPairECDSAPEM.privateKey,
@@ -399,4 +443,117 @@ describe(QUICServer.name, () => {
   // Test hole punching, there's an initiation function
   // We can make it start doing this, but technically it's the socket's duty to do this
   // not just the server side
+  test('socket stopping first triggers client destruction', async () => {
+    const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
+
+    const connectionEventProm = promise<QUICConnection>();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCryptoOps,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfigServer.leafKeyPairPEM.privateKey,
+        cert: tlsConfigServer.leafCertPEM,
+        verifyPeer: false,
+        maxIdleTimeout: 200,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) =>
+        connectionEventProm.resolveP(e.detail),
+    );
+    await server.start({
+      host: '127.0.0.1',
+      port: 55555,
+    });
+    const clientCryptoOps: ClientCryptoOps = {
+      randomBytes: testsUtils.randomBytes,
+    };
+    // If the server is slow to respond then this will time out.
+    //  Then main cause of this was the server not processing the initial packet
+    //  that creates the `QUICConnection`, as a result, the whole creation waited
+    //  an extra 1 second for the client to retry the initial packet.
+    const client = await QUICClient.createQUICClient({
+      host: '127.0.0.1',
+      port: server.port,
+      localHost: '127.0.0.1',
+      crypto: {
+        ops: clientCryptoOps,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+
+    // Handling client connection error event
+    const clientConnectionErrorProm = promise<never>();
+    client.connection.addEventListener(
+      events.EventQUICConnectionError.name,
+      (evt: events.EventQUICConnectionError) =>
+        clientConnectionErrorProm.rejectP(evt.detail),
+      { once: true },
+    );
+
+    const serverConnection = await connectionEventProm.p;
+    // Handling server connection error event
+    const serverConnectionErrorProm = promise<never>();
+    serverConnection.addEventListener(
+      events.EventQUICConnectionError.name,
+      (evt: events.EventQUICConnectionError) =>
+        serverConnectionErrorProm.rejectP(evt.detail),
+      { once: true },
+    );
+
+    // Handling server connection stop event
+    const serverConnectionStoppedProm = promise<void>();
+    client.connection.addEventListener(
+      events.EventQUICConnectionStopped.name,
+      () => serverConnectionStoppedProm.resolveP(),
+      { once: true },
+    );
+
+    // Handling server error event
+    const serverErrorProm = promise<never>();
+    server.addEventListener(
+      events.EventQUICServerError.name,
+      (evt: events.EventQUICServerError) => serverErrorProm.rejectP(evt.detail),
+      { once: true },
+    );
+
+    // Handling client destroy event
+    const serverStoppedProm = promise<void>();
+    server.addEventListener(
+      events.EventQUICServerStopped.name,
+      () => serverStoppedProm.resolveP(),
+      { once: true },
+    );
+
+    // @ts-ignore: kidnap protected property
+    const serverSocket = server.socket;
+    await serverSocket.stop({ force: true });
+
+    // Socket failure triggers server connection local failure
+    await expect(serverConnectionErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICConnectionLocal,
+    );
+    await expect(serverErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICServerSocketNotRunning,
+    );
+    await serverStoppedProm.p;
+    await serverConnectionStoppedProm.p;
+
+    // Socket failure will not trigger any close frame since transport has failed so client connection will time out
+    await expect(clientConnectionErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICConnectionIdleTimeout,
+    );
+
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
 });

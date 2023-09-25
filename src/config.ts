@@ -1,6 +1,7 @@
 import type { QUICConfig } from './types';
 import type { Config as QuicheConfig } from './native/types';
 import { quiche } from './native';
+import * as utils from './utils';
 import * as errors from './errors';
 
 /**
@@ -24,33 +25,38 @@ const sigalgs = [
 ].join(':');
 
 /**
- * Usually we would create separate timeouts for connecting vs idling.
+ * Usually we would create separate timeouts for starting vs keep-alive.
  * Unfortunately quiche only has 1 config option that controls both.
  * And it is not possible to mutate this option after connecting.
- * Therefore, this option is just a way to set a shorter connecting timeout
+ * Therefore, this option is just a way to set a shorter start timeout
  * compared to the idling timeout.
- * If this is the larger than the `maxIdleTimeout` (remember that `0` is `Infinity`) for `maxIdleTimeout`, then this has no effect.
- * This only has an effect if this is set to a number less than `maxIdleTimeout`.
- * Thus, it is the "minimum boundary" of the timeout during connecting.
- * While the `maxIdleTimeout` is still the "maximum boundary" during connecting.
+ * If this is the larger than the `maxIdleTimeout` (where `0` means `Infinity`),
+ * then this has no effect. This only has an effect if this is set to a number
+ * less than `maxIdleTimeout`. Thus, it is the "minimum boundary" of the
+ * timeout when starting. While the `maxIdleTimeout` is still the "maximum
+ * boundary" when starting.
+ * Both `minIdleTimeout` and `maxIdleTimeout` defaults to `Infinity` (where `0`
+ * means `Infinity` for `maxIdleTimeout`), thus by default connections will not
+ * timeout when starting or during keep-alive.
  */
 const minIdleTimeout = Infinity;
 
 const clientDefault: QUICConfig = {
   sigalgs,
   verifyPeer: true,
-  verifyAllowFail: false,
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200,
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 65527, but set to 1350
+  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 1200, but set to 1350
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
   initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
+  maxConnectionWindow: quiche.MAX_CONNECTION_WINDOW,
+  maxStreamWindow: quiche.MAX_STREAM_WINDOW,
   enableDgram: [false, 0, 0],
   disableActiveMigration: true,
   applicationProtos: ['quic'],
@@ -60,26 +66,24 @@ const clientDefault: QUICConfig = {
 const serverDefault: QUICConfig = {
   sigalgs,
   verifyPeer: false,
-  verifyAllowFail: false,
   grease: true,
   keepAliveIntervalTime: undefined,
   maxIdleTimeout: 0,
-  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // 65527
-  maxSendUdpPayloadSize: quiche.MIN_CLIENT_INITIAL_LEN, // 1200
+  maxRecvUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 65527
+  maxSendUdpPayloadSize: quiche.MAX_DATAGRAM_SIZE, // Default is 1200, but set to 1350
   initialMaxData: 10 * 1024 * 1024,
   initialMaxStreamDataBidiLocal: 1 * 1024 * 1024,
   initialMaxStreamDataBidiRemote: 1 * 1024 * 1024,
   initialMaxStreamDataUni: 1 * 1024 * 1024,
   initialMaxStreamsBidi: 100,
   initialMaxStreamsUni: 100,
+  maxConnectionWindow: quiche.MAX_CONNECTION_WINDOW,
+  maxStreamWindow: quiche.MAX_STREAM_WINDOW,
   enableDgram: [false, 0, 0],
   disableActiveMigration: true,
   applicationProtos: ['quic'],
   enableEarlyData: true,
 };
-
-const textDecoder = new TextDecoder('utf-8');
-const textEncoder = new TextEncoder();
 
 /**
  * Converts QUICConfig to QuicheConfig.
@@ -107,65 +111,26 @@ function buildQuicheConfig(config: QUICConfig): QuicheConfig {
   // This is a concatenated CA certificates in PEM format
   let caPEMBuffer: Uint8Array | undefined;
   if (config.ca != null) {
-    let caPEMString = '';
-    if (typeof config.ca === 'string') {
-      caPEMString = config.ca.trim() + '\n';
-    } else if (config.ca instanceof Uint8Array) {
-      caPEMString = textDecoder.decode(config.ca).trim() + '\n';
-    } else if (Array.isArray(config.ca)) {
-      for (const c of config.ca) {
-        if (typeof c === 'string') {
-          caPEMString += c.trim() + '\n';
-        } else {
-          caPEMString += textDecoder.decode(c).trim() + '\n';
-        }
-      }
-    }
-    caPEMBuffer = textEncoder.encode(caPEMString);
+    const caPEMBuffers = utils.collectPEMs(config.ca);
+    caPEMBuffer = utils.textEncoder.encode(caPEMBuffers.join(''));
   }
-  // This is an array of private keys in PEM format
+  // This is an array of private keys in PEM format as buffers
   let keyPEMBuffers: Array<Uint8Array> | undefined;
   if (config.key != null) {
-    const keyPEMs: Array<string> = [];
-    if (typeof config.key === 'string') {
-      keyPEMs.push(config.key.trim() + '\n');
-    } else if (config.key instanceof Uint8Array) {
-      keyPEMs.push(textDecoder.decode(config.key).trim() + '\n');
-    } else if (Array.isArray(config.key)) {
-      for (const k of config.key) {
-        if (typeof k === 'string') {
-          keyPEMs.push(k.trim() + '\n');
-        } else {
-          keyPEMs.push(textDecoder.decode(k).trim() + '\n');
-        }
-      }
-    }
-    keyPEMBuffers = keyPEMs.map((k) => textEncoder.encode(k));
+    const keyPEMs = utils.collectPEMs(config.key);
+    keyPEMBuffers = keyPEMs.map((k) => utils.textEncoder.encode(k));
   }
-  // This is an array of certificate chains in PEM format
+  // This is an array of certificate chains in PEM format as buffers
   let certChainPEMBuffers: Array<Uint8Array> | undefined;
   if (config.cert != null) {
-    const certChainPEMs: Array<string> = [];
-    if (typeof config.cert === 'string') {
-      certChainPEMs.push(config.cert.trim() + '\n');
-    } else if (config.cert instanceof Uint8Array) {
-      certChainPEMs.push(textDecoder.decode(config.cert).trim() + '\n');
-    } else if (Array.isArray(config.cert)) {
-      for (const c of config.cert) {
-        if (typeof c === 'string') {
-          certChainPEMs.push(c.trim() + '\n');
-        } else {
-          certChainPEMs.push(textDecoder.decode(c).trim() + '\n');
-        }
-      }
-    }
-    certChainPEMBuffers = certChainPEMs.map((c) => textEncoder.encode(c));
+    const certPEMsChain = utils.collectPEMs(config.cert);
+    certChainPEMBuffers = certPEMsChain.map((c) => utils.textEncoder.encode(c));
   }
   let quicheConfig: QuicheConfig;
   try {
     quicheConfig = quiche.Config.withBoringSslCtx(
       config.verifyPeer,
-      config.verifyAllowFail,
+      config.verifyCallback != null,
       caPEMBuffer,
       keyPEMBuffers,
       certChainPEMBuffers,

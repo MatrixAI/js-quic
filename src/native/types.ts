@@ -36,6 +36,7 @@ interface Config {
     recvQueueLen: number,
     sendQueueLen: number,
   ): void;
+  setMaxStreamWindow(v: number): void;
   setMaxConnectionWindow(v: number): void;
   setStatelessResetToken(v?: bigint | undefined | null): void;
   setDisableDcidReuse(v: boolean): void;
@@ -57,18 +58,22 @@ interface Connection {
   setKeylog(path: string): void;
   setSession(session: Uint8Array): void;
   recv(data: Uint8Array, recvInfo: RecvInfo): number;
-  send(data: Uint8Array): [number, SendInfo];
+  send(data: Uint8Array): [number, SendInfo] | null;
   sendOnPath(
     data: Uint8Array,
     from?: HostPort | undefined | null,
     to?: HostPort | undefined | null,
-  ): [number, SendInfo | null];
+  ): [number, SendInfo] | null;
   sendQuantum(): number;
   sendQuantumOnPath(localHost: HostPort, peerHost: HostPort): number;
-  streamRecv(streamId: number, data: Uint8Array): [number, boolean];
-  streamSend(streamId: number, data: Uint8Array, fin: boolean): number;
+  streamRecv(streamId: number, data: Uint8Array): [number, boolean] | null;
+  streamSend(streamId: number, data: Uint8Array, fin: boolean): number | null;
   streamPriority(streamId: number, urgency: number, incremental: boolean): void;
-  streamShutdown(streamId: number, direction: Shutdown, err: number): void;
+  streamShutdown(
+    streamId: number,
+    direction: Shutdown,
+    err: number,
+  ): void | null;
   streamCapacity(streamId: number): number;
   streamReadable(streamId: number): boolean;
   streamWritable(streamId: number, len: number): boolean;
@@ -78,9 +83,9 @@ interface Connection {
   readable(): StreamIter;
   writable(): StreamIter;
   maxSendUdpPayloadSize(): number;
-  dgramRecv(data: Uint8Array): number;
+  dgramRecv(data: Uint8Array): number | null;
   dgramRecvVec(): Uint8Array | null;
-  dgramRecvPeek(data: Uint8Array, len: number): number;
+  dgramRecvPeek(data: Uint8Array, len: number): number | null;
   dgramRecvFrontLen(): number | null;
   dgramRecvQueueLen(): number;
   dgramRecvQueueByteSize(): number;
@@ -88,8 +93,8 @@ interface Connection {
   dgramSendQueueByteSize(): number;
   isDgramSendQueueFull(): boolean;
   isDgramRecvQueueFull(): boolean;
-  dgramSend(data: Uint8Array): void;
-  dgramSendVec(data: Uint8Array): void;
+  dgramSend(data: Uint8Array): void | null;
+  dgramSendVec(data: Uint8Array): void | null;
   dgramPurgeOutgoing(f: (arg0: Uint8Array) => boolean): void;
   dgramMaxWritableLen(): number | null;
   timeout(): number | null;
@@ -110,7 +115,7 @@ interface Connection {
   retiredScidNext(): Uint8Array | null;
   availableDcids(): number;
   pathsIter(from: HostPort): HostIter;
-  close(app: boolean, err: number, reason: Uint8Array): void;
+  close(app: boolean, err: number, reason: Uint8Array): void | null;
   traceId(): string;
   applicationProto(): Uint8Array;
   serverName(): string | null;
@@ -183,6 +188,13 @@ enum Type {
   Short = 5,
 }
 
+/**
+ * QUIC transport error codes
+ * https://www.rfc-editor.org/rfc/rfc9000#section-20.1
+ * Note that `CryptoError` is a range of error codes.
+ * Therefore it is not featured in this enum.
+ * You can instead fetch it from the constants.
+ */
 enum ConnectionErrorCode {
   NoError = 0,
   InternalError = 1,
@@ -201,6 +213,43 @@ enum ConnectionErrorCode {
   KeyUpdateError = 14,
   AEADLimitReached = 15,
   NoViablePath = 16,
+}
+
+/**
+ * CryptoError is a range from `0x100` to `0x01FF`.
+ * It maps from the TLS `AlertDescription` codes, offset
+ * by `0x100`. These are known codes of TLS 1.3 hardcoded in
+ * QUIC RFC 9000.
+ * See the TLS 1.3 codes in: https://www.rfc-editor.org/rfc/rfc8446#section-6
+ */
+enum CryptoError {
+  CloseNotify = 256,
+  UnexpectedMessage = 266,
+  BadRecordMac = 276,
+  RecordOverflow = 278,
+  HandshakeFailure = 296,
+  BadCertificate = 298,
+  UnsupportedCertificate = 299,
+  CertificateRevoked = 300,
+  CertificateExpired = 301,
+  CertificateUnknown = 302,
+  IllegalParameter = 303,
+  UnknownCA = 304,
+  AccessDenied = 305,
+  DecodeError = 306,
+  DecryptError = 307,
+  ProtocolVersion = 326,
+  InsufficientSecurity = 327,
+  InternalError = 336,
+  InappropriateFallback = 342,
+  UserCanceled = 346,
+  MissingExtension = 365,
+  UnsupportedExtension = 366,
+  UnrecognizedName = 368,
+  BadCertificateStatusResponse = 369,
+  UnknownPSKIdentity = 371,
+  CertificateRequired = 372,
+  NoApplicationProtocol = 376,
 }
 
 type ConnectionError = {
@@ -313,7 +362,13 @@ type PathStatsIter = {
   [Symbol.iterator](): Iterator<PathStats, void, void>;
 };
 
-export { CongestionControlAlgorithm, Shutdown, Type, ConnectionErrorCode };
+export {
+  CongestionControlAlgorithm,
+  Shutdown,
+  Type,
+  ConnectionErrorCode,
+  CryptoError,
+};
 
 export type {
   QuicheTimeInstant,

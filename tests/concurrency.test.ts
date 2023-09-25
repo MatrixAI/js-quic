@@ -1,14 +1,14 @@
-import type * as events from '@/events';
-import type { ClientCrypto, ServerCrypto, StreamReasonToCode } from '@';
+import type { ClientCryptoOps, ServerCryptoOps, StreamReasonToCode } from '@';
 import type { Messages, StreamData } from './utils';
 import type { QUICConfig } from '@';
 import { fc, testProp } from '@fast-check/jest';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
+import * as events from '@/events';
 import QUICServer from '@/QUICServer';
 import { promise } from '@/utils';
 import QUICClient from '@/QUICClient';
 import QUICSocket from '@/QUICSocket';
-import { generateConfig, handleStreamProm, sleep } from './utils';
+import { generateTLSConfig, handleStreamProm, sleep } from './utils';
 import * as testsUtils from './utils';
 
 describe('Concurrency tests', () => {
@@ -19,37 +19,33 @@ describe('Concurrency tests', () => {
   ]);
   // This has to be setup asynchronously due to key generation
   let key: ArrayBuffer;
-  let clientCrypto: ClientCrypto;
-  let serverCrypto: ServerCrypto;
+  let ClientCryptoOps: ClientCryptoOps;
+  let ServerCryptoOps: ServerCryptoOps;
 
   // Tracking resources
-  let sockets: Array<QUICSocket>;
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+  // Normally we'd bind to a random port, but we need to know it before creating the server for these tests
   const socketPort1 = 50001;
 
-  const reasonToCode = (type: 'recv' | 'send', reason?: any) => {
+  const reasonToCode = (type: 'read' | 'write', reason?: any) => {
     logger.error(type, reason);
     return 0;
   };
 
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
-    clientCrypto = {
+    ClientCryptoOps = {
       randomBytes: testsUtils.randomBytes,
     };
-    serverCrypto = {
+    ServerCryptoOps = {
       sign: testsUtils.signHMAC,
       verify: testsUtils.verifyHMAC,
     };
-    sockets = [];
+    socketCleanMethods = testsUtils.socketCleanupFactory();
   });
 
   afterEach(async () => {
-    logger.info('AFTER EACH');
-    const stopProms: Array<Promise<void>> = [];
-    for (const socket of sockets) {
-      stopProms.push(socket.stop({ force: true }));
-    }
-    await Promise.allSettled(stopProms);
+    await socketCleanMethods.stopSockets();
   });
 
   const handleClientProm = async (
@@ -60,7 +56,7 @@ describe('Concurrency tests', () => {
     try {
       for (const streamData of connectionData.streams) {
         const streamProm = sleep(streamData.startDelay)
-          .then(() => client.connection.streamNew())
+          .then(() => client.connection.newStream())
           .then((stream) => {
             return handleStreamProm(stream, streamData);
           });
@@ -122,31 +118,32 @@ describe('Concurrency tests', () => {
     'Multiple clients connecting to a server',
     [connectionsArb, streamsArb(3)],
     async (clientDatas, serverStreams) => {
-      const tlsConfig = await generateConfig('RSA');
+      const tlsConfig = await generateTLSConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
-            key: tlsConfig.key,
-            cert: tlsConfig.cert,
+            key: tlsConfig.leafKeyPairPEM.privateKey,
+            cert: tlsConfig.leafCertPEM,
             verifyPeer: false,
           },
         });
+        socketCleanMethods.extractSocket(server);
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'serverConnection',
-          async (e: events.QUICServerConnectionEvent) => {
+          events.EventQUICServerConnection.name,
+          async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'connectionStream',
-                (streamEvent: events.QUICConnectionStreamEvent) => {
+                events.EventQUICConnectionStream.name,
+                (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
                     serverStreams[
@@ -200,7 +197,7 @@ describe('Concurrency tests', () => {
               port: socketPort1,
               localHost: '::',
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -210,6 +207,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms.push(clientProm);
@@ -244,31 +242,32 @@ describe('Concurrency tests', () => {
     'Multiple clients sharing a socket',
     [connectionsArb, streamsArb(3)],
     async (clientDatas, serverStreams) => {
-      const tlsConfig = await generateConfig('RSA');
+      const tlsConfig = await generateTLSConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
           crypto: {
             key,
-            ops: serverCrypto,
+            ops: ServerCryptoOps,
           },
           logger: logger.getChild(QUICServer.name),
           config: {
-            key: tlsConfig.key,
-            cert: tlsConfig.cert,
+            key: tlsConfig.leafKeyPairPEM.privateKey,
+            cert: tlsConfig.leafCertPEM,
             verifyPeer: false,
           },
         });
+        socketCleanMethods.extractSocket(server);
         const connProms: Array<Promise<void>> = [];
         server.addEventListener(
-          'serverConnection',
-          async (e: events.QUICServerConnectionEvent) => {
+          events.EventQUICServerConnection.name,
+          async (e: events.EventQUICServerConnection) => {
             const conn = e.detail;
             const connProm = (async () => {
               const serverStreamProms: Array<Promise<void>> = [];
               conn.addEventListener(
-                'connectionStream',
-                (streamEvent: events.QUICConnectionStreamEvent) => {
+                events.EventQUICConnectionStream.name,
+                (streamEvent: events.EventQUICConnectionStream) => {
                   const stream = streamEvent.detail;
                   const streamData =
                     serverStreams[
@@ -329,7 +328,7 @@ describe('Concurrency tests', () => {
               port: socketPort1,
               socket,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -339,6 +338,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms.push(clientProm);
@@ -378,7 +378,7 @@ describe('Concurrency tests', () => {
     serverStreams,
     reasonToCode,
   }: {
-    socket: QUICSocket | undefined;
+    socket: QUICSocket;
     port: number | undefined;
     cleanUpHoldProm: Promise<void>;
     config: Partial<QUICConfig> & {
@@ -391,23 +391,24 @@ describe('Concurrency tests', () => {
     const server = new QUICServer({
       crypto: {
         key,
-        ops: serverCrypto,
+        ops: ServerCryptoOps,
       },
       socket,
       logger: logger.getChild(QUICServer.name),
       config,
       reasonToCode,
     });
+    socketCleanMethods.extractSocket(server);
     const connProms: Array<Promise<void>> = [];
     server.addEventListener(
-      'serverConnection',
-      async (e: events.QUICServerConnectionEvent) => {
+      events.EventQUICServerConnection.name,
+      async (e: events.EventQUICServerConnection) => {
         const conn = e.detail;
         const connProm = (async () => {
           const serverStreamProms: Array<Promise<void>> = [];
           conn.addEventListener(
-            'connectionStream',
-            (streamEvent: events.QUICConnectionStreamEvent) => {
+            events.EventQUICConnectionStream.name,
+            (streamEvent: events.EventQUICConnectionStream) => {
               const stream = streamEvent.detail;
               const streamData =
                 serverStreams[serverStreamProms.length % serverStreams.length];
@@ -453,8 +454,8 @@ describe('Concurrency tests', () => {
     'Multiple clients sharing a socket with a server',
     [connectionsArb, connectionsArb, streamsArb(3), streamsArb(3)],
     async (clientDatas1, clientDatas2, serverStreams1, serverStreams2) => {
-      const tlsConfig1 = await generateConfig('RSA');
-      const tlsConfig2 = await generateConfig('RSA');
+      const tlsConfig1 = await generateTLSConfig('RSA');
+      const tlsConfig2 = await generateTLSConfig('RSA');
       const clientsInfosA = clientDatas1.map((v) => v.streams.length);
       const clientsInfosB = clientDatas2.map((v) => v.streams.length);
       logger.info(`clientsA: ${clientsInfosA}`);
@@ -467,8 +468,8 @@ describe('Concurrency tests', () => {
       const socket2 = new QUICSocket({
         logger: logger.getChild('socket'),
       });
-      sockets.push(socket1);
-      sockets.push(socket2);
+      socketCleanMethods.sockets.add(socket1);
+      socketCleanMethods.sockets.add(socket2);
       await socket1.start({
         host: '127.0.0.1',
       });
@@ -482,8 +483,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams1,
         socket: socket1,
         config: {
-          key: tlsConfig1.key,
-          cert: tlsConfig1.cert,
+          key: tlsConfig1.leafKeyPairPEM.privateKey,
+          cert: tlsConfig1.leafCertPEM,
           verifyPeer: false,
           logKeys: './tmp/key1.log',
           initialMaxStreamsBidi: 10000,
@@ -496,8 +497,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams2,
         socket: socket2,
         config: {
-          key: tlsConfig2.key,
-          cert: tlsConfig2.cert,
+          key: tlsConfig2.leafKeyPairPEM.privateKey,
+          cert: tlsConfig2.leafCertPEM,
           verifyPeer: false,
           logKeys: './tmp/key2.log',
           initialMaxStreamsBidi: 10000,
@@ -518,7 +519,7 @@ describe('Concurrency tests', () => {
               port: socket2.port,
               socket: socket1,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -528,6 +529,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms1.push(clientProm);
@@ -541,7 +543,7 @@ describe('Concurrency tests', () => {
               port: socket1.port,
               socket: socket2,
               crypto: {
-                ops: clientCrypto,
+                ops: ClientCryptoOps,
               },
               logger: logger.getChild(QUICClient.name),
               config: {
@@ -552,6 +554,7 @@ describe('Concurrency tests', () => {
             });
           })
           .then((client) => {
+            socketCleanMethods.extractSocket(client);
             return handleClientProm(client, clientData);
           });
         clientProms2.push(clientProm);
