@@ -834,15 +834,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // Because the web stream already ensures `cancel` is idempotent.
     if (this._readClosed) return;
     const code = this.reasonToCode('read', reason);
-    // What if this fails?
-    // Possible failures: InvalidStreamState and Done
-    // Done is only possible if this stream no longer exists
-    // The stream state should still exist, at this point
-    // Idempotent, that's not that important
+    // It is possible this stream has already received a `RESET_STREAM` and
+    //  therefore this will return null and be done.
     // Discards buffered data
-    let result: void | null;
     try {
-      result = this.connection.conn.streamShutdown(
+      this.connection.conn.streamShutdown(
         this.streamId,
         quiche.Shutdown.Read,
         code,
@@ -859,22 +855,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
         }),
       );
       throw e_;
-    }
-    if (result === null) {
-      // Means stream no longer exists
-      // This is technically an error
-      // Cause that should not happen here
-      // The stream must exist
-      const e = new errors.ErrorQUICStreamInternal(
-        'Local stream readable could not be shutdown because it does not exist',
-      );
-      this.readableController.error(e);
-      this.dispatchEvent(
-        new events.EventQUICStreamError({
-          detail: e,
-        }),
-      );
-      throw e;
     }
     const e = new errors.ErrorQUICStreamLocalRead(
       'Closing readable stream locally',
