@@ -1,17 +1,14 @@
-# TYPE native.stream_1KiB_ops gauge
-native.stream_1KiB_ops{name="send 1Kib of data over QUICStream with simple async runtime"} 2843
+# TYPE streams.stream_1KiB_ops gauge
+streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream"} 1376
+streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream with simple async runtime"} 14033
+streams.stream_1KiB_ops{name="send 1Kib of data over QUICStream with minimal sync operations"} 19813
 
-# TYPE native.stream_1KiB_margin gauge
-native.stream_1KiB_margin{name="send 1Kib of data over QUICStream with simple async runtime"} 3.95
+# TYPE streams.stream_1KiB_margin gauge
+streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream"} 10.27
+streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream with simple async runtime"} 4.05
+streams.stream_1KiB_margin{name="send 1Kib of data over QUICStream with minimal sync operations"} 4.14
 
-# TYPE native.stream_1KiB_samples counter
-native.stream_1KiB_samples{name="send 1Kib of data over QUICStream with simple async runtime"} 73
-
-# TYPE native.stream_1KiB_minimal_ops gauge
-native.stream_1KiB_minimal_ops{name="send 1Kib of data over QUICStream with minimal operations"} 3978
-
-# TYPE native.stream_1KiB_minimal_margin gauge
-native.stream_1KiB_minimal_margin{name="send 1Kib of data over QUICStream with minimal operations"} 0.64
-
-# TYPE native.stream_1KiB_minimal_samples counter
-native.stream_1KiB_minimal_samples{name="send 1Kib of data over QUICStream with minimal operations"} 88
+# TYPE streams.stream_1KiB_samples counter
+streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream"} 38
+streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream with simple async runtime"} 76
+streams.stream_1KiB_samples{name="send 1Kib of data over QUICStream with minimal sync operations"} 81

@@ -2,6 +2,7 @@ import b from 'benny';
 import { summaryName, suiteCommon } from '../../utils';
 
 async function main() {
+  return;
   const summary = await b.suite(
     summaryName(__filename),
     b.add('Buffer.alloc', () => {
