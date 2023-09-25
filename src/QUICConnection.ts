@@ -1024,10 +1024,10 @@ class QUICConnection {
       // If it is `settled`, then cancelling is a noop
       // If it is `settling`, then cancelling only prevents it at the beginning of the handler
       this.connTimeoutTimer?.cancel();
-
-      // FIXME: Investigate if this is needed because timer is settled synchronously after cancel
+      // The `this.connTimeoutTimer` is a lazy timer, so it's status may still
+      // be `null` or `settling`. So we have to delete it here to ensure that
+      // the timer will be recreated.
       delete this.connTimeoutTimer;
-
       if (this.conn.isClosed()) {
         this.resolveClosedP();
         if (this.conn.isTimedOut()) {
