@@ -29,11 +29,6 @@ class QUICSocket {
    */
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
-  /**
-   * Resolves once the connection has closed.
-   */
-  public readonly closedP: Promise<void>;
-
   protected logger: Logger;
 
   /**
@@ -52,6 +47,7 @@ class QUICSocket {
   protected _port: Port;
   protected _type: 'ipv4' | 'ipv6' | 'ipv4&ipv6';
   protected _closed: boolean = false;
+  protected _closedP: Promise<void>;
   protected resolveClosedP: () => void;
   protected socket: dgram.Socket;
   protected socketBind: (port: number, host: string) => Promise<void>;
@@ -179,7 +175,7 @@ class QUICSocket {
     this.logger = logger ?? new Logger(this.constructor.name);
     this.resolveHostname = resolveHostname;
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
-    this.closedP = closedP;
+    this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
   }
 
@@ -216,6 +212,10 @@ class QUICSocket {
 
   public get closed() {
     return this._closed;
+  }
+
+  public get closedP(): Promise<void> {
+    return this._closedP;
   }
 
   /**
@@ -286,12 +286,10 @@ class QUICSocket {
       );
     }
     this.socket.removeListener('error', rejectErrorP);
-
     // The dgram socket's error events might just be informational
     // They don't necessarily correspond to an error
     // Therefore we don't bother listening for it
     // Unless we were propagating default events upwards
-
     const socketAddress = this.socket.address();
     // This is the resolved IP, not the original hostname
     this._host = socketAddress.address as Host;
@@ -314,6 +312,7 @@ class QUICSocket {
       this.handleEventQUICSocketClose,
       { once: true },
     );
+    this._closed = false;
     address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
@@ -339,7 +338,11 @@ class QUICSocket {
     if (!this._closed) {
       this.dispatchEvent(new events.EventQUICSocketClose());
     }
-    await this.closedP;
+    await this._closedP;
+    // Resets the `closedP`
+    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
+    this._closedP = closedP;
+    this.resolveClosedP = resolveClosedP;
     this.removeEventListener(
       events.EventQUICSocketError.name,
       this.handleEventQUICSocketError,

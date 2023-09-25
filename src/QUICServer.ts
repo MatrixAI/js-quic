@@ -55,16 +55,12 @@ class QUICServer {
    */
   public minIdleTimeout?: number;
 
-  /**
-   * Resolves once the connection has closed.
-   */
-  public readonly closedP: Promise<void>;
-
   protected logger: Logger;
   protected socket: QUICSocket;
   protected crypto: QUICServerCrypto;
   protected config: QUICConfig;
   protected _closed: boolean = false;
+  protected _closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**
@@ -296,7 +292,7 @@ class QUICServer {
     this.codeToReason = codeToReason;
     this.minIdleTimeout = minIdleTimeout;
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
-    this.closedP = closedP;
+    this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
   }
 
@@ -315,6 +311,10 @@ class QUICServer {
    */
   public get closed() {
     return this._closed;
+  }
+
+  public get closedP(): Promise<void> {
+    return this._closedP;
   }
 
   /**
@@ -369,6 +369,7 @@ class QUICServer {
     if (!this.isSocketShared) {
       this.socket.addEventListener(EventAll.name, this.handleEventQUICSocket);
     }
+    this._closed = false;
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
   }
 
@@ -425,7 +426,11 @@ class QUICServer {
       this.dispatchEvent(new events.EventQUICServerClose());
     }
     // Wait for the socket to be closed
-    await this.closedP;
+    await this._closedP;
+    // Resets the `closedP`
+    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
+    this._closedP = closedP;
+    this.resolveClosedP = resolveClosedP;
     this.removeEventListener(
       events.EventQUICServerError.name,
       this.handleEventQUICServerError,
