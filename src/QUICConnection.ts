@@ -937,47 +937,33 @@ class QUICConnection {
       quicStream.read();
     }
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-      const quicStream = this.streamMap.get(streamId);
-      // When there's a concurrent stream close from both ends
-      // It is possible for `quicStream` to have already been deleted
-      // When the remote's `STOP_SENDING` frame arrives, quiche notifies
-      // us as the stream is writable (even though we had already closed it)
-      // Therefore we must process this closed writable stream, by acknowledging
-      // `StreamStopped` exception
+      let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
-        try {
-          // Check if it can write 0 bytes
-          // This will throw `StreamStopped`
-          this.conn.streamWritable(streamId, 0);
-        } catch (e) {
-          if (e.message.match(/StreamStopped\((.+)\)/) != null) {
-            // Now as long as it is in fact `StreamStopped`, this passes
-            // And the quiche underlying state is then cleaned up
-            continue;
-          }
-          const e_ = new errors.ErrorQUICConnectionInternal(
-            'Failed to write 0 bytes to a stream that is not stopped',
-            { cause: e },
-          );
-          this.dispatchEvent(
-            new events.EventQUICConnectionError({
-              detail: e_,
-            }),
-          );
-          throw e_;
-        }
-        const e = new errors.ErrorQUICConnectionInternal(
-          'Failed processing stream, stream was writable even though `QUICStream` does not exist',
+        quicStream = QUICStream.createQUICStream({
+          initiated: 'peer',
+          streamId,
+          config: this.config,
+          connection: this,
+          codeToReason: this.codeToReason,
+          reasonToCode: this.reasonToCode,
+          logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
+        });
+        this.streamMap.set(quicStream.streamId, quicStream);
+        quicStream.addEventListener(
+          events.EventQUICStreamSend.name,
+          this.handleEventQUICStreamSend,
         );
+        quicStream.addEventListener(
+          events.EventQUICStreamDestroyed.name,
+          this.handleEventQUICStreamDestroyed,
+          { once: true },
+        );
+        quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
         this.dispatchEvent(
-          new events.EventQUICConnectionError({
-            detail: e,
-          }),
+          new events.EventQUICConnectionStream({ detail: quicStream }),
         );
-        throw e;
-      } else {
-        quicStream.write();
       }
+      quicStream.write();
     }
   }
 
