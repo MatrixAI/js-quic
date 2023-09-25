@@ -218,6 +218,15 @@ describe('native/tls/rsa', () => {
         from: clientHost,
       });
     });
+    test('client -handshake-> server 2', async () => {
+      const result = clientConn.send(clientBuffer);
+      expect(result).not.toBeNull();
+      [clientSendLength, _clientSendInfo] = result!;
+      serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+        to: serverHost,
+        from: clientHost,
+      });
+    });
     test('server is established', async () => {
       expect(serverConn.isEstablished()).toBeTrue();
       const serverPeerCertChain = serverConn.peerCertChain()!;
@@ -674,6 +683,15 @@ describe('native/tls/rsa', () => {
       });
     });
     test('client <-initial- server', async () => {
+      const result = serverConn.send(serverBuffer);
+      expect(result).not.toBeNull();
+      [serverSendLength, _serverSendInfo] = result!;
+      clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+        to: clientHost,
+        from: serverHost,
+      });
+    });
+    test('client <-initial- server 2', async () => {
       const result = serverConn.send(serverBuffer);
       expect(result).not.toBeNull();
       [serverSendLength, _serverSendInfo] = result!;
@@ -1552,7 +1570,25 @@ describe('native/tls/rsa', () => {
           from: serverHost,
         });
       });
+      test('client <-initial- server 2', async () => {
+        const result = serverConn.send(serverBuffer);
+        expect(result).not.toBeNull();
+        [serverSendLength, _serverSendInfo] = result!;
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
       test('client -initial-> server', async () => {
+        const result = clientConn.send(clientBuffer);
+        expect(result).not.toBeNull();
+        [clientSendLength, _clientSendInfo] = result!;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client -initial-> server 2', async () => {
         const result = clientConn.send(clientBuffer);
         expect(result).not.toBeNull();
         [clientSendLength, _clientSendInfo] = result!;
@@ -2048,7 +2084,25 @@ describe('native/tls/rsa', () => {
           from: serverHost,
         });
       });
+      test('client <-initial- server 2', async () => {
+        const result = serverConn.send(serverBuffer);
+        expect(result).not.toBeNull();
+        [serverSendLength, _serverSendInfo] = result!;
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
       test('client -initial-> server', async () => {
+        const result = clientConn.send(clientBuffer);
+        expect(result).not.toBeNull();
+        [clientSendLength, _clientSendInfo] = result!;
+        serverConn.recv(clientBuffer.subarray(0, clientSendLength), {
+          to: serverHost,
+          from: clientHost,
+        });
+      });
+      test('client -initial-> server 2', async () => {
         const result = clientConn.send(clientBuffer);
         expect(result).not.toBeNull();
         [clientSendLength, _clientSendInfo] = result!;
@@ -2540,6 +2594,15 @@ describe('native/tls/rsa', () => {
         });
       });
       test('client <-initial- server', async () => {
+        const result = serverConn.send(serverBuffer);
+        expect(result).not.toBeNull();
+        [serverSendLength, _serverSendInfo] = result!;
+        clientConn.recv(serverBuffer.subarray(0, serverSendLength), {
+          to: clientHost,
+          from: serverHost,
+        });
+      });
+      test('client <-initial- server 2', async () => {
         const result = serverConn.send(serverBuffer);
         expect(result).not.toBeNull();
         [serverSendLength, _serverSendInfo] = result!;

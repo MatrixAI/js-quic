@@ -55,6 +55,11 @@ class QUICServer {
    */
   public minIdleTimeout?: number;
 
+  /**
+   * Resolves once the connection has closed.
+   */
+  public readonly closedP: Promise<void>;
+
   protected logger: Logger;
   protected socket: QUICSocket;
   protected crypto: QUICServerCrypto;

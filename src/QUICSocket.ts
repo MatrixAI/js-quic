@@ -29,6 +29,11 @@ class QUICSocket {
    */
   public connectionMap: QUICConnectionMap = new QUICConnectionMap();
 
+  /**
+   * Resolves once the connection has closed.
+   */
+  public readonly closedP: Promise<void>;
+
   protected logger: Logger;
 
   /**
@@ -46,7 +51,6 @@ class QUICSocket {
   protected _host: Host;
   protected _port: Port;
   protected _type: 'ipv4' | 'ipv6' | 'ipv4&ipv6';
-  protected closedP: Promise<void>;
   protected _closed: boolean = false;
   protected resolveClosedP: () => void;
   protected socket: dgram.Socket;

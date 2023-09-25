@@ -293,12 +293,12 @@ class QUICClient extends EventTarget {
 
   public readonly isSocketShared: boolean;
   public readonly connection: QUICConnection;
+  public readonly closedP: Promise<void>;
 
   protected logger: Logger;
   protected socket: QUICSocket;
   protected config: Config;
   protected _closed: boolean = false;
-  protected closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**

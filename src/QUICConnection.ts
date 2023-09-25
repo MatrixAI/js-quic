@@ -50,6 +50,11 @@ class QUICConnection {
   public readonly connectionId: QUICConnectionId;
 
   /**
+   * Resolves once the connection has closed.
+   */
+  public readonly closedP: Promise<void>;
+
+  /**
    * Internal native connection object.
    * @internal
    */
@@ -150,7 +155,6 @@ class QUICConnection {
   protected resolveSecureEstablishedP: () => void;
   protected rejectSecureEstablishedP: (reason?: any) => void;
 
-  protected closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**

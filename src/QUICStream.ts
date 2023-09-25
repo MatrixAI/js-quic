@@ -119,6 +119,7 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   public readonly streamId: StreamId;
   public readonly readable: ReadableStream<Uint8Array>;
   public readonly writable: WritableStream<Uint8Array>;
+  public readonly closedP: Promise<void>;
 
   protected logger: Logger;
   protected connection: QUICConnection;
@@ -133,7 +134,6 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   protected rejectReadableP?: (reason?: any) => void;
   protected resolveWritableP?: () => void;
   protected rejectWritableP?: (reason?: any) => void;
-  protected closedP: Promise<void>;
   protected resolveClosedP: () => void;
 
   /**
