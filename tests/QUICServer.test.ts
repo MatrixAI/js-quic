@@ -149,6 +149,30 @@ describe(QUICServer.name, () => {
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
     });
+    test('repeated stop and start', async () => {
+      const quicServer = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        config: {
+          key: keyPairRSAPEM.privateKey,
+          cert: certRSAPEM,
+        },
+        logger: logger.getChild('QUICServer'),
+      });
+      socketCleanMethods.extractSocket(quicServer);
+      await quicServer.start();
+      // Default to dual-stack
+      expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+      await quicServer.start();
+      // Default to dual-stack
+      expect(quicServer.host).toBe('::');
+      expect(typeof quicServer.port).toBe('number');
+      await quicServer.stop();
+    })
   });
   describe('binding to host and port', () => {
     test('listen on IPv4', async () => {
@@ -211,7 +235,6 @@ describe(QUICServer.name, () => {
       expect(typeof quicServer.port).toBe('number');
       await quicServer.stop();
     });
-    // FIXME: this is holding the process open, needs a fix
     test('listen on IPv4 mapped IPv6', async () => {
       // NOT RECOMMENDED, because send addresses will have to be mapped
       // addresses, which means you can ONLY connect to mapped addresses
