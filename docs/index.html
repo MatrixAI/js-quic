@@ -1,4 +1,4 @@
-<!DOCTYPE html><html class="default" lang="en"><head><meta charSet="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>@matrixai/quic</title><meta name="description" content="Documentation for @matrixai/quic"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script async src="assets/search.js" id="search-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os"</script><header class="tsd-page-toolbar">
+<!DOCTYPE html><html class="default" lang="en"><head><meta charSet="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>@matrixai/quic</title><meta name="description" content="Documentation for @matrixai/quic"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/search.js" id="tsd-search-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os"</script><header class="tsd-page-toolbar">
 <div class="tsd-toolbar-contents container">
 <div class="table-cell" id="tsd-search" data-base=".">
 <div class="field"><label for="tsd-search-field" class="tsd-widget tsd-toolbar-icon search no-caption"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M15.7824 13.833L12.6666 10.7177C12.5259 10.5771 12.3353 10.499 12.1353 10.499H11.6259C12.4884 9.39596 13.001 8.00859 13.001 6.49937C13.001 2.90909 10.0914 0 6.50048 0C2.90959 0 0 2.90909 0 6.49937C0 10.0896 2.90959 12.9987 6.50048 12.9987C8.00996 12.9987 9.39756 12.4863 10.5008 11.6239V12.1332C10.5008 12.3332 10.5789 12.5238 10.7195 12.6644L13.8354 15.7797C14.1292 16.0734 14.6042 16.0734 14.8948 15.7797L15.7793 14.8954C16.0731 14.6017 16.0731 14.1267 15.7824 13.833ZM6.50048 10.499C4.29094 10.499 2.50018 8.71165 2.50018 6.49937C2.50018 4.29021 4.28781 2.49976 6.50048 2.49976C8.71001 2.49976 10.5008 4.28708 10.5008 6.49937C10.5008 8.70852 8.71314 10.499 6.50048 10.499Z" fill="var(--color-text)"></path></svg></label><input type="text" id="tsd-search-field" aria-label="Search"/></div>
@@ -9,100 +9,85 @@
 <li class="state failure">The search index is not available</li></ul><a href="index.html" class="title">@matrixai/quic</a></div>
 <div class="table-cell" id="tsd-widgets"><a href="#" class="tsd-widget tsd-toolbar-icon menu no-caption" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" fill="var(--color-text)"></rect><rect x="1" y="7" width="14" height="2" fill="var(--color-text)"></rect><rect x="1" y="11" width="14" height="2" fill="var(--color-text)"></rect></svg></a></div></div></header>
 <div class="container container-main">
-<div class="col-8 col-content">
+<div class="col-content">
 <div class="tsd-page-title">
 <h2>@matrixai/quic</h2></div>
-<div class="tsd-panel tsd-typography">
-<a href="#js-quic" id="js-quic" style="color: inherit; text-decoration: none;">
-  <h1>js-quic</h1>
-</a>
-<p>staging: <a href="https://gitlab.com/MatrixAI/open-source/js-quic/commits/staging"><img src="https://gitlab.com/MatrixAI/open-source/js-quic/badges/staging/pipeline.svg" alt="pipeline status"></a>
+<div class="tsd-panel tsd-typography"><a id="md:js-quic" class="tsd-anchor"></a><h1><a href="#md:js-quic">js-quic</a></h1><p>staging: <a href="https://gitlab.com/MatrixAI/open-source/js-quic/commits/staging"><img src="https://gitlab.com/MatrixAI/open-source/js-quic/badges/staging/pipeline.svg" alt="pipeline status"></a>
 master: <a href="https://gitlab.com/MatrixAI/open-source/js-quic/commits/master"><img src="https://gitlab.com/MatrixAI/open-source/js-quic/badges/master/pipeline.svg" alt="pipeline status"></a></p>
 <p>QUIC library for TypeScript/JavaScript applications.</p>
 <p>This is built on top of Cloudflare&#39;s <a href="https://github.com/cloudflare/quiche">quiche</a> library. It is intended to support Linux, Windows MacOS, Android and iOS. Mobile support is still pending.</p>
 <p>Since Cloudflare&#39;s quiche is written in Rust. This uses the <a href="https://github.com/napi-rs/napi-rs">napi-rs</a> binding system compile the native objects for Node.js.</p>
 <p>This library focuses only on the QUIC protocol. It does not support HTTP3. You can build HTTP3 on top of this.</p>
-
-<a href="#installation" id="installation" style="color: inherit; text-decoration: none;">
-  <h2>Installation</h2>
-</a>
-<pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-3">--save</span><span class="hl-1"> </span><span class="hl-2">@matrixai/quic</span>
-</code></pre>
-
-<a href="#usage" id="usage" style="color: inherit; text-decoration: none;">
-  <h2>Usage</h2>
-</a>
-<p>See the example executables in <code>/src/bin</code>.</p>
-
-<a href="#development" id="development" style="color: inherit; text-decoration: none;">
-  <h2>Development</h2>
-</a>
-<p>Run <code>nix-shell</code>, and once you&#39;re inside, you can use:</p>
+<a id="md:installation" class="tsd-anchor"></a><h2><a href="#md:installation">Installation</a></h2><pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><span class="hl-1"> </span><span class="hl-3">--save</span><span class="hl-1"> </span><span class="hl-2">@matrixai/quic</span>
+</code><button>Copy</button></pre>
+<a id="md:usage" class="tsd-anchor"></a><h2><a href="#md:usage">Usage</a></h2><p>See the example executables in <code>/src/bin</code>.</p>
+<a id="md:development" class="tsd-anchor"></a><h2><a href="#md:development">Development</a></h2><p>Run <code>nix-shell</code>, and once you&#39;re inside, you can use:</p>
 <pre><code class="language-sh"><span class="hl-4"># install (or reinstall packages from package.json)</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">install</span><br/><span class="hl-4"># build the native objects</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">prebuild</span><br/><span class="hl-4"># build the dist and native objects</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build</span><br/><span class="hl-4"># run the repl (this allows you to import from ./src)</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">ts-node</span><br/><span class="hl-4"># run the tests</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">test</span><br/><span class="hl-4"># lint the source code</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">lint</span><br/><span class="hl-4"># automatically fix the source</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">lintfix</span>
-</code></pre>
-
-<a href="#quiche" id="quiche" style="color: inherit; text-decoration: none;">
-  <h3>Quiche</h3>
-</a>
-<p>To understand how to develop this, it is important to understand how quiche works.</p>
+</code><button>Copy</button></pre>
+<a id="md:quiche" class="tsd-anchor"></a><h3><a href="#md:quiche">Quiche</a></h3><p>To understand how to develop this, it is important to understand how quiche works.</p>
 <p>Clone the <a href="https://github.com/cloudflare/quiche">https://github.com/cloudflare/quiche</a> project. It&#39;s multi-workspace Cargo project.</p>
 <p>You can build and run their examples located in <code>/quiche/examples/</code>:</p>
 <pre><code class="language-sh"><span class="hl-0">cargo</span><span class="hl-1"> </span><span class="hl-2">build</span><span class="hl-1"> </span><span class="hl-3">--examples</span><br/><span class="hl-0">cargo</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-3">--example</span><span class="hl-1"> </span><span class="hl-2">client</span><span class="hl-1"> </span><span class="hl-2">&#39;127.0.0.1:55555&#39;</span>
-</code></pre>
+</code><button>Copy</button></pre>
 <p>You can run their apps located in <code>/apps/src/bin</code>:</p>
 <pre><code class="language-sh"><span class="hl-0">cd</span><span class="hl-1"> </span><span class="hl-2">/apps</span><br/><br/><span class="hl-4"># The source code for these is in the `/apps/src/bin` directory</span><br/><span class="hl-0">cargo</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-3">--bin</span><span class="hl-1"> </span><span class="hl-2">quiche-client</span><span class="hl-1"> </span><span class="hl-3">--</span><span class="hl-1"> </span><span class="hl-2">https://cloudflare-quic.com</span><br/><br/><span class="hl-4"># Run with</span><br/><span class="hl-0">cargo</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-3">--bin</span><span class="hl-1"> </span><span class="hl-2">quiche-server</span><span class="hl-1"> </span><span class="hl-3">--</span><span class="hl-1"> </span><span class="hl-3">--listen</span><span class="hl-1"> </span><span class="hl-5">127.0</span><span class="hl-2">.0.1:55555</span><br/><br/><span class="hl-4"># Run without verifying TLS if certificates is</span><br/><span class="hl-0">cargo</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-3">--bin</span><span class="hl-1"> </span><span class="hl-2">quiche-client</span><span class="hl-1"> </span><span class="hl-3">--</span><span class="hl-1"> </span><span class="hl-3">--no-verify</span><span class="hl-1"> </span><span class="hl-2">&#39;http://127.0.0.1:55555&#39;</span>
-</code></pre>
-
-<a href="#tls" id="tls" style="color: inherit; text-decoration: none;">
-  <h3>TLS</h3>
-</a>
-<p>If you need to test with a local certificates, try using <code>step</code>;</p>
+</code><button>Copy</button></pre>
+<a id="md:tls" class="tsd-anchor"></a><h3><a href="#md:tls">TLS</a></h3><p>If you need to test with a local certificates, try using <code>step</code>;</p>
 <pre><code class="language-sh"><span class="hl-0">step</span><span class="hl-1"> </span><span class="hl-2">certificate</span><span class="hl-1"> </span><span class="hl-2">create</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-2">localhost</span><span class="hl-1"> </span><span class="hl-2">localhost.crt</span><span class="hl-1"> </span><span class="hl-2">localhost.key</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--profile</span><span class="hl-1"> </span><span class="hl-2">self-signed</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--subtle</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--no-password</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--insecure</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--force</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--san</span><span class="hl-1"> </span><span class="hl-5">127.0</span><span class="hl-2">.0.1</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--san</span><span class="hl-1"> </span><span class="hl-2">::1</span><span class="hl-1"> </span><span class="hl-6">\</span><br/><span class="hl-1">  </span><span class="hl-3">--not-after</span><span class="hl-1"> </span><span class="hl-5">31536000</span><span class="hl-2">s</span><br/><br/><span class="hl-4"># Afterwards put certificates in `./tmp` and refer to them</span>
-</code></pre>
-
-<a href="#cargorust-targets" id="cargorust-targets" style="color: inherit; text-decoration: none;">
-  <h3>Cargo/Rust targets</h3>
-</a>
-<p>Cargo is a cross-compiler. The target structure looks like this:</p>
+</code><button>Copy</button></pre>
+<a id="md:cargorust-targets" class="tsd-anchor"></a><h3><a href="#md:cargorust-targets">Cargo/Rust targets</a></h3><p>Cargo is a cross-compiler. The target structure looks like this:</p>
 <pre><code><span class="hl-1">&lt;</span><span class="hl-7">arch</span><span class="hl-1">&gt;&lt;</span><span class="hl-7">sub</span><span class="hl-1">&gt;-&lt;</span><span class="hl-7">vendor</span><span class="hl-1">&gt;-&lt;</span><span class="hl-7">sys</span><span class="hl-1">&gt;-&lt;</span><span class="hl-7">abi</span><span class="hl-1">&gt;</span>
-</code></pre>
+</code><button>Copy</button></pre>
 <p>For example:</p>
 <pre><code><span class="hl-8">x86_64</span><span class="hl-1">-</span><span class="hl-8">unknown</span><span class="hl-1">-</span><span class="hl-8">linux</span><span class="hl-1">-</span><span class="hl-8">gnu</span><br/><span class="hl-8">x86_64</span><span class="hl-1">-</span><span class="hl-8">pc</span><span class="hl-1">-</span><span class="hl-8">windows</span><span class="hl-1">-</span><span class="hl-8">msvc</span><br/><span class="hl-8">aarch64</span><span class="hl-1">-</span><span class="hl-8">apple</span><span class="hl-1">-</span><span class="hl-8">darwin</span><br/><span class="hl-8">x86_64</span><span class="hl-1">-</span><span class="hl-8">apple</span><span class="hl-1">-</span><span class="hl-8">darwin</span>
-</code></pre>
+</code><button>Copy</button></pre>
 <p>The available target list is in <code>rustc --print target-list</code>.</p>
-
-<a href="#benchmarks" id="benchmarks" style="color: inherit; text-decoration: none;">
-  <h2>Benchmarks</h2>
-</a>
-<pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">bench</span>
-</code></pre>
+<a id="md:structure" class="tsd-anchor"></a><h3><a href="#md:structure">Structure</a></h3><p>It is possible to structure the QUIC system in the encapsulated way or the injected way.</p>
+<p>When using the encapsulated way, the <code>QUICSocket</code> is separated between client and server.</p>
+<p>When using the injected way, the <code>QUICSocket</code> is shared between client and server.</p>
+<p><img src="/images/quic_structure_encapsulated.svg" alt=""></p>
+<p>If you are building a peer to peer network, you must use the injected way. This is the only way to ensure that hole-punching works because both the client and server for any given peer must share the same UDP socket and thus share the <code>QUICSocket</code>. When done in this way, the <code>QUICSocket</code> lifecycle is managed outside of both the <code>QUICClient</code> and <code>QUICServer</code>.</p>
+<p><img src="/images/quic_structure_injected.svg" alt=""></p>
+<p>This also means both <code>QUICClient</code> and <code>QUICServer</code> must share the same connection map.  In order to allow the <code>QUICSocket</code> to dispatch data into the correct connection, the connection map is constructed in the <code>QUICSocket</code>, however setting and unsetting connections is managed by <code>QUICClient</code> and <code>QUICServer</code>.</p>
+<a id="md:dataflow" class="tsd-anchor"></a><h2><a href="#md:dataflow">Dataflow</a></h2><p>The data flow of the QUIC system is a bidirectional graph.</p>
+<p>Data received from the outside world is received on the UDP socket. It is parsed and then dispatched to each <code>QUICConnection</code>. Each connection further parses the data and then dispatches to the <code>QUICStream</code>. Each <code>QUICStream</code> presents the data on the <code>ReadableStream</code> interface, which can be read by a caller.</p>
+<p>Data sent to the outside world is written to a <code>WritableStream</code> interface of a <code>QUICStream</code>. This data is buffered up in the underlying Quiche stream. A send procedure is triggered on the associated <code>QUICConnection</code> which takes all the buffered data to be sent for that connection, and sends it to the <code>QUICSocket</code>, which then sends it to the underlying UDP socket.</p>
+<p><img src="/images/quic_dataflow.svg" alt=""></p>
+<p>Buffering occurs at the connection level and at the stream level. Each connection has a global buffer for all streams, and each stream has its own buffer. Note that connection buffering and stream buffering all occur within the Quiche library. The web streams <code>ReadableStream</code> and <code>WritableStream</code> do not do any buffering at all.</p>
+<a id="md:connection-negotiation" class="tsd-anchor"></a><h3><a href="#md:connection-negotiation">Connection Negotiation</a></h3><p>The connection negotiation process involves several exchanges of QUIC packets before the <code>QUICConnection</code> is constructed.</p>
+<p>The primary reason to do this is for both sides to determine their respective connection IDs.</p>
+<p><img src="/images/quic_connection_negotiation.svg" alt=""></p>
+<a id="md:push-amp-pull" class="tsd-anchor"></a><h3><a href="#md:push-amp-pull">Push &amp; Pull</a></h3><p>The <code>QUICSocket</code>, <code>QUICClient</code>, <code>QUICServer</code>, <code>QUICConnection</code> and <code>QUICStream</code> are independent state machines that exposes methods that can be called as well as events that may be emitted between them.</p>
+<p>This creates a concurrent decentralised state machine system where there are multiple entrypoints of change.</p>
+<p>Users may call methods which causes state transitions internally that trigger event emissions. However some methods are considered internal to the library, this means these methods are not intended to be called by the end user. They are however public relative to the other components in the system. These methods should be marked with <code>@internal</code> documentation annotation.</p>
+<p>External events may also trigger event handlers that will call methods which perform state transitions and event emission.</p>
+<p>Keeping track of how the system works is therefore quite complex and must follow a set of rules.</p>
+<ul>
+<li>Pull methods - these are either synchronous or asynchronous methods that may throw exceptions.</li>
+<li>Push handlers - these are event handlers that can initiate pull methods, if these pull handlers throw exceptions, these exceptions must be caught, and expected runtime exceptions are to be converted to error events, all other exceptions will be considered to be software bugs and will be bubbled up to the program boundary as unhandled exceptions or unhandled promise rejections. Generally the only exceptions that are expected runtime exceptions are those that arise from perform IO with the operating system.</li>
+</ul>
+<a id="md:benchmarks" class="tsd-anchor"></a><h2><a href="#md:benchmarks">Benchmarks</a></h2><pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">bench</span>
+</code><button>Copy</button></pre>
 <p>View benchmarks here: <a href="https://github.com/MatrixAI/js-quic/blob/master/benches/results">https://github.com/MatrixAI/js-quic/blob/master/benches/results</a> with <a href="https://raw.githack.com/">https://raw.githack.com/</a></p>
-
-<a href="#docs-generation" id="docs-generation" style="color: inherit; text-decoration: none;">
-  <h3>Docs Generation</h3>
-</a>
-<pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">docs</span>
-</code></pre>
+<a id="md:docs-generation" class="tsd-anchor"></a><h3><a href="#md:docs-generation">Docs Generation</a></h3><pre><code class="language-sh"><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">docs</span>
+</code><button>Copy</button></pre>
 <p>See the docs at: <a href="https://matrixai.github.io/js-quic/">https://matrixai.github.io/js-quic/</a></p>
-
-<a href="#publishing" id="publishing" style="color: inherit; text-decoration: none;">
-  <h3>Publishing</h3>
-</a>
-<p>Publishing is handled automatically by the staging pipeline.</p>
+<a id="md:publishing" class="tsd-anchor"></a><h3><a href="#md:publishing">Publishing</a></h3><p>Publishing is handled automatically by the staging pipeline.</p>
 <p>Prerelease:</p>
 <pre><code class="language-sh"><span class="hl-4"># npm login</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">version</span><span class="hl-1"> </span><span class="hl-2">prepatch</span><span class="hl-1"> </span><span class="hl-3">--preid</span><span class="hl-1"> </span><span class="hl-2">alpha</span><span class="hl-1"> </span><span class="hl-4"># premajor/preminor/prepatch</span><br/><span class="hl-0">git</span><span class="hl-1"> </span><span class="hl-2">push</span><span class="hl-1"> </span><span class="hl-3">--follow-tags</span>
-</code></pre>
+</code><button>Copy</button></pre>
 <p>Release:</p>
 <pre><code class="language-sh"><span class="hl-4"># npm login</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">version</span><span class="hl-1"> </span><span class="hl-2">patch</span><span class="hl-1"> </span><span class="hl-4"># major/minor/patch</span><br/><span class="hl-0">git</span><span class="hl-1"> </span><span class="hl-2">push</span><span class="hl-1"> </span><span class="hl-3">--follow-tags</span>
-</code></pre>
+</code><button>Copy</button></pre>
 <p>Manually:</p>
 <pre><code class="language-sh"><span class="hl-4"># npm login</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">version</span><span class="hl-1"> </span><span class="hl-2">patch</span><span class="hl-1"> </span><span class="hl-4"># major/minor/patch</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">run</span><span class="hl-1"> </span><span class="hl-2">build</span><br/><span class="hl-0">npm</span><span class="hl-1"> </span><span class="hl-2">publish</span><span class="hl-1"> </span><span class="hl-3">--access</span><span class="hl-1"> </span><span class="hl-2">public</span><br/><span class="hl-0">git</span><span class="hl-1"> </span><span class="hl-2">push</span><br/><span class="hl-0">git</span><span class="hl-1"> </span><span class="hl-2">push</span><span class="hl-1"> </span><span class="hl-3">--tags</span>
-</code></pre>
+</code><button>Copy</button></pre>
 </div></div>
-<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
+<div class="col-sidebar">
+<div class="page-menu">
 <div class="tsd-navigation settings">
 <details class="tsd-index-accordion"><summary class="tsd-accordion-summary">
-<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)"></path></svg> Settings</h3></summary>
+<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)" id="icon-chevronDown"></path></svg>Settings</h3></summary>
 <div class="tsd-accordion-details">
 <div class="tsd-filter-visibility">
 <h4 class="uppercase">Member Visibility</h4><form>
@@ -112,46 +97,74 @@ master: <a href="https://gitlab.com/MatrixAI/open-source/js-quic/commits/master"
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></form></div>
 <div class="tsd-theme-toggle">
-<h4 class="uppercase">Theme</h4><select id="theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
-<nav class="tsd-navigation primary">
-<details class="tsd-index-accordion" open><summary class="tsd-accordion-summary">
-<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)"></path></svg> Modules</h3></summary>
+<h4 class="uppercase">Theme</h4><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-index-accordion tsd-page-navigation"><summary class="tsd-accordion-summary">
+<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><use href="#icon-chevronDown"></use></svg>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <ul>
-<li class="current selected"><a href="modules.html">@matrixai/quic</a>
+<li>
 <ul>
-<li class="tsd-kind-namespace"><a href="modules/errors.html">errors</a></li>
-<li class="tsd-kind-namespace"><a href="modules/events.html">events</a></li>
-<li class="tsd-kind-namespace"><a href="modules/native.html">native</a></li>
-<li class="tsd-kind-namespace"><a href="modules/utils.html">utils</a></li></ul></li></ul></div></details></nav>
-<nav class="tsd-navigation secondary menu-sticky">
+<li><a href="#md:js-quic"><span>js-<wbr/>quic</span></a></li>
+<li>
 <ul>
-<li class="tsd-kind-class"><a href="classes/QUICClient.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-class)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6" id="icon-128-path"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)" id="icon-128-text"></path></svg>QUICClient</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICConnection.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICConnection</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICConnectionId.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICConnection<wbr/>Id</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICConnectionMap.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICConnection<wbr/>Map</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICServer.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICServer</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICSocket.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICSocket</a></li>
-<li class="tsd-kind-class"><a href="classes/QUICStream.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-128-path"></use><use href="#icon-128-text"></use></svg>QUICStream</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Address.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="var(--color-ts)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6" id="icon-4194304-path"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)" id="icon-4194304-text"></path></svg>Address</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Callback.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Callback</a></li>
-<li class="tsd-kind-type-alias"><a href="types/ClientCrypto.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Client<wbr/>Crypto</a></li>
-<li class="tsd-kind-type-alias"><a href="types/ConnectionId.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Connection<wbr/>Id</a></li>
-<li class="tsd-kind-type-alias"><a href="types/ConnectionIdString.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Connection<wbr/>Id<wbr/>String</a></li>
-<li class="tsd-kind-type-alias"><a href="types/ConnectionMetadata.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Connection<wbr/>Metadata</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Host.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Host</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Hostname.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Hostname</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Opaque.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Opaque</a></li>
-<li class="tsd-kind-type-alias"><a href="types/Port.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Port</a></li>
-<li class="tsd-kind-type-alias"><a href="types/PromiseDeconstructed.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Promise<wbr/>Deconstructed</a></li>
-<li class="tsd-kind-type-alias"><a href="types/QUICConfig.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>QUICConfig</a></li>
-<li class="tsd-kind-type-alias"><a href="types/QUICStreamMap.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>QUICStream<wbr/>Map</a></li>
-<li class="tsd-kind-type-alias"><a href="types/RemoteInfo.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Remote<wbr/>Info</a></li>
-<li class="tsd-kind-type-alias"><a href="types/ServerCrypto.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Server<wbr/>Crypto</a></li>
-<li class="tsd-kind-type-alias"><a href="types/StreamCodeToReason.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Stream<wbr/>Code<wbr/>To<wbr/>Reason</a></li>
-<li class="tsd-kind-type-alias"><a href="types/StreamId.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Stream<wbr/>Id</a></li>
-<li class="tsd-kind-type-alias"><a href="types/StreamReasonToCode.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Stream<wbr/>Reason<wbr/>To<wbr/>Code</a></li>
-<li class="tsd-kind-type-alias"><a href="types/VerifyCallback.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-4194304-path"></use><use href="#icon-4194304-text"></use></svg>Verify<wbr/>Callback</a></li></ul></nav></div></div>
-<div class="container tsd-generator">
+<li><a href="#md:installation"><span>Installation</span></a></li>
+<li><a href="#md:usage"><span>Usage</span></a></li>
+<li><a href="#md:development"><span>Development</span></a></li>
+<li>
+<ul>
+<li><a href="#md:quiche"><span>Quiche</span></a></li>
+<li><a href="#md:tls"><span>TLS</span></a></li>
+<li><a href="#md:cargorust-targets"><span>Cargo/<wbr/>Rust targets</span></a></li>
+<li><a href="#md:structure"><span>Structure</span></a></li></ul></li>
+<li><a href="#md:dataflow"><span>Dataflow</span></a></li>
+<li>
+<ul>
+<li><a href="#md:connection-negotiation"><span>Connection <wbr/>Negotiation</span></a></li>
+<li><a href="#md:push-amp-pull"><span>Push &amp; <wbr/>Pull</span></a></li></ul></li>
+<li><a href="#md:benchmarks"><span>Benchmarks</span></a></li>
+<li>
+<ul>
+<li><a href="#md:docs-generation"><span>Docs <wbr/>Generation</span></a></li>
+<li><a href="#md:publishing"><span>Publishing</span></a></li></ul></li></ul></li></ul></li></ul></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="modules.html" class="current"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-namespace)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M9.33 16V7.24H10.77L13.446 14.74C13.43 14.54 13.41 14.296 13.386 14.008C13.37 13.712 13.354 13.404 13.338 13.084C13.33 12.756 13.326 12.448 13.326 12.16V7.24H14.37V16H12.93L10.266 8.5C10.282 8.692 10.298 8.936 10.314 9.232C10.33 9.52 10.342 9.828 10.35 10.156C10.366 10.476 10.374 10.784 10.374 11.08V16H9.33Z" fill="var(--color-text)"></path></g></svg><span>@matrixai/quic</span></a>
+<ul class="tsd-small-nested-navigation">
+<li><a href="modules/errors.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>errors</span></a></li>
+<li><a href="modules/events.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>events</span></a></li>
+<li><a href="modules/native.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>native</span></a></li>
+<li><a href="modules/utils.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>utils</span></a></li>
+<li><a href="classes/QUICClient.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-128"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-class)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)"></path></g></svg><span>QUICClient</span></a></li>
+<li><a href="classes/QUICConnection.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection</span></a></li>
+<li><a href="classes/QUICConnectionId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection<wbr/>Id</span></a></li>
+<li><a href="classes/QUICConnectionMap.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection<wbr/>Map</span></a></li>
+<li><a href="classes/QUICServer.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICServer</span></a></li>
+<li><a href="classes/QUICSocket.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICSocket</span></a></li>
+<li><a href="classes/QUICStream.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICStream</span></a></li>
+<li><a href="types/Address.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Address</span></a></li>
+<li><a href="types/Callback.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Callback</span></a></li>
+<li><a href="types/Class.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Class</span></a></li>
+<li><a href="types/ClientCryptoOps.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Client<wbr/>Crypto<wbr/>Ops</span></a></li>
+<li><a href="types/ConnectionId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Id</span></a></li>
+<li><a href="types/ConnectionIdString.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Id<wbr/>String</span></a></li>
+<li><a href="types/ConnectionMetadata.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Metadata</span></a></li>
+<li><a href="types/Host.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Host</span></a></li>
+<li><a href="types/Hostname.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Hostname</span></a></li>
+<li><a href="types/Opaque.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Opaque</span></a></li>
+<li><a href="types/Port.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Port</span></a></li>
+<li><a href="types/PromiseDeconstructed.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Promise<wbr/>Deconstructed</span></a></li>
+<li><a href="types/QUICClientConfigInput.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICClient<wbr/>Config<wbr/>Input</span></a></li>
+<li><a href="types/QUICClientCrypto.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICClient<wbr/>Crypto</span></a></li>
+<li><a href="types/QUICConfig.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICConfig</span></a></li>
+<li><a href="types/QUICServerConfigInput.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICServer<wbr/>Config<wbr/>Input</span></a></li>
+<li><a href="types/QUICServerCrypto.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICServer<wbr/>Crypto</span></a></li>
+<li><a href="types/QUICStreamMap.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICStream<wbr/>Map</span></a></li>
+<li><a href="types/RemoteInfo.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Remote<wbr/>Info</span></a></li>
+<li><a href="types/ResolveHostname.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Resolve<wbr/>Hostname</span></a></li>
+<li><a href="types/ServerCryptoOps.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Server<wbr/>Crypto<wbr/>Ops</span></a></li>
+<li><a href="types/StreamCodeToReason.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Code<wbr/>To<wbr/>Reason</span></a></li>
+<li><a href="types/StreamId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Id</span></a></li>
+<li><a href="types/StreamReasonToCode.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Reason<wbr/>To<wbr/>Code</span></a></li>
+<li><a href="types/TLSVerifyCallback.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>TLSVerify<wbr/>Callback</span></a></li></ul></nav></div></div></div>
+<div class="tsd-generator">
 <p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></div>
-<div class="overlay"></div><script src="assets/main.js"></script></body></html>
+<div class="overlay"></div></body></html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html class="default" lang="en"><head><meta charSet="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>QUICClient | @matrixai/quic</title><meta name="description" content="Documentation for @matrixai/quic"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script async src="../assets/search.js" id="search-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os"</script><header class="tsd-page-toolbar">
+<!DOCTYPE html><html class="default" lang="en"><head><meta charSet="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>QUICClient | @matrixai/quic</title><meta name="description" content="Documentation for @matrixai/quic"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/search.js" id="tsd-search-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os"</script><header class="tsd-page-toolbar">
 <div class="tsd-toolbar-contents container">
 <div class="table-cell" id="tsd-search" data-base="..">
 <div class="field"><label for="tsd-search-field" class="tsd-widget tsd-toolbar-icon search no-caption"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M15.7824 13.833L12.6666 10.7177C12.5259 10.5771 12.3353 10.499 12.1353 10.499H11.6259C12.4884 9.39596 13.001 8.00859 13.001 6.49937C13.001 2.90909 10.0914 0 6.50048 0C2.90959 0 0 2.90909 0 6.49937C0 10.0896 2.90959 12.9987 6.50048 12.9987C8.00996 12.9987 9.39756 12.4863 10.5008 11.6239V12.1332C10.5008 12.3332 10.5789 12.5238 10.7195 12.6644L13.8354 15.7797C14.1292 16.0734 14.6042 16.0734 14.8948 15.7797L15.7793 14.8954C16.0731 14.6017 16.0731 14.1267 15.7824 13.833ZM6.50048 10.499C4.29094 10.499 2.50018 8.71165 2.50018 6.49937C2.50018 4.29021 4.28781 2.49976 6.50048 2.49976C8.71001 2.49976 10.5008 4.28708 10.5008 6.49937C10.5008 8.70852 8.71314 10.499 6.50048 10.499Z" fill="var(--color-text)"></path></svg></label><input type="text" id="tsd-search-field" aria-label="Search"/></div>
@@ -9,7 +9,7 @@
 <li class="state failure">The search index is not available</li></ul><a href="../index.html" class="title">@matrixai/quic</a></div>
 <div class="table-cell" id="tsd-widgets"><a href="#" class="tsd-widget tsd-toolbar-icon menu no-caption" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" fill="var(--color-text)"></rect><rect x="1" y="7" width="14" height="2" fill="var(--color-text)"></rect><rect x="1" y="11" width="14" height="2" fill="var(--color-text)"></rect></svg></a></div></div></header>
 <div class="container container-main">
-<div class="col-8 col-content">
+<div class="col-content">
 <div class="tsd-page-title">
 <ul class="tsd-breadcrumb">
 <li><a href="../modules.html">@matrixai/quic</a></li>
@@ -18,13 +18,13 @@
 <section class="tsd-panel tsd-hierarchy">
 <h4>Hierarchy</h4>
 <ul class="tsd-hierarchy">
-<li><span class="tsd-signature-type">CreateDestroy</span></li>
-<li><span class="tsd-signature-type">EventTarget</span>
+<li><span class="tsd-signature-type ">CreateDestroy</span></li>
+<li><span class="tsd-signature-type ">EventTarget</span>
 <ul class="tsd-hierarchy">
 <li><span class="target">QUICClient</span></li></ul></li></ul></section><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L42">src/QUICClient.ts:42</a></li>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L44">src/QUICClient.ts:44</a></li></ul></aside>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L32">src/QUICClient.ts:32</a></li>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L37">src/QUICClient.ts:37</a></li></ul></aside>
 <section class="tsd-panel-group tsd-index-group">
 <section class="tsd-panel tsd-index-panel">
 <details class="tsd-index-content tsd-index-accordion" open><summary class="tsd-accordion-summary tsd-index-summary">
@@ -32,157 +32,254 @@
 <div class="tsd-accordion-details">
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading">Constructors</h3>
-<div class="tsd-index-list"><a href="QUICClient.html#constructor" class="tsd-index-link tsd-kind-constructor tsd-parent-kind-class tsd-is-inherited"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="#4D7FFF" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12" id="icon-512-path"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)" id="icon-512-text"></path></svg><span>constructor</span></a>
+<div class="tsd-index-list"><a href="QUICClient.html#constructor" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-512"><rect fill="var(--color-icon-background)" stroke="#4D7FFF" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)"></path></g></svg><span>constructor</span></a>
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading">Properties</h3>
-<div class="tsd-index-list"><a href="QUICClient.html#_initLock_" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="#FF984D" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12" id="icon-1024-path"></rect><path d="M9.354 16V7.24H12.174C12.99 7.24 13.638 7.476 14.118 7.948C14.606 8.412 14.85 9.036 14.85 9.82C14.85 10.604 14.606 11.232 14.118 11.704C13.638 12.168 12.99 12.4 12.174 12.4H10.434V16H9.354ZM10.434 11.428H12.174C12.646 11.428 13.022 11.284 13.302 10.996C13.59 10.7 13.734 10.308 13.734 9.82C13.734 9.324 13.59 8.932 13.302 8.644C13.022 8.356 12.646 8.212 12.174 8.212H10.434V11.428Z" fill="var(--color-text)" id="icon-1024-text"></path></svg><span>[init<wbr/>Lock]</span></a>
-<a href="QUICClient.html#_connection" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>_connection</span></a>
-<a href="QUICClient.html#address" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>address</span></a>
-<a href="QUICClient.html#config" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>config</span></a>
-<a href="QUICClient.html#connectionMap" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>connection<wbr/>Map</span></a>
-<a href="QUICClient.html#isSocketShared" class="tsd-index-link tsd-kind-property tsd-parent-kind-class"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>is<wbr/>Socket<wbr/>Shared</span></a>
-<a href="QUICClient.html#logger" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>logger</span></a>
-<a href="QUICClient.html#socket" class="tsd-index-link tsd-kind-property tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg><span>socket</span></a>
+<div class="tsd-index-list"><a href="QUICClient.html#_initLock_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-1024"><rect fill="var(--color-icon-background)" stroke="#FF984D" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12"></rect><path d="M9.354 16V7.24H12.174C12.99 7.24 13.638 7.476 14.118 7.948C14.606 8.412 14.85 9.036 14.85 9.82C14.85 10.604 14.606 11.232 14.118 11.704C13.638 12.168 12.99 12.4 12.174 12.4H10.434V16H9.354ZM10.434 11.428H12.174C12.646 11.428 13.022 11.284 13.302 10.996C13.59 10.7 13.734 10.308 13.734 9.82C13.734 9.324 13.59 8.932 13.302 8.644C13.022 8.356 12.646 8.212 12.174 8.212H10.434V11.428Z" fill="var(--color-text)"></path></g></svg><span>[init<wbr/>Lock]</span></a>
+<a href="QUICClient.html#_closed" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>_closed</span></a>
+<a href="QUICClient.html#closedP" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>closedP</span></a>
+<a href="QUICClient.html#config" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>config</span></a>
+<a href="QUICClient.html#connection" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>connection</span></a>
+<a href="QUICClient.html#isSocketShared" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>is<wbr/>Socket<wbr/>Shared</span></a>
+<a href="QUICClient.html#logger" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>logger</span></a>
+<a href="QUICClient.html#resolveClosedP" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>resolve<wbr/>ClosedP</span></a>
+<a href="QUICClient.html#socket" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>socket</span></a>
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading">Accessors</h3>
-<div class="tsd-index-list"><a href="QUICClient.html#_destroyed_" class="tsd-index-link tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="#FF4D4D" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12" id="icon-262144-path"></rect><path d="M8.85 16L11.13 7.24H12.582L14.85 16H13.758L13.182 13.672H10.53L9.954 16H8.85ZM10.746 12.76H12.954L12.282 10.06C12.154 9.548 12.054 9.12 11.982 8.776C11.91 8.432 11.866 8.208 11.85 8.104C11.834 8.208 11.79 8.432 11.718 8.776C11.646 9.12 11.546 9.544 11.418 10.048L10.746 12.76Z" fill="var(--color-text)" id="icon-262144-text"></path></svg><span>[destroyed]</span></a>
-<a href="QUICClient.html#_status_" class="tsd-index-link tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg><span>[status]</span></a>
-<a href="QUICClient.html#connection" class="tsd-index-link tsd-kind-accessor tsd-parent-kind-class"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg><span>connection</span></a>
-<a href="QUICClient.html#host" class="tsd-index-link tsd-kind-accessor tsd-parent-kind-class"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg><span>host</span></a>
-<a href="QUICClient.html#port" class="tsd-index-link tsd-kind-accessor tsd-parent-kind-class"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg><span>port</span></a>
+<div class="tsd-index-list"><a href="QUICClient.html#_destroyed_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-262144"><rect fill="var(--color-icon-background)" stroke="#FF4D4D" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12"></rect><path d="M8.85 16L11.13 7.24H12.582L14.85 16H13.758L13.182 13.672H10.53L9.954 16H8.85ZM10.746 12.76H12.954L12.282 10.06C12.154 9.548 12.054 9.12 11.982 8.776C11.91 8.432 11.866 8.208 11.85 8.104C11.834 8.208 11.79 8.432 11.718 8.776C11.646 9.12 11.546 9.544 11.418 10.048L10.746 12.76Z" fill="var(--color-text)"></path></g></svg><span>[destroyed]</span></a>
+<a href="QUICClient.html#_eventHandled_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Handled]</span></a>
+<a href="QUICClient.html#_eventHandlers_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Handlers]</span></a>
+<a href="QUICClient.html#_eventTarget_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Target]</span></a>
+<a href="QUICClient.html#_handleEventError_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[handle<wbr/>Event<wbr/>Error]</span></a>
+<a href="QUICClient.html#_statusP_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[status<wbr/>P]</span></a>
+<a href="QUICClient.html#_status_" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[status]</span></a>
+<a href="QUICClient.html#closed" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>closed</span></a>
+<a href="QUICClient.html#host" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>host</span></a>
+<a href="QUICClient.html#localHost" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>local<wbr/>Host</span></a>
+<a href="QUICClient.html#localPort" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>local<wbr/>Port</span></a>
+<a href="QUICClient.html#port" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>port</span></a>
 </div></section>
 <section class="tsd-index-section">
 <h3 class="tsd-index-heading">Methods</h3>
-<div class="tsd-index-list"><a href="QUICClient.html#addEventListener" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="#FF4DB8" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12" id="icon-2048-path"></rect><path d="M9.162 16V7.24H10.578L11.514 10.072C11.602 10.328 11.674 10.584 11.73 10.84C11.794 11.088 11.842 11.28 11.874 11.416C11.906 11.28 11.954 11.088 12.018 10.84C12.082 10.584 12.154 10.324 12.234 10.06L13.122 7.24H14.538V16H13.482V12.82C13.482 12.468 13.49 12.068 13.506 11.62C13.53 11.172 13.558 10.716 13.59 10.252C13.622 9.78 13.654 9.332 13.686 8.908C13.726 8.476 13.762 8.1 13.794 7.78L12.366 12.16H11.334L9.894 7.78C9.934 8.092 9.97 8.456 10.002 8.872C10.042 9.28 10.078 9.716 10.11 10.18C10.142 10.636 10.166 11.092 10.182 11.548C10.206 12.004 10.218 12.428 10.218 12.82V16H9.162Z" fill="var(--color-text)" id="icon-2048-text"></path></svg><span>add<wbr/>Event<wbr/>Listener</span></a>
-<a href="QUICClient.html#destroy" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>destroy</span></a>
-<a href="QUICClient.html#dispatchEvent" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>dispatch<wbr/>Event</span></a>
-<a href="QUICClient.html#handleQUICConnectionEvents" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>handleQUICConnection<wbr/>Events</span></a>
-<a href="QUICClient.html#handleQUICSocketEvents" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-protected"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>handleQUICSocket<wbr/>Events</span></a>
-<a href="QUICClient.html#removeEventListener" class="tsd-index-link tsd-kind-method tsd-parent-kind-class tsd-is-external"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>remove<wbr/>Event<wbr/>Listener</span></a>
-<a href="QUICClient.html#createQUICClient" class="tsd-index-link tsd-kind-method tsd-parent-kind-class"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg><span>createQUICClient</span></a>
+<div class="tsd-index-list"><a href="QUICClient.html#addEventListener" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-2048"><rect fill="var(--color-icon-background)" stroke="#FF4DB8" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="12"></rect><path d="M9.162 16V7.24H10.578L11.514 10.072C11.602 10.328 11.674 10.584 11.73 10.84C11.794 11.088 11.842 11.28 11.874 11.416C11.906 11.28 11.954 11.088 12.018 10.84C12.082 10.584 12.154 10.324 12.234 10.06L13.122 7.24H14.538V16H13.482V12.82C13.482 12.468 13.49 12.068 13.506 11.62C13.53 11.172 13.558 10.716 13.59 10.252C13.622 9.78 13.654 9.332 13.686 8.908C13.726 8.476 13.762 8.1 13.794 7.78L12.366 12.16H11.334L9.894 7.78C9.934 8.092 9.97 8.456 10.002 8.872C10.042 9.28 10.078 9.716 10.11 10.18C10.142 10.636 10.166 11.092 10.182 11.548C10.206 12.004 10.218 12.428 10.218 12.82V16H9.162Z" fill="var(--color-text)"></path></g></svg><span>add<wbr/>Event<wbr/>Listener</span></a>
+<a href="QUICClient.html#destroy" class="tsd-index-link tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>destroy</span></a>
+<a href="QUICClient.html#dispatchEvent" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>dispatch<wbr/>Event</span></a>
+<a href="QUICClient.html#handleEventQUICClientClose" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICClient<wbr/>Close</span></a>
+<a href="QUICClient.html#handleEventQUICClientError" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICClient<wbr/>Error</span></a>
+<a href="QUICClient.html#handleEventQUICConnection" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection</span></a>
+<a href="QUICClient.html#handleEventQUICConnectionError" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Error</span></a>
+<a href="QUICClient.html#handleEventQUICConnectionSend" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Send</span></a>
+<a href="QUICClient.html#handleEventQUICConnectionStopped" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Stopped</span></a>
+<a href="QUICClient.html#handleEventQUICSocket" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICSocket</span></a>
+<a href="QUICClient.html#handleEventQUICSocketStopped" class="tsd-index-link tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICSocket<wbr/>Stopped</span></a>
+<a href="QUICClient.html#removeEventListener" class="tsd-index-link tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>remove<wbr/>Event<wbr/>Listener</span></a>
+<a href="QUICClient.html#createQUICClient" class="tsd-index-link"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>createQUICClient</span></a>
 </div></section></div></details></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Constructors</h2>
-<section class="tsd-panel tsd-member tsd-kind-constructor tsd-parent-kind-class tsd-is-inherited"><a id="constructor" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>constructor</span><a href="#constructor" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" id="icon-anchor-a"></path><path d="M10 14a3.5 3.5 0 0 0 5 0l4 -4a3.5 3.5 0 0 0 -5 -5l-.5 .5" id="icon-anchor-b"></path><path d="M14 10a3.5 3.5 0 0 0 -5 0l-4 4a3.5 3.5 0 0 0 5 5l.5 -.5" id="icon-anchor-c"></path></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-constructor tsd-parent-kind-class tsd-is-inherited">
-<li class="tsd-signature tsd-anchor-link" id="constructor.new_QUICClient">new QUICClient<span class="tsd-signature-symbol">(</span>__namedParameters<span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">{ </span><br/><span>    </span>address<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>connection<span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>isSocketShared<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>logger<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>socket<span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="QUICClient.html" class="tsd-signature-type" data-tsd-kind="Class">QUICClient</a><a href="#constructor.new_QUICClient" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<section class="tsd-panel tsd-member tsd-is-inherited"><a id="constructor" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>constructor</span><a href="#constructor" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><g stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round" id="icon-anchor"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M10 14a3.5 3.5 0 0 0 5 0l4 -4a3.5 3.5 0 0 0 -5 -5l-.5 .5"></path><path d="M14 10a3.5 3.5 0 0 0 -5 0l-4 4a3.5 3.5 0 0 0 5 5l.5 -.5"></path></g></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited">
+<li class="tsd-signature tsd-anchor-link" id="constructor.new_QUICClient"><span class="tsd-kind-constructor-signature">new QUICClient</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">__namedParameters</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a><a href="#constructor.new_QUICClient" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>__namedParameters: <span class="tsd-signature-symbol">{ </span><br/><span>    </span>address<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>connection<span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>isSocketShared<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>logger<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>socket<span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
+<h5><span class="tsd-kind-parameter">__namedParameters</span>: <span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">connection</span><span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type tsd-kind-class">QUICConnection</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">isSocketShared</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">socket</span><span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type tsd-kind-class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
 <ul class="tsd-parameters">
 <li class="tsd-parameter">
-<h5>address<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></h5></li>
+<h5><span class="tsd-kind-property">connection</span><span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type tsd-kind-class">QUICConnection</a></h5></li>
 <li class="tsd-parameter">
-<h5>connection<span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a></h5></li>
+<h5><span class="tsd-kind-property">is<wbr/>Socket<wbr/>Shared</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></h5></li>
 <li class="tsd-parameter">
-<h5>is<wbr/>Socket<wbr/>Shared<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></h5></li>
+<h5><span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Logger</span></h5></li>
 <li class="tsd-parameter">
-<h5>logger<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Logger</span></h5></li>
-<li class="tsd-parameter">
-<h5>socket<span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a></h5></li></ul></li></ul></div>
-<h4 class="tsd-returns-title">Returns <a href="QUICClient.html" class="tsd-signature-type" data-tsd-kind="Class">QUICClient</a></h4><aside class="tsd-sources">
+<h5><span class="tsd-kind-property">socket</span><span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type tsd-kind-class">QUICSocket</a></h5></li></ul></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a></h4><aside class="tsd-sources">
 <p>Inherited from CreateDestroy.constructor</p>
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L347">src/QUICClient.ts:347</a></li></ul></aside></li></ul></section></section>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L504">src/QUICClient.ts:504</a></li></ul></aside></li></ul></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Properties</h2>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a id="_initLock_" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>[init<wbr/>Lock]</span><a href="#_initLock_" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">[init<wbr/>Lock]<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">RWLockWriter</span></div><aside class="tsd-sources">
-<p>Inherited from CreateDestroy.__@initLock@23646</p>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_initLock_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>[init<wbr/>Lock]</span><a href="#_initLock_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">[init<wbr/>Lock]</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">RWLockWriter</span></div><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[initLock]</p>
 <ul>
-<li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:7</li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="_connection" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>_connection</span><a href="#_connection" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">_connection<span class="tsd-signature-symbol">:</span> <a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a></div><aside class="tsd-sources">
+<li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:9</li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="_closed" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>_closed</span><a href="#_closed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">_closed</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> = false</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L49">src/QUICClient.ts:49</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="address" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>address</span><a href="#address" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">address<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L301">src/QUICClient.ts:301</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member"><a id="closedP" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>closedP</span><a href="#closedP" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">closedP</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L52">src/QUICClient.ts:52</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="config" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>config</span><a href="#config" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">config<span class="tsd-signature-symbol">:</span> <a href="../interfaces/native.Config.html" class="tsd-signature-type" data-tsd-kind="Interface">Config</a></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L296">src/QUICClient.ts:296</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="config" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>config</span><a href="#config" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">config</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/native.Config.html" class="tsd-signature-type tsd-kind-interface">Config</a></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L48">src/QUICClient.ts:48</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="connectionMap" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>connection<wbr/>Map</span><a href="#connectionMap" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">connection<wbr/>Map<span class="tsd-signature-symbol">:</span> <a href="QUICConnectionMap.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnectionMap</a></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L300">src/QUICClient.ts:300</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member"><a id="connection" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>connection</span><a href="#connection" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">connection</span><span class="tsd-signature-symbol">:</span> <a href="QUICConnection.html" class="tsd-signature-type tsd-kind-class">QUICConnection</a></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L50">src/QUICClient.ts:50</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class"><a id="isSocketShared" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>is<wbr/>Socket<wbr/>Shared</span><a href="#isSocketShared" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">is<wbr/>Socket<wbr/>Shared<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L295">src/QUICClient.ts:295</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member"><a id="isSocketShared" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagReadonly">Readonly</code> <span>is<wbr/>Socket<wbr/>Shared</span><a href="#isSocketShared" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">is<wbr/>Socket<wbr/>Shared</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L45">src/QUICClient.ts:45</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="logger" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>logger</span><a href="#logger" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">logger<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Logger</span></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L294">src/QUICClient.ts:294</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="logger" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>logger</span><a href="#logger" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type ">Logger</span></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L47">src/QUICClient.ts:47</a></li></ul></aside></section>
-<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a id="socket" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>socket</span><a href="#socket" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<div class="tsd-signature">socket<span class="tsd-signature-symbol">:</span> <a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a></div><aside class="tsd-sources">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L298">src/QUICClient.ts:298</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="resolveClosedP" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>resolve<wbr/>ClosedP</span><a href="#resolveClosedP" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">resolve<wbr/>ClosedP</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">)</span></div>
+<div class="tsd-type-declaration">
+<h4>Type declaration</h4>
+<ul class="tsd-parameters">
+<li class="tsd-parameter-signature">
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="resolveClosedP.__type.__type-1"><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4></li></ul></li></ul></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L46">src/QUICClient.ts:46</a></li></ul></aside></section></section>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L302">src/QUICClient.ts:302</a></li></ul></aside></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="socket" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>socket</span><a href="#socket" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<div class="tsd-signature"><span class="tsd-kind-property">socket</span><span class="tsd-signature-symbol">:</span> <a href="QUICSocket.html" class="tsd-signature-type tsd-kind-class">QUICSocket</a></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L299">src/QUICClient.ts:299</a></li></ul></aside></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Accessors</h2>
-<section class="tsd-panel tsd-member tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a id="_destroyed_" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>[destroyed]</span><a href="#_destroyed_" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external">
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_destroyed_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[destroyed]</span><a href="#_destroyed_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
 <li class="tsd-signature" id="_destroyed_._destroyed_-1"><span class="tsd-signature-symbol">get</span> [destroyed]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
 <li class="tsd-description">
 <h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
-<p>Inherited from CreateDestroy.__@destroyed@24570</p>
-<ul>
-<li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:5</li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a id="_status_" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>[status]</span><a href="#_status_" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external">
-<li class="tsd-signature" id="_status_._status_-1"><span class="tsd-signature-symbol">get</span> [status]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Status</span></li>
-<li class="tsd-description">
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Status</span></h4><aside class="tsd-sources">
-<p>Inherited from CreateDestroy.__@status@23642</p>
+<p>Inherited from CreateDestroy.[destroyed]</p>
 <ul>
 <li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:6</li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-accessor tsd-parent-kind-class"><a id="connection" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>connection</span><a href="#connection" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-accessor tsd-parent-kind-class">
-<li class="tsd-signature" id="connection.connection-1"><span class="tsd-signature-symbol">get</span> connection<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a></li>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_eventHandled_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[event<wbr/>Handled]</span><a href="#_eventHandled_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_eventHandled_._eventHandled_-1"><span class="tsd-signature-symbol">get</span> [eventHandled]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">ReadonlyWeakSet</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Event</span><span class="tsd-signature-symbol">&gt;</span></li>
 <li class="tsd-description">
-<h4 class="tsd-returns-title">Returns <a href="QUICConnection.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnection</a></h4><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">ReadonlyWeakSet</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Event</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[eventHandled]</p>
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L398">src/QUICClient.ts:398</a></li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-accessor tsd-parent-kind-class"><a id="host" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>host</span><a href="#host" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-accessor tsd-parent-kind-class">
-<li class="tsd-signature" id="host.host-1"><span class="tsd-signature-symbol">get</span> host<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></li>
+<li>Defined in node_modules/@matrixai/events/dist/Evented.d.ts:7</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_eventHandlers_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[event<wbr/>Handlers]</span><a href="#_eventHandlers_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_eventHandlers_._eventHandlers_-1"><span class="tsd-signature-symbol">get</span> [eventHandlers]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">ReadonlyMap</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type ">Set</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">EventHandlerInfo</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></li>
 <li class="tsd-description">
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">string</span></h4><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">ReadonlyMap</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">, </span><span class="tsd-signature-type ">Set</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">EventHandlerInfo</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[eventHandlers]</p>
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L388">src/QUICClient.ts:388</a></li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-accessor tsd-parent-kind-class"><a id="port" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>port</span><a href="#port" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-accessor tsd-parent-kind-class">
-<li class="tsd-signature" id="port.port-1"><span class="tsd-signature-symbol">get</span> port<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></li>
+<li>Defined in node_modules/@matrixai/events/dist/Evented.d.ts:6</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_eventTarget_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[event<wbr/>Target]</span><a href="#_eventTarget_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_eventTarget_._eventTarget_-1"><span class="tsd-signature-symbol">get</span> [eventTarget]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">EventTarget</span></li>
 <li class="tsd-description">
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">EventTarget</span></h4><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[eventTarget]</p>
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L393">src/QUICClient.ts:393</a></li></ul></aside></li></ul></section></section>
+<li>Defined in node_modules/@matrixai/events/dist/Evented.d.ts:5</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_handleEventError_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[handle<wbr/>Event<wbr/>Error]</span><a href="#_handleEventError_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_handleEventError_._handleEventError_-1"><span class="tsd-signature-symbol">get</span> [handleEventError]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">)</span></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">)</span></h4>
+<ul class="tsd-parameters">
+<li class="tsd-parameter-signature">
+<ul class="tsd-signatures tsd-is-external">
+<li class="tsd-signature" id="_handleEventError_._handleEventError_-1.__type-2.__type-3"><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span></li>
+<li class="tsd-description">
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <span class="tsd-signature-type ">EventError</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4></li></ul></li></ul><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[handleEventError]</p>
+<ul>
+<li>Defined in node_modules/@matrixai/events/dist/Evented.d.ts:8</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_statusP_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[status<wbr/>P]</span><a href="#_statusP_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_statusP_._statusP_-1"><span class="tsd-signature-symbol">get</span> [statusP]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Status</span><span class="tsd-signature-symbol">&gt;</span></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Status</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[statusP]</p>
+<ul>
+<li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:8</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="_status_" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>[status]</span><a href="#_status_" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature" id="_status_._status_-1"><span class="tsd-signature-symbol">get</span> [status]<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Status</span></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Status</span></h4><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.[status]</p>
+<ul>
+<li>Defined in node_modules/@matrixai/async-init/dist/CreateDestroy.d.ts:7</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="closed" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>closed</span><a href="#closed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="closed.closed-1"><span class="tsd-signature-symbol">get</span> closed<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L545">src/QUICClient.ts:545</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="host" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>host</span><a href="#host" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="host.host-1"><span class="tsd-signature-symbol">get</span> host<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../types/Host.html" class="tsd-signature-type tsd-kind-type-alias">Host</a></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <a href="../types/Host.html" class="tsd-signature-type tsd-kind-type-alias">Host</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L525">src/QUICClient.ts:525</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="localHost" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>local<wbr/>Host</span><a href="#localHost" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="localHost.localHost-1"><span class="tsd-signature-symbol">get</span> localHost<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../types/Host.html" class="tsd-signature-type tsd-kind-type-alias">Host</a></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <a href="../types/Host.html" class="tsd-signature-type tsd-kind-type-alias">Host</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L535">src/QUICClient.ts:535</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="localPort" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>local<wbr/>Port</span><a href="#localPort" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="localPort.localPort-1"><span class="tsd-signature-symbol">get</span> localPort<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../types/Port.html" class="tsd-signature-type tsd-kind-type-alias">Port</a></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <a href="../types/Port.html" class="tsd-signature-type tsd-kind-type-alias">Port</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L540">src/QUICClient.ts:540</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="port" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>port</span><a href="#port" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature" id="port.port-1"><span class="tsd-signature-symbol">get</span> port<span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../types/Port.html" class="tsd-signature-type tsd-kind-type-alias">Port</a></li>
+<li class="tsd-description">
+<h4 class="tsd-returns-title">Returns <a href="../types/Port.html" class="tsd-signature-type tsd-kind-type-alias">Port</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L530">src/QUICClient.ts:530</a></li></ul></aside></li></ul></section></section>
 <section class="tsd-panel-group tsd-member-group">
 <h2>Methods</h2>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-external"><a id="addEventListener" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>add<wbr/>Event<wbr/>Listener</span><a href="#addEventListener" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-external">
-<li class="tsd-signature tsd-anchor-link" id="addEventListener.addEventListener-1">add<wbr/>Event<wbr/>Listener<span class="tsd-signature-symbol">(</span>type<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, callback<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOrEventListenerObject</span>, options<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">AddEventListenerOptions</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#addEventListener.addEventListener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="addEventListener" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>add<wbr/>Event<wbr/>Listener</span><a href="#addEventListener" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature tsd-anchor-link" id="addEventListener.addEventListener-1"><span class="tsd-kind-call-signature">add<wbr/>Event<wbr/>Listener</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">type</span>, <span class="tsd-kind-parameter">callback</span>, <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#addEventListener.addEventListener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Appends an event listener for events whose type attribute value is type. The callback argument sets the callback that will be invoked when the event is dispatched.</p>
 <p>The options argument sets listener-specific options. For compatibility this can be a boolean, in which case the method behaves exactly as if the value was specified as options&#39;s capture.</p>
@@ -191,188 +288,364 @@
 <p>When set to true, options&#39;s once indicates that the callback will only be invoked once after which the event listener will be removed.</p>
 <p>If an AbortSignal is passed for options&#39;s signal, then the event listener will be removed when signal is aborted.</p>
 <p>The event listener is appended to target&#39;s event listener list and is not appended if it has the same type, callback, and capture.</p>
+<p><a href="https://developer.mozilla.org/docs/Web/API/EventTarget/addEventListener">MDN Reference</a></p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>type: <span class="tsd-signature-type">string</span></h5></li>
+<h5><span class="tsd-kind-parameter">type</span>: <span class="tsd-signature-type">string</span></h5></li>
 <li>
-<h5>callback: <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOrEventListenerObject</span></h5></li>
+<h5><span class="tsd-kind-parameter">callback</span>: <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type ">EventListenerOrEventListenerObject</span></h5></li>
 <li>
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> options: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">AddEventListenerOptions</span></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type ">AddEventListenerOptions</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.addEventListener</p>
 <ul>
-<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:5307</li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a id="destroy" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>destroy</span><a href="#destroy" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-inherited">
-<li class="tsd-signature tsd-anchor-link" id="destroy.destroy-1">destroy<span class="tsd-signature-symbol">(</span>__namedParameters<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-symbol">{ </span><br/><span>    </span>force<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#destroy.destroy-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:8168</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited"><a id="destroy" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>destroy</span><a href="#destroy" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited">
+<li class="tsd-signature tsd-anchor-link" id="destroy.destroy-1"><span class="tsd-kind-call-signature">destroy</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">opts</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#destroy.destroy-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Force destroy means that we don&#39;t destroy gracefully.
-This should only occur when an error occurs from the socket
-or from the connection. If the socket is stopped or the connection
-is stopped, then we also force destroy.
-Suppose the socket failed, and we attempt to stop the connection.
-The connection may attempt to stop gracefully. That would result in
-an exception because the socket send method no longer works.</p>
+<div class="tsd-comment tsd-typography"><p>Destroy the QUICClient.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>__namedParameters: <span class="tsd-signature-symbol">{ </span><br/><span>    </span>force<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = {}</span></h5>
-<ul class="tsd-parameters">
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> force<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span></h5></li></ul></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<h5><span class="tsd-kind-parameter">opts</span>: <span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">errorCode</span><span class="tsd-signature-symbol">?: </span><a href="../enums/native.ConnectionErrorCode.html" class="tsd-signature-type tsd-kind-enum">ConnectionErrorCode</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">force</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">isApp</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">false</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reason</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Uint8Array</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">errorCode</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">force</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">isApp</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">true</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reason</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Uint8Array</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = {}</span></h5>
+<div class="tsd-comment tsd-typography"></div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <p>Inherited from CreateDestroy.destroy</p>
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L412">src/QUICClient.ts:412</a></li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-external"><a id="dispatchEvent" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>dispatch<wbr/>Event</span><a href="#dispatchEvent" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-external">
-<li class="tsd-signature tsd-anchor-link" id="dispatchEvent.dispatchEvent-1">dispatch<wbr/>Event<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Event</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span><a href="#dispatchEvent.dispatchEvent-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L559">src/QUICClient.ts:559</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="dispatchEvent" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>dispatch<wbr/>Event</span><a href="#dispatchEvent" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature tsd-anchor-link" id="dispatchEvent.dispatchEvent-1"><span class="tsd-kind-call-signature">dispatch<wbr/>Event</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">event</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">boolean</span><a href="#dispatchEvent.dispatchEvent-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Dispatches a synthetic event event to target and returns true if either event&#39;s cancelable attribute value is false or its preventDefault() method was not invoked, and false otherwise.</p>
+<p><a href="https://developer.mozilla.org/docs/Web/API/EventTarget/dispatchEvent">MDN Reference</a></p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>event: <span class="tsd-signature-type">Event</span></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<h5><span class="tsd-kind-parameter">event</span>: <span class="tsd-signature-type ">Event</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.dispatchEvent</p>
 <ul>
-<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:5309</li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-protected"><a id="handleQUICConnectionEvents" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handleQUICConnection<wbr/>Events</span><a href="#handleQUICConnectionEvents" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-protected">
-<li class="tsd-signature tsd-anchor-link" id="handleQUICConnectionEvents.handleQUICConnectionEvents-1">handleQUICConnection<wbr/>Events<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><a href="events.QUICConnectionEvent.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnectionEvent</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#handleQUICConnectionEvents.handleQUICConnectionEvents-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:8174</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICClientClose" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICClient<wbr/>Close</span><a href="#handleEventQUICClientClose" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICClientClose.handleEventQUICClientClose-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICClient<wbr/>Close</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#handleEventQUICClientClose.handleEventQUICClientClose-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>This must not throw any exceptions.</p>
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICClientClose</code>.
+Registered once.</p>
+<p>This event propagates errors minus the internal errors.
+All QUIC connections always close with an error, even if it is a graceful.</p>
+<p>If this event is dispatched first before <code>QUICClient.destroy</code>, it represents
+an evented close. This could originate from the <code>QUICSocket</code> or
+<code>QUICConnection</code>. If it was from the <code>QUICSocket</code>, then here it will stop
+the <code>QUICConnection</code> with an transport code <code>InternalError</code>. If it was
+from <code>QUICConnection</code>, then the <code>QUICConnection</code> will already be closing.
+Therefore attempting to stop the <code>QUICConnection</code> will be idempotent.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>event: <a href="events.QUICConnectionEvent.html" class="tsd-signature-type" data-tsd-kind="Class">QUICConnectionEvent</a></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<h5><span class="tsd-kind-parameter">evt</span>: <a href="events.EventQUICClientClose.html" class="tsd-signature-type tsd-kind-class">EventQUICClientClose</a></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L300">src/QUICClient.ts:300</a></li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-protected"><a id="handleQUICSocketEvents" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handleQUICSocket<wbr/>Events</span><a href="#handleQUICSocketEvents" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-protected">
-<li class="tsd-signature tsd-anchor-link" id="handleQUICSocketEvents.handleQUICSocketEvents-1">handleQUICSocket<wbr/>Events<span class="tsd-signature-symbol">(</span>event<span class="tsd-signature-symbol">: </span><a href="events.QUICSocketEvent.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocketEvent</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#handleQUICSocketEvents.handleQUICSocketEvents-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L358">src/QUICClient.ts:358</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICClientError" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICClient<wbr/>Error</span><a href="#handleEventQUICClientError" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICClientError.handleEventQUICClientError-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICClient<wbr/>Error</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICClientError.handleEventQUICClientError-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>This must not throw any exceptions.</p>
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICClientError</code>.</p>
+<p>This event propagates all errors from <code>QUICClient</code> and <code>QUICConnection</code>.
+This means you can expect that <code>QUICConnection</code> errors will be logged
+twice.</p>
+<p>Internal errors will be thrown upwards to become an uncaught exception.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>event: <a href="events.QUICSocketEvent.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocketEvent</a></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<h5><span class="tsd-kind-parameter">evt</span>: <a href="events.EventQUICClientError.html" class="tsd-signature-type tsd-kind-class">EventQUICClientError</a></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography">
+<h4>Throws</h4>
+<h4>Throws</h4></div><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L255">src/QUICClient.ts:255</a></li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class tsd-is-external"><a id="removeEventListener" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><span>remove<wbr/>Event<wbr/>Listener</span><a href="#removeEventListener" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class tsd-is-external">
-<li class="tsd-signature tsd-anchor-link" id="removeEventListener.removeEventListener-1">remove<wbr/>Event<wbr/>Listener<span class="tsd-signature-symbol">(</span>type<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span>, callback<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOrEventListenerObject</span>, options<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOptions</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#removeEventListener.removeEventListener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L316">src/QUICClient.ts:316</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICConnection" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICConnection</span><a href="#handleEventQUICConnection" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICConnection.handleEventQUICConnection-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICConnection</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICConnection.handleEventQUICConnection-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles all <code>EventQUICConnection</code> events.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <span class="tsd-signature-type ">EventAll</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Event</span><span class="tsd-signature-symbol">&gt;</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L432">src/QUICClient.ts:432</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICConnectionError" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICConnection<wbr/>Error</span><a href="#handleEventQUICConnectionError" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICConnectionError.handleEventQUICConnectionError-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICConnection<wbr/>Error</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICConnectionError.handleEventQUICConnectionError-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICConnectionError</code>.</p>
+<p>All connection errors are redispatched as client errors.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <a href="events.EventQUICConnectionError.html" class="tsd-signature-type tsd-kind-class">EventQUICConnectionError</a></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L443">src/QUICClient.ts:443</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICConnectionSend" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICConnection<wbr/>Send</span><a href="#handleEventQUICConnectionSend" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICConnectionSend.handleEventQUICConnectionSend-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICConnection<wbr/>Send</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span><a href="#handleEventQUICConnectionSend.handleEventQUICConnectionSend-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICConnectionSend</code>.</p>
+<p>This will propagate the connection send buffers to the socket.
+This may be concurrent and multiple send events may be processed
+at a time.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <a href="events.EventQUICConnectionSend.html" class="tsd-signature-type tsd-kind-class">EventQUICConnectionSend</a></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">Promise</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">void</span><span class="tsd-signature-symbol">&gt;</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L457">src/QUICClient.ts:457</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICConnectionStopped" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICConnection<wbr/>Stopped</span><a href="#handleEventQUICConnectionStopped" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICConnectionStopped.handleEventQUICConnectionStopped-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICConnection<wbr/>Stopped</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICConnectionStopped.handleEventQUICConnectionStopped-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICConnectionStopped</code>.
+Registered once.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <a href="events.EventQUICConnectionStopped.html" class="tsd-signature-type tsd-kind-class">EventQUICConnectionStopped</a></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L485">src/QUICClient.ts:485</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICSocket" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICSocket</span><a href="#handleEventQUICSocket" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICSocket.handleEventQUICSocket-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICSocket</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">evt</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICSocket.handleEventQUICSocket-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles all <code>EventQUICSocket</code> events.
+Registered only if the socket is encapsulated.</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li>
+<h5><span class="tsd-kind-parameter">evt</span>: <span class="tsd-signature-type ">EventAll</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">Event</span><span class="tsd-signature-symbol">&gt;</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L406">src/QUICClient.ts:406</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-protected"><a id="handleEventQUICSocketStopped" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagProtected">Protected</code> <span>handle<wbr/>EventQUICSocket<wbr/>Stopped</span><a href="#handleEventQUICSocketStopped" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-protected">
+<li class="tsd-signature tsd-anchor-link" id="handleEventQUICSocketStopped.handleEventQUICSocketStopped-1"><span class="tsd-kind-call-signature">handle<wbr/>EventQUICSocket<wbr/>Stopped</span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#handleEventQUICSocketStopped.handleEventQUICSocketStopped-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>Handles <code>EventQUICSocketStopped</code>.
+Registered once.</p>
+<p>It is an error if the socket was stopped while <code>QUICClient</code> wasn&#39;t
+destroyed.</p>
+</div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L419">src/QUICClient.ts:419</a></li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member tsd-is-inherited tsd-is-external"><a id="removeEventListener" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><span>remove<wbr/>Event<wbr/>Listener</span><a href="#removeEventListener" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures tsd-is-inherited tsd-is-external">
+<li class="tsd-signature tsd-anchor-link" id="removeEventListener.removeEventListener-1"><span class="tsd-kind-call-signature">remove<wbr/>Event<wbr/>Listener</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">type</span>, <span class="tsd-kind-parameter">callback</span>, <span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">void</span><a href="#removeEventListener.removeEventListener-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
 <div class="tsd-comment tsd-typography"><p>Removes the event listener in target&#39;s event listener list with the same type, callback, and options.</p>
+<p><a href="https://developer.mozilla.org/docs/Web/API/EventTarget/removeEventListener">MDN Reference</a></p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>type: <span class="tsd-signature-type">string</span></h5></li>
+<h5><span class="tsd-kind-parameter">type</span>: <span class="tsd-signature-type">string</span></h5></li>
 <li>
-<h5>callback: <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOrEventListenerObject</span></h5></li>
+<h5><span class="tsd-kind-parameter">callback</span>: <span class="tsd-signature-type">null</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type ">EventListenerOrEventListenerObject</span></h5></li>
 <li>
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> options: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">EventListenerOptions</span></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4><aside class="tsd-sources">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-parameter">options</span>: <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type ">EventListenerOptions</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">void</span></h4>
+<div class="tsd-comment tsd-typography"></div><aside class="tsd-sources">
+<p>Inherited from CreateDestroy.removeEventListener</p>
 <ul>
-<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:5311</li></ul></aside></li></ul></section>
-<section class="tsd-panel tsd-member tsd-kind-method tsd-parent-kind-class"><a id="createQUICClient" class="tsd-anchor"></a>
-<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagStatic">Static</code> <span>createQUICClient</span><a href="#createQUICClient" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></h3>
-<ul class="tsd-signatures tsd-kind-method tsd-parent-kind-class">
-<li class="tsd-signature tsd-anchor-link" id="createQUICClient.createQUICClient-1">createQUICClient<span class="tsd-signature-symbol">(</span>opts<span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">{ </span><br/><span>    </span>codeToReason<span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamCodeToReason</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>config<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type" data-tsd-kind="Type alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>crypto<span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">{ </span><br/><span>        </span>ops<span class="tsd-signature-symbol">: </span><a href="../types/ClientCrypto.html" class="tsd-signature-type" data-tsd-kind="Type alias">ClientCrypto</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>host<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>localHost<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>localPort<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>logger<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>port<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>reasonToCode<span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamReasonToCode</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>resolveHostname<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span>hostname<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">PromiseLike</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>socket<span class="tsd-signature-symbol">?: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>verifyCallback<span class="tsd-signature-symbol">?: </span><a href="../types/VerifyCallback.html" class="tsd-signature-type" data-tsd-kind="Type alias">VerifyCallback</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span>, ctx<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ContextTimedInput</span><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type" data-tsd-kind="Class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span><a href="#createQUICClient.createQUICClient-1" aria-label="Permalink" class="tsd-anchor-icon"><svg class="icon icon-tabler icon-tabler-link" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-anchor-a"></use><use href="#icon-anchor-b"></use><use href="#icon-anchor-c"></use></svg></a></li>
+<li>Defined in node_modules/typescript/lib/lib.dom.d.ts:8180</li></ul></aside></li></ul></section>
+<section class="tsd-panel tsd-member"><a id="createQUICClient" class="tsd-anchor"></a>
+<h3 class="tsd-anchor-link"><code class="tsd-tag ts-flagStatic">Static</code> <span>createQUICClient</span><a href="#createQUICClient" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></h3>
+<ul class="tsd-signatures">
+<li class="tsd-signature tsd-anchor-link" id="createQUICClient.createQUICClient-1"><span class="tsd-kind-call-signature">createQUICClient</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">opts</span>, <span class="tsd-kind-parameter">ctx</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span><a href="#createQUICClient.createQUICClient-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
 <li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Creates a QUIC Client</p>
+<div class="tsd-comment tsd-typography"><p>Creates a QUIC client.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>opts: <span class="tsd-signature-symbol">{ </span><br/><span>    </span>codeToReason<span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamCodeToReason</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>config<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type" data-tsd-kind="Type alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>crypto<span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">{ </span><br/><span>        </span>ops<span class="tsd-signature-symbol">: </span><a href="../types/ClientCrypto.html" class="tsd-signature-type" data-tsd-kind="Type alias">ClientCrypto</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>host<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>localHost<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>localPort<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>logger<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>port<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>reasonToCode<span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamReasonToCode</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>resolveHostname<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span>hostname<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">PromiseLike</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">; </span><br/><span>    </span>socket<span class="tsd-signature-symbol">?: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span>    </span>verifyCallback<span class="tsd-signature-symbol">?: </span><a href="../types/VerifyCallback.html" class="tsd-signature-type" data-tsd-kind="Type alias">VerifyCallback</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
+<h5><span class="tsd-kind-parameter">opts</span>: <span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">codeToReason</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type tsd-kind-type-alias">StreamCodeToReason</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">config</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type tsd-kind-type-alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">crypto</span><span class="tsd-signature-symbol">: </span><a href="../types/QUICClientCrypto.html" class="tsd-signature-type tsd-kind-type-alias">QUICClientCrypto</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">host</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">ipv6Only</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">localHost</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">localPort</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reasonToCode</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type tsd-kind-type-alias">StreamReasonToCode</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">resolveHostname</span><span class="tsd-signature-symbol">?: </span><a href="../types/ResolveHostname.html" class="tsd-signature-type tsd-kind-type-alias">ResolveHostname</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reuseAddr</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
+<div class="tsd-comment tsd-typography"></div>
 <ul class="tsd-parameters">
 <li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> code<wbr/>To<wbr/>Reason<span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamCodeToReason</a></h5>
-<div class="tsd-comment tsd-typography"><p>optional code to reason map</p>
-</div></li>
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> config<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type" data-tsd-kind="Type alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span></h5>
-<div class="tsd-comment tsd-typography"><p>optional config</p>
-</div></li>
-<li class="tsd-parameter">
-<h5>crypto<span class="tsd-signature-symbol">: </span><span class="tsd-signature-symbol">{ </span><br/><span>    </span>ops<span class="tsd-signature-symbol">: </span><a href="../types/ClientCrypto.html" class="tsd-signature-type" data-tsd-kind="Type alias">ClientCrypto</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
-<div class="tsd-comment tsd-typography"><p>client only needs the ability to generate random bytes</p>
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">code<wbr/>To<wbr/>Reason</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type tsd-kind-type-alias">StreamCodeToReason</a></h5>
+<div class="tsd-comment tsd-typography"><p>maps stream error codes to reasons</p>
 </div>
-<ul class="tsd-parameters">
+<div class="tsd-comment tsd-typography"></div></li>
 <li class="tsd-parameter">
-<h5>ops<span class="tsd-signature-symbol">: </span><a href="../types/ClientCrypto.html" class="tsd-signature-type" data-tsd-kind="Type alias">ClientCrypto</a></h5></li></ul></li>
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">config</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type tsd-kind-type-alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span></h5>
+<div class="tsd-comment tsd-typography"><p>defaults to <code>clientDefault</code></p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
 <li class="tsd-parameter">
-<h5>host<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></h5>
-<div class="tsd-comment tsd-typography"><p>peer host where <code>0.0.0.0</code> becomes <code>127.0.0.1</code> and <code>::</code> becomes <code>::1</code></p>
-</div></li>
+<h5><span class="tsd-kind-property">crypto</span><span class="tsd-signature-symbol">: </span><a href="../types/QUICClientCrypto.html" class="tsd-signature-type tsd-kind-type-alias">QUICClientCrypto</a></h5>
+<div class="tsd-comment tsd-typography"><p>client needs to generate random bytes</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
 <li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> local<wbr/>Host<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">string</span></h5>
+<h5><span class="tsd-kind-property">host</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></h5>
+<div class="tsd-comment tsd-typography"><p>target host where wildcards are resolved to point locally.</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">ipv6<wbr/>Only</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span></h5>
+<div class="tsd-comment tsd-typography"><p>force using IPv6 even when using <code>::</code></p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">local<wbr/>Host</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">string</span></h5>
 <div class="tsd-comment tsd-typography"><p>defaults to <code>::</code> (dual-stack)</p>
-</div></li>
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> local<wbr/>Port<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span></h5>
-<div class="tsd-comment tsd-typography"><p>defaults 0</p>
-</div></li>
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> logger<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">Logger</span></h5>
-<div class="tsd-comment tsd-typography"><p>optional logger</p>
-</div></li>
-<li class="tsd-parameter">
-<h5>port<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></h5></li>
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> reason<wbr/>To<wbr/>Code<span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type" data-tsd-kind="Type alias">StreamReasonToCode</a></h5>
-<div class="tsd-comment tsd-typography"><p>optional reason to code map</p>
-</div></li>
-<li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> resolve<wbr/>Hostname<span class="tsd-signature-symbol">?: </span><span class="tsd-signature-symbol">(</span><span class="tsd-signature-symbol">(</span>hostname<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol"> =&gt; </span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">PromiseLike</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">)</span></h5>
-<ul class="tsd-parameters">
-<li class="tsd-parameter-signature">
-<ul class="tsd-signatures tsd-kind-type-literal tsd-parent-kind-property">
-<li class="tsd-signature"><span class="tsd-signature-symbol">(</span>hostname<span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">PromiseLike</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol">&gt;</span></li>
-<li class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>optional hostname resolver</p>
 </div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">local<wbr/>Port</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">number</span></h5>
+<div class="tsd-comment tsd-typography"><p>defaults 0</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Logger</span></h5>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></h5>
+<div class="tsd-comment tsd-typography"><p>target port</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">reason<wbr/>To<wbr/>Code</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type tsd-kind-type-alias">StreamReasonToCode</a></h5>
+<div class="tsd-comment tsd-typography"><p>maps stream error reasons to stream error codes</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">resolve<wbr/>Hostname</span><span class="tsd-signature-symbol">?: </span><a href="../types/ResolveHostname.html" class="tsd-signature-type tsd-kind-type-alias">ResolveHostname</a></h5>
+<div class="tsd-comment tsd-typography"><p>defaults to using OS DNS resolver</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">reuse<wbr/>Addr</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span></h5>
+<div class="tsd-comment tsd-typography"><p>reuse existing port</p>
+</div>
+<div class="tsd-comment tsd-typography"></div></li></ul></li>
+<li>
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-parameter">ctx</span>: <span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">ContextTimedInput</span><span class="tsd-signature-symbol">&gt;</span></h5>
+<div class="tsd-comment tsd-typography"></div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span></h4>
+<div class="tsd-comment tsd-typography">
+<h4>Throws</h4><ul>
+<li>if timed out</li>
+</ul>
+
+<h4>Throws</h4><ul>
+<li>if shared socket is not running</li>
+</ul>
+
+<h4>Throws</h4><ul>
+<li>if local host is incompatible with target host</li>
+</ul>
+
+<h4>Throws</h4><ul>
+<li>if socket start failed</li>
+</ul>
+
+<h4>Throws</h4><ul>
+<li>if connection start failed</li>
+</ul>
+</div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L63">src/QUICClient.ts:63</a></li></ul></aside></li>
+<li class="tsd-signature tsd-anchor-link" id="createQUICClient.createQUICClient-2"><span class="tsd-kind-call-signature">createQUICClient</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">opts</span>, <span class="tsd-kind-parameter">ctx</span><span class="tsd-signature-symbol">?</span><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type ">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span><a href="#createQUICClient.createQUICClient-2" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24"><use href="#icon-anchor"></use></svg></a></li>
+<li class="tsd-description">
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li>
-<h5>hostname: <span class="tsd-signature-type">string</span></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">PromiseLike</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/Host.html" class="tsd-signature-type" data-tsd-kind="Type alias">Host</a><span class="tsd-signature-symbol">&gt;</span></h4></li></ul></li></ul></li>
+<h5><span class="tsd-kind-parameter">opts</span>: <span class="tsd-signature-symbol">{ </span><br/><span>    </span><span class="tsd-kind-property">codeToReason</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type tsd-kind-type-alias">StreamCodeToReason</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">config</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type tsd-kind-type-alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">crypto</span><span class="tsd-signature-symbol">: </span><a href="../types/QUICClientCrypto.html" class="tsd-signature-type tsd-kind-type-alias">QUICClientCrypto</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">host</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">ipv6Only</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Logger</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reasonToCode</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type tsd-kind-type-alias">StreamReasonToCode</a><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">reuseAddr</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">; </span><br/><span>    </span><span class="tsd-kind-property">socket</span><span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type tsd-kind-class">QUICSocket</a><span class="tsd-signature-symbol">; </span><br/><span class="tsd-signature-symbol">}</span></h5>
+<ul class="tsd-parameters">
 <li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> socket<span class="tsd-signature-symbol">?: </span><a href="QUICSocket.html" class="tsd-signature-type" data-tsd-kind="Class">QUICSocket</a></h5>
-<div class="tsd-comment tsd-typography"><p>optional QUICSocket to use</p>
-</div></li>
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">code<wbr/>To<wbr/>Reason</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamCodeToReason.html" class="tsd-signature-type tsd-kind-type-alias">StreamCodeToReason</a></h5></li>
 <li class="tsd-parameter">
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> verify<wbr/>Callback<span class="tsd-signature-symbol">?: </span><a href="../types/VerifyCallback.html" class="tsd-signature-type" data-tsd-kind="Type alias">VerifyCallback</a></h5></li></ul></li>
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">config</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><a href="../types/QUICConfig.html" class="tsd-signature-type tsd-kind-type-alias">QUICConfig</a><span class="tsd-signature-symbol">&gt;</span></h5></li>
+<li class="tsd-parameter">
+<h5><span class="tsd-kind-property">crypto</span><span class="tsd-signature-symbol">: </span><a href="../types/QUICClientCrypto.html" class="tsd-signature-type tsd-kind-type-alias">QUICClientCrypto</a></h5></li>
+<li class="tsd-parameter">
+<h5><span class="tsd-kind-property">host</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">string</span></h5></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">ipv6<wbr/>Only</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span></h5></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">logger</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type ">Logger</span></h5></li>
+<li class="tsd-parameter">
+<h5><span class="tsd-kind-property">port</span><span class="tsd-signature-symbol">: </span><span class="tsd-signature-type">number</span></h5></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">reason<wbr/>To<wbr/>Code</span><span class="tsd-signature-symbol">?: </span><a href="../types/StreamReasonToCode.html" class="tsd-signature-type tsd-kind-type-alias">StreamReasonToCode</a></h5></li>
+<li class="tsd-parameter">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-property">reuse<wbr/>Addr</span><span class="tsd-signature-symbol">?: </span><span class="tsd-signature-type">boolean</span></h5></li>
+<li class="tsd-parameter">
+<h5><span class="tsd-kind-property">socket</span><span class="tsd-signature-symbol">: </span><a href="QUICSocket.html" class="tsd-signature-type tsd-kind-class">QUICSocket</a></h5></li></ul></li>
 <li>
-<h5><code class="tsd-tag ts-flagOptional">Optional</code> ctx: <span class="tsd-signature-type">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type">ContextTimedInput</span><span class="tsd-signature-symbol">&gt;</span></h5></li></ul></div>
-<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type" data-tsd-kind="Class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
+<h5><code class="tsd-tag ts-flagOptional">Optional</code> <span class="tsd-kind-parameter">ctx</span>: <span class="tsd-signature-type ">Partial</span><span class="tsd-signature-symbol">&lt;</span><span class="tsd-signature-type ">ContextTimedInput</span><span class="tsd-signature-symbol">&gt;</span></h5></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type ">PromiseCancellable</span><span class="tsd-signature-symbol">&lt;</span><a href="QUICClient.html" class="tsd-signature-type tsd-kind-class">QUICClient</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L71">src/QUICClient.ts:71</a></li></ul></aside></li></ul></section></section></div>
-<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
+<li>Defined in <a href="https://github.com/MatrixAI/js-quic/blob/master/src/QUICClient.ts#L80">src/QUICClient.ts:80</a></li></ul></aside></li></ul></section></section></div>
+<div class="col-sidebar">
+<div class="page-menu">
 <div class="tsd-navigation settings">
 <details class="tsd-index-accordion"><summary class="tsd-accordion-summary">
-<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)"></path></svg> Settings</h3></summary>
+<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)" id="icon-chevronDown"></path></svg>Settings</h3></summary>
 <div class="tsd-accordion-details">
 <div class="tsd-filter-visibility">
 <h4 class="uppercase">Member Visibility</h4><form>
@@ -382,43 +655,85 @@ an exception because the socket send method no longer works.</p>
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
 <li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></form></div>
 <div class="tsd-theme-toggle">
-<h4 class="uppercase">Theme</h4><select id="theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
-<nav class="tsd-navigation primary">
-<details class="tsd-index-accordion" open><summary class="tsd-accordion-summary">
-<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4.93896 8.531L12 15.591L19.061 8.531L16.939 6.409L12 11.349L7.06098 6.409L4.93896 8.531Z" fill="var(--color-text)"></path></svg> Modules</h3></summary>
+<h4 class="uppercase">Theme</h4><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-index-accordion tsd-page-navigation"><summary class="tsd-accordion-summary">
+<h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><use href="#icon-chevronDown"></use></svg>On This Page</h3></summary>
 <div class="tsd-accordion-details">
 <ul>
-<li><a href="../modules.html">@matrixai/quic</a>
-<ul>
-<li class="tsd-kind-namespace"><a href="../modules/errors.html">errors</a></li>
-<li class="tsd-kind-namespace"><a href="../modules/events.html">events</a></li>
-<li class="tsd-kind-namespace"><a href="../modules/native.html">native</a></li>
-<li class="tsd-kind-namespace"><a href="../modules/utils.html">utils</a></li></ul></li></ul></div></details></nav>
-<nav class="tsd-navigation secondary menu-sticky">
-<ul>
-<li class="current tsd-kind-class"><a href="QUICClient.html" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-class)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6" id="icon-128-path"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)" id="icon-128-text"></path></svg><span>QUICClient</span></a>
-<ul>
-<li class="tsd-kind-constructor tsd-parent-kind-class tsd-is-inherited"><a href="QUICClient.html#constructor" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-512-path"></use><use href="#icon-512-text"></use></svg>constructor</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a href="QUICClient.html#_initLock_" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>[init<wbr/>Lock]</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#_connection" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>_connection</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#address" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>address</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#config" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>config</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#connectionMap" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>connection<wbr/>Map</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class"><a href="QUICClient.html#isSocketShared" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>is<wbr/>Socket<wbr/>Shared</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#logger" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>logger</a></li>
-<li class="tsd-kind-property tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#socket" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-1024-path"></use><use href="#icon-1024-text"></use></svg>socket</a></li>
-<li class="tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a href="QUICClient.html#_destroyed_" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg>[destroyed]</a></li>
-<li class="tsd-kind-accessor tsd-parent-kind-class tsd-is-inherited tsd-is-external"><a href="QUICClient.html#_status_" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg>[status]</a></li>
-<li class="tsd-kind-accessor tsd-parent-kind-class"><a href="QUICClient.html#connection" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg>connection</a></li>
-<li class="tsd-kind-accessor tsd-parent-kind-class"><a href="QUICClient.html#host" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg>host</a></li>
-<li class="tsd-kind-accessor tsd-parent-kind-class"><a href="QUICClient.html#port" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-262144-path"></use><use href="#icon-262144-text"></use></svg>port</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-external"><a href="QUICClient.html#addEventListener" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>add<wbr/>Event<wbr/>Listener</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-inherited"><a href="QUICClient.html#destroy" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>destroy</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-external"><a href="QUICClient.html#dispatchEvent" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>dispatch<wbr/>Event</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#handleQUICConnectionEvents" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>handleQUICConnection<wbr/>Events</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-protected"><a href="QUICClient.html#handleQUICSocketEvents" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>handleQUICSocket<wbr/>Events</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class tsd-is-external"><a href="QUICClient.html#removeEventListener" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>remove<wbr/>Event<wbr/>Listener</a></li>
-<li class="tsd-kind-method tsd-parent-kind-class"><a href="QUICClient.html#createQUICClient" class="tsd-index-link"><svg class="tsd-kind-icon" width="24" height="24" viewBox="0 0 24 24"><use href="#icon-2048-path"></use><use href="#icon-2048-text"></use></svg>createQUICClient</a></li></ul></li></ul></nav></div></div>
-<div class="container tsd-generator">
+<li><a href="#constructor" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-512"></use></svg><span>constructor</span></a></li>
+<li><a href="#_initLock_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>[init<wbr/>Lock]</span></a></li>
+<li><a href="#_closed" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>_closed</span></a></li>
+<li><a href="#closedP" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>closedP</span></a></li>
+<li><a href="#config" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>config</span></a></li>
+<li><a href="#connection" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>connection</span></a></li>
+<li><a href="#isSocketShared" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>is<wbr/>Socket<wbr/>Shared</span></a></li>
+<li><a href="#logger" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>logger</span></a></li>
+<li><a href="#resolveClosedP" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>resolve<wbr/>ClosedP</span></a></li>
+<li><a href="#socket" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-1024"></use></svg><span>socket</span></a></li>
+<li><a href="#_destroyed_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[destroyed]</span></a></li>
+<li><a href="#_eventHandled_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Handled]</span></a></li>
+<li><a href="#_eventHandlers_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Handlers]</span></a></li>
+<li><a href="#_eventTarget_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[event<wbr/>Target]</span></a></li>
+<li><a href="#_handleEventError_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[handle<wbr/>Event<wbr/>Error]</span></a></li>
+<li><a href="#_statusP_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[status<wbr/>P]</span></a></li>
+<li><a href="#_status_" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>[status]</span></a></li>
+<li><a href="#closed" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>closed</span></a></li>
+<li><a href="#host" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>host</span></a></li>
+<li><a href="#localHost" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>local<wbr/>Host</span></a></li>
+<li><a href="#localPort" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>local<wbr/>Port</span></a></li>
+<li><a href="#port" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-262144"></use></svg><span>port</span></a></li>
+<li><a href="#addEventListener" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>add<wbr/>Event<wbr/>Listener</span></a></li>
+<li><a href="#destroy" class="tsd-is-inherited"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>destroy</span></a></li>
+<li><a href="#dispatchEvent" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>dispatch<wbr/>Event</span></a></li>
+<li><a href="#handleEventQUICClientClose" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICClient<wbr/>Close</span></a></li>
+<li><a href="#handleEventQUICClientError" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICClient<wbr/>Error</span></a></li>
+<li><a href="#handleEventQUICConnection" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection</span></a></li>
+<li><a href="#handleEventQUICConnectionError" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Error</span></a></li>
+<li><a href="#handleEventQUICConnectionSend" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Send</span></a></li>
+<li><a href="#handleEventQUICConnectionStopped" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICConnection<wbr/>Stopped</span></a></li>
+<li><a href="#handleEventQUICSocket" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICSocket</span></a></li>
+<li><a href="#handleEventQUICSocketStopped" class="tsd-is-protected"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>handle<wbr/>EventQUICSocket<wbr/>Stopped</span></a></li>
+<li><a href="#removeEventListener" class="tsd-is-inherited tsd-is-external"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>remove<wbr/>Event<wbr/>Listener</span></a></li>
+<li><a href="#createQUICClient" class=""><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-2048"></use></svg><span>createQUICClient</span></a></li></ul></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../modules.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-namespace)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M9.33 16V7.24H10.77L13.446 14.74C13.43 14.54 13.41 14.296 13.386 14.008C13.37 13.712 13.354 13.404 13.338 13.084C13.33 12.756 13.326 12.448 13.326 12.16V7.24H14.37V16H12.93L10.266 8.5C10.282 8.692 10.298 8.936 10.314 9.232C10.33 9.52 10.342 9.828 10.35 10.156C10.366 10.476 10.374 10.784 10.374 11.08V16H9.33Z" fill="var(--color-text)"></path></g></svg><span>@matrixai/quic</span></a>
+<ul class="tsd-small-nested-navigation">
+<li><a href="../modules/errors.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>errors</span></a></li>
+<li><a href="../modules/events.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>events</span></a></li>
+<li><a href="../modules/native.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>native</span></a></li>
+<li><a href="../modules/utils.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4"></use></svg><span>utils</span></a></li>
+<li><a href="QUICClient.html" class="current"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-128"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-class)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.898 16.1201C11.098 16.1201 10.466 15.8961 10.002 15.4481C9.53803 15.0001 9.30603 14.3841 9.30603 13.6001V9.64012C9.30603 8.85612 9.53803 8.24012 10.002 7.79212C10.466 7.34412 11.098 7.12012 11.898 7.12012C12.682 7.12012 13.306 7.34812 13.77 7.80412C14.234 8.25212 14.466 8.86412 14.466 9.64012H13.386C13.386 9.14412 13.254 8.76412 12.99 8.50012C12.734 8.22812 12.37 8.09212 11.898 8.09212C11.426 8.09212 11.054 8.22412 10.782 8.48812C10.518 8.75212 10.386 9.13212 10.386 9.62812V13.6001C10.386 14.0961 10.518 14.4801 10.782 14.7521C11.054 15.0161 11.426 15.1481 11.898 15.1481C12.37 15.1481 12.734 15.0161 12.99 14.7521C13.254 14.4801 13.386 14.0961 13.386 13.6001H14.466C14.466 14.3761 14.234 14.9921 13.77 15.4481C13.306 15.8961 12.682 16.1201 11.898 16.1201Z" fill="var(--color-text)"></path></g></svg><span>QUICClient</span></a></li>
+<li><a href="QUICConnection.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection</span></a></li>
+<li><a href="QUICConnectionId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection<wbr/>Id</span></a></li>
+<li><a href="QUICConnectionMap.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICConnection<wbr/>Map</span></a></li>
+<li><a href="QUICServer.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICServer</span></a></li>
+<li><a href="QUICSocket.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICSocket</span></a></li>
+<li><a href="QUICStream.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-128"></use></svg><span>QUICStream</span></a></li>
+<li><a href="../types/Address.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><g id="icon-4194304"><rect fill="var(--color-icon-background)" stroke="var(--color-ts-type-alias)" stroke-width="1.5" x="1" y="1" width="22" height="22" rx="6"></rect><path d="M11.31 16V8.224H8.91V7.24H14.79V8.224H12.39V16H11.31Z" fill="var(--color-text)"></path></g></svg><span>Address</span></a></li>
+<li><a href="../types/Callback.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Callback</span></a></li>
+<li><a href="../types/Class.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Class</span></a></li>
+<li><a href="../types/ClientCryptoOps.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Client<wbr/>Crypto<wbr/>Ops</span></a></li>
+<li><a href="../types/ConnectionId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Id</span></a></li>
+<li><a href="../types/ConnectionIdString.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Id<wbr/>String</span></a></li>
+<li><a href="../types/ConnectionMetadata.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Connection<wbr/>Metadata</span></a></li>
+<li><a href="../types/Host.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Host</span></a></li>
+<li><a href="../types/Hostname.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Hostname</span></a></li>
+<li><a href="../types/Opaque.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Opaque</span></a></li>
+<li><a href="../types/Port.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Port</span></a></li>
+<li><a href="../types/PromiseDeconstructed.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Promise<wbr/>Deconstructed</span></a></li>
+<li><a href="../types/QUICClientConfigInput.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICClient<wbr/>Config<wbr/>Input</span></a></li>
+<li><a href="../types/QUICClientCrypto.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICClient<wbr/>Crypto</span></a></li>
+<li><a href="../types/QUICConfig.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICConfig</span></a></li>
+<li><a href="../types/QUICServerConfigInput.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICServer<wbr/>Config<wbr/>Input</span></a></li>
+<li><a href="../types/QUICServerCrypto.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICServer<wbr/>Crypto</span></a></li>
+<li><a href="../types/QUICStreamMap.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>QUICStream<wbr/>Map</span></a></li>
+<li><a href="../types/RemoteInfo.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Remote<wbr/>Info</span></a></li>
+<li><a href="../types/ResolveHostname.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Resolve<wbr/>Hostname</span></a></li>
+<li><a href="../types/ServerCryptoOps.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Server<wbr/>Crypto<wbr/>Ops</span></a></li>
+<li><a href="../types/StreamCodeToReason.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Code<wbr/>To<wbr/>Reason</span></a></li>
+<li><a href="../types/StreamId.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Id</span></a></li>
+<li><a href="../types/StreamReasonToCode.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>Stream<wbr/>Reason<wbr/>To<wbr/>Code</span></a></li>
+<li><a href="../types/TLSVerifyCallback.html"><svg class="tsd-kind-icon" viewBox="0 0 24 24"><use href="#icon-4194304"></use></svg><span>TLSVerify<wbr/>Callback</span></a></li></ul></nav></div></div></div>
+<div class="tsd-generator">
 <p>Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></div>
-<div class="overlay"></div><script src="../assets/main.js"></script></body></html>
+<div class="overlay"></div></body></html>
