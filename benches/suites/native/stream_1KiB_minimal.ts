@@ -1,12 +1,13 @@
+import type { Connection } from '@/native';
+import type { Host, Port } from '@';
 import b from 'benny';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import * as utils from '@/utils';
-import * as testsUtils from '../../../tests/utils';
-import { summaryName, suiteCommon } from '../../utils';
-import { Connection, quiche } from '@/native';
+import { quiche } from '@/native';
 import { buildQuicheConfig, clientDefault, serverDefault } from '@/config';
 import QUICConnectionId from '@/QUICConnectionId';
-import { Host, Port } from '@';
+import { summaryName, suiteCommon } from '../../utils';
+import * as testsUtils from '../../../tests/utils';
 
 const dataBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
 
@@ -24,24 +25,6 @@ function sendPacket(
   return true;
 }
 
-function setupStreamState(
-  connectionSource: Connection,
-  connectionDestination: Connection,
-  streamId: number,
-) {
-  const message = Buffer.from('Message');
-  connectionSource.streamSend(streamId, message, false);
-  sendPacket(connectionSource, connectionDestination);
-  sendPacket(connectionDestination, connectionSource);
-  // Clearing message buffer
-  const buffer = Buffer.allocUnsafe(1024);
-  connectionDestination.streamRecv(streamId, buffer);
-}
-
-const setupConnectionsRSA = async () => {
-
-};
-
 async function main() {
   const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
     new StreamHandler(
@@ -49,7 +32,6 @@ async function main() {
     ),
   ]);
   const data1KiB = Buffer.alloc(1024);
-  const tlsConfig = await testsUtils.generateTLSConfig('RSA');
   const localHost = '127.0.0.1' as Host;
   const clientHost = {
     host: localHost,
@@ -68,27 +50,25 @@ async function main() {
       randomBytes: testsUtils.randomBytes,
     },
   };
-  let clientConn: Connection;
-  let serverConn: Connection;
 
   // Setting up connection state
   const clientConfig = buildQuicheConfig({
     ...clientDefault,
     verifyPeer: false,
   });
-  const tlsConfigServer = await testsUtils.generateConfig('RSA');
+  const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
   const serverConfig = buildQuicheConfig({
     ...serverDefault,
 
-    key: tlsConfigServer.key,
-    cert: tlsConfigServer.cert,
+    key: tlsConfigServer.leafKeyPairPEM.privateKey,
+    cert: tlsConfigServer.leafCertPEM,
   });
 
   // Randomly generate the client SCID
   const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
   await crypto.ops.randomBytes(scidBuffer);
   const clientScid = new QUICConnectionId(scidBuffer);
-  clientConn = quiche.Connection.connect(
+  const clientConn = quiche.Connection.connect(
     null,
     clientScid,
     clientHost,
@@ -137,7 +117,7 @@ async function main() {
   [clientSendLength] = sendResult2;
 
   // Server accept
-  serverConn = quiche.Connection.accept(
+  const serverConn = quiche.Connection.accept(
     serverScid,
     clientDcid,
     serverHost,
@@ -175,26 +155,26 @@ async function main() {
         // Doing nothing - 12 896 010 ops/s, ±1.05%
         clientConn.streamSend(0, data1KiB, false);
         // Just passing data to `streamSend` - 451 088 ops/s, ±1.22% | 2.22 ,, 0.88%
-        while(true) {
+        while (true) {
           const result = clientConn.send(dataBuffer);
           if (result === null) break;
           // Doing clientConn.send inside loop -  89 343 ops/s, ±0.91% | 11.2, 9, 3.6%
-        const [serverSendLength, sendInfo] = result;
+          const [serverSendLength, sendInfo] = result;
           serverConn.recv(dataBuffer.subarray(0, serverSendLength), {
             to: sendInfo.to,
             from: sendInfo.from,
           });
           // Passing data to serverConn.recv - 82 360 ops/s, ±1.45% | 12.2, 1, 0.4%
         }
-        for (const streamId of serverConn.readable()){
+        for (const streamId of serverConn.readable()) {
           // Just iterating readable - 17 924 ops/s, ±6.38% | 55.6, 43.4, 17.4%
-          while(true) {
-            // read and ditch information
-            if (serverConn.streamRecv(0, clientBuf) === null) break;
+          while (true) {
+            // Read and ditch information
+            if (serverConn.streamRecv(streamId, clientBuf) === null) break;
             // Checking streamRecv inside loop - 21 113 ops/s, ±5.68% | 47.6, 35.4, 14.2%
           }
         }
-        while(true) {
+        while (true) {
           const result = serverConn.send(dataBuffer);
           if (result === null) break;
           // Doing serverConn.send inside loop - 19 118 ops/s, ±3.26% | 52.6, 5.0, 2.0%
@@ -209,7 +189,7 @@ async function main() {
     ),
     ...suiteCommon,
   );
-  // logger.warn('test done, closing');
+  // Logger.warn('test done, closing');
   // clientConn.close(true, 0, Buffer.from([]));
   // serverConn.close(true, 0, Buffer.from([]));
   // clientSend();

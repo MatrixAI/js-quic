@@ -71,12 +71,12 @@ describe('native/stream', () => {
       ...clientDefault,
       verifyPeer: false,
     });
-    const tlsConfigServer = await testsUtils.generateConfig('RSA');
+    const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
     const serverConfig = buildQuicheConfig({
       ...serverDefault,
 
-      key: tlsConfigServer.key,
-      cert: tlsConfigServer.cert,
+      key: tlsConfigServer.leafKeyPairPEM.privateKey,
+      cert: tlsConfigServer.leafCertPEM,
     });
 
     // Randomly generate the client SCID
@@ -481,7 +481,8 @@ describe('native/stream', () => {
       expect(() => serverConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(serverConn.streamSend(0, Buffer.from('message'), false),
+      expect(
+        serverConn.streamSend(0, Buffer.from('message'), false),
       ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
@@ -500,7 +501,8 @@ describe('native/stream', () => {
       expect(() => clientConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(clientConn.streamSend(0, Buffer.from('message'), false),
+      expect(
+        clientConn.streamSend(0, Buffer.from('message'), false),
       ).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
@@ -788,7 +790,8 @@ describe('native/stream', () => {
       expect(() => serverConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(serverConn.streamSend(0, Buffer.from('message'), false),
+      expect(
+        serverConn.streamSend(0, Buffer.from('message'), false),
       ).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
@@ -807,7 +810,8 @@ describe('native/stream', () => {
       expect(() => clientConn.streamWritable(0, 0)).toThrow(
         'InvalidStreamState(0)',
       );
-      expect(clientConn.streamSend(0, Buffer.from('message'), false),
+      expect(
+        clientConn.streamSend(0, Buffer.from('message'), false),
       ).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
@@ -1333,9 +1337,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(
-          clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toBeNull();
+        expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
@@ -1459,9 +1461,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // But still listed as writable
         expect(iterToArray(serverConn.writable())).toContain(0);
       });
@@ -1477,9 +1477,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // No longer listed as writable
         expect(iterToArray(serverConn.writable())).not.toContain(0);
       });
@@ -1498,9 +1496,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -1524,9 +1520,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -1558,8 +1552,7 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toBeNull();
+      expect(serverConn.streamSend(0, Buffer.from('message'), true)).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
@@ -1622,8 +1615,7 @@ describe('native/stream', () => {
         // After shutting down
         serverConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(serverConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toBeNull();
+        expect(serverConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
         // States are unchanged
         expect(serverConn.streamWritable(0, 0)).toBeTrue();
@@ -1747,9 +1739,7 @@ describe('native/stream', () => {
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => clientConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => clientConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // But still listed as writable
         expect(iterToArray(clientConn.writable())).toContain(0);
       });
@@ -1765,9 +1755,7 @@ describe('native/stream', () => {
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => clientConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => clientConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // No longer listed as writable
         expect(iterToArray(clientConn.writable())).not.toContain(0);
       });
@@ -1792,9 +1780,7 @@ describe('native/stream', () => {
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => clientConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => clientConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(clientConn.writable())).not.toContain(0);
 
         // Server changes
@@ -1820,9 +1806,7 @@ describe('native/stream', () => {
         expect(() => clientConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => clientConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => clientConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(clientConn.writable())).not.toContain(0);
 
         // Server changes
@@ -1854,9 +1838,7 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(
-        clientConn.streamSend(0, Buffer.from('message'), true),
-      ).toBeNull();
+      expect(clientConn.streamSend(0, Buffer.from('message'), true)).toBeNull();
       expect(() => clientConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
@@ -1932,8 +1914,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toBeNull();
+        expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
@@ -2062,9 +2043,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // But still listed as writable
         expect(iterToArray(serverConn.writable())).toContain(0);
       });
@@ -2080,9 +2059,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // No longer listed as writable
         expect(iterToArray(serverConn.writable())).not.toContain(0);
       });
@@ -2101,9 +2078,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -2127,9 +2102,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -2161,8 +2134,7 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toBeNull();
+      expect(serverConn.streamSend(0, Buffer.from('message'), true)).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );
@@ -2239,8 +2211,7 @@ describe('native/stream', () => {
         // After shutting down
         clientConn.streamShutdown(0, Shutdown.Write, 42);
         // Further shutdowns throw done
-        expect(clientConn.streamShutdown(0, Shutdown.Write, 42),
-        ).toBeNull();
+        expect(clientConn.streamShutdown(0, Shutdown.Write, 42)).toBeNull();
 
         // States are unchanged
         expect(clientConn.streamWritable(0, 0)).toBeTrue();
@@ -2364,9 +2335,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // But still listed as writable
         expect(iterToArray(serverConn.writable())).toContain(0);
       });
@@ -2382,9 +2351,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         // No longer listed as writable
         expect(iterToArray(serverConn.writable())).not.toContain(0);
       });
@@ -2410,9 +2377,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -2436,9 +2401,7 @@ describe('native/stream', () => {
         expect(() => serverConn.streamWritable(0, 0)).toThrow(
           'StreamStopped(42)',
         );
-        expect(() => serverConn.streamCapacity(0)).toThrow(
-          'StreamStopped(42)',
-        );
+        expect(() => serverConn.streamCapacity(0)).toThrow('StreamStopped(42)');
         expect(iterToArray(serverConn.writable())).not.toContain(0);
 
         // Client changes
@@ -2470,8 +2433,7 @@ describe('native/stream', () => {
         'StreamReset(42)',
       );
       // States change
-      expect(serverConn.streamSend(0, Buffer.from('message'), true),
-      ).toBeNull();
+      expect(serverConn.streamSend(0, Buffer.from('message'), true)).toBeNull();
       expect(() => serverConn.streamRecv(0, streamBuf)).toThrow(
         'InvalidStreamState(0)',
       );

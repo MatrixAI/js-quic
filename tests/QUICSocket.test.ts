@@ -319,6 +319,7 @@ describe(QUICSocket.name, () => {
         }),
       );
       socket.dispatchEvent(new events.EventQUICSocketClose());
+      // @ts-ignore: awaiting protected property
       await socket.closedP;
       expect(socket.closed).toBe(true);
       expect(handleEventQUICSocketError).toHaveBeenCalledTimes(1);

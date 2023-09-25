@@ -192,9 +192,7 @@ describe('native/connection', () => {
           // Exhaust the timeout
           await testsUtils.waitForTimeoutNull(clientConn);
           // After max idle timeout, you cannot artificially close the connection
-          expect(
-            clientConn.close(true, 0, Buffer.from('abc'))
-          ).toBeNull();
+          expect(clientConn.close(true, 0, Buffer.from('abc'))).toBeNull();
           // Connection has timed out
           expect(clientConn.isTimedOut()).toBeTrue();
           expect(clientConn.isInEarlyData()).toBeFalse();

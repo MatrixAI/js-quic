@@ -755,14 +755,8 @@ timeout: ${conn.timeout()},
 `;
 }
 
-type KeyTypes = 'RSA' | 'ECDSA' | 'ED25519';
+type KeyTypes = 'RSA' | 'ECDSA' | 'Ed25519';
 type TLSConfigs = {
-  key: string;
-  cert: string;
-  ca: string;
-};
-
-async function generateTLSConfig(type: 'RSA' | 'ECDSA' | 'Ed25519'): Promise<{
   leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
   leafKeyPairPEM: { publicKey: string; privateKey: string };
   leafCert: X509Certificate;
@@ -771,7 +765,9 @@ async function generateTLSConfig(type: 'RSA' | 'ECDSA' | 'Ed25519'): Promise<{
   caKeyPairPEM: { publicKey: string; privateKey: string };
   caCert: X509Certificate;
   caCertPEM: string;
-}> {
+};
+
+async function generateTLSConfig(type: KeyTypes): Promise<TLSConfigs> {
   let leafKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };
   let leafKeyPairPEM: { publicKey: string; privateKey: string };
   let caKeyPair: { publicKey: JsonWebKey; privateKey: JsonWebKey };

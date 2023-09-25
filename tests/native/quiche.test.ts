@@ -5,7 +5,7 @@ import * as testsUtils from '../utils';
 describe('native/quiche', () => {
   testProp(
     'packet parsing',
-    [testsUtils.bufferArb({ minLength: 0, maxLength: 100})],
+    [testsUtils.bufferArb({ minLength: 0, maxLength: 100 })],
     (packet) => {
       // Remember a UDP payload only has 1 QUIC packet
       // But 1 QUIC packet can have multiple QUIC frames
@@ -18,7 +18,7 @@ describe('native/quiche', () => {
         expect(e.message).toBe('BufferTooShort');
         // InvalidPacket seems very rare, save it as an example if you find one!
       }
-    }
+    },
   );
   test('version negotiation', async () => {
     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);

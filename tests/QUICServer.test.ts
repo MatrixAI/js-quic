@@ -1,18 +1,18 @@
 import type { X509Certificate } from '@peculiar/x509';
 import type { Host, ServerCryptoOps } from '@/types';
+import type QUICConnection from '@/QUICConnection';
+import type { ClientCryptoOps } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
 import * as utils from '@/utils';
-import * as testsUtils from './utils';
 import { promise } from '@/utils';
-import QUICConnection from '@/QUICConnection';
 import * as events from '@/events';
 import QUICClient from '@/QUICClient';
 import * as errors from '@/errors';
-import { ClientCryptoOps } from '@/types';
+import * as testsUtils from './utils';
 
 describe(QUICServer.name, () => {
-  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.INFO, [
+  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -90,7 +90,7 @@ describe(QUICServer.name, () => {
   });
   afterEach(async () => {
     await socketCleanMethods.stopSockets();
-  })
+  });
   describe('start and stop', () => {
     test('with RSA', async () => {
       const quicServer = new QUICServer({
@@ -284,6 +284,7 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
+  // TODO: what is this? re-enable?
   // Describe.only('connection bootstrap', () => {
   //   // Test without peer verification
   //   test.only('', async () => {
@@ -420,7 +421,7 @@ describe(QUICServer.name, () => {
   // We can make it start doing this, but technically it's the socket's duty to do this
   // not just the server side
   test('socket stopping first triggers client destruction', async () => {
-    const tlsConfigServer = await testsUtils.generateConfig('RSA');
+    const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
 
     const connectionEventProm = promise<QUICConnection>();
     const server = new QUICServer({
@@ -430,8 +431,8 @@ describe(QUICServer.name, () => {
       },
       logger: logger.getChild(QUICServer.name),
       config: {
-        key: tlsConfigServer.key,
-        cert: tlsConfigServer.cert,
+        key: tlsConfigServer.leafKeyPairPEM.privateKey,
+        cert: tlsConfigServer.leafCertPEM,
         verifyPeer: false,
         maxIdleTimeout: 200,
       },
@@ -439,7 +440,8 @@ describe(QUICServer.name, () => {
     socketCleanMethods.extractSocket(server);
     server.addEventListener(
       events.EventQUICServerConnection.name,
-      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e.detail),
+      (e: events.EventQUICServerConnection) =>
+        connectionEventProm.resolveP(e.detail),
     );
     await server.start({
       host: '127.0.0.1',
@@ -452,27 +454,27 @@ describe(QUICServer.name, () => {
     //  Then main cause of this was the server not processing the initial packet
     //  that creates the `QUICConnection`, as a result, the whole creation waited
     //  an extra 1 second for the client to retry the initial packet.
-    const client = await QUICClient.createQUICClient(
-      {
-        host: '127.0.0.1',
-        port: server.port,
-        localHost: '127.0.0.1',
-        crypto: {
-          ops: clientCryptoOps,
-        },
-        logger: logger.getChild(QUICClient.name),
-        config: {
-          verifyPeer: false,
-        },
-      });
+    const client = await QUICClient.createQUICClient({
+      host: '127.0.0.1',
+      port: server.port,
+      localHost: '127.0.0.1',
+      crypto: {
+        ops: clientCryptoOps,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
     socketCleanMethods.extractSocket(client);
 
-    // handling client connection error event
+    // Handling client connection error event
     const clientConnectionErrorProm = promise<never>();
     client.connection.addEventListener(
       events.EventQUICConnectionError.name,
-      (evt: events.EventQUICConnectionError) => clientConnectionErrorProm.rejectP(evt.detail),
-      {once: true},
+      (evt: events.EventQUICConnectionError) =>
+        clientConnectionErrorProm.rejectP(evt.detail),
+      { once: true },
     );
 
     const serverConnection = await connectionEventProm.p;
@@ -480,49 +482,55 @@ describe(QUICServer.name, () => {
     const serverConnectionErrorProm = promise<never>();
     serverConnection.addEventListener(
       events.EventQUICConnectionError.name,
-      (evt: events.EventQUICConnectionError) => serverConnectionErrorProm.rejectP(evt.detail),
-      {once: true},
+      (evt: events.EventQUICConnectionError) =>
+        serverConnectionErrorProm.rejectP(evt.detail),
+      { once: true },
     );
 
-    // handling server connection stop event
+    // Handling server connection stop event
     const serverConnectionStoppedProm = promise<void>();
     client.connection.addEventListener(
       events.EventQUICConnectionStopped.name,
       () => serverConnectionStoppedProm.resolveP(),
-      {once: true},
+      { once: true },
     );
 
-    // handling server error event
+    // Handling server error event
     const serverErrorProm = promise<never>();
     server.addEventListener(
       events.EventQUICServerError.name,
       (evt: events.EventQUICServerError) => serverErrorProm.rejectP(evt.detail),
-      {once: true},
+      { once: true },
     );
 
-    // handling client destroy event
+    // Handling client destroy event
     const serverStoppedProm = promise<void>();
     server.addEventListener(
       events.EventQUICServerStopped.name,
       () => serverStoppedProm.resolveP(),
-      {once: true},
+      { once: true },
     );
 
     // @ts-ignore: kidnap protected property
     const serverSocket = server.socket;
-    await serverSocket.stop({force: true});
+    await serverSocket.stop({ force: true });
 
     // Socket failure triggers server connection local failure
-    await expect(serverConnectionErrorProm.p).rejects.toThrow(errors.ErrorQUICConnectionLocal);
-    await expect(serverErrorProm.p).rejects.toThrow(errors.ErrorQUICServerSocketNotRunning);
+    await expect(serverConnectionErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICConnectionLocal,
+    );
+    await expect(serverErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICServerSocketNotRunning,
+    );
     await serverStoppedProm.p;
     await serverConnectionStoppedProm.p;
 
     // Socket failure will not trigger any close frame since transport has failed so client connection will time out
-    await expect(clientConnectionErrorProm.p).rejects.toThrow(errors.ErrorQUICConnectionIdleTimeout);
+    await expect(clientConnectionErrorProm.p).rejects.toThrow(
+      errors.ErrorQUICConnectionIdleTimeout,
+    );
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
-  })
-
+  });
 });

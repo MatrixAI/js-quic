@@ -46,9 +46,9 @@ async function main() {
             // Do nothing, only consume
           }
           process.stderr.write('<<<<<<<< HANDLED THE QUIC SERVER STREAM\n');
-        }
+        },
       );
-    }
+    },
   );
   await quicServer.start();
   const quicClient = await QUICClient.createQUICClient({
@@ -69,15 +69,11 @@ async function main() {
   const reader = stream.readable.getReader();
   const writer = stream.writable.getWriter();
 
-
   const summary = await b.suite(
     summaryName(__filename),
-    b.add(
-      'send 1Kib of data over QUICStream',
-      async () => {
-        await writer.write(data1KiB);
-      },
-    ),
+    b.add('send 1Kib of data over QUICStream', async () => {
+      await writer.write(data1KiB);
+    }),
     ...suiteCommon,
   );
 

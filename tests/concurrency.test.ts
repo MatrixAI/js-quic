@@ -8,7 +8,7 @@ import QUICServer from '@/QUICServer';
 import { promise } from '@/utils';
 import QUICClient from '@/QUICClient';
 import QUICSocket from '@/QUICSocket';
-import { generateConfig, handleStreamProm, sleep } from './utils';
+import { generateTLSConfig, handleStreamProm, sleep } from './utils';
 import * as testsUtils from './utils';
 
 describe('Concurrency tests', () => {
@@ -118,7 +118,7 @@ describe('Concurrency tests', () => {
     'Multiple clients connecting to a server',
     [connectionsArb, streamsArb(3)],
     async (clientDatas, serverStreams) => {
-      const tlsConfig = await generateConfig('RSA');
+      const tlsConfig = await generateTLSConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
@@ -128,8 +128,8 @@ describe('Concurrency tests', () => {
           },
           logger: logger.getChild(QUICServer.name),
           config: {
-            key: tlsConfig.key,
-            cert: tlsConfig.cert,
+            key: tlsConfig.leafKeyPairPEM.privateKey,
+            cert: tlsConfig.leafCertPEM,
             verifyPeer: false,
           },
         });
@@ -242,7 +242,7 @@ describe('Concurrency tests', () => {
     'Multiple clients sharing a socket',
     [connectionsArb, streamsArb(3)],
     async (clientDatas, serverStreams) => {
-      const tlsConfig = await generateConfig('RSA');
+      const tlsConfig = await generateTLSConfig('RSA');
       const cleanUpHoldProm = promise<void>();
       const serverProm = (async () => {
         const server = new QUICServer({
@@ -252,8 +252,8 @@ describe('Concurrency tests', () => {
           },
           logger: logger.getChild(QUICServer.name),
           config: {
-            key: tlsConfig.key,
-            cert: tlsConfig.cert,
+            key: tlsConfig.leafKeyPairPEM.privateKey,
+            cert: tlsConfig.leafCertPEM,
             verifyPeer: false,
           },
         });
@@ -454,8 +454,8 @@ describe('Concurrency tests', () => {
     'Multiple clients sharing a socket with a server',
     [connectionsArb, connectionsArb, streamsArb(3), streamsArb(3)],
     async (clientDatas1, clientDatas2, serverStreams1, serverStreams2) => {
-      const tlsConfig1 = await generateConfig('RSA');
-      const tlsConfig2 = await generateConfig('RSA');
+      const tlsConfig1 = await generateTLSConfig('RSA');
+      const tlsConfig2 = await generateTLSConfig('RSA');
       const clientsInfosA = clientDatas1.map((v) => v.streams.length);
       const clientsInfosB = clientDatas2.map((v) => v.streams.length);
       logger.info(`clientsA: ${clientsInfosA}`);
@@ -483,8 +483,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams1,
         socket: socket1,
         config: {
-          key: tlsConfig1.key,
-          cert: tlsConfig1.cert,
+          key: tlsConfig1.leafKeyPairPEM.privateKey,
+          cert: tlsConfig1.leafCertPEM,
           verifyPeer: false,
           logKeys: './tmp/key1.log',
           initialMaxStreamsBidi: 10000,
@@ -497,8 +497,8 @@ describe('Concurrency tests', () => {
         serverStreams: serverStreams2,
         socket: socket2,
         config: {
-          key: tlsConfig2.key,
-          cert: tlsConfig2.cert,
+          key: tlsConfig2.leafKeyPairPEM.privateKey,
+          cert: tlsConfig2.leafCertPEM,
           verifyPeer: false,
           logKeys: './tmp/key2.log',
           initialMaxStreamsBidi: 10000,

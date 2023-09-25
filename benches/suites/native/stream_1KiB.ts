@@ -1,12 +1,12 @@
+import type { Connection } from '@/native';
+import type { Host, Port } from '@';
 import b from 'benny';
-import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import * as utils from '@/utils';
-import * as testsUtils from '../../../tests/utils';
-import { summaryName, suiteCommon } from '../../utils';
-import { Connection, quiche } from '@/native';
+import { quiche } from '@/native';
 import { buildQuicheConfig, clientDefault, serverDefault } from '@/config';
 import QUICConnectionId from '@/QUICConnectionId';
-import { Host, Port } from '@';
+import { summaryName, suiteCommon } from '../../utils';
+import * as testsUtils from '../../../tests/utils';
 
 const dataBuffer = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
 
@@ -24,32 +24,8 @@ function sendPacket(
   return true;
 }
 
-function setupStreamState(
-  connectionSource: Connection,
-  connectionDestination: Connection,
-  streamId: number,
-) {
-  const message = Buffer.from('Message');
-  connectionSource.streamSend(streamId, message, false);
-  sendPacket(connectionSource, connectionDestination);
-  sendPacket(connectionDestination, connectionSource);
-  // Clearing message buffer
-  const buffer = Buffer.allocUnsafe(1024);
-  connectionDestination.streamRecv(streamId, buffer);
-}
-
-const setupConnectionsRSA = async () => {
-
-};
-
 async function main() {
-  const logger = new Logger(`stream_1KiB Bench`, LogLevel.INFO, [
-    new StreamHandler(
-      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
-    ),
-  ]);
   const data1KiB = Buffer.alloc(1024);
-  const tlsConfig = await testsUtils.generateTLSConfig('RSA');
   const localHost = '127.0.0.1' as Host;
   const clientHost = {
     host: localHost,
@@ -68,27 +44,25 @@ async function main() {
       randomBytes: testsUtils.randomBytes,
     },
   };
-  let clientConn: Connection;
-  let serverConn: Connection;
 
   // Setting up connection state
   const clientConfig = buildQuicheConfig({
     ...clientDefault,
     verifyPeer: false,
   });
-  const tlsConfigServer = await testsUtils.generateConfig('RSA');
+  const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
   const serverConfig = buildQuicheConfig({
     ...serverDefault,
 
-    key: tlsConfigServer.key,
-    cert: tlsConfigServer.cert,
+    key: tlsConfigServer.leafKeyPairPEM.privateKey,
+    cert: tlsConfigServer.leafCertPEM,
   });
 
   // Randomly generate the client SCID
   const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
   await crypto.ops.randomBytes(scidBuffer);
   const clientScid = new QUICConnectionId(scidBuffer);
-  clientConn = quiche.Connection.connect(
+  const clientConn = quiche.Connection.connect(
     null,
     clientScid,
     clientHost,
@@ -137,7 +111,7 @@ async function main() {
   [clientSendLength] = sendResult2;
 
   // Server accept
-  serverConn = quiche.Connection.accept(
+  const serverConn = quiche.Connection.accept(
     serverScid,
     clientDcid,
     serverHost,
@@ -173,7 +147,7 @@ async function main() {
 
   const clientSend = () => {
     let sent = false;
-    while(true) {
+    while (true) {
       if (sendPacket(clientConn, serverConn)) {
         sent = true;
       } else {
@@ -181,34 +155,34 @@ async function main() {
       }
     }
     if (sent) serverWaitRecvProm.resolveP();
-  }
+  };
   const clientWrite = (buffer: Buffer) => {
-    // write buffer to stream
+    // Write buffer to stream
     clientConn.streamSend(0, buffer, false);
-    // trigger send
+    // Trigger send
     clientSend();
-  }
+  };
   const clientRuntime = (async () => {
     while (true) {
-      await clientWaitRecvProm.p
+      await clientWaitRecvProm.p;
       clientWaitRecvProm = utils.promise<void>();
       // Process streams.
       for (const streamId of serverConn.readable()) {
         while (true) {
-          // read and ditch information
-          if (clientConn.streamRecv(0, clientBuf) === null) break;
+          // Read and ditch information
+          if (clientConn.streamRecv(streamId, clientBuf) === null) break;
         }
       }
-      // process sends.
+      // Process sends.
       clientSend();
-      // check state change,
+      // Check state change,
       if (clientConn.isClosed() || clientConn.isDraining()) break;
     }
   })();
 
   const serverSend = () => {
     let sent = false;
-    while(true) {
+    while (true) {
       if (sendPacket(serverConn, clientConn)) {
         sent = true;
       } else {
@@ -216,22 +190,22 @@ async function main() {
       }
     }
     if (sent) clientWaitRecvProm.resolveP();
-  }
+  };
 
   const serverRuntime = (async () => {
     while (true) {
-      await serverWaitRecvProm.p
+      await serverWaitRecvProm.p;
       serverWaitRecvProm = utils.promise<void>();
       // Process streams.
-      for (const streamId of serverConn.readable()){
-        while(true) {
-          // read and ditch information
-          if (serverConn.streamRecv(0, clientBuf) === null) break;
+      for (const streamId of serverConn.readable()) {
+        while (true) {
+          // Read and ditch information
+          if (serverConn.streamRecv(streamId, clientBuf) === null) break;
         }
       }
-      // process sends.
+      // Process sends.
       serverSend();
-      // check state change,
+      // Check state change,
       if (serverConn.isClosed() || serverConn.isDraining()) break;
     }
   })();
@@ -250,10 +224,7 @@ async function main() {
   serverConn.close(true, 0, Buffer.from([]));
   clientSend();
   serverSend();
-  await Promise.all([
-    clientRuntime,
-    serverRuntime,
-  ]);
+  await Promise.all([clientRuntime, serverRuntime]);
   return summary;
 }
 
