@@ -513,7 +513,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       if ((code = utils.isStreamStopped(e)) !== false) {
         // Cleanup the underlying quiche stream state, otherwise the stream
         // remains writable and we end up re-creating a `QUICStream`.
-        this.connection.conn.streamShutdown(this.streamId, quiche.Shutdown.Write, code);
+        this.connection.conn.streamShutdown(
+          this.streamId,
+          quiche.Shutdown.Write,
+          code,
+        );
         const reason = this.codeToReason('write', code);
         const e_ = new errors.ErrorQUICStreamPeerWrite(
           'Peer stopped the writable stream',
