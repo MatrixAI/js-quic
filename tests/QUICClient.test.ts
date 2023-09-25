@@ -625,7 +625,7 @@ describe(QUICClient.name, () => {
           clientConnectionErrorProm.rejectP(evt.detail),
       );
       await expect(clientConnectionErrorProm.p).rejects.toThrow(
-        errors.ErrorQUICConnectionPeer,
+        errors.ErrorQUICConnectionPeerTLS,
       );
 
       await server.stop();
@@ -1533,7 +1533,7 @@ describe(QUICClient.name, () => {
           serverErrorProm.rejectP(evt.detail),
       );
       await expect(serverErrorProm.p).rejects.toThrow(
-        errors.ErrorQUICConnectionPeer,
+        errors.ErrorQUICConnectionPeerTLS,
       );
       await expect(clientProm).rejects.toThrow(errors.ErrorQUICConnectionLocal);
 
@@ -1640,7 +1640,7 @@ describe(QUICClient.name, () => {
           clientConnectionErrorProm.rejectP(evt.detail),
       );
       await expect(clientConnectionErrorProm.p).rejects.toThrow(
-        errors.ErrorQUICConnectionPeer,
+        errors.ErrorQUICConnectionPeerTLS,
       );
 
       // Server connection is never emitted
