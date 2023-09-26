@@ -13,7 +13,7 @@ import * as events from '@/events';
 import * as testsUtils from './utils';
 
 describe(QUICSocket.name, () => {
-  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.SILENT, [
     new StreamHandler(),
   ]);
   // This has to be setup asynchronously due to key generation
