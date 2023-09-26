@@ -852,7 +852,7 @@ describe(QUICSocket.name, () => {
       },
       { numRuns: 20 },
     );
-    testProp.only(
+    testProp(
       'new connection failure due to socket errors results in domain error events',
       [
         testsUtils.bufferArb({
@@ -894,14 +894,14 @@ describe(QUICSocket.name, () => {
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
-          host: '::1',
+          host: '::',
         });
         await dualStackSocketSend(
           message,
           0,
           message.byteLength,
           socket.port,
-          socket.host,
+          utils.resolvesZeroIP(socket.host), // Sending to '::' breaks mac CI
         );
         // Wait for the message to be received
         await handleSocketMessageMockP;
@@ -966,14 +966,14 @@ describe(QUICSocket.name, () => {
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
-          host: '::1',
+          host: '::',
         });
         await dualStackSocketSend(
           message,
           0,
           message.byteLength,
           socket.port,
-          socket.host,
+          utils.resolvesZeroIP(socket.host), // Sending to '::' breaks mac CI
         );
         // Wait for the message to be received
         await handleSocketMessageMockP;
