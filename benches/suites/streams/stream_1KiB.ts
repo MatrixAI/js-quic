@@ -8,7 +8,7 @@ import { summaryName, suiteCommon } from '../../utils';
 import * as testsUtils from '../../../tests/utils';
 
 async function main() {
-  const logger = new Logger(`stream_1KiB Bench`, LogLevel.DEBUG, [
+  const logger = new Logger(`stream_1KiB Bench`, LogLevel.SILENT, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -38,7 +38,7 @@ async function main() {
         events.EventQUICConnectionStream.name,
         async (evt: events.EventQUICConnectionStream) => {
           const stream = evt.detail;
-          await stream.writable.abort();
+          await stream.writable.close();
           // Consume until graceful close of readable
           for await (const _ of stream.readable) {
             // Do nothing, only consume
@@ -62,9 +62,11 @@ async function main() {
     logger: logger.getChild('QUICClient'),
   });
   const clientStream = quicClient.connection.newStream();
-  const reader = clientStream.readable.getReader();
   const writer = clientStream.writable.getWriter();
-  await reader.cancel();
+  await writer.write(data1KiB);
+  for await (const _ of clientStream.readable) {
+    // No nothing, just consume
+  }
   const summary = await b.suite(
     summaryName(__filename),
     b.add('send 1Kib of data over QUICStream with UDP socket', async () => {
