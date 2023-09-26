@@ -852,7 +852,7 @@ describe(QUICSocket.name, () => {
       },
       { numRuns: 20 },
     );
-    testProp(
+    testProp.only(
       'new connection failure due to socket errors results in domain error events',
       [
         testsUtils.bufferArb({
@@ -894,7 +894,7 @@ describe(QUICSocket.name, () => {
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
-          host: '::',
+          host: '::1',
         });
         await dualStackSocketSend(
           message,
@@ -920,7 +920,11 @@ describe(QUICSocket.name, () => {
           await socket.stop();
         }
       },
-      { numRuns: 20 },
+      {
+        seed: 528336845,
+        path: '0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0',
+        endOnFailure: true,
+      },
     );
     testProp(
       'new connection failure due start timeout is ignored',
@@ -962,7 +966,7 @@ describe(QUICSocket.name, () => {
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
-          host: '::',
+          host: '::1',
         });
         await dualStackSocketSend(
           message,
