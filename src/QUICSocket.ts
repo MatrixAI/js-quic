@@ -397,6 +397,7 @@ class QUICSocket {
       udpType,
       errors.ErrorQUICSocketInvalidSendAddress,
     );
+    host_ = utils.resolvesZeroIP(host_);
     params[index] = host_;
     return this.socketSend(...params);
   }
