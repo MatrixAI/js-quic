@@ -21,6 +21,8 @@ describe(QUICClient.name, () => {
     ),
   ]);
   const localhost = '127.0.0.1';
+  // Intentional hard coded port, no destination exists
+  const noTargetPort = 55544;
   // This has to be setup asynchronously due to key generation
   const serverCryptoOps: ServerCryptoOps = {
     sign: testsUtils.signHMAC,
@@ -115,7 +117,6 @@ describe(QUICClient.name, () => {
       );
       await server.start({
         host: '::1',
-        port: 0,
       });
       const client = await QUICClient.createQUICClient({
         host: '::1',
@@ -161,7 +162,6 @@ describe(QUICClient.name, () => {
       );
       await server.start({
         host: '::',
-        port: 0,
       });
       const client = await QUICClient.createQUICClient({
         host: '::', // Will resolve to ::1
@@ -191,7 +191,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666,
+          port: noTargetPort,
           localHost: localhost,
           crypto: {
             ops: clientCryptoOps,
@@ -209,7 +209,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666,
+          port: noTargetPort,
           localHost: localhost,
           crypto: {
             ops: clientCryptoOps,
@@ -226,7 +226,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666,
+          port: noTargetPort,
           localHost: localhost,
           crypto: {
             ops: clientCryptoOps,
@@ -243,7 +243,7 @@ describe(QUICClient.name, () => {
       await expect(
         QUICClient.createQUICClient({
           host: localhost,
-          port: 56666,
+          port: noTargetPort,
           localHost: localhost,
           crypto: {
             ops: clientCryptoOps,
@@ -262,7 +262,7 @@ describe(QUICClient.name, () => {
         QUICClient.createQUICClient(
           {
             host: localhost,
-            port: 56666,
+            port: noTargetPort,
             localHost: localhost,
             crypto: {
               ops: clientCryptoOps,
@@ -284,7 +284,7 @@ describe(QUICClient.name, () => {
       const clientProm = QUICClient.createQUICClient(
         {
           host: localhost,
-          port: 56666,
+          port: noTargetPort,
           localHost: localhost,
           crypto: {
             ops: clientCryptoOps,
@@ -1417,7 +1417,7 @@ describe(QUICClient.name, () => {
     test('Keep alive does not prevent connection timeout', async () => {
       const clientProm = QUICClient.createQUICClient({
         host: '::ffff:127.0.0.1',
-        port: 54444,
+        port: noTargetPort,
         localHost: '::',
         crypto: {
           ops: clientCryptoOps,
@@ -1614,7 +1614,6 @@ describe(QUICClient.name, () => {
       );
       await server.start({
         host: localhost,
-        port: 55555,
       });
       // Connection should fail
       const client = await QUICClient.createQUICClient({
@@ -1678,7 +1677,6 @@ describe(QUICClient.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 55555,
     });
     // If the server is slow to respond then this will time out.
     //  Then main cause of this was the server not processing the initial packet
@@ -1729,7 +1727,6 @@ describe(QUICClient.name, () => {
     );
     await server.start({
       host: localhost,
-      port: 55555,
     });
     // If the server is slow to respond then this will time out.
     //  Then main cause of this was the server not processing the initial packet

@@ -1,5 +1,5 @@
 import type { Connection, StreamIter } from '@/native';
-import type { ClientCryptoOps, Host, Port, ServerCryptoOps } from '@';
+import type { ClientCryptoOps, Host, ServerCryptoOps } from '@';
 import { quiche, Shutdown } from '@/native';
 import QUICConnectionId from '@/QUICConnectionId';
 import { buildQuicheConfig, clientDefault, serverDefault } from '@/config';
@@ -10,7 +10,7 @@ describe('native/stream', () => {
   const localHost = '127.0.0.1' as Host;
   const clientHost = {
     host: localHost,
-    port: 55555 as Port,
+    port: 55555,
   };
   const serverHost = {
     host: localHost,

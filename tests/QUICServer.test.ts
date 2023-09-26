@@ -468,7 +468,6 @@ describe(QUICServer.name, () => {
     );
     await server.start({
       host: '127.0.0.1',
-      port: 55555,
     });
     const clientCryptoOps: ClientCryptoOps = {
       randomBytes: testsUtils.randomBytes,

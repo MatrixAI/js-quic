@@ -2,7 +2,6 @@ import type { X509Certificate } from '@peculiar/x509';
 import type {
   QUICConfig,
   Host,
-  Port,
   ClientCryptoOps,
   ServerCryptoOps,
 } from '@/types';
@@ -51,11 +50,11 @@ describe('native/tls/rsa', () => {
   describe('RSA success with both client and server certificates', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -124,7 +123,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -150,7 +153,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -333,11 +336,11 @@ describe('native/tls/rsa', () => {
   describe('RSA success with only server certificates', () => {
     // These tests run in-order, and each step is a tate transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -400,7 +403,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -426,7 +433,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -566,11 +573,11 @@ describe('native/tls/rsa', () => {
   describe('RSA fail verifying client with bad client certificate (TlsFail CryptoError.UnknownCA)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -635,7 +642,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -661,7 +672,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -802,11 +813,11 @@ describe('native/tls/rsa', () => {
   describe('RSA fail verifying client with no client certificate (TlsFail CryptoError.CertificateRequired)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -870,7 +881,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -896,7 +911,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -1032,11 +1047,11 @@ describe('native/tls/rsa', () => {
   describe('RSA fail verifying server with bad server certificate (TlsFail CryptoError.UnknownCA)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -1099,7 +1114,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -1125,7 +1144,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -1245,11 +1264,11 @@ describe('native/tls/rsa', () => {
   describe('RSA fail with no server certificates (InternalError 1)', () => {
     // These tests run in-order, and each step is a state transition
     const clientHost = {
-      host: '127.0.0.1' as Host,
-      port: 55555 as Port,
+      host: '127.0.0.1',
+      port: 55555,
     };
     const serverHost = {
-      host: '127.0.0.1' as Host,
+      host: '127.0.0.1',
       port: 55556,
     };
     // These buffers will be used between the tests and will be mutated
@@ -1313,7 +1332,11 @@ describe('native/tls/rsa', () => {
         quiche.MAX_CONN_ID_LEN,
       );
       // Stateless retry
-      const token = await utils.mintToken(clientDcid, clientHost.host, crypto);
+      const token = await utils.mintToken(
+        clientDcid,
+        clientHost.host as Host,
+        crypto,
+      );
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
       const retryDatagramLength = quiche.retry(
         clientScid,
@@ -1339,7 +1362,7 @@ describe('native/tls/rsa', () => {
       // Validate the token
       const dcidOriginal = await utils.validateToken(
         Buffer.from(clientHeaderInitialRetry.token!),
-        clientHost.host,
+        clientHost.host as Host,
         crypto,
       );
       // The original randomly generated DCID was embedded in the token
@@ -1432,11 +1455,11 @@ describe('native/tls/rsa', () => {
     describe('RSA success with both client and server certificates', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       // These buffers will be used between the tests and will be mutated
@@ -1512,7 +1535,7 @@ describe('native/tls/rsa', () => {
         // Stateless retry
         const token = await utils.mintToken(
           clientDcid,
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -1540,7 +1563,7 @@ describe('native/tls/rsa', () => {
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         // The original randomly generated DCID was embedded in the token
@@ -1702,11 +1725,11 @@ describe('native/tls/rsa', () => {
     describe('RSA success with only server certificates', () => {
       // These tests run in-order, and each step is a tate transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       // These buffers will be used between the tests and will be mutated
@@ -1778,7 +1801,7 @@ describe('native/tls/rsa', () => {
         // Stateless retry
         const token = await utils.mintToken(
           clientDcid,
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -1806,7 +1829,7 @@ describe('native/tls/rsa', () => {
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         // The original randomly generated DCID was embedded in the token
@@ -1947,11 +1970,11 @@ describe('native/tls/rsa', () => {
     describe('RSA fail verifying client with bad client certificate (TlsFail CryptoError.UnknownCA)', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       // These buffers will be used between the tests and will be mutated
@@ -2026,7 +2049,7 @@ describe('native/tls/rsa', () => {
         // Stateless retry
         const token = await utils.mintToken(
           clientDcid,
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -2054,7 +2077,7 @@ describe('native/tls/rsa', () => {
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         // The original randomly generated DCID was embedded in the token
@@ -2214,11 +2237,11 @@ describe('native/tls/rsa', () => {
     describe('RSA fail verifying client with no client certificate (TlsFail CryptoError.CertificateRequired)', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       // These buffers will be used between the tests and will be mutated
@@ -2292,7 +2315,7 @@ describe('native/tls/rsa', () => {
         // Stateless retry
         const token = await utils.mintToken(
           clientDcid,
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -2320,7 +2343,7 @@ describe('native/tls/rsa', () => {
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         // The original randomly generated DCID was embedded in the token
@@ -2464,11 +2487,11 @@ describe('native/tls/rsa', () => {
     describe('RSA fail verifying server with bad server certificate (TlsFail CryptoError.UnknownCA)', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       // These buffers will be used between the tests and will be mutated
@@ -2544,7 +2567,7 @@ describe('native/tls/rsa', () => {
         // Stateless retry
         const token = await utils.mintToken(
           clientDcid,
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -2572,7 +2595,7 @@ describe('native/tls/rsa', () => {
         // Validate the token
         const dcidOriginal = await utils.validateToken(
           Buffer.from(clientHeaderInitialRetry.token!),
-          clientHost.host,
+          clientHost.host as Host,
           crypto,
         );
         // The original randomly generated DCID was embedded in the token

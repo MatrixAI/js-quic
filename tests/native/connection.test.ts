@@ -2,7 +2,6 @@ import type { X509Certificate } from '@peculiar/x509';
 import type {
   QUICConfig,
   Host,
-  Port,
   ClientCryptoOps,
   ServerCryptoOps,
 } from '@/types';
@@ -51,11 +50,11 @@ describe('native/connection', () => {
     describe('connect and close client', () => {
       // These tests run in-order, and each step is a state transition
       const clientHost = {
-        host: '127.0.0.1' as Host,
-        port: 55555 as Port,
+        host: '127.0.0.1',
+        port: 55555,
       };
       const serverHost = {
-        host: '127.0.0.1' as Host,
+        host: '127.0.0.1',
         port: 55556,
       };
       let clientQuicheConfig: Config;
@@ -142,11 +141,11 @@ describe('native/connection', () => {
       describe('dialing timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
-          host: '127.0.0.1' as Host,
-          port: 55555 as Port,
+          host: '127.0.0.1',
+          port: 55555,
         };
         const serverHost = {
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
@@ -210,11 +209,11 @@ describe('native/connection', () => {
       describe('initial timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
-          host: '127.0.0.1' as Host,
-          port: 55555 as Port,
+          host: '127.0.0.1',
+          port: 55555,
         };
         const serverHost = {
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
@@ -276,7 +275,7 @@ describe('native/connection', () => {
           );
           const token = await utils.mintToken(
             clientDcid,
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -302,7 +301,7 @@ describe('native/connection', () => {
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
@@ -366,11 +365,11 @@ describe('native/connection', () => {
       describe('handshake timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
-          host: '127.0.0.1' as Host,
-          port: 55555 as Port,
+          host: '127.0.0.1',
+          port: 55555,
         };
         const serverHost = {
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
@@ -432,7 +431,7 @@ describe('native/connection', () => {
           );
           const token = await utils.mintToken(
             clientDcid,
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -458,7 +457,7 @@ describe('native/connection', () => {
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
@@ -534,11 +533,11 @@ describe('native/connection', () => {
       describe('established timeout', () => {
         // These tests run in-order, and each step is a state transition
         const clientHost = {
-          host: '127.0.0.1' as Host,
-          port: 55555 as Port,
+          host: '127.0.0.1',
+          port: 55555,
         };
         const serverHost = {
-          host: '127.0.0.1' as Host,
+          host: '127.0.0.1',
           port: 55556,
         };
         // These buffers will be used between the tests and will be mutated
@@ -600,7 +599,7 @@ describe('native/connection', () => {
           );
           const token = await utils.mintToken(
             clientDcid,
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
@@ -626,7 +625,7 @@ describe('native/connection', () => {
           );
           const dcidOriginal = await utils.validateToken(
             Buffer.from(clientHeaderInitialRetry.token!),
-            clientHost.host,
+            clientHost.host as Host,
             crypto,
           );
           expect(dcidOriginal).toEqual(clientDcid);
