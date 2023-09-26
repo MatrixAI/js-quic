@@ -238,9 +238,6 @@ describe(QUICSocket.name, () => {
       'name',
       'RangeError',
     );
-    await expect(socket.send(msg, ipv4SocketPort, '0.0.0.0')).rejects.toThrow(
-      errors.ErrorQUICSocketInvalidSendAddress,
-    );
     expect(handleEventQUICSocketError).not.toHaveBeenCalled();
     await socket.stop();
     expect(handleEventQUICSocketError).not.toHaveBeenCalled();

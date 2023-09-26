@@ -390,6 +390,7 @@ class QUICSocket {
     }
     const host = params[index] as Host | Hostname;
     let [host_, udpType] = await utils.resolveHost(host, this.resolveHostname);
+    host_ = utils.resolvesZeroIP(host_);
     host_ = utils.validateTarget(
       this._host,
       this._type,
@@ -397,7 +398,6 @@ class QUICSocket {
       udpType,
       errors.ErrorQUICSocketInvalidSendAddress,
     );
-    host_ = utils.resolvesZeroIP(host_);
     params[index] = host_;
     return this.socketSend(...params);
   }
