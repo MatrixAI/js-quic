@@ -75,8 +75,8 @@ async function main() {
     ...suiteCommon,
   );
   await writer.close();
-  await quicClient?.destroy({ force: false });
-  await quicServer?.stop({ force: false });
+  await quicClient?.destroy();
+  await quicServer?.stop();
   return summary;
 }
 
