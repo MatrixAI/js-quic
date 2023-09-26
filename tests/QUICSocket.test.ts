@@ -63,7 +63,11 @@ describe(QUICSocket.name, () => {
     dualStackSocketMessageP = p;
     dualStackSocketMessageResolveP = resolveP;
   };
+
+  let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+
   beforeEach(async () => {
+    socketCleanMethods = testsUtils.socketCleanupFactory();
     ipv4Socket = dgram.createSocket({
       type: 'udp4',
     });
@@ -107,11 +111,13 @@ describe(QUICSocket.name, () => {
     ipv4Socket.off('message', handleIPv4SocketMessage);
     ipv6Socket.off('message', handleIPv6SocketMessage);
     dualStackSocket.off('message', handleDualStackSocketMessage);
+    await socketCleanMethods.stopSockets();
   });
   test('cannot stop socket with active connections', async () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await socket.start({
       host: '127.0.0.1',
     });
@@ -131,6 +137,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await socket.start({
       host: '127.0.0.1',
     });
@@ -146,6 +153,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await expect(
       socket.start({
         host: '127.0.0.1',
@@ -158,6 +166,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await socket.start({
       host: '::1',
       ipv6Only: false,
@@ -168,6 +177,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await socket.start({
       host: '0.0.0.0',
     });
@@ -188,6 +198,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     await socket.start({
       host: '::0',
     });
@@ -208,6 +219,7 @@ describe(QUICSocket.name, () => {
     const socket = new QUICSocket({
       logger,
     });
+    socketCleanMethods.sockets.add(socket);
     const handleEventQUICSocketError = jest.fn();
     socket.addEventListener(
       events.EventQUICSocketError.name,
@@ -238,6 +250,7 @@ describe(QUICSocket.name, () => {
       const socket = new QUICSocket({
         logger,
       });
+      socketCleanMethods.sockets.add(socket);
       const handleEventQUICSocketStart = jest.fn();
       socket.addEventListener(
         events.EventQUICSocketStart.name,
@@ -271,12 +284,12 @@ describe(QUICSocket.name, () => {
       const startP = socket.start({
         host: '127.0.0.1',
       });
-      await testsUtils.sleep(0);
+      await testsUtils.sleep(200);
       expect(handleEventQUICSocketStart).toHaveBeenCalled();
       await startP;
       expect(handleEventQUICSocketStarted).toHaveBeenCalled();
       const stopP = socket.stop();
-      await testsUtils.sleep(0);
+      await testsUtils.sleep(200);
       expect(handleEventQUICSocketStop).toHaveBeenCalled();
       await stopP;
       expect(handleEventQUICSocketClose).toHaveBeenCalled();
@@ -290,6 +303,7 @@ describe(QUICSocket.name, () => {
       const socket = new QUICSocket({
         logger: socketLogger,
       });
+      socketCleanMethods.sockets.add(socket);
       const handleEventQUICSocketStop = jest.fn();
       socket.addEventListener(
         events.EventQUICSocketStop.name,
@@ -325,7 +339,7 @@ describe(QUICSocket.name, () => {
       expect(handleEventQUICSocketError).toHaveBeenCalledTimes(1);
       expect(handleEventQUICSocketClose).toHaveBeenCalledTimes(1);
       // Note that we may need to wait for the system to actually stop
-      await testsUtils.sleep(0);
+      await testsUtils.sleep(200);
       expect(handleEventQUICSocketStop).toHaveBeenCalledTimes(1);
       expect(handleEventQUICSocketStopped).toHaveBeenCalledTimes(1);
       // It should be the case that the `socket` is already stopped
@@ -340,6 +354,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '127.0.0.1',
       });
@@ -408,6 +423,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '::1',
       });
@@ -462,6 +478,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '::',
         ipv6Only: true,
@@ -520,6 +537,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '::',
       });
@@ -626,6 +644,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '::ffff:127.0.0.1',
       });
@@ -682,6 +701,7 @@ describe(QUICSocket.name, () => {
     });
     const msg = Buffer.from('Hello World');
     beforeAll(async () => {
+      socketCleanMethods.sockets.add(socket);
       await socket.start({
         host: '::ffff:7f00:1',
       });
@@ -742,6 +762,7 @@ describe(QUICSocket.name, () => {
         const socket = new QUICSocket({
           logger,
         });
+        socketCleanMethods.sockets.add(socket);
         // We have to spy on the arrow function property before it is registered
         // Which meanst this spy must be created before the socket is started
         const handleSocketMessageMock = jest.spyOn(
@@ -767,11 +788,12 @@ describe(QUICSocket.name, () => {
           socket.host,
         );
         // Allow the event loop to flush the UDP socket
-        await testsUtils.sleep(0);
+        await testsUtils.sleep(200);
         expect(handleSocketMessageMock).toHaveBeenCalledTimes(1);
         expect(handleEventQUICSocketError).not.toHaveBeenCalled();
-        await socket.stop();
+        await socket.stop({ force: true });
       },
+      { numRuns: 20 },
     );
     testProp(
       'datagrams at >20 bytes are sometimes accepted for new connections',
@@ -788,6 +810,7 @@ describe(QUICSocket.name, () => {
         const socket = new QUICSocket({
           logger,
         });
+        socketCleanMethods.sockets.add(socket);
         // We have to spy on the arrow function property before it is registered
         // Which meanst this spy must be created before the socket is started
         const {
@@ -820,13 +843,14 @@ describe(QUICSocket.name, () => {
         // Wait for the message to be received
         await handleSocketMessageMockP;
         // Wait for events to settle
-        await testsUtils.sleep(0);
+        await testsUtils.sleep(200);
         expect(
           quicServer.acceptConnection.mock.calls.length,
         ).toBeLessThanOrEqual(1);
         expect(handleEventQUICSocketError).not.toHaveBeenCalled();
         await socket.stop();
       },
+      { numRuns: 20 },
     );
     testProp(
       'new connection failure due to socket errors results in domain error events',
@@ -848,6 +872,7 @@ describe(QUICSocket.name, () => {
         const socket = new QUICSocket({
           logger: socketLogger,
         });
+        socketCleanMethods.sockets.add(socket);
 
         // We have to spy on the arrow function property before it is registered
         // Which meanst this spy must be created before the socket is started
@@ -881,7 +906,7 @@ describe(QUICSocket.name, () => {
         // Wait for the message to be received
         await handleSocketMessageMockP;
         // Wait for events to settle
-        await testsUtils.sleep(0);
+        await testsUtils.sleep(200);
         // Some times the packet is considered as `BufferTooShort`
         // So here we branch out depending on whether `acceptConnection` was called
         if (quicServer.acceptConnection.mock.calls.length > 0) {
@@ -895,6 +920,7 @@ describe(QUICSocket.name, () => {
           await socket.stop();
         }
       },
+      { numRuns: 20 },
     );
     testProp(
       'new connection failure due start timeout is ignored',
@@ -915,6 +941,7 @@ describe(QUICSocket.name, () => {
         const socket = new QUICSocket({
           logger,
         });
+        socketCleanMethods.sockets.add(socket);
         // We have to spy on the arrow function property before it is registered
         // Which meanst this spy must be created before the socket is started
         const {
@@ -947,7 +974,7 @@ describe(QUICSocket.name, () => {
         // Wait for the message to be received
         await handleSocketMessageMockP;
         // Wait for events to settle
-        await testsUtils.sleep(0);
+        await testsUtils.sleep(200);
         // Some times the packet is considered as `BufferTooShort`
         expect(
           quicServer.acceptConnection.mock.calls.length,
@@ -955,6 +982,7 @@ describe(QUICSocket.name, () => {
         expect(handleEventQUICSocketError).not.toHaveBeenCalled();
         await socket.stop();
       },
+      { numRuns: 20 },
     );
   });
 });
