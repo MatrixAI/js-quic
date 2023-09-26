@@ -22,7 +22,7 @@ New-Item -Path "${PSScriptRoot}\..\tmp\chocolatey" -ItemType "directory" -ErrorA
 choco source add --name="cache" --source="${PSScriptRoot}\..\tmp\chocolatey" --priority=1
 
 # Install nodejs v20.5.1 (will use cache if exists)
-$nodejs = "nodejs.install"
+$nodejs = "nodejs"
 choco install "$nodejs" --version="20.5.1" --require-checksums -y
 # Internalise nodejs to cache if doesn't exist
 if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$nodejs\$nodejs.20.5.1.nupkg" -PathType Leaf) ) {
