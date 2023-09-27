@@ -34,7 +34,7 @@ interface QUICClient extends CreateDestroy {}
   eventDestroy: events.EventQUICClientDestroy,
   eventDestroyed: events.EventQUICClientDestroyed,
 })
-class QUICClient extends EventTarget {
+class QUICClient {
   /**
    * Creates a QUIC client.
    *
@@ -512,7 +512,6 @@ class QUICClient extends EventTarget {
     connection: QUICConnection;
     logger: Logger;
   }) {
-    super();
     this.logger = logger;
     this.socket = socket;
     this.isSocketShared = isSocketShared;
