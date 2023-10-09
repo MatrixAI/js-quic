@@ -475,7 +475,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
       const [recvLength] = result;
       if (recvLength > 0) {
         this.readableController.enqueue(
-          this.readableChunk!.subarray(0, recvLength),
+          // Making a copy to be enqueued
+          Buffer.from(this.readableChunk!.slice(0, recvLength)),
         );
       }
       this.readableController.close();
@@ -641,7 +642,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     const [recvLength, fin] = result;
     if (recvLength > 0) {
       this.readableController.enqueue(
-        this.readableChunk!.subarray(0, recvLength),
+        // Making a copy to be enqueued
+        Buffer.from(this.readableChunk!.slice(0, recvLength)),
       );
     }
     if (fin) {

@@ -270,6 +270,99 @@ describe(QUICStream.name, () => {
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
+  test('sent data should be correct and expected', async () => {
+    const messages = [
+      'The',
+      'Quick',
+      'Brown',
+      'Fox',
+      'Jumped',
+      'Over',
+      'The',
+      'Lazy',
+      'Dog',
+    ].map((v) => Buffer.from(v));
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+    const conn = (await connectionEventProm.p).detail;
+    // Do the test
+    const streamProm = utils.promise<QUICStream>();
+    conn.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (streamEvent: events.EventQUICConnectionStream) => {
+        streamProm.resolveP(streamEvent.detail);
+      },
+      { once: true },
+    );
+
+    // Create a stream
+    const streamLocal = client.connection.newStream();
+    const writerLocal = streamLocal.writable.getWriter();
+    for (const message of messages) {
+      await writerLocal.write(message);
+    }
+    await writerLocal.close();
+    const streamPeer = await streamProm.p;
+    const writerPeer = streamPeer.writable.getWriter();
+    for (const message of messages) {
+      await writerPeer.write(message);
+    }
+    await writerPeer.close();
+
+    const readMessagesLocal: Array<any> = [];
+    const readMessagesPeer: Array<any> = [];
+    for await (const chunk of streamPeer.readable) {
+      readMessagesLocal.push(chunk);
+    }
+    for await (const chunk of streamLocal.readable) {
+      readMessagesPeer.push(chunk);
+    }
+
+    const expected = messages.map((v) => Buffer.from(v)).join(' ');
+    expect(readMessagesLocal.map((v) => Buffer.from(v)).join(' ')).toBe(
+      expected,
+    );
+    expect(readMessagesPeer.map((v) => Buffer.from(v)).join(' ')).toBe(
+      expected,
+    );
+
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
   test('should propagate errors over stream for writable', async () => {
     const tlsConfig = await generateTLSConfig(defaultType);
     const server = new QUICServer({
