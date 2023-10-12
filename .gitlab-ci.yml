@@ -176,6 +176,7 @@ build:windows:
     # Only x64 architecture is needed
     npm_config_arch: "x64"
     RUST_BACKTRACE: "1"
+    LIBCLANG_PATH: "C:\\Program Files\\LLVM\\bin"
   before_script:
     - mkdir -Force "$CI_PROJECT_DIR/tmp"
     - Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
