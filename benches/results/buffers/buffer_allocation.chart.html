@@ -28,7 +28,7 @@
   </head>
   <body>
     <div class="container">
-      <canvas id="chart1695635571016" width="16" height="9"></canvas>
+      <canvas id="chart1697506316266" width="16" height="9"></canvas>
     </div>
     <script>
       const format = (num) => {
@@ -51,18 +51,18 @@
           chunked.map((chunk) => chunk.join('')).join(' ') + fractionStr
         )
       }
-      const ctx1695635571016 = document
-        .getElementById('chart1695635571016')
+      const ctx1697506316266 = document
+        .getElementById('chart1697506316266')
         .getContext('2d')
-      const chart1695635571016 = new Chart(ctx1695635571016, {
+      const chart1697506316266 = new Chart(ctx1697506316266, {
         type: 'bar',
         data: {
           labels: ["Buffer.alloc","Buffer.allocUnsafe","Buffer.allocUnsafeSlow","Buffer.from subarray","Buffer.copyBytesFrom","Uint8Array","Uint8Array slice"],
           datasets: [
             {
-              data: [737442,3112051,949633,1700664,517646,777665,704702],
-              backgroundColor: ["hsl(28.44, 85%, 55%)","hsl(120, 85%, 55%)","hsl(36.612, 85%, 55%)","hsl(65.58, 85%, 55%)","hsl(19.955999999999992, 85%, 55%)","hsl(29.987999999999996, 85%, 55%)","hsl(27.168000000000003, 85%, 55%)"],
-              borderColor: ["hsl(28.44, 85%, 55%)","hsl(120, 85%, 55%)","hsl(36.612, 85%, 55%)","hsl(65.58, 85%, 55%)","hsl(19.955999999999992, 85%, 55%)","hsl(29.987999999999996, 85%, 55%)","hsl(27.168000000000003, 85%, 55%)"],
+              data: [1342250,7102874,1589200,3509682,936376,1310106,1435174],
+              backgroundColor: ["hsl(22.680000000000007, 85%, 55%)","hsl(120, 85%, 55%)","hsl(26.844000000000005, 85%, 55%)","hsl(59.292, 85%, 55%)","hsl(15.816000000000006, 85%, 55%)","hsl(22.127999999999997, 85%, 55%)","hsl(24.251999999999995, 85%, 55%)"],
+              borderColor: ["hsl(22.680000000000007, 85%, 55%)","hsl(120, 85%, 55%)","hsl(26.844000000000005, 85%, 55%)","hsl(59.292, 85%, 55%)","hsl(15.816000000000006, 85%, 55%)","hsl(22.127999999999997, 85%, 55%)","hsl(24.251999999999995, 85%, 55%)"],
               borderWidth: 2,
             },
           ],
