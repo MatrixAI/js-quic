@@ -30,6 +30,8 @@ async function main() {
     },
     logger: logger.getChild('QUICServer'),
   });
+  const { p: serverStreamEndedP, resolveP: serverStreamEndedResolveP } =
+    utils.promise<void>();
   quicServer.addEventListener(
     events.EventQUICServerConnection.name,
     (evt: events.EventQUICServerConnection) => {
@@ -43,6 +45,7 @@ async function main() {
           for await (const _ of stream.readable) {
             // Do nothing, only consume
           }
+          serverStreamEndedResolveP();
         },
       );
     },
@@ -75,6 +78,7 @@ async function main() {
     ...suiteCommon,
   );
   await writer.close();
+  await serverStreamEndedP;
   await quicClient?.destroy();
   await quicServer?.stop();
   return summary;
