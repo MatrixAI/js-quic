@@ -53,10 +53,10 @@ if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$nasm\$nasm.2.16.0
   Save-ChocoPackage -PackageName $nasm
 }
 
-# Install Windows SDK v10.0.20348.0 (will use cache if exists)
-$windowsSdk = "windows-sdk-10-version-2104-all"
-choco install $windowsSdk --version="10.0.20348.0" --require-checksums -y
+# Install Windows SDK v10.0.22621.2 (will use cache if exists)
+$windowsSdk = "windows-sdk-11-version-22h2-all"
+choco install $windowsSdk --version="10.0.22621.2" --require-checksums -y
 # Internalise rust to cache if doesn't exist
-if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$windowsSdk\$windowsSdk.10.0.20348.0.nupkg" -PathType Leaf) ) {
+if ( -not (Test-Path -Path "${PSScriptRoot}\..\tmp\chocolatey\$windowsSdk\$windowsSdk.10.0.22621.2.nupkg" -PathType Leaf) ) {
   Save-ChocoPackage -PackageName $windowsSdk
 }
