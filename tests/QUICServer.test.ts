@@ -1,13 +1,11 @@
 import type { X509Certificate } from '@peculiar/x509';
 import type { Host, ServerCryptoOps } from '@/types';
-import type QUICConnection from '@/QUICConnection';
 import type { ClientCryptoOps } from '@/types';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import QUICServer from '@/QUICServer';
-import * as utils from '@/utils';
-import { promise } from '@/utils';
-import * as events from '@/events';
 import QUICClient from '@/QUICClient';
+import * as utils from '@/utils';
+import * as events from '@/events';
 import * as errors from '@/errors';
 import * as testsUtils from './utils';
 
@@ -307,146 +305,8 @@ describe(QUICServer.name, () => {
       await quicServer.stop();
     });
   });
-  // TODO: what is this? re-enable?
-  // Describe.only('connection bootstrap', () => {
-  //   // Test without peer verification
-  //   test.only('', async () => {
-  //     const quicServer = new QUICServer({
-  //       crypto: {
-  //         key,
-  //         ops: serverCryptoOps,
-  //       },
-  //       config: {
-  //         key: keyPairECDSAPEM.privateKey,
-  //         cert: certECDSAPEM,
-  //         verifyPeer: false,
-  //       },
-  //       logger: logger.getChild('QUICServer'),
-  //     });
-  //     await quicServer.start({
-  //       host: '127.0.0.1',
-  //     });
-  //
-  //     const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
-  //     await clientCrypto.randomBytes(scidBuffer);
-  //     const scid = new QUICConnectionId(scidBuffer);
-  //
-  //     // Verify peer
-  //     // Note that you cannot send to IPv4 from dual stack socket
-  //     // It must be sent as IPv4 mapped IPv6
-  //
-  //     const socket = new QUICSocket({
-  //       logger: logger.getChild(QUICSocket.name),
-  //     });
-  //     await socket.start({
-  //       host: '127.0.0.1',
-  //     });
-  //
-  //     // ???
-  //     const clientConfig: QUICConfig = {
-  //       ...clientDefault,
-  //       verifyPeer: false,
-  //     };
-  //
-  //     // This creates a connection state
-  //     // We now need to trigger it
-  //     const connection = await QUICConnection.createQUICConnection({
-  //       type: 'client',
-  //       scid,
-  //       socket,
-  //       remoteInfo: {
-  //         host: quicServer.host,
-  //         port: quicServer.port,
-  //       },
-  //       config: clientConfig,
-  //       logger: logger.getChild(QUICConnection.name),
-  //     });
-  //
-  //     connection.addEventListener('error', (e) => {
-  //       console.log('error', e);
-  //     });
-  //
-  //     // Trigger the connection
-  //     await connection.send();
-  //
-  //     // Wait till it is established
-  //     console.log('BEFORE ESTABLISHED P');
-  //     await connection.establishedP;
-  //     console.log('AFTER ESTABLISHED P');
-  //
-  //     // You must destroy the connection
-  //     console.log('DESTROY CONNECTION');
-  //     await connection.stop();
-  //     console.log('DESTROYED CONNECTION');
-  //
-  //     console.log('STOP SOCKET');
-  //     await socket.stop();
-  //     console.time('STOPPED SOCKET');
-  //     await quicServer.stop();
-  //     console.timeEnd('STOPPED SOCKET');
-  //   });
-  // });
-  // Test('bootstrapping a new connection', async () => {
-  //   const quicServer = new QUICServer({
-  //     crypto,
-  //     config: {
-  //       key: keyPairEd25519PEM.privateKey,
-  //       cert: certEd25519PEM,
-  //     },
-  //     logger: logger.getChild('QUICServer'),
-  //   });
-  //   await quicServer.start();
-  //
-  //   const scidBuffer = new ArrayBuffer(quiche.MAX_CONN_ID_LEN);
-  //   await crypto.ops.randomBytes(scidBuffer);
-  //   const scid = new QUICConnectionId(scidBuffer);
-  //
-  //   const socket = new QUICSocket({
-  //     crypto,
-  //     resolveHostname: utils.resolveHostname,
-  //     logger: logger.getChild(QUICSocket.name),
-  //   });
-  //   await socket.start();
-  //
-  //   // Const config = buildQuicheConfig({
-  //   //   ...clientDefault
-  //   // });
-  //   // Here we want to VERIFY the peer
-  //   // If we use the same certificate
-  //   // then it should be consider as if it is trusted!
-  //
-  //   const quicConfig: QUICConfig = {
-  //     ...clientDefault,
-  //     verifyPeer: true,
-  //   };
-  //
-  //   const connection = await QUICConnection.connectQUICConnection({
-  //     scid,
-  //     socket,
-  //
-  //     remoteInfo: {
-  //       host: utils.resolvesZeroIP(quicServer.host),
-  //       port: quicServer.port,
-  //     },
-  //
-  //     config: quicConfig,
-  //   });
-  //
-  //   await socket.stop();
-  //   await quicServer.stop();
-  //
-  //   // We can run with several rsa keypairs and certificates
-  // });
-  // describe('updating configuration', () => {
-  //   // We want to test changing the configuration over time
-  // });
-  // Test hole punching, there's an initiation function
-  // We can make it start doing this, but technically it's the socket's duty to do this
-  // not just the server side
-  test('socket stopping first triggers client destruction', async () => {
+  test('stopping server socket should result in server error and client timeout', async () => {
     const tlsConfigServer = await testsUtils.generateTLSConfig('RSA');
-
-    const connectionEventProm = promise<QUICConnection>();
     const server = new QUICServer({
       crypto: {
         key,
@@ -461,10 +321,13 @@ describe(QUICServer.name, () => {
       },
     });
     socketCleanMethods.extractSocket(server);
+    const { p: quicServerErrorP, rejectP: rejectQuicServerErrorP } =
+      utils.promise<Error>();
     server.addEventListener(
-      events.EventQUICServerConnection.name,
-      (e: events.EventQUICServerConnection) =>
-        connectionEventProm.resolveP(e.detail),
+      events.EventQUICServerError.name,
+      (e: events.EventQUICServerError) => {
+        rejectQuicServerErrorP(e.detail);
+      },
     );
     await server.start({
       host: '127.0.0.1',
@@ -472,10 +335,6 @@ describe(QUICServer.name, () => {
     const clientCryptoOps: ClientCryptoOps = {
       randomBytes: testsUtils.randomBytes,
     };
-    // If the server is slow to respond then this will time out.
-    //  Then main cause of this was the server not processing the initial packet
-    //  that creates the `QUICConnection`, as a result, the whole creation waited
-    //  an extra 1 second for the client to retry the initial packet.
     const client = await QUICClient.createQUICClient({
       host: '127.0.0.1',
       port: server.port,
@@ -483,76 +342,30 @@ describe(QUICServer.name, () => {
       crypto: {
         ops: clientCryptoOps,
       },
-      logger: logger.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
+        maxIdleTimeout: 200,
       },
+      logger: logger.getChild(QUICClient.name),
     });
+    const { p: quicClientErrorP, rejectP: rejectQuicClientErrorP } =
+      utils.promise<Error>();
+    client.addEventListener(
+      events.EventQUICClientError.name,
+      (e: events.EventQUICClientError) => {
+        rejectQuicClientErrorP(e.detail);
+      },
+    );
     socketCleanMethods.extractSocket(client);
-
-    // Handling client connection error event
-    const clientConnectionErrorProm = promise<never>();
-    client.connection.addEventListener(
-      events.EventQUICConnectionError.name,
-      (evt: events.EventQUICConnectionError) =>
-        clientConnectionErrorProm.rejectP(evt.detail),
-      { once: true },
-    );
-
-    const serverConnection = await connectionEventProm.p;
-    // Handling server connection error event
-    const serverConnectionErrorProm = promise<never>();
-    serverConnection.addEventListener(
-      events.EventQUICConnectionError.name,
-      (evt: events.EventQUICConnectionError) =>
-        serverConnectionErrorProm.rejectP(evt.detail),
-      { once: true },
-    );
-
-    // Handling server connection stop event
-    const serverConnectionStoppedProm = promise<void>();
-    client.connection.addEventListener(
-      events.EventQUICConnectionStopped.name,
-      () => serverConnectionStoppedProm.resolveP(),
-      { once: true },
-    );
-
-    // Handling server error event
-    const serverErrorProm = promise<never>();
-    server.addEventListener(
-      events.EventQUICServerError.name,
-      (evt: events.EventQUICServerError) => serverErrorProm.rejectP(evt.detail),
-      { once: true },
-    );
-
-    // Handling client destroy event
-    const serverStoppedProm = promise<void>();
-    server.addEventListener(
-      events.EventQUICServerStopped.name,
-      () => serverStoppedProm.resolveP(),
-      { once: true },
-    );
-
-    // @ts-ignore: kidnap protected property
-    const serverSocket = server.socket;
-    await serverSocket.stop({ force: true });
-
-    // Socket failure triggers server connection local failure
-    await expect(serverConnectionErrorProm.p).rejects.toThrow(
-      errors.ErrorQUICConnectionLocal,
-    );
-    await expect(serverErrorProm.p).rejects.toThrow(
+    // Force stop the server socket
+    // @ts-ignore: protected property
+    await server.socket.stop({ force: true });
+    // Results in an error event on the server
+    await expect(quicServerErrorP).rejects.toThrowError(
       errors.ErrorQUICServerSocketNotRunning,
     );
-    await serverStoppedProm.p;
-    await serverConnectionStoppedProm.p;
-
-    // Socket failure will not trigger any close frame since transport has failed so client connection will time out
-    await expect(clientConnectionErrorProm.p).rejects.toThrow(
+    await expect(quicClientErrorP).rejects.toThrowError(
       errors.ErrorQUICConnectionIdleTimeout,
     );
-
-    await client.destroy({ force: true });
-    await server.stop({ force: true });
   });
 });
