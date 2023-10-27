@@ -72,7 +72,8 @@ class QUICServer {
    */
   protected handleEventQUICServerError = (evt: events.EventQUICServerError) => {
     const error = evt.detail;
-    this.logger.error(utils.formatError(error));
+    // Log out error for debugging
+    this.logger.info(utils.formatError(error));
     if (error instanceof errors.ErrorQUICServerInternal) {
       throw error;
     }

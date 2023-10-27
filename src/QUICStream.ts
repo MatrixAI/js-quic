@@ -150,7 +150,8 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
   protected handleEventQUICStreamError = (evt: events.EventQUICStreamError) => {
     const error = evt.detail;
     if (error instanceof errors.ErrorQUICStreamInternal) {
-      this.logger.error(utils.formatError(error));
+      // Log out error for debugging
+      this.logger.debug(utils.formatError(error));
       throw error;
     }
     if (
