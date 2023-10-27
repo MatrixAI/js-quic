@@ -400,7 +400,13 @@ class QUICConnection {
    * This is the source connection ID.
    */
   public get connectionId() {
-    return new QUICConnectionId(this.conn.sourceId());
+    const sourceId = this.conn.sourceId();
+    // Zero copy construction of QUICConnectionId
+    return new QUICConnectionId(
+      sourceId.buffer,
+      sourceId.byteOffset,
+      sourceId.byteLength,
+    );
   }
 
   /**
@@ -409,7 +415,13 @@ class QUICConnection {
    */
   @ready(new errors.ErrorQUICConnectionNotRunning())
   public get connectionIdPeer() {
-    return new QUICConnectionId(this.conn.destinationId());
+    const destinationId = this.conn.destinationId();
+    // Zero copy construction of QUICConnectionId
+    return new QUICConnectionId(
+      destinationId.buffer,
+      destinationId.byteOffset,
+      destinationId.byteLength,
+    );
   }
 
   /**
