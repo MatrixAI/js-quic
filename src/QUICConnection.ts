@@ -1,7 +1,6 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
 import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
 import type QUICSocket from './QUICSocket';
-import type QUICConnectionId from './QUICConnectionId';
 import type {
   Host,
   Port,
@@ -25,6 +24,7 @@ import {
 } from '@matrixai/async-init/dist/StartStop';
 import { timedCancellable, context } from '@matrixai/contexts/dist/decorators';
 import { buildQuicheConfig, minIdleTimeout } from './config';
+import QUICConnectionId from './QUICConnectionId';
 import QUICStream from './QUICStream';
 import { quiche, ConnectionErrorCode } from './native';
 import * as utils from './utils';
@@ -43,11 +43,6 @@ class QUICConnection {
    * This determines when it is a client or server connection.
    */
   public readonly type: 'client' | 'server';
-
-  /**
-   * This is the source connection ID.
-   */
-  public readonly connectionId: QUICConnectionId;
 
   /**
    * Resolves once the connection has closed.
@@ -381,7 +376,6 @@ class QUICConnection {
     }
     this.type = type;
     this.conn = conn!;
-    this.connectionId = scid;
     this.socket = socket;
     this.config = config;
     if (this.config.cert != null) {
@@ -411,6 +405,37 @@ class QUICConnection {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this.closedP = closedP;
     this.resolveClosedP = resolveClosedP;
+  }
+
+  /**
+   * This is the source connection ID.
+   */
+  public get connectionId() {
+    return new QUICConnectionId(this.conn.sourceId());
+  }
+
+  /**
+   * This is the destination connection ID.
+   * This is only fully known after establishing the connection
+   */
+  @ready(new errors.ErrorQUICConnectionNotRunning())
+  public get connectionIdPeer() {
+    return new QUICConnectionId(this.conn.destinationId());
+  }
+
+  /**
+   * A common ID between the client and server connection.
+   * Used to identify connection pairs more easily.
+   */
+  @ready(new errors.ErrorQUICConnectionNotRunning())
+  public get connectionIdShared() {
+    const sourceId = this.conn.sourceId();
+    const destinationId = this.conn.destinationId();
+    if (Buffer.compare(sourceId, destinationId) <= 0) {
+      return new QUICConnectionId(Buffer.concat([sourceId, destinationId]));
+    } else {
+      return new QUICConnectionId(Buffer.concat([destinationId, sourceId]));
+    }
   }
 
   public get remoteHost(): Host {

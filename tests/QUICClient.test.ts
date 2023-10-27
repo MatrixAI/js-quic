@@ -1654,7 +1654,7 @@ describe(QUICClient.name, () => {
       await server.stop();
     });
   });
-  test('Connections are established and secured quickly', async () => {
+  test('connections are established and secured quickly', async () => {
     const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
 
     const connectionEventProm = promise<events.EventQUICServerConnection>();
@@ -1807,6 +1807,73 @@ describe(QUICClient.name, () => {
     await expect(serverConnectionErrorProm.p).rejects.toThrow(
       errors.ErrorQUICConnectionIdleTimeout,
     );
+
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
+  test('connections share the same id information', async () => {
+    const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
+
+    const { p: serverConnectionP, resolveP: serverConnectionResolveP } =
+      promise<QUICConnection>();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCryptoOps,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfigServer.leafKeyPairPEM.privateKey,
+        cert: tlsConfigServer.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (evt: events.EventQUICServerConnection) => {
+        serverConnectionResolveP(evt.detail);
+      },
+    );
+    await server.start({
+      host: localhost,
+    });
+    // If the server is slow to respond then this will time out.
+    //  Then main cause of this was the server not processing the initial packet
+    //  that creates the `QUICConnection`, as a result, the whole creation waited
+    //  an extra 1 second for the client to retry the initial packet.
+    const client = await QUICClient.createQUICClient(
+      {
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+        },
+      },
+      { timer: 500 },
+    );
+    socketCleanMethods.extractSocket(client);
+
+    const clientConn = client.connection;
+    const serverConn = await serverConnectionP;
+
+    expect(
+      Buffer.compare(clientConn.connectionId, serverConn.connectionIdPeer),
+    ).toBe(0);
+    expect(
+      Buffer.compare(clientConn.connectionIdPeer, serverConn.connectionId),
+    ).toBe(0);
+    expect(
+      Buffer.compare(
+        clientConn.connectionIdShared,
+        serverConn.connectionIdShared,
+      ),
+    ).toBe(0);
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
