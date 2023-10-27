@@ -10,7 +10,7 @@ import * as errors from '@/errors';
 import * as testsUtils from './utils';
 
 describe(QUICServer.name, () => {
-  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.SILENT, [
+  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),

@@ -56,7 +56,8 @@ class QUICSocket {
 
   protected handleEventQUICSocketError = (evt: events.EventQUICSocketError) => {
     const error = evt.detail;
-    this.logger.error(utils.formatError(error));
+    // Log out error for debugging
+    this.logger.debug(utils.formatError(error));
   };
 
   protected handleEventQUICSocketClose = async () => {

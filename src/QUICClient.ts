@@ -315,19 +315,8 @@ class QUICClient {
    */
   protected handleEventQUICClientError = (evt: events.EventQUICClientError) => {
     const error = evt.detail;
-    if (
-      (error instanceof errors.ErrorQUICConnectionLocal ||
-        error instanceof errors.ErrorQUICConnectionPeer) &&
-      ((!error.data.isApp &&
-        error.data.errorCode === ConnectionErrorCode.NoError) ||
-        (error.data.isApp && error.data.errorCode === 0))
-    ) {
-      // Log out the excpetion as an info when it is graceful
-      this.logger.info(utils.formatError(error));
-    } else {
-      // Log out the exception as an error when it is not graceful
-      this.logger.error(utils.formatError(error));
-    }
+    // Log out the error
+    this.logger.info(utils.formatError(error));
     if (
       error instanceof errors.ErrorQUICClientInternal ||
       error instanceof errors.ErrorQUICConnectionInternal

@@ -10,7 +10,7 @@ import * as testsUtils from './utils';
 import { generateTLSConfig } from './utils';
 
 describe(QUICStream.name, () => {
-  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.SILENT, [
+  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),

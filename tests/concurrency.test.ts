@@ -12,7 +12,7 @@ import { generateTLSConfig, handleStreamProm, sleep } from './utils';
 import * as testsUtils from './utils';
 
 describe('Concurrency tests', () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.SILENT, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),

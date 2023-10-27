@@ -13,7 +13,7 @@ import * as events from '@/events';
 import * as testsUtils from './utils';
 
 describe(QUICSocket.name, () => {
-  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.SILENT, [
+  const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
     new StreamHandler(),
   ]);
   // This has to be setup asynchronously due to key generation
@@ -296,7 +296,7 @@ describe(QUICSocket.name, () => {
     test('error and close event lifecycle', async () => {
       // We expect error logs
       const socketLogger = logger.getChild('abc');
-      socketLogger.setLevel(LogLevel.SILENT);
+      socketLogger.setLevel(LogLevel.WARN);
       const socket = new QUICSocket({
         logger: socketLogger,
       });
@@ -865,7 +865,7 @@ describe(QUICSocket.name, () => {
         };
         // We expect lots of error logs
         const socketLogger = logger.getChild('abc');
-        socketLogger.setLevel(LogLevel.SILENT);
+        socketLogger.setLevel(LogLevel.WARN);
         const socket = new QUICSocket({
           logger: socketLogger,
         });
