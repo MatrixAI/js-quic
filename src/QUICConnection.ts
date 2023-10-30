@@ -30,6 +30,7 @@ import { quiche, ConnectionErrorCode } from './native';
 import * as utils from './utils';
 import * as events from './events';
 import * as errors from './errors';
+import { sleep } from '../tests/utils';
 
 interface QUICConnection extends StartStop {}
 @StartStop({
@@ -616,7 +617,27 @@ class QUICConnection {
       } = {}) {
     this.logger.info(`Stop ${this.constructor.name}`);
     this.stopKeepAliveIntervalTimer();
-    // Closing the connection first to avoid accepting new streams
+
+    // Yield to allow any background processing to settle before proceeding.
+    // This will allow any streams to process buffers before continuing
+    await sleep(0);
+
+    // Destroy all streams
+    const streamsDestroyP: Array<Promise<void>> = [];
+    for (const quicStream of this.streamMap.values()) {
+      // The reason is only used if `force` is `true`
+      // If `force` is not true, this will gracefully wait for
+      // both readable and writable to gracefully close
+      streamsDestroyP.push(
+        quicStream.destroy({
+          reason: this.errorLast,
+          force: force || this.conn.isDraining() || this.conn.isClosed(),
+        }),
+      );
+    }
+    await Promise.all(streamsDestroyP);
+
+    // Close after processing all streams
     if (!this.conn.isDraining() && !this.conn.isClosed()) {
       // If `this.conn.close` is already called, the connection will be draining,
       // in that case we just skip doing this local close.
@@ -632,20 +653,7 @@ class QUICConnection {
       });
       this.dispatchEvent(new events.EventQUICConnectionError({ detail: e }));
     }
-    // Destroy all streams
-    const streamsDestroyP: Array<Promise<void>> = [];
-    for (const quicStream of this.streamMap.values()) {
-      // The reason is only used if `force` is `true`
-      // If `force` is not true, this will gracefully wait for
-      // both readable and writable to gracefully close
-      streamsDestroyP.push(
-        quicStream.destroy({
-          reason: this.errorLast,
-          force: force || this.conn.isDraining() || this.conn.isClosed(),
-        }),
-      );
-    }
-    await Promise.all(streamsDestroyP);
+
     // Waiting for `closedP` to resolve
     // Only the `this.connTimeoutTimer` will resolve this promise
     await this.closedP;

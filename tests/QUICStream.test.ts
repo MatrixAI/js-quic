@@ -672,8 +672,6 @@ describe(QUICStream.name, () => {
     await streamEndedProm.p;
     expect(streamCreatedCount).toBe(streamsNum);
     expect(streamEndedCount).toBe(streamsNum);
-    await client.destroy({ force: true });
-    await server.stop({ force: true });
   });
   test('should clean up streams when connection times out', async () => {
     const streamsNum = 10;
@@ -1236,5 +1234,184 @@ describe(QUICStream.name, () => {
 
     await client.destroy({ force: true });
     await server.stop({ force: true });
+  });
+
+  test('streams are allowed to end when client is destroyed with force: false', async () => {
+    const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
+    const numStreams = 10;
+    const numMessage = 10;
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+    const conn = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const activeServerStreams: Array<Promise<void>> = [];
+    conn.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (streamEvent: events.EventQUICConnectionStream) => {
+        const stream = streamEvent.detail;
+        const streamProm = stream.readable.pipeTo(stream.writable);
+        activeServerStreams.push(streamProm);
+      },
+    );
+
+    const { p: waitP, resolveP: waitResolveP } = utils.promise();
+
+    // Let's make a new streams.
+    const activeClientStreams: Array<Promise<void>> = [];
+    for (let i = 0; i < numStreams; i++) {
+      activeClientStreams.push(
+        (async () => {
+          const stream = client.connection.newStream();
+          const writer = stream.writable.getWriter();
+          const reader = stream.readable.getReader();
+          // Do write and read messages here.
+          for (let j = 0; j < numMessage; j++) {
+            await writer.write(message);
+            const readMessage = await reader.read();
+            expect(readMessage.done).toBeFalse();
+            expect(readMessage.value).toStrictEqual(message);
+            await waitP;
+          }
+          await writer.close();
+          const value = await reader.read();
+          expect(value.done).toBeTrue();
+        })(),
+      );
+    }
+
+    // Start unforced close of client
+    const clientDestroyP = client.destroy({ force: false });
+    waitResolveP();
+
+    await Promise.all([
+      Promise.all(activeClientStreams),
+      Promise.all(activeServerStreams),
+      clientDestroyP,
+    ]);
+    await server.stop({ force: true });
+  });
+  test('streams are allowed to end when server is destroyed with force: false', async () => {
+    const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
+    const numStreams = 10;
+    const numMessage = 10;
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+    const conn = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const activeServerStreams: Array<Promise<void>> = [];
+    conn.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (streamEvent: events.EventQUICConnectionStream) => {
+        const stream = streamEvent.detail;
+        const streamProm = stream.readable.pipeTo(stream.writable);
+        activeServerStreams.push(streamProm);
+      },
+    );
+
+    const { p: waitP, resolveP: waitResolveP } = utils.promise();
+
+    // Let's make a new streams.
+    const activeClientStreams: Array<Promise<void>> = [];
+    for (let i = 0; i < numStreams; i++) {
+      activeClientStreams.push(
+        (async () => {
+          const stream = client.connection.newStream();
+          const writer = stream.writable.getWriter();
+          const reader = stream.readable.getReader();
+          // Do write and read messages here.
+          for (let j = 0; j < numMessage; j++) {
+            await writer.write(message);
+            const readMessage = await reader.read();
+            expect(readMessage.done).toBeFalse();
+            expect(readMessage.value).toStrictEqual(message);
+            await waitP;
+          }
+          await writer.close();
+          const value = await reader.read();
+          expect(value.done).toBeTrue();
+        })(),
+      );
+    }
+
+    // Start unforced close of server
+    const serverStopP = server.stop({ force: false });
+    waitResolveP();
+
+    await Promise.all([
+      Promise.all(activeClientStreams),
+      Promise.all(activeServerStreams),
+      serverStopP,
+    ]);
+    await client.destroy({ force: true });
   });
 });
