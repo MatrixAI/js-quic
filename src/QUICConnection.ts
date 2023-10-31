@@ -27,6 +27,7 @@ import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICConnectionId from './QUICConnectionId';
 import QUICStream from './QUICStream';
 import { quiche, ConnectionErrorCode } from './native';
+import { Shutdown } from './native/types';
 import * as utils from './utils';
 import * as events from './events';
 import * as errors from './errors';
@@ -948,6 +949,13 @@ class QUICConnection {
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
+        if (this[running] === false || this[status] === 'stopping') {
+          // We should reject new connections when stopping
+          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
+          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          continue;
+        }
+
         quicStream = QUICStream.createQUICStream({
           initiated: 'peer',
           streamId,
@@ -977,6 +985,13 @@ class QUICConnection {
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
+        if (this[running] === false || this[status] === 'stopping') {
+          // We should reject new connections when stopping
+          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
+          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          continue;
+        }
+
         quicStream = QUICStream.createQUICStream({
           initiated: 'peer',
           streamId,

@@ -7,7 +7,7 @@ import QUICServer from '@/QUICServer';
 import QUICClient from '@/QUICClient';
 import QUICStream from '@/QUICStream';
 import * as testsUtils from './utils';
-import { generateTLSConfig } from './utils';
+import { generateTLSConfig, sleep } from './utils';
 
 describe(QUICStream.name, () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
@@ -1413,5 +1413,83 @@ describe(QUICStream.name, () => {
       serverStopP,
     ]);
     await client.destroy({ force: true });
+  });
+  test('new streams are rejected when a connection is ending', async () => {
+    const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig = await generateTLSConfig(defaultType);
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig.leafKeyPairPEM.privateKey,
+        cert: tlsConfig.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+    const conn = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const { p: waitP, resolveP: waitResolveP } = utils.promise();
+    const activeServerStreams: Array<Promise<void>> = [];
+    conn.addEventListener(
+      events.EventQUICConnectionStream.name,
+      async (streamEvent: events.EventQUICConnectionStream) => {
+        const stream = streamEvent.detail;
+        await waitP;
+        const streamProm = stream.readable.pipeTo(stream.writable);
+        activeServerStreams.push(streamProm);
+      },
+    );
+
+    const stream = client.connection.newStream();
+    const writer = stream.writable.getWriter();
+    await writer.write(message);
+    await writer.close();
+
+    // Start unforced close of client
+    const clientDestroyP = client.destroy({ force: false });
+    // Yield to allow `destroy` to progress
+    await sleep(0);
+    // New client streams should throw
+    expect(() => client.connection.newStream()).toThrow();
+    // Creating a stream on the server side should throw
+    const newStream = conn.newStream();
+    await newStream.writable.close();
+    const asd = (async () => {
+      for await (const _ of newStream.readable) {
+        // Do nothing
+      }
+    })();
+    await expect(asd).rejects.toThrow('read 1');
+
+    waitResolveP();
+    await clientDestroyP;
+    await server.stop({ force: true });
   });
 });
