@@ -23,10 +23,6 @@ async function sleep(ms: number): Promise<void> {
   return await new Promise<void>((r) => setTimeout(r, ms));
 }
 
-async function yieldMicro(): Promise<void> {
-  return await new Promise<void>((r) => queueMicrotask(r));
-}
-
 async function randomBytes(data: ArrayBuffer) {
   webcrypto.getRandomValues(new Uint8Array(data));
 }
@@ -853,7 +849,6 @@ function createReasonConverters() {
 
 export {
   sleep,
-  yieldMicro,
   randomBytes,
   generateKeyPairRSA,
   generateKeyPairECDSA,

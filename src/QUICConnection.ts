@@ -31,7 +31,6 @@ import { Shutdown } from './native/types';
 import * as utils from './utils';
 import * as events from './events';
 import * as errors from './errors';
-import { sleep } from '../tests/utils';
 
 interface QUICConnection extends StartStop {}
 @StartStop({
@@ -621,7 +620,7 @@ class QUICConnection {
 
     // Yield to allow any background processing to settle before proceeding.
     // This will allow any streams to process buffers before continuing
-    await sleep(0);
+    await utils.yieldMicro();
 
     // Destroy all streams
     const streamsDestroyP: Array<Promise<void>> = [];
@@ -1153,6 +1152,21 @@ class QUICConnection {
       this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
     }
     return quicStream;
+  }
+
+  /**
+   * Destroys all active streams without closing the connection.
+   *
+   * If there are no active streams then it will do nothing.
+   * If the connection is stopped with `force: false` then this can be used
+   * to force close any streams `stop` is waiting for to end.
+   *
+   * Destruction will occur in the background.
+   */
+  public destroyStreams(reason?: any) {
+    for (const quicStream of this.streamMap.values()) {
+      quicStream.cancel(reason);
+    }
   }
 
   /**
