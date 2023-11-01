@@ -27,6 +27,7 @@ import { buildQuicheConfig, minIdleTimeout } from './config';
 import QUICConnectionId from './QUICConnectionId';
 import QUICStream from './QUICStream';
 import { quiche, ConnectionErrorCode } from './native';
+import { Shutdown } from './native/types';
 import * as utils from './utils';
 import * as events from './events';
 import * as errors from './errors';
@@ -616,7 +617,27 @@ class QUICConnection {
       } = {}) {
     this.logger.info(`Stop ${this.constructor.name}`);
     this.stopKeepAliveIntervalTimer();
-    // Closing the connection first to avoid accepting new streams
+
+    // Yield to allow any background processing to settle before proceeding.
+    // This will allow any streams to process buffers before continuing
+    await utils.yieldMicro();
+
+    // Destroy all streams
+    const streamsDestroyP: Array<Promise<void>> = [];
+    for (const quicStream of this.streamMap.values()) {
+      // The reason is only used if `force` is `true`
+      // If `force` is not true, this will gracefully wait for
+      // both readable and writable to gracefully close
+      streamsDestroyP.push(
+        quicStream.destroy({
+          reason: this.errorLast,
+          force: force || this.conn.isDraining() || this.conn.isClosed(),
+        }),
+      );
+    }
+    await Promise.all(streamsDestroyP);
+
+    // Close after processing all streams
     if (!this.conn.isDraining() && !this.conn.isClosed()) {
       // If `this.conn.close` is already called, the connection will be draining,
       // in that case we just skip doing this local close.
@@ -632,20 +653,7 @@ class QUICConnection {
       });
       this.dispatchEvent(new events.EventQUICConnectionError({ detail: e }));
     }
-    // Destroy all streams
-    const streamsDestroyP: Array<Promise<void>> = [];
-    for (const quicStream of this.streamMap.values()) {
-      // The reason is only used if `force` is `true`
-      // If `force` is not true, this will gracefully wait for
-      // both readable and writable to gracefully close
-      streamsDestroyP.push(
-        quicStream.destroy({
-          reason: this.errorLast,
-          force: force || this.conn.isDraining() || this.conn.isClosed(),
-        }),
-      );
-    }
-    await Promise.all(streamsDestroyP);
+
     // Waiting for `closedP` to resolve
     // Only the `this.connTimeoutTimer` will resolve this promise
     await this.closedP;
@@ -940,6 +948,13 @@ class QUICConnection {
     for (const streamId of this.conn.readable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
+        if (this[running] === false || this[status] === 'stopping') {
+          // We should reject new connections when stopping
+          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
+          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          continue;
+        }
+
         quicStream = QUICStream.createQUICStream({
           initiated: 'peer',
           streamId,
@@ -969,6 +984,13 @@ class QUICConnection {
     for (const streamId of this.conn.writable() as Iterable<StreamId>) {
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
+        if (this[running] === false || this[status] === 'stopping') {
+          // We should reject new connections when stopping
+          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
+          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          continue;
+        }
+
         quicStream = QUICStream.createQUICStream({
           initiated: 'peer',
           streamId,
@@ -1130,6 +1152,21 @@ class QUICConnection {
       this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
     }
     return quicStream;
+  }
+
+  /**
+   * Destroys all active streams without closing the connection.
+   *
+   * If there are no active streams then it will do nothing.
+   * If the connection is stopped with `force: false` then this can be used
+   * to force close any streams `stop` is waiting for to end.
+   *
+   * Destruction will occur in the background.
+   */
+  public destroyStreams(reason?: any) {
+    for (const quicStream of this.streamMap.values()) {
+      quicStream.cancel(reason);
+    }
   }
 
   /**

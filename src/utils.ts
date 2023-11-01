@@ -18,6 +18,13 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8');
 
 /**
+ * Used to yield to the event loop to allow other micro tasks to process
+ */
+async function yieldMicro(): Promise<void> {
+  return await new Promise<void>((r) => queueMicrotask(r));
+}
+
+/**
  * Convert callback-style to promise-style
  * If this is applied to overloaded function
  * it will only choose one of the function signatures to use
@@ -550,6 +557,7 @@ function isStreamReset(e: Error): number | false {
 export {
   textEncoder,
   textDecoder,
+  yieldMicro,
   promisify,
   promise,
   bufferWrap,

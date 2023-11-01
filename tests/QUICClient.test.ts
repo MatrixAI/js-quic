@@ -1775,6 +1775,7 @@ describe(QUICClient.name, () => {
 
     // Handling client error event
     const clientErrorProm = promise<never>();
+    void clientErrorProm.p.catch(() => {}); // Ignore unhandled rejection
     client.addEventListener(
       events.EventQUICClientError.name,
       (evt: events.EventQUICClientError) => clientErrorProm.rejectP(evt.detail),
@@ -1783,6 +1784,7 @@ describe(QUICClient.name, () => {
 
     // Handling client destroy event
     const clientDestroyedProm = promise<void>();
+    void clientDestroyedProm.p.catch(() => {}); // Ignore unhandled rejection
     client.addEventListener(
       events.EventQUICClientDestroyed.name,
       () => clientDestroyedProm.resolveP(),
