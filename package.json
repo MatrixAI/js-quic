@@ -44,7 +44,7 @@
     "@matrixai/events": "^3.2.0",
     "@matrixai/logger": "^3.1.0",
     "@matrixai/resources": "^1.1.5",
-    "@matrixai/timer": "^1.1.1",
+    "@matrixai/timer": "^1.1.2",
     "ip-num": "^1.5.0"
   },
   "optionalDependencies": {

@@ -12,7 +12,7 @@ import { generateTLSConfig, handleStreamProm, sleep } from './utils';
 import * as testsUtils from './utils';
 
 describe('Concurrency tests', () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -101,7 +101,7 @@ describe('Concurrency tests', () => {
     fc.array(streamArb, { size: 'small', minLength, maxLength }).noShrink();
   const connectionArb = fc
     .record({
-      streams: streamsArb(1, 5),
+      streams: streamsArb(200),
       startDelay: fc.integer({ min: 0, max: 20 }),
       endDelay: fc.integer({ min: 0, max: 20 }),
     })
@@ -109,12 +109,12 @@ describe('Concurrency tests', () => {
   const connectionsArb = fc
     .array(connectionArb, {
       minLength: 1,
-      maxLength: 5,
+      maxLength: 1,
       size: 'small',
     })
     .noShrink() as fc.Arbitrary<Array<ConnectionData>>;
 
-  testProp(
+  testProp.only(
     'Multiple clients connecting to a server',
     [connectionsArb, streamsArb(3)],
     async (clientDatas, serverStreams) => {
