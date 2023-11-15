@@ -27,6 +27,7 @@ describe(QUICStream.name, () => {
     randomBytes: testsUtils.randomBytes,
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
+  let createQUICStreamMock: jest.SpyInstance;
 
   const testReason = Symbol('TestReason');
   const testCodeToReason = (type, code) => {
@@ -46,8 +47,10 @@ describe(QUICStream.name, () => {
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
     socketCleanMethods = testsUtils.socketCleanupFactory();
+    createQUICStreamMock = jest.spyOn(QUICStream, 'createQUICStream');
   });
   afterEach(async () => {
+    createQUICStreamMock.mockRestore();
     await socketCleanMethods.stopSockets();
   });
 
@@ -1235,7 +1238,6 @@ describe(QUICStream.name, () => {
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
-
   test('streams are allowed to end when client is destroyed with force: false', async () => {
     const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
     const numStreams = 10;
@@ -1575,5 +1577,276 @@ describe(QUICStream.name, () => {
     await server.stop({ force: true });
     waitResolveP();
     await waitP;
+  });
+  test('quicStream properly cleans up after cancelling without data sent', async () => {
+    const cancelReason = Symbol('CancelReason');
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
+    const reasonConverters = testsUtils.createReasonConverters();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
+        verifyPeer: true,
+        ca: tlsConfig2.caCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(client);
+    const serverConnection = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const { p: serverStreamP, resolveP: serverStreamResolveP } =
+      utils.promise<QUICStream>();
+    serverConnection.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
+        serverStreamResolveP(event.detail);
+      },
+    );
+    // Let's make a new stream.
+    const clientStream = client.connection.newStream();
+    const writer = clientStream.writable.getWriter();
+    // Await writer.write(message);
+    writer.releaseLock();
+    clientStream.cancel(cancelReason);
+    await expect(clientStream.readable.getReader().read()).rejects.toBe(
+      cancelReason,
+    );
+    await expect(clientStream.writable.getWriter().write()).rejects.toBe(
+      cancelReason,
+    );
+
+    // Let's check that the server side ended
+    const serverStream = await serverStreamP;
+    const serverReadProm = (async () => {
+      for await (const _ of serverStream.readable) {
+        // Just consume until stream throws
+      }
+    })();
+    await expect(serverReadProm).rejects.toBe(cancelReason);
+    const serverWriter = serverStream.writable.getWriter();
+    // Should throw
+    await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(
+      cancelReason,
+    );
+
+    // And client stream should've cleaned up
+    await testsUtils.sleep(100);
+    // Only two streams should've been created
+    expect(createQUICStreamMock).toHaveBeenCalledTimes(2);
+
+    expect(clientStream[destroyed]).toBeTrue();
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
+  test('quicStream properly cleans up after cancelling with data sent', async () => {
+    const cancelReason = Symbol('CancelReason');
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
+    const reasonConverters = testsUtils.createReasonConverters();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
+        verifyPeer: true,
+        ca: tlsConfig2.caCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(client);
+    const serverConnection = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const { p: serverStreamP, resolveP: serverStreamResolveP } =
+      utils.promise<QUICStream>();
+    serverConnection.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
+        serverStreamResolveP(event.detail);
+      },
+    );
+    // Let's make a new stream.
+    const message = Buffer.from('Hello!');
+    const clientStream = client.connection.newStream();
+    const writer = clientStream.writable.getWriter();
+    await writer.write(message);
+    writer.releaseLock();
+    clientStream.cancel(cancelReason);
+    await expect(clientStream.readable.getReader().read()).rejects.toBe(
+      cancelReason,
+    );
+    await expect(clientStream.writable.getWriter().write()).rejects.toBe(
+      cancelReason,
+    );
+
+    // Let's check that the server side ended
+    const serverStream = await serverStreamP;
+    const serverReadProm = (async () => {
+      for await (const _ of serverStream.readable) {
+        // Just consume until stream throws
+      }
+    })();
+    await expect(serverReadProm).rejects.toBe(cancelReason);
+    const serverWriter = serverStream.writable.getWriter();
+    // Should throw
+    await expect(serverWriter.write(Buffer.from('hello'))).rejects.toBe(
+      cancelReason,
+    );
+
+    // And client stream should've cleaned up
+    await testsUtils.sleep(100);
+    // Only two streams should've been created
+    expect(createQUICStreamMock).toHaveBeenCalledTimes(2);
+
+    expect(clientStream[destroyed]).toBeTrue();
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
+  });
+  test('quicStream properly cleans up after graceful end with data sent', async () => {
+    const connectionEventProm =
+      utils.promise<events.EventQUICServerConnection>();
+    const tlsConfig1 = await generateTLSConfig(defaultType);
+    const tlsConfig2 = await generateTLSConfig(defaultType);
+    const reasonConverters = testsUtils.createReasonConverters();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCrypto,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfig1.leafKeyPairPEM.privateKey,
+        cert: tlsConfig1.leafCertPEM,
+        verifyPeer: true,
+        ca: tlsConfig2.caCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(server);
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => connectionEventProm.resolveP(e),
+    );
+    await server.start({
+      host: localhost,
+    });
+    const client = await QUICClient.createQUICClient({
+      host: localhost,
+      port: server.port,
+      localHost: localhost,
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
+      },
+      ...reasonConverters,
+    });
+    socketCleanMethods.extractSocket(client);
+    const serverConnection = (await connectionEventProm.p).detail;
+
+    // Do the test
+    const { p: serverStreamP, resolveP: serverStreamResolveP } =
+      utils.promise<QUICStream>();
+    serverConnection.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (event: events.EventQUICConnectionStream) => {
+        serverStreamResolveP(event.detail);
+      },
+    );
+    // Let's make a new stream.
+    const message = Buffer.from('Hello!');
+    const clientStream = client.connection.newStream();
+    const writer = clientStream.writable.getWriter();
+    await writer.write(message);
+    await writer.close();
+
+    // Let's check that the server side ended
+    const serverStream = await serverStreamP;
+    const serverReadP = (async () => {
+      const writer = serverStream.writable.getWriter();
+      await writer.write(message);
+      await writer.close();
+      for await (const _ of serverStream.readable) {
+        // Just consume until finish
+      }
+    })();
+    for await (const _ of clientStream.readable) {
+      // Just consume until finish
+    }
+    await serverReadP;
+
+    // And client stream should've cleaned up
+    await testsUtils.sleep(100);
+    // Only two streams should've been created
+    expect(createQUICStreamMock).toHaveBeenCalledTimes(2);
+
+    expect(clientStream[destroyed]).toBeTrue();
+    await client.destroy({ force: true });
+    await server.stop({ force: true });
   });
 });
