@@ -229,7 +229,11 @@ class QUICConnection {
    * Handles all `EventQUICStream` events.
    */
   protected handleEventQUICStream = (evt: EventAll) => {
-    if (evt.detail instanceof AbstractEvent) {
+    if (
+      evt.detail instanceof AbstractEvent &&
+      // Avoid cloning the `EventQUICStreamSend` event as it's very low level
+      !(evt.detail instanceof events.EventQUICStreamSend)
+    ) {
       this.dispatchEvent(evt.detail.clone());
     }
   };
