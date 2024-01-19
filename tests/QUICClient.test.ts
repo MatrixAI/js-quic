@@ -1880,4 +1880,63 @@ describe(QUICClient.name, () => {
     await client.destroy({ force: true });
     await server.stop({ force: true });
   });
+  test('handles many connections', async () => {
+    const connNum = 100;
+    const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
+    const connectionEventProm = promise<events.EventQUICServerConnection>();
+    const server = new QUICServer({
+      crypto: {
+        key,
+        ops: serverCryptoOps,
+      },
+      logger: logger.getChild(QUICServer.name),
+      config: {
+        key: tlsConfigServer.leafKeyPairPEM.privateKey,
+        cert: tlsConfigServer.leafCertPEM,
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(server);
+    let connCount = 0;
+    server.addEventListener(
+      events.EventQUICServerConnection.name,
+      (e: events.EventQUICServerConnection) => {
+        connCount++;
+        if (connCount === connNum) connectionEventProm.resolveP(e);
+      },
+    );
+    await server.start({
+      host: localhost,
+    });
+    const sharedSocket = new QUICSocket({
+      logger: logger.getChild(QUICSocket.name),
+    });
+    await sharedSocket.start({
+      host: localhost,
+    });
+    const clientPs: Array<Promise<QUICClient>> = [];
+    for (let i = 0; i < connNum; i++) {
+      const clientP = QUICClient.createQUICClient(
+        {
+          socket: sharedSocket,
+          host: localhost,
+          port: server.port,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            verifyPeer: false,
+          },
+        },
+        { timer: 2000 },
+      );
+      clientPs.push(clientP);
+    }
+    const clients = await Promise.all(clientPs);
+    await connectionEventProm.p;
+    await Promise.all(clients.map(client => client.destroy({ force: true })));
+    await sharedSocket.stop({ force: true });
+    await server.stop({ force: true });
+  });
 });

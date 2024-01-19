@@ -28,6 +28,8 @@ import { clientDefault, minIdleTimeout } from './config';
 import * as utils from './utils';
 import * as events from './events';
 import * as errors from './errors';
+import nodeEvents from 'events';
+nodeEvents.setMaxListeners(1000000);
 
 interface QUICClient extends CreateDestroy {}
 @CreateDestroy({
