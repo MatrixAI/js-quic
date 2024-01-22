@@ -1935,7 +1935,7 @@ describe(QUICClient.name, () => {
     }
     const clients = await Promise.all(clientPs);
     await connectionEventProm.p;
-    await Promise.all(clients.map(client => client.destroy({ force: true })));
+    await Promise.all(clients.map((client) => client.destroy({ force: true })));
     await sharedSocket.stop({ force: true });
     await server.stop({ force: true });
   });
