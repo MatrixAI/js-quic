@@ -92,6 +92,10 @@ class ErrorQUICConnection<T> extends ErrorQUIC<T> {
   static description = 'QUIC Connection error';
 }
 
+class ErrorQUICConnectionStopping<T> extends ErrorQUICConnection<T> {
+  static description = 'QUIC Connection is stopping';
+}
+
 class ErrorQUICConnectionNotRunning<T> extends ErrorQUICConnection<T> {
   static description = 'QUIC Connection is not running';
 }
@@ -297,6 +301,7 @@ export {
   ErrorQUICServerNewConnection,
   ErrorQUICServerInternal,
   ErrorQUICConnection,
+  ErrorQUICConnectionStopping,
   ErrorQUICConnectionNotRunning,
   ErrorQUICConnectionClosed,
   ErrorQUICConnectionStartData,

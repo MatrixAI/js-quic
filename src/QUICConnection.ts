@@ -542,10 +542,18 @@ class QUICConnection {
         // No `QUICStream` objects could have been created, however quiche stream
         // state should be cleaned up, and this can be done synchronously
         for (const streamId of this.conn.readable() as Iterable<StreamId>) {
-          this.conn.streamShutdown(streamId, quiche.Shutdown.Read, 0);
+          this.conn.streamShutdown(
+            streamId,
+            quiche.Shutdown.Read,
+            this.reasonToCode('read', e),
+          );
         }
         for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-          this.conn.streamShutdown(streamId, quiche.Shutdown.Write, 0);
+          this.conn.streamShutdown(
+            streamId,
+            quiche.Shutdown.Write,
+            this.reasonToCode('write', e),
+          );
         }
         // According to RFC9000, closing while in the middle of a handshake
         // should use a transport error code `APPLICATION_ERROR`.
@@ -954,8 +962,16 @@ class QUICConnection {
       if (quicStream == null) {
         if (this[running] === false || this[status] === 'stopping') {
           // We should reject new connections when stopping
-          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
-          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          this.conn.streamShutdown(
+            streamId,
+            Shutdown.Write,
+            this.reasonToCode('write', errors.ErrorQUICConnectionStopping),
+          );
+          this.conn.streamShutdown(
+            streamId,
+            Shutdown.Read,
+            this.reasonToCode('read', errors.ErrorQUICConnectionStopping),
+          );
           continue;
         }
 
@@ -990,8 +1006,16 @@ class QUICConnection {
       if (quicStream == null) {
         if (this[running] === false || this[status] === 'stopping') {
           // We should reject new connections when stopping
-          this.conn.streamShutdown(streamId, Shutdown.Write, 1);
-          this.conn.streamShutdown(streamId, Shutdown.Read, 1);
+          this.conn.streamShutdown(
+            streamId,
+            Shutdown.Write,
+            this.reasonToCode('write', errors.ErrorQUICConnectionStopping),
+          );
+          this.conn.streamShutdown(
+            streamId,
+            Shutdown.Read,
+            this.reasonToCode('read', errors.ErrorQUICConnectionStopping),
+          );
           continue;
         }
 
