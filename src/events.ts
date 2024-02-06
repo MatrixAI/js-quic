@@ -62,6 +62,8 @@ class EventQUICClientError extends EventQUICClient<
   | ErrorQUICConnectionInternal<unknown>
 > {}
 
+class EventQUICClientErrorSend extends EventQUICSocket<Error> {}
+
 class EventQUICClientClose extends EventQUICClient<
   | ErrorQUICClientSocketNotRunning<unknown>
   | ErrorQUICConnectionLocal<unknown>
@@ -126,6 +128,7 @@ class EventQUICConnectionClose extends EventQUICConnection<
 class EventQUICConnectionStream extends EventQUICConnection<QUICStream> {}
 
 class EventQUICConnectionSend extends EventQUICConnection<{
+  id: string;
   msg: Uint8Array;
   port: number;
   address: string;
@@ -193,6 +196,7 @@ export {
   EventQUICClientDestroy,
   EventQUICClientDestroyed,
   EventQUICClientError,
+  EventQUICClientErrorSend,
   EventQUICClientClose,
   EventQUICServer,
   EventQUICServerStart,

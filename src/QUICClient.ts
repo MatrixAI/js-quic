@@ -247,8 +247,34 @@ class QUICClient {
     // the client, because the client bridges the push flow from the connection
     // to the socket.
     socket.connectionMap.set(connection.connectionId, connection);
+    // Set up intermediate abort signal
+    const abortController = new AbortController();
+    const abortHandler = () => {
+      abortController.abort(ctx.signal.reason);
+    };
+    if (ctx.signal.aborted) abortController.abort(ctx.signal.reason);
+    else ctx.signal.addEventListener('abort', abortHandler);
+    const handleEventQUICClientErrorSend = (
+      evt: events.EventQUICClientErrorSend,
+    ) => {
+      // @ts-ignore: the error contains `code` but not part of the type
+      if (evt.detail.code === 'EINVAL') {
+        abortController.abort(
+          new errors.ErrorQUICClientInvalidArgument(undefined, {
+            cause: evt.detail,
+          }),
+        );
+      }
+    };
+    client.addEventListener(
+      `${events.EventQUICClientErrorSend.name}-${connection.sendId}`,
+      handleEventQUICClientErrorSend,
+    );
     try {
-      await connection.start(undefined, ctx);
+      await connection.start(undefined, {
+        timer: ctx.timer,
+        signal: abortController.signal,
+      });
     } catch (e) {
       socket.connectionMap.delete(connection.connectionId);
       socket.removeEventListener(
@@ -284,6 +310,12 @@ class QUICClient {
         client.handleEventQUICClientClose,
       );
       throw e;
+    } finally {
+      ctx.signal.removeEventListener('abort', abortHandler);
+      client.removeEventListener(
+        `${events.EventQUICClientErrorSend.name}-${connection.sendId}`,
+        handleEventQUICClientErrorSend,
+      );
     }
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -299,6 +331,10 @@ class QUICClient {
   protected config: Config;
   protected _closed: boolean = false;
   protected resolveClosedP: () => void;
+  /**
+   * Flag used to make sure network fail warnings are only logged once per failure
+   */
+  protected networkWarned: boolean = false;
 
   /**
    * Handles `EventQUICClientError`.
@@ -458,15 +494,49 @@ class QUICClient {
         evt.detail.port,
         evt.detail.address,
       );
+      this.networkWarned = false;
     } catch (e) {
-      const e_ = new errors.ErrorQUICClientInternal(
-        'Failed to send data on the QUICSocket',
-        {
-          data: evt.detail,
-          cause: e,
-        },
-      );
-      this.dispatchEvent(new events.EventQUICClientError({ detail: e_ }));
+      switch (e.code) {
+        case 'EINVAL':
+          {
+            this.dispatchEvent(
+              new events.EventQUICClientErrorSend(
+                `${events.EventQUICClientErrorSend.name}-${evt.detail.id}`,
+                {
+                  detail: e,
+                },
+              ),
+            );
+          }
+          break;
+        case 'ENETUNREACH':
+          {
+            // We consider this branch a temp failure.
+            // For these error codes we rely on the connection's timeout to handle.
+            if (!this.networkWarned) {
+              this.logger.warn(
+                `client send failed with 'ENETUNREACH', likely due to network failure`,
+              );
+              this.networkWarned = true;
+            }
+          }
+          break;
+        default:
+          {
+            this.dispatchEvent(
+              new events.EventQUICClientError({
+                detail: new errors.ErrorQUICClientInternal(
+                  'Failed to send data on the QUICSocket',
+                  {
+                    data: evt.detail,
+                    cause: e,
+                  },
+                ),
+              }),
+            );
+          }
+          break;
+      }
     }
   };
 
