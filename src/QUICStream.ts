@@ -239,21 +239,11 @@ class QUICStream implements ReadableWritablePair<Uint8Array, Uint8Array> {
     // This will setup the readable chunk buffer with the size set to the
     // configured per-stream buffer size. Note that this doubles the memory
     // usage of each stream due to maintaining both the Rust and JS buffers
-    if (this.type === 'uni') {
-      if (initiated === 'local') {
-        // We expect the readable stream to be closed
-        this.readableChunk = undefined;
-      } else if (initiated === 'peer') {
-        this.readableChunk = Buffer.allocUnsafe(config.initialMaxStreamDataUni);
-      }
-    } else if (this.type === 'bidi' && initiated === 'local') {
-      this.readableChunk = Buffer.allocUnsafe(
-        config.initialMaxStreamDataBidiLocal,
-      );
-    } else if (this.type === 'bidi' && initiated === 'peer') {
-      this.readableChunk = Buffer.allocUnsafe(
-        config.initialMaxStreamDataBidiRemote,
-      );
+    if (this.type === 'uni' && initiated === 'local') {
+      // We expect the readable stream to be closed
+      this.readableChunk = undefined;
+    } else {
+      this.readableChunk = Buffer.allocUnsafe(config.readableChunkSize);
     }
     if (this.type === 'uni' && initiated === 'local') {
       // This is just a dummy stream that will be auto-closed during creation

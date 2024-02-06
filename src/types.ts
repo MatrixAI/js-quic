@@ -177,7 +177,7 @@ type QUICConfig = {
   logKeys?: string;
 
   /**
-   * Enable "Generate Random extensions and Sustain Extensibilty".
+   * Enable "Generate Random extensions and Sustain Extensibility".
    * This prevents protocol ossification by periodically introducing
    * random no-op values in the optional fields in TLS.
    * This defaults to true.
@@ -305,6 +305,12 @@ type QUICConfig = {
   applicationProtos: string[];
 
   enableEarlyData: boolean;
+
+  /**
+   * Defines the size of the Buffer used to read out data from the readable stream.
+   * This affects amount of memory reserved by the stream.
+   */
+  readableChunkSize: number;
 };
 
 type QUICClientConfigInput = Partial<QUICConfig>;

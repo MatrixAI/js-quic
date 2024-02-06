@@ -61,6 +61,7 @@ const clientDefault: QUICConfig = {
   disableActiveMigration: true,
   applicationProtos: ['quic'],
   enableEarlyData: true,
+  readableChunkSize: 4 * 1024,
 };
 
 const serverDefault: QUICConfig = {
@@ -83,6 +84,7 @@ const serverDefault: QUICConfig = {
   disableActiveMigration: true,
   applicationProtos: ['quic'],
   enableEarlyData: true,
+  readableChunkSize: 4 * 1024,
 };
 
 /**
