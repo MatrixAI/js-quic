@@ -62,6 +62,11 @@ class QUICConnection {
    */
   public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
+  /**
+   * Unique id used to identify events intended for this connection.
+   */
+  public readonly sendId: string;
+
   protected logger: Logger;
   protected socket: QUICSocket;
   protected config: QUICConfig;
@@ -322,6 +327,7 @@ class QUICConnection {
         logger?: Logger;
       }) {
     this.logger = logger ?? new Logger(`${this.constructor.name} ${scid}`);
+    this.sendId = scid.toString();
     if (
       config.keepAliveIntervalTime != null &&
       config.maxIdleTimeout !== 0 &&
@@ -876,6 +882,7 @@ class QUICConnection {
       this.dispatchEvent(
         new events.EventQUICConnectionSend({
           detail: {
+            id: this.sendId,
             msg: sendBuffer.subarray(0, sendLength),
             port: sendInfo.to.port,
             address: sendInfo.to.host,
