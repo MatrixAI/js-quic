@@ -62,10 +62,6 @@ class QUICServer {
   protected _closed: boolean = false;
   protected _closedP: Promise<void>;
   protected resolveClosedP: () => void;
-  /**
-   * Flag used to make sure network fail warnings are only logged once per failure
-   */
-  protected networkWarned: boolean = false;
 
   /**
    * Handles `EventQUICServerError`.
@@ -199,49 +195,15 @@ class QUICServer {
         evt.detail.port,
         evt.detail.address,
       );
-      this.networkWarned = false;
     } catch (e) {
-      switch (e.code) {
-        case 'EINVAL':
-          {
-            this.dispatchEvent(
-              new events.EventQUICClientErrorSend(
-                `${events.EventQUICClientErrorSend.name}-${evt.detail.id}`,
-                {
-                  detail: e,
-                },
-              ),
-            );
-          }
-          break;
-        case 'ENETUNREACH':
-          {
-            // We consider this branch a temp failure.
-            // For these error codes we rely on the connection's timeout to handle.
-            if (!this.networkWarned) {
-              this.logger.warn(
-                `server send failed with 'ENETUNREACH', likely due to network failure`,
-              );
-              this.networkWarned = true;
-            }
-          }
-          break;
-        default:
-          {
-            this.dispatchEvent(
-              new events.EventQUICServerError({
-                detail: new errors.ErrorQUICServerInternal(
-                  'Failed to send data on the QUICSocket',
-                  {
-                    data: evt.detail,
-                    cause: e,
-                  },
-                ),
-              }),
-            );
-          }
-          break;
-      }
+      const e_ = new errors.ErrorQUICServerInternal(
+        'Failed to send data on the QUICSocket',
+        {
+          data: evt.detail,
+          cause: e,
+        },
+      );
+      this.dispatchEvent(new events.EventQUICServerError({ detail: e_ }));
     }
   };
 

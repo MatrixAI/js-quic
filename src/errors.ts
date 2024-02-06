@@ -59,11 +59,6 @@ class ErrorQUICClientSocketNotRunning<T> extends ErrorQUICClient<T> {
     'QUIC Client cannot be created with an unstarted shared QUIC socket';
 }
 
-class ErrorQUICClientInvalidArgument<T> extends ErrorQUICClient<T> {
-  static description =
-    'QUIC Client had a failure relating to an invalid argument';
-}
-
 class ErrorQUICClientInvalidHost<T> extends ErrorQUICClient<T> {
   static description = 'QUIC Client cannot be created with the specified host';
 }
@@ -298,7 +293,6 @@ export {
   ErrorQUICClientDestroyed,
   ErrorQUICClientCreateTimeout,
   ErrorQUICClientSocketNotRunning,
-  ErrorQUICClientInvalidArgument,
   ErrorQUICClientInvalidHost,
   ErrorQUICClientInternal,
   ErrorQUICServer,
