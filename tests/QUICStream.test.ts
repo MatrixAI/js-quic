@@ -1487,12 +1487,12 @@ describe(QUICStream.name, () => {
     // Creating a stream on the server side should throw
     const newStream = conn.newStream();
     await newStream.writable.close();
-    const asd = (async () => {
+    const code = (async () => {
       for await (const _ of newStream.readable) {
         // Do nothing
       }
     })();
-    await expect(asd).rejects.toThrow('read 1');
+    await expect(code).rejects.toThrow('read 0');
 
     waitResolveP();
     await Promise.all(activeServerStreams);
