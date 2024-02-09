@@ -258,12 +258,25 @@ class QUICClient {
       evt: events.EventQUICClientErrorSend,
     ) => {
       // @ts-ignore: the error contains `code` but not part of the type
-      if (evt.detail.code === 'EINVAL') {
-        abortController.abort(
-          new errors.ErrorQUICClientInvalidArgument(undefined, {
-            cause: evt.detail,
-          }),
-        );
+      const code = evt.detail.code;
+      switch (code) {
+        // Thrown due to invalid arguments on linux
+        case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
+          {
+            abortController.abort(
+              new errors.ErrorQUICClientInvalidArgument(undefined, {
+                cause: evt.detail,
+              }),
+            );
+          }
+          break;
+        default: // Do nothing
       }
     };
     client.addEventListener(
@@ -331,10 +344,6 @@ class QUICClient {
   protected config: Config;
   protected _closed: boolean = false;
   protected resolveClosedP: () => void;
-  /**
-   * Flag used to make sure network fail warnings are only logged once per failure
-   */
-  protected networkWarned: boolean = false;
 
   /**
    * Handles `EventQUICClientError`.
@@ -494,10 +503,16 @@ class QUICClient {
         evt.detail.port,
         evt.detail.address,
       );
-      this.networkWarned = false;
     } catch (e) {
       switch (e.code) {
+        // Thrown due to invalid arguments on linux
         case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
           {
             this.dispatchEvent(
               new events.EventQUICClientErrorSend(
@@ -507,18 +522,6 @@ class QUICClient {
                 },
               ),
             );
-          }
-          break;
-        case 'ENETUNREACH':
-          {
-            // We consider this branch a temp failure.
-            // For these error codes we rely on the connection's timeout to handle.
-            if (!this.networkWarned) {
-              this.logger.warn(
-                `client send failed with 'ENETUNREACH', likely due to network failure`,
-              );
-              this.networkWarned = true;
-            }
           }
           break;
         default:

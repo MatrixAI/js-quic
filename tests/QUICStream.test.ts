@@ -1893,7 +1893,7 @@ describe(QUICStream.name, () => {
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
-      localHost: '192.168.56.1',
+      localHost: localhost,
       crypto: {
         ops: clientCrypto,
       },
@@ -2025,7 +2025,7 @@ describe(QUICStream.name, () => {
     const client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
-      localHost: '192.168.56.1',
+      localHost: localhost,
       crypto: {
         ops: clientCrypto,
       },

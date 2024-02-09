@@ -62,10 +62,6 @@ class QUICServer {
   protected _closed: boolean = false;
   protected _closedP: Promise<void>;
   protected resolveClosedP: () => void;
-  /**
-   * Flag used to make sure network fail warnings are only logged once per failure
-   */
-  protected networkWarned: boolean = false;
 
   /**
    * Handles `EventQUICServerError`.
@@ -199,10 +195,16 @@ class QUICServer {
         evt.detail.port,
         evt.detail.address,
       );
-      this.networkWarned = false;
     } catch (e) {
       switch (e.code) {
+        // Thrown due to invalid arguments on linux
         case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
           {
             this.dispatchEvent(
               new events.EventQUICClientErrorSend(
@@ -212,18 +214,6 @@ class QUICServer {
                 },
               ),
             );
-          }
-          break;
-        case 'ENETUNREACH':
-          {
-            // We consider this branch a temp failure.
-            // For these error codes we rely on the connection's timeout to handle.
-            if (!this.networkWarned) {
-              this.logger.warn(
-                `server send failed with 'ENETUNREACH', likely due to network failure`,
-              );
-              this.networkWarned = true;
-            }
           }
           break;
         default:
