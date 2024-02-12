@@ -196,14 +196,42 @@ class QUICServer {
         evt.detail.address,
       );
     } catch (e) {
-      const e_ = new errors.ErrorQUICServerInternal(
-        'Failed to send data on the QUICSocket',
-        {
-          data: evt.detail,
-          cause: e,
-        },
-      );
-      this.dispatchEvent(new events.EventQUICServerError({ detail: e_ }));
+      switch (e.code) {
+        // Thrown due to invalid arguments on linux
+        case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
+          {
+            this.dispatchEvent(
+              new events.EventQUICClientErrorSend(
+                `${events.EventQUICClientErrorSend.name}-${evt.detail.id}`,
+                {
+                  detail: e,
+                },
+              ),
+            );
+          }
+          break;
+        default:
+          {
+            this.dispatchEvent(
+              new events.EventQUICServerError({
+                detail: new errors.ErrorQUICServerInternal(
+                  'Failed to send data on the QUICSocket',
+                  {
+                    data: evt.detail,
+                    cause: e,
+                  },
+                ),
+              }),
+            );
+          }
+          break;
+      }
     }
   };
 

@@ -247,8 +247,47 @@ class QUICClient {
     // the client, because the client bridges the push flow from the connection
     // to the socket.
     socket.connectionMap.set(connection.connectionId, connection);
+    // Set up intermediate abort signal
+    const abortController = new AbortController();
+    const abortHandler = () => {
+      abortController.abort(ctx.signal.reason);
+    };
+    if (ctx.signal.aborted) abortController.abort(ctx.signal.reason);
+    else ctx.signal.addEventListener('abort', abortHandler);
+    const handleEventQUICClientErrorSend = (
+      evt: events.EventQUICClientErrorSend,
+    ) => {
+      // @ts-ignore: the error contains `code` but not part of the type
+      const code = evt.detail.code;
+      switch (code) {
+        // Thrown due to invalid arguments on linux
+        case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
+          {
+            abortController.abort(
+              new errors.ErrorQUICClientInvalidArgument(undefined, {
+                cause: evt.detail,
+              }),
+            );
+          }
+          break;
+        default: // Do nothing
+      }
+    };
+    client.addEventListener(
+      `${events.EventQUICClientErrorSend.name}-${connection.sendId}`,
+      handleEventQUICClientErrorSend,
+    );
     try {
-      await connection.start(undefined, ctx);
+      await connection.start(undefined, {
+        timer: ctx.timer,
+        signal: abortController.signal,
+      });
     } catch (e) {
       socket.connectionMap.delete(connection.connectionId);
       socket.removeEventListener(
@@ -284,6 +323,12 @@ class QUICClient {
         client.handleEventQUICClientClose,
       );
       throw e;
+    } finally {
+      ctx.signal.removeEventListener('abort', abortHandler);
+      client.removeEventListener(
+        `${events.EventQUICClientErrorSend.name}-${connection.sendId}`,
+        handleEventQUICClientErrorSend,
+      );
     }
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -459,14 +504,42 @@ class QUICClient {
         evt.detail.address,
       );
     } catch (e) {
-      const e_ = new errors.ErrorQUICClientInternal(
-        'Failed to send data on the QUICSocket',
-        {
-          data: evt.detail,
-          cause: e,
-        },
-      );
-      this.dispatchEvent(new events.EventQUICClientError({ detail: e_ }));
+      switch (e.code) {
+        // Thrown due to invalid arguments on linux
+        case 'EINVAL':
+        // Thrown due to invalid arguments on macOS
+        // Falls through
+        case 'EADDRNOTAVAIL':
+        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
+        // Falls through
+        case 'ENETUNREACH':
+          {
+            this.dispatchEvent(
+              new events.EventQUICClientErrorSend(
+                `${events.EventQUICClientErrorSend.name}-${evt.detail.id}`,
+                {
+                  detail: e,
+                },
+              ),
+            );
+          }
+          break;
+        default:
+          {
+            this.dispatchEvent(
+              new events.EventQUICClientError({
+                detail: new errors.ErrorQUICClientInternal(
+                  'Failed to send data on the QUICSocket',
+                  {
+                    data: evt.detail,
+                    cause: e,
+                  },
+                ),
+              }),
+            );
+          }
+          break;
+      }
     }
   };
 
