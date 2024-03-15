@@ -220,12 +220,16 @@ build:macos:
     - hash -r
     - npm install --ignore-scripts
     - export PATH="$(npm root)/.bin:$PATH"
+    - export PATH="$(npm root)/.bin:$PATH"
     # Gitlab MacOS already has rust installed
     # This will override the system installed rust
     - export PATH="$HOME/.cargo/bin:$PATH"
     # Build x64 and arm64 separately
     - npm run prebuild --verbose -- --arch x64 --production
     - npm run prebuild --verbose -- --arch arm64 --production
+    - lipo -create -output prebuild/quic-darwin-x64+arm64.node prebuild/quic-darwin-arm64.node prebuild/quic-darwin-x64.node
+    # Force remove any downloaded native bindings, so we only test with our builds
+    - rm -rf node_modules/@matrixai/quic-*
     - npm test -- --ci --coverage
     - npm run bench
   artifacts:
