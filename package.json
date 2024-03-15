@@ -50,6 +50,7 @@
   "optionalDependencies": {
     "@matrixai/quic-darwin-arm64": "1.2.3",
     "@matrixai/quic-darwin-x64": "1.2.3",
+    "@matrixai/quic-darwin-universal": "1.2.3",
     "@matrixai/quic-linux-x64": "1.2.3",
     "@matrixai/quic-win32-x64": "1.2.3"
   },
