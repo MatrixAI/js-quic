@@ -63,7 +63,13 @@ async function main(argv = process.argv) {
     // This is `name-platform-arch`
     const name = path.basename(buildName, '.node');
     // This is `@org/name-platform-arch`, uses `posix` to force usage of `/`
-    const packageName = path.posix.join(orgName ?? '', name);
+    let packageName = path.posix.join(orgName ?? '', name);
+    // Check and rename any universal packages as universal
+    if (packageName.includes('+')) {
+      const packageNameSplit = packageName.split('-');
+      packageNameSplit[2] = 'universal';
+      packageName = packageNameSplit.join('-');
+    }
     const constraints = name.match(
       /^(?:[^-]+)-(?<platform>[^-]+)-(?<arch>[^-]+)$/,
     );
