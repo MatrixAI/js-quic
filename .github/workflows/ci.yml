@@ -10,30 +10,24 @@ jobs:
   check-lint:
     name: "Check / Lint"
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/matrixai/github-runner
     steps:
       - uses: actions/checkout@v4
       - name: Run linting
         run: |
-          nix develop --command bash -c $'
+          npm install
           npm run lint
           npm run lint-shell
-          '
 
   check-test:
     name: "Check / Test"
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/matrixai/github-runner
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
         run: |
-          nix develop .#ci --command bash -c $'
+          npm install
           npm run prebuild --verbose
           npm test -- --ci --coverage
-          '
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -42,7 +36,6 @@ jobs:
   build-pull:
     name: "Build / Pull Request"
     runs-on: ubuntu-latest
-    needs: [check-lint, check-test]
     if: github.ref == 'refs/heads/staging'
     steps:
       - uses: actions/checkout@v4
@@ -62,152 +55,13 @@ jobs:
             --body-file - \
             --repo "$GITHUB_REPOSITORY"
 
-  build-dist:
-    name: "Build / Dist"
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/matrixai/github-runner
-    needs: [check-lint, check-test]
-    if: github.ref == 'refs/heads/staging'
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          nix develop .#ci --command bash -c $'
-          npm run build --ignore-scripts --verbose
-          '
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: ./dist
-
-  build-platforms:
-    name: "Build / Platforms"
-    runs-on: ${{ matrix.os }}
-    container:
-      image: ${{ matrix.platform == 'linux' && 'ghcr.io/matrixai/github-runner' || null }}
-    needs: build-dist
-    if: github.ref == 'refs/heads/staging'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux
-            os: ubuntu-latest
-            env:
-              npm_config_arch: "x64"
-              RUST_BACKTRACE: "1"
-            script: |
-              nix develop .#ci --command bash -c $'
-              npm run prebuild --verbose -- --production
-              npm test -- --ci --coverage
-              npm run bench
-              '
-          - platform: windows
-            os: windows-latest
-            env:
-              npm_config_arch: "x64"
-              RUST_BACKTRACE: "1"
-              LIBCLANG_PATH: "C:\\Program Files\\LLVM\\bin"
-            script: |
-              mkdir -Force "$CI_PROJECT_DIR/tmp"
-              Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-              ./scripts/choco-install.ps1
-              refreshenv
-              npm install --ignore-scripts
-              $env:Path = "$(npm root)\.bin;" + $env:Path
-              npm run prebuild --verbose -- --production
-              npm test -- --ci --coverage
-              npm run bench
-          - platform: macos
-            os: macos-latest
-            env:
-              RUST_BACKTRACE: "1"
-            script: |
-              eval "$(brew shellenv)"
-              ./scripts/brew-install.sh
-              hash -r
-              npm install --ignore-scripts
-              export PATH="$(npm root)/.bin:$PATH"
-              export PATH="$HOME/.cargo/bin:$PATH"
-              npm run prebuild --verbose -- --arch x64 --production
-              npm run prebuild --verbose -- --arch arm64 --production
-              lipo -create -output prebuild/quic-darwin-x64+arm64.node prebuild/quic-darwin-arm64.node prebuild/quic-darwin-x64.node
-              rm -rf node_modules/@matrixai/quic-*
-              npm test -- --ci --coverage
-              npm run bench
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: ./dist
-      - name: Build
-        env: ${{ matrix.env }}
-        run: ${{ matrix.script }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: builds-${{ matrix.platform }}
-          path: ./builds
-
-  build-prerelease:
-    name: "Build / Pre-release"
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/matrixai/github-runner
-    concurrency:
-      group: build-prerelease
-      cancel-in-progress: false
-    needs: [check-lint, check-test]
-    if: >
-      github.ref == 'refs/heads/staging' &&
-      startsWith(github.ref, 'refs/tags/v') &&
-      contains(github.ref, '-')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: builds*
-          path: builds
-          merge-multiple: true
-      - name: Run pre-release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ./.npmrc
-          echo 'Publishing library prerelease'
-          nix develop .#ci --command bash -c $'
-          npm publish --tag prerelease --access public
-          '
-          for d in prebuild/*; do
-            tar \
-              --create \
-              --verbose \
-              --file="prebuild/$(basename $d).tar" \
-              --directory=prebuild \
-              "$(basename $d)"
-          done
-          nix develop .#ci --command bash -c $'
-          gh release \
-            create "$GITHUB_REF_NAME" \
-            prebuild/*.tar \
-            --title "$GITHUB_REF_NAME-$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-            --notes "" \
-            --prerelease \
-            --target staging \
-            --repo "$GITHUB_REPOSITORY"
-          '
-          rm -f ./.npmrc
-
   integration-merge:
     name: "Integration / Merge"
     runs-on: ubuntu-latest
     concurrency:
       group: integration-merge
       cancel-in-progress: true
-    needs: [build-pull, build-platforms]
+    needs: build-pull
     if: github.ref == 'refs/heads/staging'
     steps:
       - uses: actions/checkout@v4
@@ -230,50 +84,3 @@ jobs:
           git merge --ff-only "$GITHUB_SHA"
           git push origin master
 
-  release-distribution:
-    name: "Release / Distribution"
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/matrixai/github-runner
-    concurrency:
-      group: release-distribution
-      cancel-in-progress: false
-    needs: integration-merge
-    if: >
-      github.ref == 'refs/heads/staging' &&
-      startsWith(github.ref, 'refs/tags/v') &&
-      !contains(github.ref, '-')
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: builds*
-          path: builds
-          merge-multiple: true
-      - name: Run release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ./.npmrc
-          echo 'Publishing library'
-          nix develop .#ci --command bash -c $'
-          npm publish --access public
-          '
-          for d in prebuild/*; do
-            tar \
-              --create \
-              --verbose \
-              --file="prebuild/$(basename $d).tar" \
-              --directory=prebuild \
-              "$(basename $d)"
-          done
-          nix develop .#ci --command bash -c $'
-          gh release \
-            create "$GITHUB_REF_NAME" \
-            prebuild/*.tar \
-            --title "$GITHUB_REF_NAME-$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-            --notes "" \
-            --target master \
-            --repo "$GITHUB_REPOSITORY"
-          '
-          rm -f ./.npmrc
