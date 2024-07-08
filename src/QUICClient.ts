@@ -186,7 +186,7 @@ class QUICClient {
       connection = new QUICConnection({
         type: 'client',
         scid,
-        serverName: host,
+        serverName: quicConfig.serverName || host,
         socket,
         remoteInfo: {
           host: host_,

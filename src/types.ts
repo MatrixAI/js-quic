@@ -162,6 +162,11 @@ type QUICConfig = {
   verifyPeer: boolean;
 
   /**
+   * Optional explicit server name, defaults to host
+   */
+  serverName?: string;
+
+  /**
    * Custom TLS verification callback.
    * It is expected that the callback will throw an error if the verification
    * fails.
@@ -316,6 +321,7 @@ type QUICConfig = {
 type QUICClientConfigInput = Partial<QUICConfig>;
 
 type QUICServerConfigInput = Partial<QUICConfig> & {
+  serverName?: string;
   key: string | Array<string> | Uint8Array | Array<Uint8Array>;
   cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
 };
