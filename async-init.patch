@@ -1,0 +1,346 @@
+diff -crB dist/CreateDestroy.js patched/CreateDestroy.js
+*** dist/CreateDestroy.js	2025-05-13 17:01:44.521843798 +1000
+--- patched/CreateDestroy.js	2025-05-13 16:43:22.019287860 +1000
+***************
+*** 1,8 ****
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, } from './utils.js';
+  import { EventAsyncInitDestroy, EventAsyncInitDestroyed } from './events.js';
+  import { ErrorAsyncInitDestroyed } from './errors.js';
+  function CreateDestroy({ eventDestroy = EventAsyncInitDestroy, eventDestroyed = EventAsyncInitDestroyed, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+--- 1,10 ----
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, _spanId, spanId, spanContext, } from './utils.js';
+  import { EventAsyncInitDestroy, EventAsyncInitDestroyed } from './events.js';
+  import { ErrorAsyncInitDestroyed } from './errors.js';
++ import { tracer } from '@matrixai/logger'
++ let i = 0;
+  function CreateDestroy({ eventDestroy = EventAsyncInitDestroy, eventDestroyed = EventAsyncInitDestroyed, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+***************
+*** 12,17 ****
+--- 14,20 ----
+              [_statusP] = p;
+              [resolveStatusP] = resolveP;
+              [initLock] = new RWLockWriter();
++             [_spanId] = undefined;
+              get [destroyed]() {
+                  return this[_destroyed];
+              }
+***************
+*** 21,26 ****
+--- 24,38 ----
+              get [statusP]() {
+                  return this[_statusP];
+              }
++             get [spanId]() {
++                 return this[_spanId];
++             }
++             constructor(...args) {
++                 super(...args);
++                 const ctx = spanContext.getStore();
++                 const parentSpanId = ctx?.currentSpanId;
++                 this[_spanId] = tracer.startSpan(`cd-${this.constructor.name || i++}`, parentSpanId);
++             }
+              async destroy(...args) {
+                  return this[initLock]
+                      .withWriteF(async () => {
+***************
+*** 37,42 ****
+--- 49,55 ----
+                      if (typeof super['destroy'] === 'function') {
+                          result = await super.destroy(...args);
+                      }
++                     tracer.endSpan(this[_spanId]);
+                      this[_destroyed] = true;
+                      this.dispatchEvent(new eventDestroyed());
+                      return result;
+diff -crB dist/CreateDestroyStartStop.js patched/CreateDestroyStartStop.js
+*** dist/CreateDestroyStartStop.js	2025-05-13 17:01:44.547844173 +1000
+--- patched/CreateDestroyStartStop.js	2025-05-13 16:43:34.415385091 +1000
+***************
+*** 1,8 ****
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, } from './utils.js';
+  import { EventAsyncInitStart, EventAsyncInitStarted, EventAsyncInitStop, EventAsyncInitStopped, EventAsyncInitDestroy, EventAsyncInitDestroyed, } from './events.js';
+  import { ErrorAsyncInitRunning, ErrorAsyncInitNotRunning, ErrorAsyncInitDestroyed, } from './errors.js';
+  function CreateDestroyStartStop(errorRunning = new ErrorAsyncInitRunning(), errorDestroyed = new ErrorAsyncInitDestroyed(), { eventStart = EventAsyncInitStart, eventStarted = EventAsyncInitStarted, eventStop = EventAsyncInitStop, eventStopped = EventAsyncInitStopped, eventDestroy = EventAsyncInitDestroy, eventDestroyed = EventAsyncInitDestroyed, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+--- 1,10 ----
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, _spanId, spanId, spanContext } from './utils.js';
+  import { EventAsyncInitStart, EventAsyncInitStarted, EventAsyncInitStop, EventAsyncInitStopped, EventAsyncInitDestroy, EventAsyncInitDestroyed, } from './events.js';
+  import { ErrorAsyncInitRunning, ErrorAsyncInitNotRunning, ErrorAsyncInitDestroyed, } from './errors.js';
++ import { tracer } from '@matrixai/logger'
++ let i = 0;
+  function CreateDestroyStartStop(errorRunning = new ErrorAsyncInitRunning(), errorDestroyed = new ErrorAsyncInitDestroyed(), { eventStart = EventAsyncInitStart, eventStarted = EventAsyncInitStarted, eventStop = EventAsyncInitStop, eventStopped = EventAsyncInitStopped, eventDestroy = EventAsyncInitDestroy, eventDestroyed = EventAsyncInitDestroyed, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+***************
+*** 13,18 ****
+--- 15,21 ----
+              [_statusP] = p;
+              [resolveStatusP] = resolveP;
+              [initLock] = new RWLockWriter();
++             [_spanId] = undefined;
+              get [running]() {
+                  return this[_running];
+              }
+***************
+*** 25,30 ****
+--- 28,36 ----
+              get [statusP]() {
+                  return this[_statusP];
+              }
++             get [spanId]() {
++                 return this[_spanId];
++             }
+              async destroy(...args) {
+                  return this[initLock]
+                      .withWriteF(async () => {
+***************
+*** 69,87 ****
+                          resetStackTrace(errorDestroyed);
+                          throw errorDestroyed;
+                      }
+!                     this[_status] = 'starting';
+!                     this[resolveStatusP]('starting');
+!                     const { p, resolveP } = promise();
+!                     this[_statusP] = p;
+!                     this[resolveStatusP] = resolveP;
+!                     this.dispatchEvent(new eventStart());
+!                     let result;
+!                     if (typeof super['start'] === 'function') {
+!                         result = await super.start(...args);
+!                     }
+!                     this[_running] = true;
+!                     this.dispatchEvent(new eventStarted());
+!                     return result;
+                  })
+                      .finally(() => {
+                      this[_status] = null;
+--- 75,98 ----
+                          resetStackTrace(errorDestroyed);
+                          throw errorDestroyed;
+                      }
+!                     const ctx = spanContext.getStore();
+!                     const parentSpanId = ctx?.currentSpanId;
+!                     this[_spanId] = tracer.startSpan(`ss-${this.constructor.name || i++}`, parentSpanId);
+!                     return spanContext.run({ currentSpanId: this[_spanId] }, async () => {
+!                         this[_status] = 'starting';
+!                         this[resolveStatusP]('starting');
+!                         const { p, resolveP } = promise();
+!                         this[_statusP] = p;
+!                         this[resolveStatusP] = resolveP;
+!                         this.dispatchEvent(new eventStart());
+!                         let result;
+!                         if (typeof super['start'] === 'function') {
+!                             result = await super.start(...args);
+!                         }
+!                         this[_running] = true;
+!                         this.dispatchEvent(new eventStarted());
+!                         return result;
+!                     });
+                  })
+                      .finally(() => {
+                      this[_status] = null;
+***************
+*** 114,119 ****
+--- 125,131 ----
+                      if (typeof super['stop'] === 'function') {
+                          result = await super.stop(...args);
+                      }
++                     tracer.endSpan(this[_spanId]);
+                      this[_running] = false;
+                      this.dispatchEvent(new eventStopped());
+                      return result;
+diff -crB dist/StartStop.js patched/StartStop.js
+*** dist/StartStop.js	2025-05-13 17:01:44.604844994 +1000
+--- patched/StartStop.js	2025-05-13 15:45:54.003601036 +1000
+***************
+*** 1,8 ****
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _running, running, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, } from './utils.js';
+  import { EventAsyncInitStart, EventAsyncInitStarted, EventAsyncInitStop, EventAsyncInitStopped, } from './events.js';
+  import { ErrorAsyncInitNotRunning } from './errors.js';
+  function StartStop({ eventStart = EventAsyncInitStart, eventStarted = EventAsyncInitStarted, eventStop = EventAsyncInitStop, eventStopped = EventAsyncInitStopped, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+--- 1,10 ----
+  import { Evented } from '@matrixai/events';
+  import { RWLockWriter } from '@matrixai/async-locks';
+! import { _running, running, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, promise, resetStackTrace, _spanId, spanId, spanContext, } from './utils.js';
+  import { EventAsyncInitStart, EventAsyncInitStarted, EventAsyncInitStop, EventAsyncInitStopped, } from './events.js';
+  import { ErrorAsyncInitNotRunning } from './errors.js';
++ import { tracer } from '@matrixai/logger';
++ let i = 0;
+  function StartStop({ eventStart = EventAsyncInitStart, eventStarted = EventAsyncInitStarted, eventStop = EventAsyncInitStop, eventStopped = EventAsyncInitStopped, } = {}) {
+      return (constructor) => {
+          const { p, resolveP } = promise();
+***************
+*** 10,15 ****
+--- 12,18 ----
+              [_running] = false;
+              [_status] = null;
+              [_statusP] = p;
++             [_spanId] = undefined;
+              [resolveStatusP] = resolveP;
+              [initLock] = new RWLockWriter();
+              get [running]() {
+***************
+*** 21,45 ****
+              get [statusP]() {
+                  return this[_statusP];
+              }
+              async start(...args) {
+                  return this[initLock]
+                      .withWriteF(async () => {
+                      if (this[_running]) {
+                          return;
+                      }
+!                     this[_status] = 'starting';
+!                     this[resolveStatusP]('starting');
+!                     const { p, resolveP } = promise();
+!                     this[_statusP] = p;
+!                     this[resolveStatusP] = resolveP;
+!                     this.dispatchEvent(new eventStart());
+!                     let result;
+!                     if (typeof super['start'] === 'function') {
+!                         result = await super.start(...args);
+!                     }
+!                     this[_running] = true;
+!                     this.dispatchEvent(new eventStarted());
+!                     return result;
+                  })
+                      .finally(() => {
+                      this[_status] = null;
+--- 24,56 ----
+              get [statusP]() {
+                  return this[_statusP];
+              }
++             get [spanId]() {
++                 return this[_spanId];
++             }
+              async start(...args) {
+                  return this[initLock]
+                      .withWriteF(async () => {
+                      if (this[_running]) {
+                          return;
+                      }
+!                     const ctx = spanContext.getStore();
+!                     const parentSpanId = ctx?.currentSpanId;
+!                     this[_spanId] = tracer.startSpan(`ss-${this.constructor.name || i++}`, parentSpanId);
+!                     return spanContext.run({ currentSpanId: this[_spanId] }, async () => {
+!                         this[_status] = 'starting';
+!                         this[resolveStatusP]('starting');
+!                         const { p, resolveP } = promise();
+!                         this[_statusP] = p;
+!                         this[resolveStatusP] = resolveP;
+!                         this.dispatchEvent(new eventStart());
+!                         let result;
+!                         if (typeof super['start'] === 'function') {
+!                             result = await super.start(...args);
+!                         }
+!                         this[_running] = true;
+!                         this.dispatchEvent(new eventStarted());
+!                         return result;
+!                     });
+                  })
+                      .finally(() => {
+                      this[_status] = null;
+***************
+*** 67,72 ****
+--- 78,84 ----
+                      }
+                      this[_running] = false;
+                      this.dispatchEvent(new eventStopped());
++                     tracer.endSpan(this[_spanId]);
+                      return result;
+                  })
+                      .finally(() => {
+diff -crB dist/utils.d.ts patched/utils.d.ts
+*** dist/utils.d.ts	2025-05-13 17:01:44.754847155 +1000
+--- patched/utils.d.ts	2025-05-13 16:48:52.064927307 +1000
+***************
+*** 1,3 ****
+--- 1,4 ----
++ import type { AsyncLocalStorage } from 'node:async_hooks';
+  import type { PromiseDeconstructed } from './types.js';
+  /**
+   * Symbols prevents name clashes with decorated classes
+***************
+*** 12,17 ****
+--- 13,21 ----
+  declare const statusP: unique symbol;
+  declare const resolveStatusP: unique symbol;
+  declare const initLock: unique symbol;
++ declare const _spanId: unique symbol;
++ declare const spanId: unique symbol;
++ declare const spanContext: AsyncLocalStorage<any>;
+  declare const AsyncFunction: Function;
+  declare const GeneratorFunction: Function;
+  declare const AsyncGeneratorFunction: Function;
+***************
+*** 27,30 ****
+   * function is called, giving a more useful stack trace
+   */
+  declare function resetStackTrace(error: Error, decorated?: Function): void;
+! export { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, hasCaptureStackTrace, promise, resetStackTrace, };
+--- 31,34 ----
+   * function is called, giving a more useful stack trace
+   */
+  declare function resetStackTrace(error: Error, decorated?: Function): void;
+! export { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, hasCaptureStackTrace, _spanId, spanId, spanContext, promise, resetStackTrace, };
+diff -crB dist/utils.js patched/utils.js
+*** dist/utils.js	2025-05-13 17:01:44.617845181 +1000
+--- patched/utils.js	2025-05-13 15:45:45.001524143 +1000
+***************
+*** 1,3 ****
+--- 1,5 ----
++ import { AsyncLocalStorage } from 'node:async_hooks';
++ 
+  /**
+   * Symbols prevents name clashes with decorated classes
+   */
+***************
+*** 9,20 ****
+--- 11,25 ----
+  const status = Symbol('status');
+  const _statusP = Symbol('_statusP');
+  const statusP = Symbol('statusP');
++ const _spanId = Symbol('_spanId');
++ const spanId = Symbol('spanId');
+  const resolveStatusP = Symbol('resolveStatusP');
+  const initLock = Symbol('initLock');
+  const AsyncFunction = (async () => { }).constructor;
+  const GeneratorFunction = function* () { }.constructor;
+  const AsyncGeneratorFunction = async function* () { }.constructor;
+  const hasCaptureStackTrace = 'captureStackTrace' in Error;
++ const spanContext = new AsyncLocalStorage();
+  /**
+   * Deconstructed promise
+   */
+***************
+*** 53,57 ****
+          error.stack = error.stack.replace(/[^\n]+\n/, stackTitle);
+      }
+  }
+! export { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, hasCaptureStackTrace, promise, resetStackTrace, };
+  //# sourceMappingURL=utils.js.map
+\ No newline at end of file
+--- 58,62 ----
+          error.stack = error.stack.replace(/[^\n]+\n/, stackTitle);
+      }
+  }
+! export { _running, running, _destroyed, destroyed, _status, status, _statusP, statusP, resolveStatusP, initLock, AsyncFunction, GeneratorFunction, AsyncGeneratorFunction, hasCaptureStackTrace, _spanId, spanId, spanContext, promise, resetStackTrace, };
+  //# sourceMappingURL=utils.js.map
+\ No newline at end of file

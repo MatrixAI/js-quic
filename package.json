@@ -55,7 +55,8 @@
     "@matrixai/contexts": "^2.0.2",
     "@matrixai/errors": "^2.1.3",
     "@matrixai/events": "^4.0.1",
-    "@matrixai/logger": "^4.0.3",
+    "@matrixai/id": "^4.0.0",
+    "@matrixai/logger": "^4.0.4-alpha.5",
     "@matrixai/resources": "^2.0.1",
     "@matrixai/timer": "^2.1.1",
     "ip-num": "^1.5.0"
@@ -95,5 +96,8 @@
     "tsx": "^3.12.7",
     "typedoc": "^0.24.8",
     "typescript": "^5.1.6"
+  },
+  "overrides": {
+    "@matrixai/logger": "^4.0.4-alpha.5"
   }
 }
