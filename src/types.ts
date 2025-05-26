@@ -1,6 +1,8 @@
 import type QUICStream from './QUICStream.js';
 import type { CryptoError } from './native/types.js';
 
+type POJO = { [key: string]: any };
+
 /**
  * Opaque types are wrappers of existing types
  * that require smart constructors
@@ -350,6 +352,7 @@ type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
 type QUICStreamMap = Map<StreamId, QUICStream>;
 
 export type {
+  POJO,
   Opaque,
   Class,
   Callback,

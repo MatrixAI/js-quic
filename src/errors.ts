@@ -1,4 +1,4 @@
-import type { POJO } from '@matrixai/errors';
+import type { POJO } from './types.js';
 import type { ConnectionError, CryptoError } from './native/types.js';
 import { AbstractError } from '@matrixai/errors';
 
@@ -6,15 +6,15 @@ class ErrorQUIC<T> extends AbstractError<T> {
   static description = 'QUIC error';
 }
 
-class ErrorQUICUndefinedBehaviour<T> extends AbstractError<T> {
+class ErrorQUICUndefinedBehaviour<T> extends ErrorQUIC<T> {
   static description = 'You should never see this error';
 }
 
-class ErrorQUICHostInvalid<T> extends AbstractError<T> {
+class ErrorQUICHostInvalid<T> extends ErrorQUIC<T> {
   static description = 'Host provided was not valid';
 }
 
-class ErrorQUICPortInvalid<T> extends AbstractError<T> {
+class ErrorQUICPortInvalid<T> extends ErrorQUIC<T> {
   static description = 'Port provided was not valid';
 }
 

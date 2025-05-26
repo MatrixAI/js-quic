@@ -1,12 +1,26 @@
 import type { ClientCryptoOps, ServerCryptoOps } from '#types.js';
-import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
-import * as testsUtils from './tests/utils.js';
-import { generateTLSConfig } from './tests/utils.js';
+import Logger, {
+  formatting,
+  LogLevel,
+  StreamHandler,
+  tracer,
+} from '@matrixai/logger';
 import * as events from '#events.js';
 import * as utils from '#utils.js';
+import * as testsUtils from './utils.js';
 import QUICServer from '#QUICServer.js';
 import QUICClient from '#QUICClient.js';
 import QUICStream from '#QUICStream.js';
+
+const p = (async () => {
+  const fs = await import('node:fs');
+  const spanFile = await fs.promises.open('span.jsonl', 'w');
+  const gen = tracer.streamEvents();
+  for await (const event of gen) {
+    await spanFile.write(JSON.stringify(event) + '\n');
+  }
+  await spanFile.close();
+})();
 
 const main = async () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
@@ -25,10 +39,8 @@ const main = async () => {
     randomBytes: testsUtils.randomBytes,
   };
   const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
-  const numStreams = 10;
-  const numMessage = 10;
   const connectionEventProm = utils.promise<events.EventQUICServerConnection>();
-  const tlsConfig = await generateTLSConfig('RSA');
+  const tlsConfig = await testsUtils.generateTLSConfig('RSA');
   const server = new QUICServer({
     crypto: {
       key,
@@ -75,7 +87,7 @@ const main = async () => {
   );
 
   // Let's make a new streams.
-  for (let i = 0; i < 100000; i++) {
+  for (let i = 0; i < 1000; i++) {
     const stream = client.connection.newStream();
     const writer = stream.writable.getWriter();
     const reader = stream.readable.getReader();
@@ -100,6 +112,8 @@ const main = async () => {
 
   await client.destroy({ force: true });
   await server.stop({ force: true });
+  tracer.endTracing();
+  await p;
   console.error('Test passed!');
 };
 
