@@ -2,11 +2,16 @@
 
 QUIC library for TypeScript/JavaScript applications.
 
-This is built on top of Cloudflare's [quiche](https://github.com/cloudflare/quiche) library. It is intended to support Linux, Windows MacOS, Android and iOS. Mobile support is still pending.
+This is built on top of Cloudflare's
+[quiche](https://github.com/cloudflare/quiche) library. It is intended to
+support Linux, Windows MacOS, Android and iOS. Mobile support is still pending.
 
-Since Cloudflare's quiche is written in Rust. This uses the [napi-rs](https://github.com/napi-rs/napi-rs) binding system compile the native objects for Node.js.
+Since Cloudflare's quiche is written in Rust. This uses the
+[napi-rs](https://github.com/napi-rs/napi-rs) binding system compile the native
+objects for Node.js.
 
-This library focuses only on the QUIC protocol. It does not support HTTP3. You can build HTTP3 on top of this.
+This library focuses only on the QUIC protocol. It does not support HTTP3. You
+can build HTTP3 on top of this.
 
 ## Installation
 
@@ -62,9 +67,11 @@ git push --tags
 
 ### Quiche
 
-To understand how to develop this, it is important to understand how quiche works.
+To understand how to develop this, it is important to understand how quiche
+works.
 
-Clone the https://github.com/cloudflare/quiche project. It's multi-workspace Cargo project.
+Clone the https://github.com/cloudflare/quiche project. It's multi-workspace
+Cargo project.
 
 You can build and run their examples located in `/quiche/examples/`:
 
@@ -128,55 +135,96 @@ The available target list is in `rustc --print target-list`.
 
 ### Structure
 
-It is possible to structure the QUIC system in the encapsulated way or the injected way.
+It is possible to structure the QUIC system in the encapsulated way or the
+injected way.
 
-When using the encapsulated way, the `QUICSocket` is separated between client and server.
+When using the encapsulated way, the `QUICSocket` is separated between client
+and server.
 
-When using the injected way, the `QUICSocket` is shared between client and server.
+When using the injected way, the `QUICSocket` is shared between client and
+server.
 
 ![image](/images/quic_structure_encapsulated.svg)
 
-If you are building a peer to peer network, you must use the injected way. This is the only way to ensure that hole-punching works because both the client and server for any given peer must share the same UDP socket and thus share the `QUICSocket`. When done in this way, the `QUICSocket` lifecycle is managed outside of both the `QUICClient` and `QUICServer`.
+If you are building a peer to peer network, you must use the injected way. This
+is the only way to ensure that hole-punching works because both the client and
+server for any given peer must share the same UDP socket and thus share the
+`QUICSocket`. When done in this way, the `QUICSocket` lifecycle is managed
+outside of both the `QUICClient` and `QUICServer`.
 
 ![image](/images/quic_structure_injected.svg)
 
-This also means both `QUICClient` and `QUICServer` must share the same connection map. In order to allow the `QUICSocket` to dispatch data into the correct connection, the connection map is constructed in the `QUICSocket`, however setting and unsetting connections is managed by `QUICClient` and `QUICServer`.
+This also means both `QUICClient` and `QUICServer` must share the same
+connection map. In order to allow the `QUICSocket` to dispatch data into the
+correct connection, the connection map is constructed in the `QUICSocket`,
+however setting and unsetting connections is managed by `QUICClient` and
+`QUICServer`.
 
 ### Dataflow
 
 The data flow of the QUIC system is a bidirectional graph.
 
-Data received from the outside world is received on the UDP socket. It is parsed and then dispatched to each `QUICConnection`. Each connection further parses the data and then dispatches to the `QUICStream`. Each `QUICStream` presents the data on the `ReadableStream` interface, which can be read by a caller.
+Data received from the outside world is received on the UDP socket. It is parsed
+and then dispatched to each `QUICConnection`. Each connection further parses the
+data and then dispatches to the `QUICStream`. Each `QUICStream` presents the
+data on the `ReadableStream` interface, which can be read by a caller.
 
-Data sent to the outside world is written to a `WritableStream` interface of a `QUICStream`. This data is buffered up in the underlying Quiche stream. A send procedure is triggered on the associated `QUICConnection` which takes all the buffered data to be sent for that connection, and sends it to the `QUICSocket`, which then sends it to the underlying UDP socket.
+Data sent to the outside world is written to a `WritableStream` interface of a
+`QUICStream`. This data is buffered up in the underlying Quiche stream. A send
+procedure is triggered on the associated `QUICConnection` which takes all the
+buffered data to be sent for that connection, and sends it to the `QUICSocket`,
+which then sends it to the underlying UDP socket.
 
 ![image](/images/quic_dataflow.svg)
 
-Buffering occurs at the connection level and at the stream level. Each connection has a global buffer for all streams, and each stream has its own buffer. Note that connection buffering and stream buffering all occur within the Quiche library. The web streams `ReadableStream` and `WritableStream` do not do any buffering at all.
+Buffering occurs at the connection level and at the stream level. Each
+connection has a global buffer for all streams, and each stream has its own
+buffer. Note that connection buffering and stream buffering all occur within the
+Quiche library. The web streams `ReadableStream` and `WritableStream` do not do
+any buffering at all.
 
 ### Connection Negotiation
 
-The connection negotiation process involves several exchanges of QUIC packets before the `QUICConnection` is constructed.
+The connection negotiation process involves several exchanges of QUIC packets
+before the `QUICConnection` is constructed.
 
-The primary reason to do this is for both sides to determine their respective connection IDs.
+The primary reason to do this is for both sides to determine their respective
+connection IDs.
 
 ![image](/images/quic_connection_negotiation.svg)
 
 ### Push & Pull
 
-The `QUICSocket`, `QUICClient`, `QUICServer`, `QUICConnection` and `QUICStream` are independent state machines that exposes methods that can be called as well as events that may be emitted between them.
+The `QUICSocket`, `QUICClient`, `QUICServer`, `QUICConnection` and `QUICStream`
+are independent state machines that exposes methods that can be called as well
+as events that may be emitted between them.
 
-This creates a concurrent decentralised state machine system where there are multiple entrypoints of change.
+This creates a concurrent decentralised state machine system where there are
+multiple entrypoints of change.
 
-Users may call methods which causes state transitions internally that trigger event emissions. However some methods are considered internal to the library, this means these methods are not intended to be called by the end user. They are however public relative to the other components in the system. These methods should be marked with `@internal` documentation annotation.
+Users may call methods which causes state transitions internally that trigger
+event emissions. However some methods are considered internal to the library,
+this means these methods are not intended to be called by the end user. They are
+however public relative to the other components in the system. These methods
+should be marked with `@internal` documentation annotation.
 
-External events may also trigger event handlers that will call methods which perform state transitions and event emission.
+External events may also trigger event handlers that will call methods which
+perform state transitions and event emission.
 
-Keeping track of how the system works is therefore quite complex and must follow a set of rules.
+Keeping track of how the system works is therefore quite complex and must follow
+a set of rules.
 
-- Pull methods - these are either synchronous or asynchronous methods that may throw exceptions.
-- Push handlers - these are event handlers that can initiate pull methods, if these pull handlers throw exceptions, these exceptions must be caught, and expected runtime exceptions are to be converted to error events, all other exceptions will be considered to be software bugs and will be bubbled up to the program boundary as unhandled exceptions or unhandled promise rejections. Generally the only exceptions that are expected runtime exceptions are those that arise from perform IO with the operating system.
+- Pull methods - these are either synchronous or asynchronous methods that may
+  throw exceptions.
+- Push handlers - these are event handlers that can initiate pull methods, if
+  these pull handlers throw exceptions, these exceptions must be caught, and
+  expected runtime exceptions are to be converted to error events, all other
+  exceptions will be considered to be software bugs and will be bubbled up to
+  the program boundary as unhandled exceptions or unhandled promise rejections.
+  Generally the only exceptions that are expected runtime exceptions are those
+  that arise from perform IO with the operating system.
 
 ## License
 
-js-quic is licensed under Apache-2.0, you may read the terms of the license [here](LICENSE).
+js-quic is licensed under Apache-2.0, you may read the terms of the license
+[here](LICENSE).

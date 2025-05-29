@@ -68,7 +68,7 @@
     "@matrixai/quic-win32-x64": "2.0.9"
   },
   "devDependencies": {
-    "@matrixai/lint": "^0.2.6",
+    "@matrixai/lint": "^0.2.11",
     "@fast-check/jest": "^2.1.0",
     "@napi-rs/cli": "^2.15.2",
     "@noble/ed25519": "^1.7.3",
