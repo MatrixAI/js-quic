@@ -24,6 +24,9 @@
               cargo
               cmake
               rustPlatform.bindgenHook
+              valgrind
+              heaptrack
+              massif-visualizer
             ];
             NIX_DONT_SET_RPATH = true;
             NIX_NO_SELF_RPATH = true;

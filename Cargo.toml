@@ -6,12 +6,28 @@ license-file = "LICENSE"
 edition = "2021"
 exclude = ["index.node"]
 
+[profile.release]
+debug = true
+strip = false
+opt-level = 0
+lto = false
+codegen-units = 1
+incremental = false
+
+[profile.dev]
+debug = true
+strip = false
+opt-level = 0
+lto = false
+codegen-units = 1
+incremental = false
+
 [lib]
 crate-type = ["cdylib"]
 path = "src/native/napi/lib.rs"
 
 [dependencies]
-napi = { version = "2", features = ["async", "napi6", "serde-json"] }
+napi = { version = "2", features = ["napi6", "serde-json"] }
 serde = { version = "1.0", features = ["derive"] }
 napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.18.0", features = ["boringssl-boring-crate", "boringssl-vendored"] }
