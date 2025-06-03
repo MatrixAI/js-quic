@@ -1,8 +1,8 @@
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
-import * as events from '../dist/events.js';
-import * as utils from '../dist/utils.js';
 import * as peculiarWebcrypto from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
+import * as events from '../dist/events.js';
+import * as utils from '../dist/utils.js';
 import QUICServer from '../dist/QUICServer.js';
 import QUICClient from '../dist/QUICClient.js';
 import QUICStream from '../dist/QUICStream.js';
@@ -21,10 +21,7 @@ const extendedKeyUsageFlags = {
 
 async function generateKeyHMAC() {
   const cryptoKey = await webcrypto.subtle.generateKey(
-    {
-      name: 'HMAC',
-      hash: 'SHA-256',
-    },
+    { name: 'HMAC', hash: 'SHA-256' },
     true,
     ['sign', 'verify'],
   );
@@ -51,10 +48,7 @@ async function signHMAC(key, data) {
   const cryptoKey = await webcrypto.subtle.importKey(
     'raw',
     key,
-    {
-      name: 'HMAC',
-      hash: 'SHA-256',
-    },
+    { name: 'HMAC', hash: 'SHA-256' },
     true,
     ['sign', 'verify'],
   );
@@ -65,10 +59,7 @@ async function verifyHMAC(key, data, sig) {
   const cryptoKey = await webcrypto.subtle.importKey(
     'raw',
     key,
-    {
-      name: 'HMAC',
-      hash: 'SHA-256',
-    },
+    { name: 'HMAC', hash: 'SHA-256' },
     true,
     ['sign', 'verify'],
   );
@@ -81,22 +72,13 @@ async function importPublicKey(publicKey) {
     case 'RSA':
       switch (publicKey.alg) {
         case 'RS256':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-256',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
           break;
         case 'RS384':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-384',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-384' };
           break;
         case 'RS512':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-512',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' };
           break;
         default:
           throw new Error(`Unsupported algorithm ${publicKey.alg}`);
@@ -110,32 +92,19 @@ async function importPublicKey(publicKey) {
   ]);
 }
 
-/**
- * Imports private key.
- * This uses `@peculiar/webcrypto` API for Ed25519 keys.
- */
 async function importPrivateKey(privateKey) {
   let algorithm;
   switch (privateKey.kty) {
     case 'RSA':
       switch (privateKey.alg) {
         case 'RS256':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-256',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
           break;
         case 'RS384':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-384',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-384' };
           break;
         case 'RS512':
-          algorithm = {
-            name: 'RSASSA-PKCS1-v1_5',
-            hash: 'SHA-512',
-          };
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' };
           break;
         default:
           throw new Error(`Unsupported algorithm ${privateKey.alg}`);
@@ -226,11 +195,8 @@ async function generateCertificate({
   if (duration < 0) {
     throw new RangeError('`duration` must be positive');
   }
-  // X509 `UTCTime` format only has resolution of seconds
-  // this truncates to second resolution
   const notBeforeDate = new Date(now.getTime() - (now.getTime() % 1000));
   const notAfterDate = new Date(now.getTime() - (now.getTime() % 1000));
-  // If the duration is 0, then only the `now` is valid
   notAfterDate.setSeconds(notAfterDate.getSeconds() + duration);
   if (notBeforeDate < new Date(0)) {
     throw new RangeError(
@@ -253,26 +219,12 @@ async function generateCertificate({
   const serialNumber = certId;
   const subjectNodeIdEncoded = Buffer.from(subjectNodeId).toString('hex');
   const issuerNodeIdEncoded = Buffer.from(issuerNodeId).toString('hex');
-  // The entire subject attributes and issuer attributes
-  // is constructed via `x509.Name` class
-  // By default this supports on a limited set of names:
-  // CN, L, ST, O, OU, C, DC, E, G, I, SN, T
-  // If custom names are desired, this needs to change to constructing
-  // `new x509.Name('FOO=BAR', { FOO: '1.2.3.4' })` manually
-  // And each custom attribute requires a registered OID
-  // Because the OID is what is encoded into ASN.1
   const subjectAttrs = [
-    {
-      CN: [subjectNodeIdEncoded],
-    },
-    // Filter out conflicting CN attributes
+    { CN: [subjectNodeIdEncoded] },
     ...subjectAttrsExtra.filter((attr) => !('CN' in attr)),
   ];
   const issuerAttrs = [
-    {
-      CN: [issuerNodeIdEncoded],
-    },
-    // Filter out conflicting CN attributes
+    { CN: [issuerNodeIdEncoded] },
     ...issuerAttrsExtra.filter((attr) => !('CN' in attr)),
   ];
   const signingAlgorithm = issuerPrivateCryptoKey.algorithm;
@@ -305,34 +257,12 @@ async function generateCertificate({
         extendedKeyUsageFlags.ocspSigning,
       ]),
       new x509.SubjectAlternativeNameExtension([
-        {
-          type: 'dns',
-          value: subjectNodeIdEncoded,
-        },
-        {
-          type: 'dns',
-          value: 'localhost',
-        },
-        // Quiche doesn't support IP SANs,
-        // instead we hack these in as DNS SANs for testing purposes
-        {
-          type: 'dns',
-          value: '127.0.0.1',
-        },
-        // Quiche doesn't support IP SANs,
-        // instead we hack these in as DNS SANs for testing purposes
-        {
-          type: 'dns',
-          value: '::1',
-        },
-        {
-          type: 'ip',
-          value: '127.0.0.1',
-        },
-        {
-          type: 'ip',
-          value: '::1',
-        },
+        { type: 'dns', value: subjectNodeIdEncoded },
+        { type: 'dns', value: 'localhost' },
+        { type: 'dns', value: '127.0.0.1' },
+        { type: 'dns', value: '::1' },
+        { type: 'ip', value: '127.0.0.1' },
+        { type: 'ip', value: '::1' },
       ]),
       await x509.SubjectKeyIdentifierExtension.create(subjectPublicCryptoKey),
     ],
@@ -376,6 +306,7 @@ async function generateTLSConfig() {
   };
 }
 
+/* eslint-disable no-console */
 const main = async () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
     new StreamHandler(
@@ -428,7 +359,6 @@ const main = async () => {
   });
   socketCleanMethods.extractSocket(client);
   const conn = (await connectionEventProm.p).detail;
-  // Do the test
   const activeServerStreams = [];
   conn.addEventListener(
     events.EventQUICConnectionStream.name,
@@ -439,7 +369,6 @@ const main = async () => {
     },
   );
 
-  // Let's make a new streams.
   for (let i = 0; i < 1000; i++) {
     console.error('loop');
     const stream = client.connection.newStream();
