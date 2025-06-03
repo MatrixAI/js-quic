@@ -1,14 +1,12 @@
 use crate::config;
 use crate::path;
 use crate::stream;
-use crate::tracing::{end_span, start_span};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-use tokio;
 
 #[napi]
 pub enum ConnectionErrorCode {
@@ -183,12 +181,7 @@ pub struct RecvInfo {
 }
 
 #[napi]
-pub struct Connection {
-    conn: quiche::Connection,
-    span_handle: i64,
-    // Stream id -> handle
-    stream_spans: std::collections::HashMap<u64, i64>,
-}
+pub struct Connection(pub(crate) quiche::Connection);
 
 #[napi]
 impl Connection {
@@ -218,13 +211,7 @@ impl Connection {
             &mut config.0,
         )
         .or_else(|err| Err(napi::Error::from_reason(err.to_string())))?;
-        let rt: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
-        let span_handle = rt.block_on(start_span("quic_connection", None))?;
-        return Ok(Connection {
-            conn: connection,
-            span_handle,
-            stream_spans: std::collections::HashMap::new(),
-        });
+        return Ok(Connection(connection));
     }
 
     #[napi(factory)]
@@ -251,27 +238,21 @@ impl Connection {
             &mut config.0,
         )
         .or_else(|err| Err(napi::Error::from_reason(err.to_string())))?;
-        let rt: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
-        let span_handle = rt.block_on(start_span("quic_connection", None))?;
-        return Ok(Connection {
-            conn: connection,
-            span_handle,
-            stream_spans: std::collections::HashMap::new(),
-        });
+        return Ok(Connection(connection));
     }
 
     #[napi]
     pub fn set_keylog(&mut self, path: String) -> napi::Result<()> {
         let file =
             File::create(path).or_else(|err| Err(napi::Error::from_reason(err.to_string())))?;
-        self.conn.set_keylog(Box::new(file));
+        self.0.set_keylog(Box::new(file));
         return Ok(());
     }
 
     #[napi]
     pub fn set_session(&mut self, session: Uint8Array) -> napi::Result<()> {
         return self
-            .conn
+            .0
             .set_session(&session)
             .or_else(|err| Err(napi::Error::from_reason(err.to_string())));
     }
@@ -288,7 +269,7 @@ impl Connection {
                 .try_into()
                 .or_else(|err: io::Error| Err(napi::Error::from_reason(err.to_string())))?,
         };
-        let read = match self.conn.recv(&mut data, recv_info) {
+        let read = match self.0.recv(&mut data, recv_info) {
             Ok(v) => v,
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
         };
@@ -305,7 +286,7 @@ impl Connection {
     /// If there is nothing to be sent a Done error will be thrown.
     #[napi(ts_return_type = "[number, SendInfo]")]
     pub fn send(&mut self, env: Env, mut data: Uint8Array) -> napi::Result<Option<Array>> {
-        let (write, send_info) = match self.conn.send(&mut data) {
+        let (write, send_info) = match self.0.send(&mut data) {
             Ok((write, send_info)) => (write, send_info),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -348,7 +329,7 @@ impl Connection {
             })?),
             _ => None,
         };
-        let (write, send_info) = match self.conn.send_on_path(&mut data, from, to) {
+        let (write, send_info) = match self.0.send_on_path(&mut data, from, to) {
             Ok((write, send_info)) => (write, send_info),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -373,7 +354,7 @@ impl Connection {
 
     #[napi]
     pub fn send_quantum(&self) -> i64 {
-        return self.conn.send_quantum() as i64;
+        return self.0.send_quantum() as i64;
     }
 
     #[napi]
@@ -388,7 +369,7 @@ impl Connection {
         let remote_addr: SocketAddr = peer_host.try_into().or_else(|err: io::Error| {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
-        return Ok(self.conn.send_quantum_on_path(local_addr, remote_addr) as i64);
+        return Ok(self.0.send_quantum_on_path(local_addr, remote_addr) as i64);
     }
 
     #[napi(ts_return_type = "[number, boolean]")]
@@ -398,14 +379,7 @@ impl Connection {
         stream_id: i64,
         mut data: Uint8Array,
     ) -> napi::Result<Option<Array>> {
-        // Lazily start stream span
-        if !self.stream_spans.contains_key(&(stream_id as u64)) {
-            let rt: tokio::runtime::Runtime = tokio::runtime::Runtime::new().unwrap();
-            let child = rt.block_on(start_span("quic_stream", Some(&self.span_handle)))?;
-            self.stream_spans.insert(stream_id as u64, child);
-        }
-        // Recv
-        let (read, fin) = match self.conn.stream_recv(stream_id as u64, &mut data) {
+        let (read, fin) = match self.0.stream_recv(stream_id as u64, &mut data) {
             Ok((read, fin)) => (read, fin),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -413,12 +387,6 @@ impl Connection {
         let mut read_and_fin = env.create_array(2)?;
         read_and_fin.set(0, read as i64)?;
         read_and_fin.set(1, fin)?;
-        // Close span on FIN
-        if fin {
-            if let Some(h) = self.stream_spans.remove(&(stream_id as u64)) {
-                let _ = end_span(h);
-            }
-        }
         return Ok(Some(read_and_fin));
     }
 
@@ -429,7 +397,7 @@ impl Connection {
         data: Uint8Array,
         fin: bool,
     ) -> napi::Result<Option<i64>> {
-        match self.conn.stream_send(stream_id as u64, &data, fin) {
+        match self.0.stream_send(stream_id as u64, &data, fin) {
             Ok(v) => return Ok(Some(v as i64)),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -444,7 +412,7 @@ impl Connection {
         incremental: bool,
     ) -> napi::Result<()> {
         return self
-            .conn
+            .0
             .stream_priority(stream_id as u64, urgency, incremental)
             .map_err(|e| napi::Error::from_reason(e.to_string()));
     }
@@ -457,7 +425,7 @@ impl Connection {
         err: i64,
     ) -> napi::Result<Option<()>> {
         return match self
-            .conn
+            .0
             .stream_shutdown(stream_id as u64, direction.into(), err as u64)
         {
             Ok(()) => Ok(Some(())),
@@ -469,7 +437,7 @@ impl Connection {
     #[napi]
     pub fn stream_capacity(&self, stream_id: i64) -> napi::Result<i64> {
         return self
-            .conn
+            .0
             .stream_capacity(stream_id as u64)
             .or_else(|err| Err(napi::Error::from_reason(err.to_string())))
             .map(|v| v as i64);
@@ -477,50 +445,50 @@ impl Connection {
 
     #[napi]
     pub fn stream_readable(&self, stream_id: i64) -> bool {
-        return self.conn.stream_readable(stream_id as u64);
+        return self.0.stream_readable(stream_id as u64);
     }
 
     #[napi]
     pub fn stream_writable(&mut self, stream_id: i64, len: i64) -> napi::Result<bool> {
         return self
-            .conn
+            .0
             .stream_writable(stream_id as u64, len as usize)
             .or_else(|err| Err(napi::Error::from_reason(err.to_string())));
     }
 
     #[napi]
     pub fn stream_finished(&self, stream_id: i64) -> bool {
-        return self.conn.stream_finished(stream_id as u64);
+        return self.0.stream_finished(stream_id as u64);
     }
 
     #[napi]
     pub fn peer_streams_left_bidi(&self) -> i64 {
-        return self.conn.peer_streams_left_bidi() as i64;
+        return self.0.peer_streams_left_bidi() as i64;
     }
 
     #[napi]
     pub fn peer_streams_left_uni(&self) -> i64 {
-        return self.conn.peer_streams_left_uni() as i64;
+        return self.0.peer_streams_left_uni() as i64;
     }
 
     #[napi]
     pub fn readable(&self) -> stream::StreamIter {
-        return stream::StreamIter(self.conn.readable());
+        return stream::StreamIter(self.0.readable());
     }
 
     #[napi]
     pub fn writable(&self) -> stream::StreamIter {
-        return stream::StreamIter(self.conn.writable());
+        return stream::StreamIter(self.0.writable());
     }
 
     #[napi]
     pub fn max_send_udp_payload_size(&self) -> i64 {
-        return self.conn.max_send_udp_payload_size() as i64;
+        return self.0.max_send_udp_payload_size() as i64;
     }
 
     #[napi]
     pub fn dgram_recv(&mut self, mut data: Uint8Array) -> napi::Result<Option<i64>> {
-        match self.conn.dgram_recv(&mut data) {
+        match self.0.dgram_recv(&mut data) {
             Ok(v) => return Ok(Some(v as i64)),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -529,7 +497,7 @@ impl Connection {
 
     #[napi]
     pub fn dgram_recv_vec(&mut self) -> napi::Result<Option<Uint8Array>> {
-        match self.conn.dgram_recv_vec() {
+        match self.0.dgram_recv_vec() {
             Ok(v) => return Ok(Some(v.into())),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -538,7 +506,7 @@ impl Connection {
 
     #[napi]
     pub fn dgram_recv_peek(&self, mut data: Uint8Array, len: i64) -> napi::Result<Option<i64>> {
-        match self.conn.dgram_recv_peek(&mut data, len as usize) {
+        match self.0.dgram_recv_peek(&mut data, len as usize) {
             Ok(v) => return Ok(Some(v as i64)),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -547,42 +515,42 @@ impl Connection {
 
     #[napi]
     pub fn dgram_recv_front_len(&self) -> Option<i64> {
-        return self.conn.dgram_recv_front_len().map(|v| v as i64);
+        return self.0.dgram_recv_front_len().map(|v| v as i64);
     }
 
     #[napi]
     pub fn dgram_recv_queue_len(&self) -> i64 {
-        return self.conn.dgram_recv_queue_len() as i64;
+        return self.0.dgram_recv_queue_len() as i64;
     }
 
     #[napi]
     pub fn dgram_recv_queue_byte_size(&self) -> i64 {
-        return self.conn.dgram_recv_queue_byte_size() as i64;
+        return self.0.dgram_recv_queue_byte_size() as i64;
     }
 
     #[napi]
     pub fn dgram_send_queue_len(&self) -> i64 {
-        return self.conn.dgram_send_queue_len() as i64;
+        return self.0.dgram_send_queue_len() as i64;
     }
 
     #[napi]
     pub fn dgram_send_queue_byte_size(&self) -> i64 {
-        return self.conn.dgram_send_queue_byte_size() as i64;
+        return self.0.dgram_send_queue_byte_size() as i64;
     }
 
     #[napi]
     pub fn is_dgram_send_queue_full(&self) -> bool {
-        return self.conn.is_dgram_send_queue_full();
+        return self.0.is_dgram_send_queue_full();
     }
 
     #[napi]
     pub fn is_dgram_recv_queue_full(&self) -> bool {
-        return self.conn.is_dgram_recv_queue_full();
+        return self.0.is_dgram_recv_queue_full();
     }
 
     #[napi]
     pub fn dgram_send(&mut self, data: Uint8Array) -> napi::Result<Option<()>> {
-        match self.conn.dgram_send(&data) {
+        match self.0.dgram_send(&data) {
             Ok(v) => return Ok(Some(v)),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -591,7 +559,7 @@ impl Connection {
 
     #[napi]
     pub fn dgram_send_vec(&mut self, data: Uint8Array) -> napi::Result<Option<()>> {
-        match self.conn.dgram_send_vec(data.to_vec()) {
+        match self.0.dgram_send_vec(data.to_vec()) {
             Ok(v) => return Ok(Some(v)),
             Err(quiche::Error::Done) => return Ok(None),
             Err(e) => return Err(napi::Error::from_reason(e.to_string())),
@@ -601,7 +569,7 @@ impl Connection {
     #[napi]
     pub fn dgram_purge_outgoing<F: Fn(Uint8Array) -> napi::Result<bool>>(&mut self, f: F) -> () {
         return self
-            .conn
+            .0
             .dgram_purge_outgoing(|data: &[u8]| match f(data.into()) {
                 Ok(v) => v,
                 // If error occurs, this must return false
@@ -611,17 +579,17 @@ impl Connection {
 
     #[napi]
     pub fn dgram_max_writable_len(&mut self) -> Option<i64> {
-        return self.conn.dgram_max_writable_len().map(|v| v as i64);
+        return self.0.dgram_max_writable_len().map(|v| v as i64);
     }
 
     #[napi]
     pub fn timeout(&self) -> Option<i64> {
-        return self.conn.timeout().map(|t| t.as_millis() as i64);
+        return self.0.timeout().map(|t| t.as_millis() as i64);
     }
 
     #[napi]
     pub fn on_timeout(&mut self) -> () {
-        return self.conn.on_timeout();
+        return self.0.on_timeout();
     }
 
     #[napi]
@@ -633,7 +601,7 @@ impl Connection {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
         return self
-            .conn
+            .0
             .probe_path(local_addr, peer_addr)
             .map(|v| v as i64)
             .or_else(|e| Err(napi::Error::from_reason(e.to_string())));
@@ -645,7 +613,7 @@ impl Connection {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
         return self
-            .conn
+            .0
             .migrate_source(local_addr)
             .map(|v| v as i64)
             .or_else(|e| Err(napi::Error::from_reason(e.to_string())));
@@ -660,7 +628,7 @@ impl Connection {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
         return self
-            .conn
+            .0
             .migrate(local_addr, peer_addr)
             .map(|v| v as i64)
             .or_else(|e| Err(napi::Error::from_reason(e.to_string())));
@@ -674,7 +642,7 @@ impl Connection {
         retire_if_needed: bool,
     ) -> napi::Result<i64> {
         return self
-            .conn
+            .0
             .new_source_cid(
                 &quiche::ConnectionId::from_ref(&scid),
                 reset_token.get_u128().1,
@@ -686,36 +654,36 @@ impl Connection {
 
     #[napi]
     pub fn active_source_cids(&self) -> i64 {
-        return self.conn.active_source_cids() as i64;
+        return self.0.active_source_cids() as i64;
     }
 
     #[napi]
     pub fn source_cids_left(&self) -> i64 {
-        return self.conn.source_cids_left() as i64;
+        return self.0.source_cids_left() as i64;
     }
 
     #[napi]
     pub fn retire_destination_cid(&mut self, dcid_seq: i64) -> napi::Result<()> {
         return self
-            .conn
+            .0
             .retire_destination_cid(dcid_seq as u64)
             .or_else(|e| Err(napi::Error::from_reason(e.to_string())));
     }
 
     #[napi(ts_return_type = "object")]
     pub fn path_event_next(&mut self, env: Env) -> napi::Result<Option<napi::JsUnknown>> {
-        let path_event: Option<path::PathEvent> = self.conn.path_event_next().map(|v| v.into());
+        let path_event: Option<path::PathEvent> = self.0.path_event_next().map(|v| v.into());
         return path_event.map(|v| env.to_js_value(&v)).transpose();
     }
 
     #[napi]
     pub fn retired_scid_next(&mut self) -> Option<Uint8Array> {
-        return self.conn.retired_scid_next().map(|v| v.into());
+        return self.0.retired_scid_next().map(|v| v.into());
     }
 
     #[napi]
     pub fn available_dcids(&self) -> i64 {
-        return self.conn.available_dcids() as i64;
+        return self.0.available_dcids() as i64;
     }
 
     #[napi]
@@ -723,17 +691,13 @@ impl Connection {
         let from_addr: SocketAddr = from.try_into().or_else(|err: io::Error| {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
-        let socket_addr_iter = self.conn.paths_iter(from_addr);
+        let socket_addr_iter = self.0.paths_iter(from_addr);
         return Ok(path::HostIter(socket_addr_iter));
     }
 
     #[napi]
     pub fn close(&mut self, app: bool, err: i64, reason: Uint8Array) -> napi::Result<Option<()>> {
-        for (_, handle) in self.stream_spans.iter() {
-            let _ = end_span(*handle);
-        }
-        let _ = end_span(self.span_handle);
-        return match self.conn.close(app, err as u64, &reason) {
+        return match self.0.close(app, err as u64, &reason) {
             Ok(_) => Ok(Some(())),
             Err(quiche::Error::Done) => Ok(None),
             Err(e) => Err(napi::Error::from_reason(e.to_string())),
@@ -742,60 +706,60 @@ impl Connection {
 
     #[napi]
     pub fn trace_id(&self) -> String {
-        return self.conn.trace_id().to_string();
+        return self.0.trace_id().to_string();
     }
 
     #[napi]
     pub fn application_proto(&self) -> Uint8Array {
-        return self.conn.application_proto().to_vec().into();
+        return self.0.application_proto().to_vec().into();
     }
 
     #[napi]
     pub fn server_name(&self) -> Option<String> {
-        return self.conn.server_name().map(|v| v.to_string());
+        return self.0.server_name().map(|v| v.to_string());
     }
 
     #[napi]
     pub fn peer_cert_chain(&self) -> Option<Vec<Uint8Array>> {
         return self
-            .conn
+            .0
             .peer_cert_chain()
             .map(|certs| certs.iter().map(|cert| cert.to_vec().into()).collect());
     }
 
     #[napi]
     pub fn session(&self) -> Option<Uint8Array> {
-        return self.conn.session().map(|s| s.to_vec().into());
+        return self.0.session().map(|s| s.to_vec().into());
     }
 
     #[napi]
     pub fn source_id(&self) -> Uint8Array {
-        return self.conn.source_id().as_ref().into();
+        return self.0.source_id().as_ref().into();
     }
 
     #[napi]
     pub fn destination_id(&self) -> Uint8Array {
-        return self.conn.destination_id().as_ref().into();
+        return self.0.destination_id().as_ref().into();
     }
 
     #[napi]
     pub fn is_established(&self) -> bool {
-        return self.conn.is_established();
+        return self.0.is_established();
     }
 
     #[napi]
     pub fn is_resumed(&self) -> bool {
-        return self.conn.is_resumed();
+        return self.0.is_resumed();
     }
 
     #[napi]
     pub fn is_in_early_data(&self) -> bool {
-        return self.conn.is_in_early_data();
+        return self.0.is_in_early_data();
     }
 
     #[napi]
     pub fn is_readable(&self) -> bool {
-        return self.conn.is_readable();
+        return self.0.is_readable();
     }
 
     #[napi]
@@ -807,40 +771,40 @@ impl Connection {
             Err(napi::Error::new(napi::Status::InvalidArg, err.to_string()))
         })?;
         return self
-            .conn
+            .0
             .is_path_validated(from_addr, to_addr)
             .or_else(|e| Err(napi::Error::from_reason(e.to_string())));
     }
 
     #[napi]
     pub fn is_draining(&self) -> bool {
-        return self.conn.is_draining();
+        return self.0.is_draining();
     }
 
     #[napi]
     pub fn is_closed(&self) -> bool {
-        let x = self.conn.is_closed();
+        let x = self.0.is_closed();
         return x;
     }
 
     #[napi]
     pub fn is_timed_out(&self) -> bool {
-        return self.conn.is_timed_out();
+        return self.0.is_timed_out();
     }
 
     #[napi]
     pub fn peer_error(&self) -> Option<ConnectionError> {
-        return self.conn.peer_error().map(|e| e.clone().into());
+        return self.0.peer_error().map(|e| e.clone().into());
     }
 
     #[napi]
     pub fn local_error(&self) -> Option<ConnectionError> {
-        return self.conn.local_error().map(|e| e.clone().into());
+        return self.0.local_error().map(|e| e.clone().into());
     }
 
     #[napi]
     pub fn stats(&self) -> Stats {
-        return self.conn.stats().into();
+        return self.0.stats().into();
     }
 
     /// Path stats as an array
@@ -854,13 +818,13 @@ impl Connection {
     /// https://stackoverflow.com/q/50343130/582917
     #[napi]
     pub fn path_stats(&self) -> Vec<path::PathStats> {
-        return self.conn.path_stats().map(|s| s.into()).collect();
+        return self.0.path_stats().map(|s| s.into()).collect();
     }
 
     #[napi]
     pub fn send_ack_eliciting(&mut self) -> napi::Result<()> {
         return self
-            .conn
+            .0
             .send_ack_eliciting()
             .or_else(|err| Err(Error::from_reason(err.to_string())));
     }

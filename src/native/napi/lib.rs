@@ -2,15 +2,14 @@ extern crate core;
 
 use napi_derive::napi;
 
-mod constants;
 mod config;
 mod connection;
-mod stream;
-mod path;
+mod constants;
 mod packet;
-mod tracing;
+mod path;
+mod stream;
 
 #[napi]
 pub fn version_is_supported(version: u32) -> bool {
-  return quiche::version_is_supported(version);
+    return quiche::version_is_supported(version);
 }
