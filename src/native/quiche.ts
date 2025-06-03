@@ -12,6 +12,8 @@ import type {
   ConnectionConstructor,
   HeaderConstructor,
 } from './types.js';
+import type { SpanId } from '@matrixai/logger';
+import { tracer } from '@matrixai/logger';
 import process from 'process';
 import path from 'path';
 import url from 'url';
@@ -48,6 +50,11 @@ interface Quiche {
     out: Uint8Array,
   ): number;
   versionIsSupported(version: number): boolean;
+  initialize(
+    start_cb: (name: string, respond_to: any, parent?: number) => void,
+    end_cb: (handle: number) => void,
+  ): void;
+  // respond(sender: any, handle: number): void;
   Config: ConfigConstructor;
   Connection: ConnectionConstructor;
   Header: HeaderConstructor;
@@ -160,6 +167,30 @@ switch (process.platform) {
       `Unsupported OS: ${process.platform}, architecture: ${process.arch}`,
     );
 }
+
+// We should have nativeBinding set here onwards
+const spans = new Map<number, SpanId>();
+let handle = 0;
+nativeBinding.initialize(
+  (name, respond_to, parent) => {
+    process.stdout.write(`Starting span ${name} (handle:${handle + 1})\n`);
+    const parentSpan = parent ? spans.get(parent) : undefined;
+    const spanId = tracer.startSpan(name, parentSpan);
+    const newHandle = handle++;
+    spans.set(newHandle, spanId);
+    respond_to(newHandle);
+    // nativeBinding.respond(respond_to, newHandle);
+    process.stdout.write(`Started span ${name}\n`);
+  },
+  (handle) => {
+    process.stdout.write(`Stopping span with handle ${handle}\n`);
+    if (spans.has(handle)) {
+      tracer.endSpan(spans[handle]);
+      spans.delete(handle);
+    }
+    process.stdout.write('Stopped\n');
+  },
+);
 
 export default nativeBinding;
 

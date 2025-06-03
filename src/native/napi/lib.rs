@@ -8,6 +8,7 @@ mod connection;
 mod stream;
 mod path;
 mod packet;
+mod tracing;
 
 #[napi]
 pub fn version_is_supported(version: u32) -> bool {

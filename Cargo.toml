@@ -15,6 +15,7 @@ napi = { version = "2", features = ["async", "napi6", "serde-json"] }
 serde = { version = "1.0", features = ["derive"] }
 napi-derive = { version = "2", default-features = false, features = ["strict", "compat-mode"] }
 quiche = { version = "0.18.0", features = ["boringssl-boring-crate", "boringssl-vendored"] }
+tokio = { version = "1", features = ["full"] }
 boring = "3"
 
 [build-dependencies]
