@@ -313,7 +313,6 @@ const main = async () => {
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
-  const localhost = '127.0.0.1';
   const key = await generateKeyHMAC();
   let socketCleanMethods = socketCleanupFactory();
   const serverCrypto = {
@@ -342,13 +341,11 @@ const main = async () => {
   server.addEventListener(events.EventQUICServerConnection.name, (e) =>
     connectionEventProm.resolveP(e),
   );
-  await server.start({
-    host: localhost,
-  });
+  await server.start({ host: '127.0.0.1' });
   const client = await QUICClient.createQUICClient({
-    host: localhost,
+    host: '127.0.0.1',
     port: server.port,
-    localHost: localhost,
+    localHost: '127.0.0.1',
     crypto: {
       ops: clientCrypto,
     },
@@ -373,11 +370,13 @@ const main = async () => {
     console.error('loop');
     const stream = client.connection.newStream();
     const writer = stream.writable.getWriter();
-    const reader = stream.readable.getReader();
     await writer.write(message);
-    await reader.read();
     await writer.close();
-    await reader.cancel();
+    const reader = stream.readable.getReader();
+    let finished = false;
+    while (!finished) {
+      finished = (await reader.read()).done;
+    }
   }
   await Promise.all([activeServerStreams]);
 
