@@ -29,21 +29,6 @@ async function generateKeyHMAC() {
   return key;
 }
 
-function socketCleanupFactory() {
-  const sockets = new Set();
-  return {
-    extractSocket: (thing) => sockets.add(thing.socket),
-    stopSockets: async () => {
-      const stopProms = [];
-      for (const socket of sockets) {
-        stopProms.push(socket.stop({ force: true }));
-      }
-      await Promise.all(stopProms);
-    },
-    sockets,
-  };
-}
-
 async function signHMAC(key, data) {
   const cryptoKey = await webcrypto.subtle.importKey(
     'raw',
@@ -316,7 +301,6 @@ const main = async () => {
     ),
   ]);
   const key = await generateKeyHMAC();
-  let socketCleanMethods = socketCleanupFactory();
   const serverCrypto = {
     sign: signHMAC,
     verify: verifyHMAC,
@@ -324,7 +308,6 @@ const main = async () => {
   const clientCrypto = {
     randomBytes: (data) => webcrypto.getRandomValues(new Uint8Array(data)),
   };
-  let connectionEventProm = utils.promise();
   const tlsConfig = await generateTLSConfig();
   const server = new QUICServer({
     crypto: {
@@ -338,9 +321,31 @@ const main = async () => {
       verifyPeer: false,
     },
   });
-  socketCleanMethods.extractSocket(server);
-  server.addEventListener(events.EventQUICServerConnection.name, (e) =>
-    connectionEventProm.resolveP(e),
+  let activeStream = undefined;
+  let activeConn = undefined;
+  // Lets keep all the handling in once place but track when it is done with promises
+  server.addEventListener(events.EventQUICServerConnection.name, (e) =>{
+    const conn = e.detail;
+    conn.addEventListener(
+          events.EventQUICConnectionStream.name,
+          (streamEvent) => {
+            const stream = streamEvent.detail;
+            const streamProm = stream.readable.pipeTo(stream.writable);
+            if (activeStream != null) throw Error('Active stream should be null')
+            activeStream = streamProm;
+          },
+          { 'once': true },
+      );
+    if (activeConn != null) throw Error('Active stream should be null')
+    activeConn = utils.promise();
+    conn.addEventListener(
+        events.EventQUICClientDestroyed.name,
+        () => {
+          activeConn.resolveP()
+        },
+        { once: true},
+    );
+    }
   );
   await server.start({ host: '127.0.0.1' });
 
@@ -350,7 +355,6 @@ const main = async () => {
     // if (i % 500 == 0) console.error('loop', i);
     console.error('loop', i);
 
-    connectionEventProm = utils.promise();
     const client = await QUICClient.createQUICClient({
       host: '127.0.0.1',
       port: server.port,
@@ -363,19 +367,6 @@ const main = async () => {
         verifyPeer: false,
       },
     });
-    socketCleanMethods.extractSocket(client);
-    const conn = (await connectionEventProm.p).detail;
-    let activeStream = undefined;
-    conn.addEventListener(
-      events.EventQUICConnectionStream.name,
-      (streamEvent) => {
-        const stream = streamEvent.detail;
-        const streamProm = stream.readable.pipeTo(stream.writable);
-        activeStream = streamProm;
-      },
-      { 'once': true },
-    );
-
     const stream = client.connection.newStream();
     const writer = stream.writable.getWriter();
     await writer.write(data);
@@ -384,8 +375,10 @@ const main = async () => {
       // do nothing
     }
     await activeStream;
-    await conn.stop({ force: true });
     await client.destroy({ force: true });
+    await activeConn;
+    activeConn = undefined;
+    activeStream = undefined;
   }
 
   await server.stop({ force: true });
