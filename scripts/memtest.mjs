@@ -306,6 +306,8 @@ async function generateTLSConfig() {
   };
 }
 
+// setInterval(() => console.log("Im still alive!"), 5000);
+
 /* eslint-disable no-console */
 const main = async () => {
   const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
@@ -322,8 +324,7 @@ const main = async () => {
   const clientCrypto = {
     randomBytes: (data) => webcrypto.getRandomValues(new Uint8Array(data)),
   };
-  const message = Buffer.from('The Quick Brown Fox Jumped Over The Lazy Dog');
-  const connectionEventProm = utils.promise();
+  let connectionEventProm = utils.promise();
   const tlsConfig = await generateTLSConfig();
   const server = new QUICServer({
     crypto: {
@@ -342,45 +343,51 @@ const main = async () => {
     connectionEventProm.resolveP(e),
   );
   await server.start({ host: '127.0.0.1' });
-  const client = await QUICClient.createQUICClient({
-    host: '127.0.0.1',
-    port: server.port,
-    localHost: '127.0.0.1',
-    crypto: {
-      ops: clientCrypto,
-    },
-    logger: logger.getChild(QUICClient.name),
-    config: {
-      verifyPeer: false,
-    },
-  });
-  socketCleanMethods.extractSocket(client);
-  const conn = (await connectionEventProm.p).detail;
-  const activeServerStreams = [];
-  conn.addEventListener(
-    events.EventQUICConnectionStream.name,
-    (streamEvent) => {
-      const stream = streamEvent.detail;
-      const streamProm = stream.readable.pipeTo(stream.writable);
-      activeServerStreams.push(streamProm);
-    },
-  );
 
-  for (let i = 0; i < 1000; i++) {
-    console.error('loop');
+  const data = Buffer.alloc(1, 0xf0);
+
+  for (let i = 0; i < 100000; i++) {
+    // if (i % 500 == 0) console.error('loop', i);
+    console.error('loop', i);
+
+    connectionEventProm = utils.promise();
+    const client = await QUICClient.createQUICClient({
+      host: '127.0.0.1',
+      port: server.port,
+      localHost: '127.0.0.1',
+      crypto: {
+        ops: clientCrypto,
+      },
+      logger: logger.getChild(QUICClient.name),
+      config: {
+        verifyPeer: false,
+      },
+    });
+    socketCleanMethods.extractSocket(client);
+    const conn = (await connectionEventProm.p).detail;
+    let activeStream = undefined;
+    conn.addEventListener(
+      events.EventQUICConnectionStream.name,
+      (streamEvent) => {
+        const stream = streamEvent.detail;
+        const streamProm = stream.readable.pipeTo(stream.writable);
+        activeStream = streamProm;
+      },
+      { 'once': true },
+    );
+
     const stream = client.connection.newStream();
     const writer = stream.writable.getWriter();
-    await writer.write(message);
+    await writer.write(data);
     await writer.close();
-    const reader = stream.readable.getReader();
-    let finished = false;
-    while (!finished) {
-      finished = (await reader.read()).done;
+    for await (const _ of stream.readable) {
+      // do nothing
     }
+    await activeStream;
+    await conn.stop({ force: true });
+    await client.destroy({ force: true });
   }
-  await Promise.all([activeServerStreams]);
 
-  await client.destroy({ force: true });
   await server.stop({ force: true });
   console.error('Test passed!');
 };

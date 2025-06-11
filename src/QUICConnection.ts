@@ -790,6 +790,7 @@ class QUICConnection {
         // Expect the `data` is mutated here due to in-place decryption,
         // so do not re-use the `data` afterward.
         this.conn.recv(data, recvInfo);
+        // this.logger.warn(`recv: ${data.byteLength}`);
       } catch (e) {
         // If `config.verifyPeer` is true and `config.verifyCallback` is undefined,
         // then during the TLS handshake, a `TlsFail` exception will only be thrown
@@ -891,6 +892,7 @@ class QUICConnection {
       // Fastest way of allocating a buffer, which will be dispatched
       const sendBuffer = Buffer.allocUnsafe(this.config.maxSendUdpPayloadSize);
       try {
+        // this.logger.warn(`send: ${sendBuffer.byteLength}`);
         const result = this.conn.send(sendBuffer);
         if (result === null) {
           // Break the loop
