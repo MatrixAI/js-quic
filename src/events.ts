@@ -10,7 +10,6 @@ import type {
   ErrorQUICStreamPeerWrite,
   ErrorQUICStreamInternal,
   ErrorQUICConnectionIdleTimeout,
-  ErrorQUICSocketInternal,
   ErrorQUICServerInternal,
   ErrorQUICServerSocketNotRunning,
   ErrorQUICClientSocketNotRunning,
@@ -31,14 +30,6 @@ class EventQUICSocketStarted extends EventQUICSocket {}
 class EventQUICSocketStop extends EventQUICSocket {}
 
 class EventQUICSocketStopped extends EventQUICSocket {}
-
-class EventQUICSocketError extends EventQUICSocket<
-  ErrorQUICSocketInternal<unknown>
-> {}
-
-class EventQUICSocketClose extends EventQUICSocket<
-  ErrorQUICSocketInternal<unknown> | undefined
-> {}
 
 // Client events
 
@@ -190,8 +181,6 @@ export {
   EventQUICSocketStarted,
   EventQUICSocketStop,
   EventQUICSocketStopped,
-  EventQUICSocketError,
-  EventQUICSocketClose,
   EventQUICClient,
   EventQUICClientDestroy,
   EventQUICClientDestroyed,

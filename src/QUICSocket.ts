@@ -1,17 +1,24 @@
 import type QUICServer from './QUICServer.js';
 import type { Host, Hostname, Port, ResolveHostname } from './types.js';
 import type { Header } from './native/types.js';
+import type { RemoteInfo } from 'dgram';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
 import { utils as eventsUtils } from '@matrixai/events';
+import { Subject } from 'rxjs';
 import QUICConnectionId from './QUICConnectionId.js';
 import QUICConnectionMap from './QUICConnectionMap.js';
 import quiche from './native/quiche.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
+
+type MessageData = {
+  data: Buffer;
+  remoteInfo: RemoteInfo;
+};
 
 interface QUICSocket extends startStop.StartStop {}
 @startStop.StartStop({
@@ -55,110 +62,23 @@ class QUICSocket {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  protected handleEventQUICSocketError = (evt: events.EventQUICSocketError) => {
-    const error = evt.detail;
-    // Log out error for debugging
-    this.logger.debug(utils.formatError(error));
-  };
+  public socketClose$: Subject<void>;
+  public socketError$: Subject<Error>;
+  public socketListening$: Subject<void>;
+  public socketMessage$: Subject<MessageData>;
 
-  protected handleEventQUICSocketClose = async () => {
-    await this.socketClose();
-    this._closed = true;
-    this.resolveClosedP();
-    if (this[startStop.running]) {
-      await this.stop({ force: true });
-    }
-  };
+  // General events
 
-  /**
-   * Handles UDP socket message.
-   *
-   * The `data` buffer could be multiple coalesced QUIC packets.
-   * It could also be a non-QUIC packet data.
-   * If it is non-QUIC, we can discard the data.
-   * If there are multiple coalesced QUIC packets, it is expected that
-   * all packets are intended for the same connection. This means we only
-   * need to parse the first QUIC packet to determining what connection to route
-   * the data to.
-   */
-  protected handleSocketMessage = async (
-    data: Buffer,
-    remoteInfo: dgram.RemoteInfo,
-  ) => {
-    // The data buffer may have multiple coalesced QUIC packets.
-    // This header is parsed from the first packet.
-    let header: Header;
-    try {
-      header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
-    } catch (e) {
-      // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
-      // packet. If so, then we just ignore the packet.
-      if (e.message === 'BufferTooShort' || e.message === 'InvalidPacket') {
-        return;
-      }
-      // If the error is neither `BufferTooShort` nor `InvalidPacket`, this
-      // may indicate something went wrong in the header parsing, which should
-      // be a software error.
-      throw e;
-    }
-    // All QUIC packets will have the `dcid` header property
-    // However short packets will not have the `scid` property
-    // The destination connection ID is supposed to be our connection ID
-    const dcid = new QUICConnectionId(header.dcid);
-    const remoteInfo_ = {
-      host: remoteInfo.address as Host,
-      port: remoteInfo.port as Port,
-    };
-    const connection = this.connectionMap.get(dcid);
-    if (connection != null) {
-      // In the QUIC protocol, acknowledging packets while in a draining
-      // state is optional. We can respond with `STATELESS_RESET`
-      // but it's not necessary, and ignoring is simpler
-      // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
-      await connection.recv(data, remoteInfo_);
-    } else {
-      // If the server is not registered, we cannot attempt to create a new
-      // connection for this packet.
-      if (this.server == null) {
-        return;
-      }
-      try {
-        // This call will block until the connection is started which
-        // may require multiple `recv` and `send` pairs to process the
-        // received packets.
-        // In order to do this, firstly the initial `data` is facilitated by the
-        // `QUICServer`. And subsequently multiple `recv` and `send` pairs will
-        // occur concurrently while the connection is starting.
-        // These concurrent `recv` and `send` pairs occur in this same handler,
-        // but just in the other branch of the current `if` statement where
-        // the connection object already exists in the connection map.
-        await this.server.acceptConnection(remoteInfo_, header, dcid, data);
-      } catch (e) {
-        if (
-          errorsUtils.checkError(e, (e) => e instanceof errors.ErrorQUICSocket)
-        ) {
-          const e_ = new errors.ErrorQUICSocketInternal(
-            'Failed to call accept connection due to socket send',
-            { cause: e },
-          );
-          this.dispatchEvent(
-            new events.EventQUICSocketError({
-              detail: e_,
-            }),
-          );
-          this.dispatchEvent(new events.EventQUICSocketClose());
-          return;
-        }
-        // If the connection timed out during start, this is an expected
-        // possibility, because the remote peer might have become unavailable,
-        // in which case we can just ignore the error here.
-        if (e instanceof errors.ErrorQUICServerNewConnection) {
-          return;
-        }
-        throw e;
-      }
-    }
-  };
+  public quicSocketStart$: Subject<void>;
+  public quicSocketStarted$: Subject<void>;
+  public quicSocketStop$: Subject<void>;
+  public quicSocketStopped$: Subject<void>;
+  public quicSocketError$: Subject<Error>;
+  public quicSocketClose$: Subject<void>;
+
+  // Debug observables
+
+  protected quicSocketMessageDropped$: Subject<MessageData>;
 
   /**
    * Constructs a QUIC socket.
@@ -179,6 +99,32 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
+
+    // Setting up observables
+    this.socketClose$ = new Subject();
+    this.socketError$ = new Subject();
+    this.socketListening$ = new Subject();
+    this.socketMessage$ = new Subject();
+    this.socketClose$.complete();
+    this.socketError$.complete();
+    this.socketListening$.complete();
+    this.socketMessage$.complete();
+
+    this.quicSocketStart$ = new Subject();
+    this.quicSocketStarted$ = new Subject();
+    this.quicSocketStop$ = new Subject();
+    this.quicSocketStopped$ = new Subject();
+    this.quicSocketError$ = new Subject();
+    this.quicSocketClose$ = new Subject();
+    this.quicSocketStart$.complete();
+    this.quicSocketStarted$.complete();
+    this.quicSocketStop$.complete();
+    this.quicSocketStopped$.complete();
+    this.quicSocketError$.complete();
+    this.quicSocketClose$.complete();
+
+    this.quicSocketMessageDropped$ = new Subject();
+    this.quicSocketMessageDropped$.complete();
   }
 
   /**
@@ -260,39 +206,88 @@ class QUICSocket {
       this.resolveHostname,
     );
     const port_ = utils.toPort(port);
+
+    this.socketClose$ = new Subject();
+    this.socketError$ = new Subject();
+    this.socketListening$ = new Subject();
+    this.socketMessage$ = new Subject();
+    this.quicSocketStart$ = new Subject();
+    this.quicSocketStarted$ = new Subject();
+    this.quicSocketStop$ = new Subject();
+    this.quicSocketStopped$ = new Subject();
+    this.quicSocketError$ = new Subject();
+    this.quicSocketClose$ = new Subject();
+    this.quicSocketMessageDropped$ = new Subject();
+
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr,
       ipv6Only,
     });
+
+    // Hooking up events
+    this.socket.once('close', () => {
+      this.socketClose$.next();
+    });
+    this.socket.once('error', (e) => {
+      this.socketError$.next(e);
+    });
+    this.socket.once('listening', () => {
+      this.socketListening$.next();
+    });
+    const handleMessage = (msg: Buffer, rinfo: RemoteInfo) => {
+      this.socketMessage$.next({
+        remoteInfo: rinfo,
+        data: msg,
+      });
+    };
+
+    // This needs to be cleaned up on either close or error.
+    this.socket.on('message', handleMessage);
+    // Clean up of eventHandler is done after SocketMessage$ completes
+    this.socketMessage$.subscribe({
+      complete: () => {
+        this.socket.removeListener('message', handleMessage);
+      },
+    });
+    // Close or error triggers socketMessage$ to complete
+    this.socketClose$.subscribe(() => {
+      this.socketMessage$.complete();
+    });
+    this.socketError$.subscribe(() => {
+      this.socketMessage$.complete();
+    });
+
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
     this.socketClose = utils.promisify(this.socket.close).bind(this.socket);
     this.socketSend = utils.promisify(this.socket.send).bind(this.socket);
-    const { p: errorP, rejectP: rejectErrorP } = utils.promise();
-    // Prevent promise rejection leak
-    void errorP.catch(() => {});
-    this.socket.once('error', rejectErrorP);
+    const { p: socketErrorP, cleanUp } = utils.observableToPromise(
+      this.socketError$,
+    );
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
     // This makes it equivalent to `dns.lookup`.
     const socketBindP = this.socketBind(port_, host_);
-    try {
-      await Promise.race([socketBindP, errorP]);
-    } catch (e) {
-      // Possible binding failure due to EINVAL or ENOTFOUND.
-      // EINVAL due to using IPv4 address where udp6 is specified.
-      // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
-      // or doesn't resolve to IPv4 if udp4 is specified.
+    const raceResult = await Promise.race([socketBindP, socketErrorP]).finally(
+      async () => {
+        await cleanUp();
+      },
+    );
+    // Possible binding failure due to EINVAL or ENOTFOUND.
+    // EINVAL due to using IPv4 address where udp6 is specified.
+    // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
+    // or doesn't resolve to IPv4 if udp4 is specified.
+    if (raceResult != null) {
       throw new errors.ErrorQUICSocketInvalidBindAddress(
         host !== host_
           ? `Could not bind to resolved ${host} -> ${host_}`
           : `Could not bind to ${host}`,
         {
-          cause: e,
+          cause: raceResult,
         },
       );
     }
-    this.socket.removeListener('error', rejectErrorP);
+
     // The dgram socket's error events might just be informational
     // They don't necessarily correspond to an error
     // Therefore we don't bother listening for it
@@ -309,16 +304,104 @@ class QUICSocket {
     } else if (udpType === 'udp6') {
       this._type = 'ipv6';
     }
-    this.socket.on('message', this.handleSocketMessage);
-    this.addEventListener(
-      events.EventQUICSocketError.name,
-      this.handleEventQUICSocketError,
-    );
-    this.addEventListener(
-      events.EventQUICSocketClose.name,
-      this.handleEventQUICSocketClose,
-      { once: true },
-    );
+    this.socketMessage$.subscribe(async ({ data, remoteInfo }) => {
+      /**
+       * Handles UDP socket message.
+       *
+       * The `data` buffer could be multiple coalesced QUIC packets.
+       * It could also be a non-QUIC packet data.
+       * If it is non-QUIC, we can discard the data.
+       * If there are multiple coalesced QUIC packets, it is expected that
+       * all packets are intended for the same connection. This means we only
+       * need to parse the first QUIC packet to determining what connection to route
+       * the data to.
+       */
+      // The data buffer may have multiple coalesced QUIC packets.
+      // This header is parsed from the first packet.
+      let header: Header;
+      try {
+        header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
+      } catch (e) {
+        // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
+        // packet. If so, then we just ignore the packet.
+        if (e.message === 'BufferTooShort' || e.message === 'InvalidPacket') {
+          this.quicSocketMessageDropped$.next({
+            data,
+            remoteInfo,
+          });
+          return;
+        }
+        // If the error is neither `BufferTooShort` nor `InvalidPacket`, this
+        // may indicate something went wrong in the header parsing, which should
+        // be a software error.
+        throw e;
+      }
+      // All QUIC packets will have the `dcid` header property
+      // However short packets will not have the `scid` property
+      // The destination connection ID is supposed to be our connection ID
+      const dcid = new QUICConnectionId(header.dcid);
+      const remoteInfo_ = {
+        host: remoteInfo.address as Host,
+        port: remoteInfo.port as Port,
+      };
+
+      const connection = this.connectionMap.get(dcid);
+      if (connection != null) {
+        // In the QUIC protocol, acknowledging packets while in a draining
+        // state is optional. We can respond with `STATELESS_RESET`
+        // but it's not necessary, and ignoring is simpler
+        // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
+        await connection.recv(data, remoteInfo_);
+      } else {
+        // If the server is not registered, we cannot attempt to create a new
+        // connection for this packet.
+        if (this.server == null) {
+          return;
+        }
+        try {
+          // This call will block until the connection is started which
+          // may require multiple `recv` and `send` pairs to process the
+          // received packets.
+          // In order to do this, firstly the initial `data` is facilitated by the
+          // `QUICServer`. And subsequently multiple `recv` and `send` pairs will
+          // occur concurrently while the connection is starting.
+          // These concurrent `recv` and `send` pairs occur in this same handler,
+          // but just in the other branch of the current `if` statement where
+          // the connection object already exists in the connection map.
+          await this.server.acceptConnection(remoteInfo_, header, dcid, data);
+        } catch (e) {
+          if (
+            errorsUtils.checkError(
+              e,
+              (e) => e instanceof errors.ErrorQUICSocket,
+            )
+          ) {
+            const e_ = new errors.ErrorQUICSocketInternal(
+              'Failed to call accept connection due to socket send',
+              { cause: e },
+            );
+            this.quicSocketError$.next(e_);
+            this.quicSocketClose$.next();
+            return;
+          }
+          // If the connection timed out during start, this is an expected
+          // possibility, because the remote peer might have become unavailable,
+          // in which case we can just ignore the error here.
+          if (e instanceof errors.ErrorQUICServerNewConnection) {
+            return;
+          }
+          throw e;
+        }
+      }
+    });
+    this.quicSocketClose$.subscribe(async () => {
+      await this.socketClose();
+      this._closed = true;
+      this.resolveClosedP();
+      if (this[startStop.running]) {
+        await this.stop({ force: true });
+      }
+    });
     this._closed = false;
     address = utils.buildAddress(this._host, this._port);
     this.logger.info(`Started ${this.constructor.name} on ${address}`);
@@ -343,22 +426,24 @@ class QUICSocket {
       );
     }
     if (!this._closed) {
-      this.dispatchEvent(new events.EventQUICSocketClose());
+      this.quicSocketClose$.next();
     }
     await this._closedP;
     // Resets the `closedP`
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-    this.removeEventListener(
-      events.EventQUICSocketError.name,
-      this.handleEventQUICSocketError,
-    );
-    this.removeEventListener(
-      events.EventQUICSocketClose.name,
-      this.handleEventQUICSocketClose,
-    );
-    this.socket.off('message', this.handleSocketMessage);
+    this.socketClose$.complete();
+    this.socketError$.complete();
+    this.socketListening$.complete();
+    this.socketMessage$.complete();
+    this.quicSocketStart$.complete();
+    this.quicSocketStarted$.complete();
+    this.quicSocketStop$.complete();
+    this.quicSocketStopped$.complete();
+    this.quicSocketError$.complete();
+    this.quicSocketClose$.complete();
+    this.quicSocketMessageDropped$.complete();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 

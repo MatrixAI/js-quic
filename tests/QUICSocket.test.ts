@@ -222,10 +222,7 @@ describe(QUICSocket.name, () => {
     });
     socketCleanMethods.sockets.add(socket);
     const handleEventQUICSocketError = jest.fn();
-    socket.addEventListener(
-      events.EventQUICSocketError.name,
-      handleEventQUICSocketError,
-    );
+    socket.quicSocketError$.subscribe(handleEventQUICSocketError);
     await socket.start({
       host: '::',
     });
@@ -270,15 +267,9 @@ describe(QUICSocket.name, () => {
         handleEventQUICSocketStopped,
       );
       const handleEventQUICSocketClose = jest.fn();
-      socket.addEventListener(
-        events.EventQUICSocketClose.name,
-        handleEventQUICSocketClose,
-      );
+      socket.quicSocketClose$.subscribe(handleEventQUICSocketClose);
       const handleEventQUICSocketError = jest.fn();
-      socket.addEventListener(
-        events.EventQUICSocketError.name,
-        handleEventQUICSocketError,
-      );
+      socket.quicSocketError$.subscribe(handleEventQUICSocketError);
       const startP = socket.start({
         host: '127.0.0.1',
       });
@@ -313,24 +304,16 @@ describe(QUICSocket.name, () => {
         handleEventQUICSocketStopped,
       );
       const handleEventQUICSocketClose = jest.fn();
-      socket.addEventListener(
-        events.EventQUICSocketClose.name,
-        handleEventQUICSocketClose,
-      );
+      socket.quicSocketClose$.subscribe(handleEventQUICSocketClose);
       const handleEventQUICSocketError = jest.fn();
-      socket.addEventListener(
-        events.EventQUICSocketError.name,
-        handleEventQUICSocketError,
-      );
+      socket.quicSocketError$.subscribe(handleEventQUICSocketError);
       await socket.start({
         host: '127.0.0.1',
       });
-      socket.dispatchEvent(
-        new events.EventQUICSocketError({
-          detail: new errors.ErrorQUICSocketInternal('Dummy Error'),
-        }),
+      socket.quicSocketError$.next(
+        new errors.ErrorQUICSocketInternal('Dummy Error'),
       );
-      socket.dispatchEvent(new events.EventQUICSocketClose());
+      socket.quicSocketClose$.next();
       // @ts-ignore: awaiting protected property
       await socket.closedP;
       expect(socket.closed).toBe(true);
@@ -769,10 +752,7 @@ describe(QUICSocket.name, () => {
           'handleSocketMessage' as any,
         );
         const handleEventQUICSocketError = jest.fn();
-        socket.addEventListener(
-          events.EventQUICSocketError.name,
-          handleEventQUICSocketError,
-        );
+        socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         await socket.start({
           host: '127.0.0.1',
         });
@@ -824,10 +804,7 @@ describe(QUICSocket.name, () => {
         });
         (socket as any).handleSocketMessage = handleSocketMessageMock;
         const handleEventQUICSocketError = jest.fn();
-        socket.addEventListener(
-          events.EventQUICSocketError.name,
-          handleEventQUICSocketError,
-        );
+        socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
@@ -885,10 +862,7 @@ describe(QUICSocket.name, () => {
         });
         (socket as any).handleSocketMessage = handleSocketMessageMock;
         const handleEventQUICSocketError = jest.fn();
-        socket.addEventListener(
-          events.EventQUICSocketError.name,
-          handleEventQUICSocketError,
-        );
+        socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({
@@ -908,9 +882,7 @@ describe(QUICSocket.name, () => {
         // Some times the packet is considered as `BufferTooShort`
         // So here we branch out depending on whether `acceptConnection` was called
         if (quicServer.acceptConnection.mock.calls.length > 0) {
-          expect(handleEventQUICSocketError).toBeCalledWith(
-            expect.any(events.EventQUICSocketError),
-          );
+          expect(handleEventQUICSocketError).toHaveBeenCalled();
           // The socket is automatically stopped
           expect(socket[running]).toBe(false);
         } else {
@@ -954,10 +926,7 @@ describe(QUICSocket.name, () => {
         });
         (socket as any).handleSocketMessage = handleSocketMessageMock;
         const handleEventQUICSocketError = jest.fn();
-        socket.addEventListener(
-          events.EventQUICSocketError.name,
-          handleEventQUICSocketError,
-        );
+        socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
         socket.setServer(quicServer as unknown as QUICServer);
         await socket.start({

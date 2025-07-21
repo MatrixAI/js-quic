@@ -9,11 +9,13 @@ import type {
   ConnectionIdString,
   StreamId,
 } from './types.js';
+import type { Observable } from 'rxjs';
 import dns from 'dns';
 import events from 'node:events';
 import { IPv4, IPv6, Validator } from 'ip-num';
-import QUICConnectionId from './QUICConnectionId.js';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import * as errors from './errors.js';
+import QUICConnectionId from './QUICConnectionId.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8');
@@ -573,6 +575,22 @@ function setMaxListeners(
   events.setMaxListeners(limit, target);
 }
 
+function observableToPromise<T>(subscribable: Observable<T>): {
+  p: Promise<T | undefined>;
+  cleanUp: () => Promise<void>;
+} {
+  const cleanUpSubject = new Subject<void>();
+  const p = firstValueFrom(subscribable.pipe(takeUntil(cleanUpSubject)), {
+    defaultValue: undefined,
+  });
+  const cleanUp = async () => {
+    cleanUpSubject.next();
+    cleanUpSubject.complete();
+    await p;
+  };
+  return { p, cleanUp };
+}
+
 export {
   textEncoder,
   textDecoder,
@@ -613,4 +631,5 @@ export {
   isStreamStopped,
   isStreamReset,
   setMaxListeners,
+  observableToPromise,
 };

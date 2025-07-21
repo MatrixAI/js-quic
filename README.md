@@ -225,8 +225,9 @@ a set of rules.
   that arise from perform IO with the operating system.
 
 ### Running without nix
-This assumes you are running linux.
-To run outside nix setting up the enviroment, you need to install the following.
+
+This assumes you are running linux. To run outside nix setting up the
+enviroment, you need to install the following.
 
 1. Use NVM to install node version 20.
 2. Install the following native libraries
