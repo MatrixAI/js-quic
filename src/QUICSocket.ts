@@ -62,23 +62,23 @@ class QUICSocket {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  public socketClose$: Subject<void>;
-  public socketError$: Subject<Error>;
-  public socketListening$: Subject<void>;
-  public socketMessage$: Subject<MessageData>;
+  public socketClose$: Subject<void> = new Subject();
+  public socketError$: Subject<Error> = new Subject();
+  public socketListening$: Subject<void> = new Subject();
+  public socketMessage$: Subject<MessageData> = new Subject();
 
   // General events
 
-  public quicSocketStart$: Subject<void>;
-  public quicSocketStarted$: Subject<void>;
-  public quicSocketStop$: Subject<void>;
-  public quicSocketStopped$: Subject<void>;
-  public quicSocketError$: Subject<Error>;
-  public quicSocketClose$: Subject<void>;
+  public quicSocketStart$: Subject<void> = new Subject();
+  public quicSocketStarted$: Subject<void> = new Subject();
+  public quicSocketStop$: Subject<void> = new Subject();
+  public quicSocketStopped$: Subject<void> = new Subject();
+  public quicSocketError$: Subject<Error> = new Subject();
+  public quicSocketClose$: Subject<void> = new Subject();
 
   // Debug observables
 
-  protected quicSocketMessageDropped$: Subject<MessageData>;
+  protected quicSocketMessageDropped$: Subject<MessageData> = new Subject();
 
   /**
    * Constructs a QUIC socket.
@@ -99,32 +99,6 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-
-    // Setting up observables
-    this.socketClose$ = new Subject();
-    this.socketError$ = new Subject();
-    this.socketListening$ = new Subject();
-    this.socketMessage$ = new Subject();
-    this.socketClose$.complete();
-    this.socketError$.complete();
-    this.socketListening$.complete();
-    this.socketMessage$.complete();
-
-    this.quicSocketStart$ = new Subject();
-    this.quicSocketStarted$ = new Subject();
-    this.quicSocketStop$ = new Subject();
-    this.quicSocketStopped$ = new Subject();
-    this.quicSocketError$ = new Subject();
-    this.quicSocketClose$ = new Subject();
-    this.quicSocketStart$.complete();
-    this.quicSocketStarted$.complete();
-    this.quicSocketStop$.complete();
-    this.quicSocketStopped$.complete();
-    this.quicSocketError$.complete();
-    this.quicSocketClose$.complete();
-
-    this.quicSocketMessageDropped$ = new Subject();
-    this.quicSocketMessageDropped$.complete();
   }
 
   /**
@@ -206,19 +180,6 @@ class QUICSocket {
       this.resolveHostname,
     );
     const port_ = utils.toPort(port);
-
-    this.socketClose$ = new Subject();
-    this.socketError$ = new Subject();
-    this.socketListening$ = new Subject();
-    this.socketMessage$ = new Subject();
-    this.quicSocketStart$ = new Subject();
-    this.quicSocketStarted$ = new Subject();
-    this.quicSocketStop$ = new Subject();
-    this.quicSocketStopped$ = new Subject();
-    this.quicSocketError$ = new Subject();
-    this.quicSocketClose$ = new Subject();
-    this.quicSocketMessageDropped$ = new Subject();
-
     this.socket = dgram.createSocket({
       type: udpType,
       reuseAddr,
@@ -433,17 +394,32 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
+
+    // Resetting observables
     this.socketClose$.complete();
     this.socketError$.complete();
     this.socketListening$.complete();
     this.socketMessage$.complete();
+    this.socketClose$ = new Subject();
+    this.socketError$ = new Subject();
+    this.socketListening$ = new Subject();
+    this.socketMessage$ = new Subject();
+
     this.quicSocketStart$.complete();
     this.quicSocketStarted$.complete();
     this.quicSocketStop$.complete();
     this.quicSocketStopped$.complete();
     this.quicSocketError$.complete();
     this.quicSocketClose$.complete();
+    this.quicSocketStart$ = new Subject();
+    this.quicSocketStarted$ = new Subject();
+    this.quicSocketStop$ = new Subject();
+    this.quicSocketStopped$ = new Subject();
+    this.quicSocketError$ = new Subject();
+    this.quicSocketClose$ = new Subject();
+
     this.quicSocketMessageDropped$.complete();
+    this.quicSocketMessageDropped$ = new Subject();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 

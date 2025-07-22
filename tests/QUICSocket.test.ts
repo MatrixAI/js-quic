@@ -738,6 +738,7 @@ describe(QUICSocket.name, () => {
   describe('receiving datagrams', () => {
     test.prop([testsUtils.bufferArb({ minLength: 0, maxLength: 100 })], {
       numRuns: 20,
+      verbose: true,
     })(
       'random datagrams are discarded when there is no server',
       async (message) => {
@@ -747,10 +748,8 @@ describe(QUICSocket.name, () => {
         socketCleanMethods.sockets.add(socket);
         // We have to spy on the arrow function property before it is registered
         // Which meanst this spy must be created before the socket is started
-        const handleSocketMessageMock = jest.spyOn(
-          socket,
-          'handleSocketMessage' as any,
-        );
+        const handleSocketMessage = jest.fn();
+        socket.socketMessage$.subscribe(handleSocketMessage);
         const handleEventQUICSocketError = jest.fn();
         socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         await socket.start({
@@ -768,7 +767,7 @@ describe(QUICSocket.name, () => {
         );
         // Allow the event loop to flush the UDP socket
         await testsUtils.sleep(200);
-        expect(handleSocketMessageMock).toHaveBeenCalledTimes(1);
+        expect(handleSocketMessage).toHaveBeenCalledTimes(1);
         expect(handleEventQUICSocketError).not.toHaveBeenCalled();
         await socket.stop({ force: true });
       },
@@ -797,12 +796,9 @@ describe(QUICSocket.name, () => {
           p: handleSocketMessageMockP,
           resolveP: resolveHandleSocketMessageMockP,
         } = utils.promise();
-        const handleSocketMessage = (socket as any).handleSocketMessage;
-        const handleSocketMessageMock = jest.fn((...args) => {
-          resolveHandleSocketMessageMockP();
-          handleSocketMessage.apply(socket, args);
-        });
-        (socket as any).handleSocketMessage = handleSocketMessageMock;
+        socket.socketMessage$.subscribe(() =>
+          resolveHandleSocketMessageMockP(),
+        );
         const handleEventQUICSocketError = jest.fn();
         socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
@@ -828,12 +824,15 @@ describe(QUICSocket.name, () => {
         await socket.stop();
       },
     );
-    test.prop([
-      testsUtils.bufferArb({
-        minLength: quiche.MAX_CONN_ID_LEN + 1,
-        maxLength: 100,
-      }),
-    ])(
+    test.prop(
+      [
+        testsUtils.bufferArb({
+          minLength: quiche.MAX_CONN_ID_LEN + 1,
+          maxLength: 100,
+        }),
+      ],
+      { numRuns: 20 },
+    )(
       'new connection failure due to socket errors results in domain error events',
       async (message) => {
         const quicServer = {
@@ -855,12 +854,9 @@ describe(QUICSocket.name, () => {
           p: handleSocketMessageMockP,
           resolveP: resolveHandleSocketMessageMockP,
         } = utils.promise();
-        const handleSocketMessage = (socket as any).handleSocketMessage;
-        const handleSocketMessageMock = jest.fn((...args) => {
-          resolveHandleSocketMessageMockP();
-          handleSocketMessage.apply(socket, args);
-        });
-        (socket as any).handleSocketMessage = handleSocketMessageMock;
+        socket.socketMessage$.subscribe(() =>
+          resolveHandleSocketMessageMockP(),
+        );
         const handleEventQUICSocketError = jest.fn();
         socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
@@ -919,12 +915,9 @@ describe(QUICSocket.name, () => {
           p: handleSocketMessageMockP,
           resolveP: resolveHandleSocketMessageMockP,
         } = utils.promise();
-        const handleSocketMessage = (socket as any).handleSocketMessage;
-        const handleSocketMessageMock = jest.fn((...args) => {
-          resolveHandleSocketMessageMockP();
-          handleSocketMessage.apply(socket, args);
-        });
-        (socket as any).handleSocketMessage = handleSocketMessageMock;
+        socket.socketMessage$.subscribe(() =>
+          resolveHandleSocketMessageMockP(),
+        );
         const handleEventQUICSocketError = jest.fn();
         socket.quicSocketError$.subscribe(handleEventQUICSocketError);
         // Dummy server
