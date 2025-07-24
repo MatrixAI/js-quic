@@ -1,4 +1,5 @@
 import type { Host } from '#types.js';
+import { map, Observable, Subject } from 'rxjs';
 import * as utils from '#utils.js';
 
 describe('utils', () => {
@@ -106,5 +107,19 @@ describe('utils', () => {
     expect(utils.resolvesZeroIP('1.1.1.1' as Host)).toBe('1.1.1.1');
     expect(utils.resolvesZeroIP('::2' as Host)).toBe('::2');
     expect(utils.resolvesZeroIP('::ffff:7f00:1' as Host)).toBe('::ffff:7f00:1');
+  });
+});
+
+test('asd', async () => {
+  const asd = new Subject();
+  asd.complete();
+  const bsd = asd.pipe(map(() => 123));
+  bsd.subscribe({
+    next: (value) => console.log(value),
+    complete: () => console.log('complete'),
+  });
+  bsd.subscribe({
+    next: (value) => console.log(value),
+    complete: () => console.log('complete'),
   });
 });

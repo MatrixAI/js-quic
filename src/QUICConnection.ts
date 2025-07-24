@@ -12,21 +12,27 @@ import type {
   StreamReasonToCode,
 } from './types.js';
 import type { Connection, ConnectionError, SendInfo } from './native/types.js';
+import type { EventAll } from '@matrixai/events';
 import Logger from '@matrixai/logger';
 import { Timer } from '@matrixai/timer';
 import { Lock } from '@matrixai/async-locks';
-import { AbstractEvent, EventAll } from '@matrixai/events';
+import { AbstractEvent } from '@matrixai/events';
 import { startStop } from '@matrixai/async-init';
 import { decorators } from '@matrixai/contexts';
 import { buildQuicheConfig, minIdleTimeout } from './config.js';
 import QUICConnectionId from './QUICConnectionId.js';
-import QUICStream from './QUICStream.js';
 import { ConnectionErrorCode } from './native/types.js';
 import quiche from './native/quiche.js';
 import { Shutdown } from './native/types.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
+
+type SendDetails = {
+  id: number;
+  message: Buffer;
+  sendInfo: SendInfo;
+};
 
 interface QUICConnection extends startStop.StartStop {}
 @startStop.StartStop({
@@ -51,12 +57,6 @@ class QUICConnection {
    * @internal
    */
   public readonly conn: Connection;
-
-  /**
-   * Internal stream map.
-   * @internal
-   */
-  public readonly streamMap: Map<StreamId, QUICStream> = new Map();
 
   /**
    * Unique id used to identify events intended for this connection.
@@ -275,22 +275,6 @@ class QUICConnection {
    */
   protected handleEventQUICStreamSend = async () => {
     if (this[startStop.running]) await this.send();
-  };
-
-  /**
-   * Handles `EventQUICStreamDestroyed`.
-   * Registered once.
-   */
-  protected handleEventQUICStreamDestroyed = (
-    evt: events.EventQUICStreamDestroyed,
-  ) => {
-    const quicStream = evt.target as QUICStream;
-    quicStream.removeEventListener(
-      events.EventQUICStreamSend.name,
-      this.handleEventQUICStreamSend,
-    );
-    quicStream.removeEventListener(EventAll.name, this.handleEventQUICStream);
-    this.streamMap.delete(quicStream.streamId);
   };
 
   /**
@@ -667,21 +651,6 @@ class QUICConnection {
     // This will allow any streams to process buffers before continuing
     await utils.yieldMicro();
 
-    // Destroy all streams
-    const streamsDestroyP: Array<Promise<void>> = [];
-    for (const quicStream of this.streamMap.values()) {
-      // The reason is only used if `force` is `true`
-      // If `force` is not true, this will gracefully wait for
-      // both readable and writable to gracefully close
-      streamsDestroyP.push(
-        quicStream.destroy({
-          reason: this.errorLast,
-          force: force || this.conn.isDraining() || this.conn.isClosed(),
-        }),
-      );
-    }
-    await Promise.all(streamsDestroyP);
-
     // Close after processing all streams
     if (!this.conn.isDraining() && !this.conn.isClosed()) {
       // If `this.conn.close` is already called, the connection will be draining,
@@ -767,6 +736,7 @@ class QUICConnection {
    *
    * @internal
    */
+  // TODO: make sync
   @startStop.ready(new errors.ErrorQUICConnectionNotRunning(), false, [
     'starting',
     'stopping',
@@ -851,10 +821,6 @@ class QUICConnection {
         this.config.verifyCallback == null
       ) {
         this.resolveSecureEstablishedP();
-      }
-      // If we are securely established we can process streams.
-      if (this.secureEstablished) {
-        this.processStreams();
       }
       // After every recv, there must be a send.
       await this.send();
@@ -957,7 +923,6 @@ class QUICConnection {
       // `this.recv`. This will only be run on the first time, we perform
       // the custom TLS verification
       this.resolveSecureEstablishedP();
-      this.processStreams();
     }
     if (this[startStop.status] !== 'stopping') {
       const peerError = this.conn.peerError();
@@ -1075,115 +1040,6 @@ class QUICConnection {
     }
   }
 
-  protected processStreams() {
-    for (const streamId of this.conn.readable() as Iterable<StreamId>) {
-      let quicStream = this.streamMap.get(streamId);
-      if (quicStream == null) {
-        if (
-          this[startStop.running] === false ||
-          this[startStop.status] === 'stopping'
-        ) {
-          // We should reject new connections when stopping
-          this.conn.streamShutdown(
-            streamId,
-            Shutdown.Write,
-            this.reasonToCode('write', errors.ErrorQUICConnectionStopping),
-          );
-          this.conn.streamShutdown(
-            streamId,
-            Shutdown.Read,
-            this.reasonToCode('read', errors.ErrorQUICConnectionStopping),
-          );
-          continue;
-        }
-        if (this.isStreamUsed(streamId)) {
-          utils.never('We should never repeat streamIds when creating streams');
-        }
-        quicStream = QUICStream.createQUICStream({
-          initiated: 'peer',
-          streamId,
-          config: this.config,
-          connection: this,
-          codeToReason: this.codeToReason,
-          reasonToCode: this.reasonToCode,
-          logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
-        });
-        this.streamMap.set(quicStream.streamId, quicStream);
-        quicStream.addEventListener(
-          events.EventQUICStreamSend.name,
-          this.handleEventQUICStreamSend,
-        );
-        quicStream.addEventListener(
-          events.EventQUICStreamDestroyed.name,
-          this.handleEventQUICStreamDestroyed,
-          { once: true },
-        );
-        quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
-        this.dispatchEvent(
-          new events.EventQUICConnectionStream({ detail: quicStream }),
-        );
-      }
-      quicStream.read();
-    }
-    for (const streamId of this.conn.writable() as Iterable<StreamId>) {
-      let quicStream = this.streamMap.get(streamId);
-      if (quicStream == null) {
-        if (
-          this[startStop.running] === false ||
-          this[startStop.status] === 'stopping'
-        ) {
-          // We should reject new connections when stopping
-          this.conn.streamShutdown(
-            streamId,
-            Shutdown.Write,
-            this.reasonToCode('write', errors.ErrorQUICConnectionStopping),
-          );
-          this.conn.streamShutdown(
-            streamId,
-            Shutdown.Read,
-            this.reasonToCode('read', errors.ErrorQUICConnectionStopping),
-          );
-          continue;
-        }
-        if (this.isStreamUsed(streamId)) {
-          try {
-            this.conn.streamSend(streamId, new Uint8Array(), false);
-          } catch (e) {
-            // Both `StreamStopped()` and `FinalSize` errors means that the stream has ended and we cleaned up state
-            if (utils.isStreamStopped(e) !== false) continue;
-            if (e.message === 'FinalSize') continue;
-            throw e;
-          }
-          utils.never('We never expect a duplicate stream to be readable');
-        }
-        quicStream = QUICStream.createQUICStream({
-          initiated: 'peer',
-          streamId,
-          config: this.config,
-          connection: this,
-          codeToReason: this.codeToReason,
-          reasonToCode: this.reasonToCode,
-          logger: this.logger.getChild(`${QUICStream.name} ${streamId}`),
-        });
-        this.streamMap.set(quicStream.streamId, quicStream);
-        quicStream.addEventListener(
-          events.EventQUICStreamSend.name,
-          this.handleEventQUICStreamSend,
-        );
-        quicStream.addEventListener(
-          events.EventQUICStreamDestroyed.name,
-          this.handleEventQUICStreamDestroyed,
-          { once: true },
-        );
-        quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
-        this.dispatchEvent(
-          new events.EventQUICConnectionStream({ detail: quicStream }),
-        );
-      }
-      quicStream.write();
-    }
-  }
-
   /**
    * Sets up the connection timeout timer.
    *
@@ -1269,71 +1125,6 @@ class QUICConnection {
       });
     } else if (this.connTimeoutTimer.status == null) {
       this.connTimeoutTimer.reset(timeout + 1);
-    }
-  }
-
-  /**
-   * Creates a new QUIC stream on the connection.
-   */
-  @startStop.ready(new errors.ErrorQUICConnectionNotRunning())
-  public newStream(type: 'bidi' | 'uni' = 'bidi'): QUICStream {
-    let streamId: StreamId;
-    if (this.type === 'client' && type === 'bidi') {
-      streamId = this.streamIdClientBidi;
-    } else if (this.type === 'server' && type === 'bidi') {
-      streamId = this.streamIdServerBidi;
-    } else if (this.type === 'client' && type === 'uni') {
-      streamId = this.streamIdClientUni;
-    } else if (this.type === 'server' && type === 'uni') {
-      streamId = this.streamIdServerUni;
-    }
-    if (this.isStreamUsed(streamId!)) {
-      utils.never('We should never repeat streamIds when creating streams');
-    }
-    const quicStream = QUICStream.createQUICStream({
-      initiated: 'local',
-      streamId: streamId!,
-      connection: this,
-      config: this.config,
-      codeToReason: this.codeToReason,
-      reasonToCode: this.reasonToCode,
-      logger: this.logger.getChild(`${QUICStream.name} ${streamId!}`),
-    });
-    this.streamMap.set(quicStream.streamId, quicStream);
-    quicStream.addEventListener(
-      events.EventQUICStreamSend.name,
-      this.handleEventQUICStreamSend,
-    );
-    quicStream.addEventListener(
-      events.EventQUICStreamDestroyed.name,
-      this.handleEventQUICStreamDestroyed,
-      { once: true },
-    );
-    quicStream.addEventListener(EventAll.name, this.handleEventQUICStream);
-    if (this.type === 'client' && type === 'bidi') {
-      this.streamIdClientBidi = (this.streamIdClientBidi + 4) as StreamId;
-    } else if (this.type === 'server' && type === 'bidi') {
-      this.streamIdServerBidi = (this.streamIdServerBidi + 4) as StreamId;
-    } else if (this.type === 'client' && type === 'uni') {
-      this.streamIdClientUni = (this.streamIdClientUni + 4) as StreamId;
-    } else if (this.type === 'server' && type === 'uni') {
-      this.streamIdServerUni = (this.streamIdServerUni + 4) as StreamId;
-    }
-    return quicStream;
-  }
-
-  /**
-   * Destroys all active streams without closing the connection.
-   *
-   * If there are no active streams then it will do nothing.
-   * If the connection is stopped with `force: false` then this can be used
-   * to force close any streams `stop` is waiting for to end.
-   *
-   * Destruction will occur in the background.
-   */
-  public destroyStreams(reason?: any) {
-    for (const quicStream of this.streamMap.values()) {
-      quicStream.cancel(reason);
     }
   }
 

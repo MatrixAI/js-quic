@@ -2,12 +2,13 @@ import type QUICServer from './QUICServer.js';
 import type { Host, Hostname, Port, ResolveHostname } from './types.js';
 import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
+import type { Observable } from 'rxjs';
 import dgram from 'dgram';
 import Logger from '@matrixai/logger';
 import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
 import { utils as eventsUtils } from '@matrixai/events';
-import { Subject } from 'rxjs';
+import { firstValueFrom, map, sampleTime, Subject } from 'rxjs';
 import QUICConnectionId from './QUICConnectionId.js';
 import QUICConnectionMap from './QUICConnectionMap.js';
 import quiche from './native/quiche.js';
@@ -62,23 +63,27 @@ class QUICSocket {
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
 
-  public socketClose$: Subject<void> = new Subject();
-  public socketError$: Subject<Error> = new Subject();
-  public socketListening$: Subject<void> = new Subject();
-  public socketMessage$: Subject<MessageData> = new Subject();
+  public socketClose$: Subject<void>;
+  public socketError$: Subject<Error>;
+  public socketListening$: Subject<void>;
+  public socketMessage$: Subject<MessageData>;
+  public socketSend$: Subject<QUICConnectionId>;
+  public socketSendReady$: Observable<void>;
 
   // General events
 
-  public quicSocketStart$: Subject<void> = new Subject();
-  public quicSocketStarted$: Subject<void> = new Subject();
-  public quicSocketStop$: Subject<void> = new Subject();
-  public quicSocketStopped$: Subject<void> = new Subject();
-  public quicSocketError$: Subject<Error> = new Subject();
-  public quicSocketClose$: Subject<void> = new Subject();
+  public quicSocketStart$: Subject<void>;
+  public quicSocketStarted$: Subject<void>;
+  public quicSocketStop$: Subject<void>;
+  public quicSocketStopped$: Subject<void>;
+  public quicSocketError$: Subject<Error>;
+  public quicSocketClose$: Subject<void>;
 
   // Debug observables
 
-  protected quicSocketMessageDropped$: Subject<MessageData> = new Subject();
+  protected quicSocketMessageDropped$: Subject<
+    MessageData & { reason: string }
+  >;
 
   /**
    * Constructs a QUIC socket.
@@ -99,6 +104,7 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
+    this.setupObservables();
   }
 
   /**
@@ -168,6 +174,7 @@ class QUICSocket {
     reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
+    void this.processSendQueue();
     // Since we have a one-to-many relationship with clients and connections,
     // we want to up the warning limit on the EventTarget
     utils.setMaxListeners(this[eventsUtils._eventTarget]);
@@ -287,6 +294,7 @@ class QUICSocket {
         // packet. If so, then we just ignore the packet.
         if (e.message === 'BufferTooShort' || e.message === 'InvalidPacket') {
           this.quicSocketMessageDropped$.next({
+            reason: e.message,
             data,
             remoteInfo,
           });
@@ -317,6 +325,11 @@ class QUICSocket {
         // If the server is not registered, we cannot attempt to create a new
         // connection for this packet.
         if (this.server == null) {
+          this.quicSocketMessageDropped$.next({
+            reason: 'ServerNotRunning',
+            data,
+            remoteInfo,
+          });
           return;
         }
         try {
@@ -343,12 +356,22 @@ class QUICSocket {
             );
             this.quicSocketError$.next(e_);
             this.quicSocketClose$.next();
+            this.quicSocketMessageDropped$.next({
+              reason: 'ServerFailedAccept',
+              data,
+              remoteInfo,
+            });
             return;
           }
           // If the connection timed out during start, this is an expected
           // possibility, because the remote peer might have become unavailable,
           // in which case we can just ignore the error here.
           if (e instanceof errors.ErrorQUICServerNewConnection) {
+            this.quicSocketMessageDropped$.next({
+              reason: 'ServerFailedNewConnection',
+              data,
+              remoteInfo,
+            });
             return;
           }
           throw e;
@@ -395,22 +418,36 @@ class QUICSocket {
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
 
+    this.setupObservables();
+    this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
+  }
+
+  protected setupObservables() {
     // Resetting observables
-    this.socketClose$.complete();
-    this.socketError$.complete();
-    this.socketListening$.complete();
-    this.socketMessage$.complete();
+    this.socketClose$?.complete();
+    this.socketError$?.complete();
+    this.socketListening$?.complete();
+    this.socketMessage$?.complete();
+    this.socketSend$?.complete();
     this.socketClose$ = new Subject();
     this.socketError$ = new Subject();
     this.socketListening$ = new Subject();
     this.socketMessage$ = new Subject();
+    this.socketSend$ = new Subject();
+    this.socketSend$.subscribe((v) => {
+      this.connectionSendReadyQueue.add(v.toString());
+      this.connectionSendReadyQueue2.push(v.toString());
+    });
+    this.socketSendReady$ = this.socketSend$
+      .pipe(map(() => undefined))
+      .pipe(sampleTime(0));
 
-    this.quicSocketStart$.complete();
-    this.quicSocketStarted$.complete();
-    this.quicSocketStop$.complete();
-    this.quicSocketStopped$.complete();
-    this.quicSocketError$.complete();
-    this.quicSocketClose$.complete();
+    this.quicSocketStart$?.complete();
+    this.quicSocketStarted$?.complete();
+    this.quicSocketStop$?.complete();
+    this.quicSocketStopped$?.complete();
+    this.quicSocketError$?.complete();
+    this.quicSocketClose$?.complete();
     this.quicSocketStart$ = new Subject();
     this.quicSocketStarted$ = new Subject();
     this.quicSocketStop$ = new Subject();
@@ -418,9 +455,8 @@ class QUICSocket {
     this.quicSocketError$ = new Subject();
     this.quicSocketClose$ = new Subject();
 
-    this.quicSocketMessageDropped$.complete();
+    this.quicSocketMessageDropped$?.complete();
     this.quicSocketMessageDropped$ = new Subject();
-    this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
 
   /**
@@ -432,6 +468,7 @@ class QUICSocket {
    * mean that this `QUICSocket` is an error state. It could be the caller's
    * fault.
    */
+  // FIXME: this is way too complex for a low level send.
   public async send(
     msg: string | Uint8Array | ReadonlyArray<any>,
     port: number,
@@ -505,6 +542,33 @@ class QUICSocket {
 
   public unsetServer() {
     delete this.server;
+  }
+
+  // FIXME: getting ahead of myself here. Skip for now.
+  // Logic for handling send queue
+  protected connectionSendReadyQueue: Set<string> = new Set();
+  protected connectionSendReadyQueue2: Array<string> = [];
+
+  public async processSendQueue(): Promise<void> {
+    this.socketSend$.subscribe((v) =>
+      this.logger.warn(`socket send with ${v.toString()}`),
+    );
+    this.socketSendReady$.subscribe({
+      next: () => this.logger.warn(`socket send ready`),
+      complete: () => this.logger.warn(`socket send Ready complete`),
+    });
+    while (true) {
+      const result = await firstValueFrom(this.socketSendReady$, {
+        defaultValue: true,
+      });
+      if (result === true) break;
+      this.logger.warn(
+        `processing ran with queue size ${this.connectionSendReadyQueue2.length}`,
+      );
+      this.connectionSendReadyQueue.clear();
+      this.connectionSendReadyQueue2 = [];
+    }
+    this.logger.warn('process loop complete');
   }
 }
 

@@ -5,6 +5,7 @@ import { test } from '@fast-check/jest';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { jest } from '@jest/globals';
+import { Observable } from 'rxjs';
 import * as testsUtils from './utils.js';
 import QUICSocket from '#QUICSocket.js';
 import QUICConnectionId from '#QUICConnectionId.js';
