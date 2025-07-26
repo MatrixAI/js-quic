@@ -112,14 +112,11 @@ describe('utils', () => {
 
 test('asd', async () => {
   const asd = new Subject();
+  asd.subscribe(
+    (v) => console.log('asd', v),
+    (e) => console.error(e),
+    () => console.log('complete'),
+  );
+  asd.error(new Error('asd'));
   asd.complete();
-  const bsd = asd.pipe(map(() => 123));
-  bsd.subscribe({
-    next: (value) => console.log(value),
-    complete: () => console.log('complete'),
-  });
-  bsd.subscribe({
-    next: (value) => console.log(value),
-    complete: () => console.log('complete'),
-  });
 });

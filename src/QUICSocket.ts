@@ -1,5 +1,11 @@
 import type QUICServer from './QUICServer.js';
-import type { Host, Hostname, Port, ResolveHostname } from './types.js';
+import type {
+  Host,
+  Hostname,
+  Port,
+  ResolveHostname,
+  QUICConnectionId,
+} from './types.js';
 import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
 import type { Observable } from 'rxjs';
@@ -9,7 +15,6 @@ import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
 import { utils as eventsUtils } from '@matrixai/events';
 import { firstValueFrom, map, sampleTime, Subject } from 'rxjs';
-import QUICConnectionId from './QUICConnectionId.js';
 import QUICConnectionMap from './QUICConnectionMap.js';
 import quiche from './native/quiche.js';
 import * as utils from './utils.js';
@@ -273,6 +278,7 @@ class QUICSocket {
       this._type = 'ipv6';
     }
     this.socketMessage$.subscribe(async ({ data, remoteInfo }) => {
+      this.logger.warn(`processing message from ${remoteInfo.address}`);
       /**
        * Handles UDP socket message.
        *
@@ -287,9 +293,11 @@ class QUICSocket {
       // The data buffer may have multiple coalesced QUIC packets.
       // This header is parsed from the first packet.
       let header: Header;
+      console.log(data.byteLength, data.toString());
       try {
         header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
       } catch (e) {
+        console.error(e);
         // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
         // packet. If so, then we just ignore the packet.
         if (e.message === 'BufferTooShort' || e.message === 'InvalidPacket') {
@@ -298,6 +306,7 @@ class QUICSocket {
             data,
             remoteInfo,
           });
+          console.log('a');
           return;
         }
         // If the error is neither `BufferTooShort` nor `InvalidPacket`, this
@@ -308,7 +317,7 @@ class QUICSocket {
       // All QUIC packets will have the `dcid` header property
       // However short packets will not have the `scid` property
       // The destination connection ID is supposed to be our connection ID
-      const dcid = new QUICConnectionId(header.dcid);
+      const dcid = Buffer.from(header.dcid).toString('hex');
       const remoteInfo_ = {
         host: remoteInfo.address as Host,
         port: remoteInfo.port as Port,
@@ -330,6 +339,7 @@ class QUICSocket {
             data,
             remoteInfo,
           });
+          console.log('b');
           return;
         }
         try {
@@ -361,6 +371,7 @@ class QUICSocket {
               data,
               remoteInfo,
             });
+            console.log('c');
             return;
           }
           // If the connection timed out during start, this is an expected
@@ -372,6 +383,7 @@ class QUICSocket {
               data,
               remoteInfo,
             });
+            console.log('d');
             return;
           }
           throw e;
@@ -434,9 +446,8 @@ class QUICSocket {
     this.socketListening$ = new Subject();
     this.socketMessage$ = new Subject();
     this.socketSend$ = new Subject();
-    this.socketSend$.subscribe((v) => {
-      this.connectionSendReadyQueue.add(v.toString());
-      this.connectionSendReadyQueue2.push(v.toString());
+    this.socketSend$.subscribe((connectionId) => {
+      this.queueSend(connectionId);
     });
     this.socketSendReady$ = this.socketSend$
       .pipe(map(() => undefined))
@@ -546,8 +557,8 @@ class QUICSocket {
 
   // FIXME: getting ahead of myself here. Skip for now.
   // Logic for handling send queue
-  protected connectionSendReadyQueue: Set<string> = new Set();
-  protected connectionSendReadyQueue2: Array<string> = [];
+  protected connectionSendReadySet: Set<string> = new Set();
+  protected connectionSendReadyQueue: Array<string> = [];
 
   public async processSendQueue(): Promise<void> {
     this.socketSend$.subscribe((v) =>
@@ -563,12 +574,36 @@ class QUICSocket {
       });
       if (result === true) break;
       this.logger.warn(
-        `processing ran with queue size ${this.connectionSendReadyQueue2.length}`,
+        `processing ran with queue size ${this.connectionSendReadyQueue.length}`,
       );
-      this.connectionSendReadyQueue.clear();
-      this.connectionSendReadyQueue2 = [];
+      let connectionId = this.connectionSendReadyQueue.pop();
+      while (connectionId != null) {
+        this.connectionSendReadySet.delete(connectionId);
+        const connection = this.connectionMap.get(connectionId);
+        if (connection == null) {
+          this.logger.warn(
+            `connection ${connectionId} is missing, skipping...`,
+          );
+          continue;
+        }
+        let data = connection.send();
+        while (data != null) {
+          this.logger.warn(`packet queued for ${connectionId}`);
+          await this.send_(data.data, data.port, data.host);
+          data = connection.send();
+        }
+        connectionId = this.connectionSendReadyQueue.pop();
+      }
+      this.logger.warn('done processing loop');
+      // Sending messages
     }
     this.logger.warn('process loop complete');
+  }
+
+  protected queueSend(connectionId: string): void {
+    if (this.connectionSendReadySet.has(connectionId)) return;
+    this.connectionSendReadyQueue.push(connectionId);
+    this.connectionSendReadySet.add(connectionId);
   }
 }
 

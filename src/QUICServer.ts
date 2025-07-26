@@ -8,14 +8,15 @@ import type {
   QUICServerConfigInput,
   StreamCodeToReason,
   StreamReasonToCode,
+  QUICConnectionId,
 } from './types.js';
 import type { Header } from './native/types.js';
 import Logger from '@matrixai/logger';
 import { AbstractEvent, EventAll } from '@matrixai/events';
 import { startStop } from '@matrixai/async-init';
+import { Subject } from 'rxjs';
 import QUICSocket from './QUICSocket.js';
 import QUICConnection from './QUICConnection.js';
-import QUICConnectionId from './QUICConnectionId.js';
 import { ConnectionErrorCode } from './native/types.js';
 import quiche from './native/quiche.js';
 import { serverDefault } from './config.js';
@@ -162,105 +163,7 @@ class QUICServer {
     );
   };
 
-  /**
-   * Handles all `EventQUICConnection` events.
-   */
-  protected handleEventQUICConnection = (evt: EventAll) => {
-    if (
-      evt.detail instanceof AbstractEvent &&
-      // Avoid cloning the `EventQUICConnectionSend` event as it's very low level
-      !(evt.detail instanceof events.EventQUICConnectionSend)
-    ) {
-      this.dispatchEvent(evt.detail.clone());
-    }
-  };
-
-  /**
-   * Handles `EventQUICConnectionSend`.
-   *
-   * This will propagate the connection send buffers to the socket.
-   * This may be concurrent and multiple send events may be processed
-   * at a time.
-   */
-  protected handleEventQUICConnectionSend = async (
-    evt: events.EventQUICConnectionSend,
-  ) => {
-    // We want to skip this if the socket has already ended
-    if (
-      !(
-        this.socket[startStop.running] &&
-        this.socket[startStop.status] !== 'stopping'
-      )
-    ) {
-      return;
-    }
-    try {
-      await this.socket.send_(
-        evt.detail.msg,
-        evt.detail.port,
-        evt.detail.address,
-      );
-    } catch (e) {
-      switch (e.code) {
-        // Thrown due to invalid arguments on linux
-        case 'EINVAL':
-        // Thrown due to invalid arguments on macOS
-        // Falls through
-        case 'EADDRNOTAVAIL':
-        // Thrown due to invalid arguments on Win but also for network dropouts on all platforms
-        // Falls through
-        case 'ENETUNREACH':
-        // Thrown when no route to the host is available.
-        // Falls through
-        case 'EHOSTUNREACH':
-          {
-            this.dispatchEvent(
-              new events.EventQUICClientErrorSend(
-                `${events.EventQUICClientErrorSend.name}-${evt.detail.id}`,
-                {
-                  detail: e,
-                },
-              ),
-            );
-          }
-          break;
-        default:
-          {
-            this.dispatchEvent(
-              new events.EventQUICServerError({
-                detail: new errors.ErrorQUICServerInternal(
-                  'Failed to send data on the QUICSocket',
-                  {
-                    data: evt.detail,
-                    cause: e,
-                  },
-                ),
-              }),
-            );
-          }
-          break;
-      }
-    }
-  };
-
-  /**
-   * Handles `EventQUICConnectionStopped`.
-   * Registered once.
-   */
-  protected handleEventQUICConnectionStopped = (
-    evt: events.EventQUICConnectionStopped,
-  ) => {
-    const quicConnection = evt.target as QUICConnection;
-    quicConnection.removeEventListener(
-      events.EventQUICConnectionSend.name,
-      this.handleEventQUICConnectionSend,
-    );
-    quicConnection.removeEventListener(
-      EventAll.name,
-      this.handleEventQUICConnection,
-    );
-    this.socket.connectionMap.delete(quicConnection.connectionId);
-  };
+  public connection$: Subject<QUICConnection> = new Subject();
 
   /**
    * Constructs a QUIC server.
@@ -455,23 +358,18 @@ class QUICServer {
     );
     // Stop answering new connections
     this.socket.unsetServer();
-    const connectionsDestroyP: Array<Promise<void>> = [];
     // If force then signal for any starting connections to abort
     if (force) {
       this.stopAbortController?.abort(new errors.ErrorQUICServerStopping());
     }
     this.stopAbortController = undefined;
     for (const connection of this.socket.connectionMap.serverConnections.values()) {
-      connectionsDestroyP.push(
-        connection.stop({
-          isApp,
-          errorCode,
-          reason,
-          force,
-        }),
+      // TODO: clean up connections
+      console.log(
+        'existing connection not cleaned up!',
+        connection.connectionIdShared,
       );
     }
-    await Promise.all(connectionsDestroyP);
     if (!this._closed) {
       this.dispatchEvent(new events.EventQUICServerClose());
     }
@@ -532,11 +430,14 @@ class QUICServer {
       return;
     }
     // Derive the new connection's SCID from the client generated DCID
-    const scid = new QUICConnectionId(
-      await this.crypto.ops.sign(this.crypto.key, dcid),
-      0,
-      quiche.MAX_CONN_ID_LEN,
+    const dcidBuffer = Buffer.alloc(quiche.MAX_CONN_ID_LEN, 0);
+    dcidBuffer.write(dcid, 'hex');
+    console.log(dcidBuffer);
+
+    const scid = new Uint8Array(
+      await this.crypto.ops.sign(this.crypto.key, dcidBuffer),
     );
+    console.log('asd', scid, dcidBuffer.byteLength);
     const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
@@ -572,6 +473,7 @@ class QUICServer {
     if (token.byteLength === 0) {
       const token = await this.mintToken(dcid, remoteInfo.host);
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
+      console.log(header.scid, header.dcid);
       const retryDatagramLength = quiche.retry(
         header.scid, // Client initial packet source ID
         header.dcid, // Client initial packet destination ID
@@ -614,67 +516,23 @@ class QUICServer {
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    const newScid = new QUICConnectionId(header.dcid);
+    const newScid = Buffer.from(header.dcid).toString('hex');
     // Construct a QUIC connection that isn't yet started
-    const connection = new QUICConnection({
-      type: 'server',
+    const connection = QUICConnection.connectionAccept({
       scid: newScid,
       dcid: dcidOriginal,
-      socket: this.socket,
-      remoteInfo,
-      config: { ...this.config }, // Config must be copied in case it is updated
-      reasonToCode: this.reasonToCode,
-      codeToReason: this.codeToReason,
-      logger: this.logger.getChild(`${QUICConnection.name} ${scid.toString()}`),
+      config: { ...this.config },
+      sourceHost: this.socket.host,
+      sourcePort: this.socket.port,
+      host: remoteInfo.host,
+      port: remoteInfo.port,
     });
     // This unstarted connection is set to the connection map which allows
     // concurrent received packets to trigger the `recv` and `send` pair.
     this.socket.connectionMap.set(connection.connectionId, connection);
-    connection.addEventListener(
-      events.EventQUICConnectionSend.name,
-      this.handleEventQUICConnectionSend,
-    );
-    connection.addEventListener(
-      events.EventQUICConnectionStopped.name,
-      this.handleEventQUICConnectionStopped,
-      { once: true },
-    );
-    connection.addEventListener(EventAll.name, this.handleEventQUICConnection);
-    try {
-      await connection.start(
-        {
-          data,
-          remoteInfo,
-        },
-        {
-          timer: this.minIdleTimeout,
-          signal: this.stopAbortController?.signal,
-        },
-      );
-    } catch (e) {
-      connection.removeEventListener(
-        events.EventQUICConnectionSend.name,
-        this.handleEventQUICConnectionSend,
-      );
-      connection.removeEventListener(
-        events.EventQUICConnectionStopped.name,
-        this.handleEventQUICConnectionStopped,
-      );
-      connection.removeEventListener(
-        EventAll.name,
-        this.handleEventQUICConnection,
-      );
-      this.socket.connectionMap.delete(connection.connectionId);
-      // This could be due to a runtime IO exception or start timeout
-      throw new errors.ErrorQUICServerNewConnection(
-        'Failed to start accepted connection',
-        { cause: e },
-      );
-    }
-    // This connection is now started and ready to be used
-    this.dispatchEvent(
-      new events.EventQUICServerConnection({ detail: connection }),
-    );
+    connection.recv(data, remoteInfo);
+    this.connection$.next(connection);
+    connection.send$.subscribe(this.socket.socketSend$);
     return connection;
   }
 

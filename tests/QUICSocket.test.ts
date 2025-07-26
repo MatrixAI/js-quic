@@ -5,14 +5,13 @@ import { test } from '@fast-check/jest';
 import Logger, { LogLevel, StreamHandler } from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { jest } from '@jest/globals';
-import { Observable } from 'rxjs';
 import * as testsUtils from './utils.js';
 import QUICSocket from '#QUICSocket.js';
-import QUICConnectionId from '#QUICConnectionId.js';
 import quiche from '#native/quiche.js';
 import * as utils from '#utils.js';
 import * as errors from '#errors.js';
 import * as events from '#events.js';
+import { ConnectionType } from '#types.js';
 
 describe(QUICSocket.name, () => {
   const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
@@ -123,11 +122,9 @@ describe(QUICSocket.name, () => {
     await socket.start({
       host: '127.0.0.1',
     });
-    const connectionId = QUICConnectionId.fromBuffer(
-      Buffer.from('SomeRandomId'),
-    );
+    const connectionId = Buffer.from('SomeRandomId').toString('hex');
     // Mock connection, we only need the `type` property
-    const connection = { type: 'client' } as QUICConnection;
+    const connection = { type: ConnectionType.CLIENT } as QUICConnection;
     socket.connectionMap.set(connectionId, connection);
     await expect(socket.stop()).rejects.toThrow(
       errors.ErrorQUICSocketConnectionsActive,
@@ -143,11 +140,9 @@ describe(QUICSocket.name, () => {
     await socket.start({
       host: '127.0.0.1',
     });
-    const connectionId = QUICConnectionId.fromBuffer(
-      Buffer.from('SomeRandomId'),
-    );
+    const connectionId = Buffer.from('SomeRandomId').toString('hex');
     // Mock connection, we only need the `type` property
-    const connection = { type: 'client' } as QUICConnection;
+    const connection = { type: ConnectionType.CLIENT } as QUICConnection;
     socket.connectionMap.set(connectionId, connection);
     await expect(socket.stop({ force: true })).toResolve();
   });

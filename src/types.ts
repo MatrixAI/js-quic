@@ -1,4 +1,3 @@
-import type QUICStream from './QUICStream.js';
 import type { CryptoError } from './native/types.js';
 
 type POJO = { [key: string]: any };
@@ -322,9 +321,13 @@ type QUICServerConfigInput = Partial<QUICConfig> & {
   cert: string | Array<string> | Uint8Array | Array<Uint8Array>;
 };
 
-type ConnectionId = Opaque<'ConnectionId', Buffer>;
+enum ConnectionType {
+  CLIENT = 0,
+  SERVER = 1,
+}
 
-type ConnectionIdString = Opaque<'ConnectionIdString', string>;
+type QUICConnectionId = string;
+type ConnectionId = string;
 
 type ConnectionMetadata = {
   localHost: string;
@@ -349,8 +352,6 @@ type StreamReasonToCode = (type: 'read' | 'write', reason?: any) => number;
  */
 type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
 
-type QUICStreamMap = Map<StreamId, QUICStream>;
-
 export type {
   POJO,
   Opaque,
@@ -371,11 +372,12 @@ export type {
   QUICConfig,
   QUICClientConfigInput,
   QUICServerConfigInput,
+  QUICConnectionId,
   ConnectionId,
-  ConnectionIdString,
   ConnectionMetadata,
   StreamId,
   StreamReasonToCode,
   StreamCodeToReason,
-  QUICStreamMap,
 };
+
+export { ConnectionType };

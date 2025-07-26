@@ -5,9 +5,8 @@ import type {
   Host,
   Port,
   QUICServerCrypto,
-  ConnectionId,
-  ConnectionIdString,
   StreamId,
+  QUICConnectionId,
 } from './types.js';
 import type { Observable } from 'rxjs';
 import dns from 'dns';
@@ -15,7 +14,6 @@ import events from 'node:events';
 import { IPv4, IPv6, Validator } from 'ip-num';
 import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import * as errors from './errors.js';
-import QUICConnectionId from './QUICConnectionId.js';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder('utf-8');
@@ -452,14 +450,6 @@ function formatError(error: Error): string {
   }${error.message !== undefined ? ` - ${error.message}` : ''}`;
 }
 
-function encodeConnectionId(connId: ConnectionId): ConnectionIdString {
-  return connId.toString('hex') as ConnectionIdString;
-}
-
-function decodeConnectionId(connIdString: ConnectionIdString): ConnectionId {
-  return Buffer.from(connIdString, 'hex') as ConnectionId;
-}
-
 async function mintToken(
   dcid: QUICConnectionId,
   peerHost: Host,
@@ -514,7 +504,7 @@ async function validateToken(
   if (msgData.host !== peerHost) {
     return;
   }
-  return QUICConnectionId.fromString(msgData.dcid);
+  return msgData.dcid;
 }
 
 function isStreamClientInitiated(streamId: StreamId): boolean {
@@ -620,8 +610,6 @@ export {
   pemToDER,
   derToPEM,
   formatError,
-  encodeConnectionId,
-  decodeConnectionId,
   mintToken,
   validateToken,
   isStreamClientInitiated,
