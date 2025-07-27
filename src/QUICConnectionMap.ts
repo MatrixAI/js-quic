@@ -1,5 +1,5 @@
 import type QUICConnection from './QUICConnection.js';
-import type { QUICConnectionId } from './types.js';
+import QUICConnectionId from './QUICConnectionId.js';
 import { ConnectionType } from './types.js';
 
 class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
@@ -102,7 +102,7 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
           const [key, value] = serverResult.value;
           return {
             done: false,
-            value: [key, value],
+            value: [QUICConnectionId.fromString(key), value],
           };
         }
         const clientResult = clientIterator.next();
@@ -110,7 +110,7 @@ class QUICConnectionMap implements Map<QUICConnectionId, QUICConnection> {
           const [key, value] = clientResult.value;
           return {
             done: false,
-            value: [key, value],
+            value: [QUICConnectionId.fromString(key), value],
           };
         }
         return { done: true, value: undefined };

@@ -1,11 +1,5 @@
 import type QUICServer from './QUICServer.js';
-import type {
-  Host,
-  Hostname,
-  Port,
-  ResolveHostname,
-  QUICConnectionId,
-} from './types.js';
+import type { Host, Hostname, Port, ResolveHostname } from './types.js';
 import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
 import type { Observable } from 'rxjs';
@@ -20,6 +14,7 @@ import quiche from './native/quiche.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
+import QUICConnectionId from './QUICConnectionId.js';
 
 type MessageData = {
   data: Buffer;
@@ -278,7 +273,9 @@ class QUICSocket {
       this._type = 'ipv6';
     }
     this.socketMessage$.subscribe(async ({ data, remoteInfo }) => {
-      this.logger.warn(`processing message from ${remoteInfo.address}`);
+      this.logger.warn(
+        `Received ${data.byteLength} bytes from ${remoteInfo.address}:${remoteInfo.port}`,
+      );
       /**
        * Handles UDP socket message.
        *
@@ -293,11 +290,9 @@ class QUICSocket {
       // The data buffer may have multiple coalesced QUIC packets.
       // This header is parsed from the first packet.
       let header: Header;
-      console.log(data.byteLength, data.toString());
       try {
         header = quiche.Header.fromSlice(data, quiche.MAX_CONN_ID_LEN);
       } catch (e) {
-        console.error(e);
         // `BufferTooShort` and `InvalidPacket` means that this is not a QUIC
         // packet. If so, then we just ignore the packet.
         if (e.message === 'BufferTooShort' || e.message === 'InvalidPacket') {
@@ -306,7 +301,6 @@ class QUICSocket {
             data,
             remoteInfo,
           });
-          console.log('a');
           return;
         }
         // If the error is neither `BufferTooShort` nor `InvalidPacket`, this
@@ -317,7 +311,7 @@ class QUICSocket {
       // All QUIC packets will have the `dcid` header property
       // However short packets will not have the `scid` property
       // The destination connection ID is supposed to be our connection ID
-      const dcid = Buffer.from(header.dcid).toString('hex');
+      const dcid = new QUICConnectionId(header.dcid);
       const remoteInfo_ = {
         host: remoteInfo.address as Host,
         port: remoteInfo.port as Port,
@@ -329,6 +323,9 @@ class QUICSocket {
         // state is optional. We can respond with `STATELESS_RESET`
         // but it's not necessary, and ignoring is simpler
         // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
+        this.logger.warn(
+          `recv ${connection.connectionIdShared}@${remoteInfo_.host}:${remoteInfo_.port}->${data.byteLength}`,
+        );
         await connection.recv(data, remoteInfo_);
       } else {
         // If the server is not registered, we cannot attempt to create a new
@@ -339,7 +336,6 @@ class QUICSocket {
             data,
             remoteInfo,
           });
-          console.log('b');
           return;
         }
         try {
@@ -371,7 +367,6 @@ class QUICSocket {
               data,
               remoteInfo,
             });
-            console.log('c');
             return;
           }
           // If the connection timed out during start, this is an expected
@@ -383,7 +378,6 @@ class QUICSocket {
               data,
               remoteInfo,
             });
-            console.log('d');
             return;
           }
           throw e;
@@ -558,7 +552,7 @@ class QUICSocket {
   // FIXME: getting ahead of myself here. Skip for now.
   // Logic for handling send queue
   protected connectionSendReadySet: Set<string> = new Set();
-  protected connectionSendReadyQueue: Array<string> = [];
+  protected connectionSendReadyQueue: Array<QUICConnectionId> = [];
 
   public async processSendQueue(): Promise<void> {
     this.socketSend$.subscribe((v) =>
@@ -578,7 +572,7 @@ class QUICSocket {
       );
       let connectionId = this.connectionSendReadyQueue.pop();
       while (connectionId != null) {
-        this.connectionSendReadySet.delete(connectionId);
+        this.connectionSendReadySet.delete(connectionId.toString());
         const connection = this.connectionMap.get(connectionId);
         if (connection == null) {
           this.logger.warn(
@@ -588,7 +582,9 @@ class QUICSocket {
         }
         let data = connection.send();
         while (data != null) {
-          this.logger.warn(`packet queued for ${connectionId}`);
+          this.logger.warn(
+            `sent ${data.data.byteLength}->${connectionId}@${data.host}:${data.port}`,
+          );
           await this.send_(data.data, data.port, data.host);
           data = connection.send();
         }
@@ -600,10 +596,10 @@ class QUICSocket {
     this.logger.warn('process loop complete');
   }
 
-  protected queueSend(connectionId: string): void {
-    if (this.connectionSendReadySet.has(connectionId)) return;
+  protected queueSend(connectionId: QUICConnectionId): void {
+    if (this.connectionSendReadySet.has(connectionId.toString())) return;
     this.connectionSendReadyQueue.push(connectionId);
-    this.connectionSendReadySet.add(connectionId);
+    this.connectionSendReadySet.add(connectionId.toString());
   }
 }
 

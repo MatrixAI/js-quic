@@ -326,8 +326,9 @@ enum ConnectionType {
   SERVER = 1,
 }
 
-type QUICConnectionId = string;
-type ConnectionId = string;
+type ConnectionId = Opaque<'ConnectionId', Buffer>;
+
+type ConnectionIdString = Opaque<'ConnectionIdString', string>;
 
 type ConnectionMetadata = {
   localHost: string;
@@ -372,8 +373,8 @@ export type {
   QUICConfig,
   QUICClientConfigInput,
   QUICServerConfigInput,
-  QUICConnectionId,
   ConnectionId,
+  ConnectionIdString,
   ConnectionMetadata,
   StreamId,
   StreamReasonToCode,

@@ -5,6 +5,7 @@ import type {
   QUICConfig,
   RemoteInfo,
   ConnectionId,
+  ConnectionIdString,
 } from './types.js';
 import { Subject } from 'rxjs';
 import { ConnectionType } from './types.js';
@@ -12,6 +13,7 @@ import { quiche } from './native/index.js';
 import { buildQuicheConfig } from './config.js';
 import * as errors from './errors.js';
 import * as utils from './utils.js';
+import QUICConnectionId from './QUICConnectionId.js';
 
 class QUICConnection {
   // TODO: define static constructors here;
@@ -89,8 +91,8 @@ class QUICConnection {
   }: {
     serverName?: string;
     config: QUICConfig;
-    scid: ConnectionId;
-    dcid: ConnectionId;
+    scid: QUICConnectionId;
+    dcid: QUICConnectionId;
     sourceHost: Host;
     sourcePort: Port;
     host: Host;
@@ -108,8 +110,8 @@ class QUICConnection {
     }
     const quicheConfig = buildQuicheConfig(config);
     const connection = quiche.Connection.accept(
-      Buffer.from(scid, 'hex'),
-      Buffer.from(dcid, 'hex'),
+      scid,
+      dcid,
       {
         host: sourceHost,
         port: sourcePort,
@@ -142,7 +144,7 @@ class QUICConnection {
   //  - when a recv is processed
   //  - After a timeout event when `onTimeout()` is called
   //  - When the application interacts with the streams
-  public readonly send$: Subject<ConnectionId> = new Subject();
+  public readonly send$: Subject<QUICConnectionId> = new Subject();
 
   /**
    * Chain of local certificates from leaf to root in DER format.
@@ -174,19 +176,29 @@ class QUICConnection {
     }
   }
 
-  public get connectionId(): ConnectionId {
+  public get connectionId_(): QUICConnectionId {
     const sourceId = this.connection.sourceId();
-    return Buffer.from(sourceId).toString('hex');
+    // Zero copy construction of QUICConnectionId
+    return new QUICConnectionId(
+      sourceId.buffer,
+      sourceId.byteOffset,
+      sourceId.byteLength,
+    );
   }
 
-  public get connectionIdPeer(): ConnectionId {
-    const sourceId = this.connection.destinationId();
-    return Buffer.from(sourceId).toString('hex');
+  public get connectionId(): ConnectionIdString {
+    const sourceId = this.connection.sourceId();
+    return Buffer.from(sourceId).toString('hex') as ConnectionIdString;
   }
 
-  public get connectionIdShared(): ConnectionId {
-    const sourceId = this.connection.sourceId();
+  public get connectionIdPeer(): ConnectionIdString {
     const destinationId = this.connection.destinationId();
+    return Buffer.from(destinationId).toString('hex') as ConnectionIdString;
+  }
+
+  public get connectionIdShared(): string {
+    const sourceId = this.connectionId;
+    const destinationId = this.connectionIdPeer;
     return [sourceId, destinationId].sort().join('-');
   }
 
@@ -234,7 +246,7 @@ class QUICConnection {
     }
 
     // TODO: check and dispatch state changes;
-    this.send$.next(this.connectionId);
+    this.send$.next(this.connectionId_);
   }
 
   /**

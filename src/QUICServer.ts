@@ -8,7 +8,6 @@ import type {
   QUICServerConfigInput,
   StreamCodeToReason,
   StreamReasonToCode,
-  QUICConnectionId,
 } from './types.js';
 import type { Header } from './native/types.js';
 import Logger from '@matrixai/logger';
@@ -23,6 +22,7 @@ import { serverDefault } from './config.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
+import QUICConnectionId from './QUICConnectionId.js';
 
 interface QUICServer extends startStop.StartStop {}
 @startStop.StartStop({
@@ -427,17 +427,15 @@ class QUICServer {
       header.ty !== quiche.Type.Initial &&
       header.ty !== quiche.Type.ZeroRTT
     ) {
+      this.logger.error('end a');
       return;
     }
     // Derive the new connection's SCID from the client generated DCID
-    const dcidBuffer = Buffer.alloc(quiche.MAX_CONN_ID_LEN, 0);
-    dcidBuffer.write(dcid, 'hex');
-    console.log(dcidBuffer);
-
-    const scid = new Uint8Array(
-      await this.crypto.ops.sign(this.crypto.key, dcidBuffer),
+    const scid = new QUICConnectionId(
+      await this.crypto.ops.sign(this.crypto.key, dcid),
+      0,
+      quiche.MAX_CONN_ID_LEN,
     );
-    console.log('asd', scid, dcidBuffer.byteLength);
     const peerAddress = utils.buildAddress(remoteInfo.host, remoteInfo.port);
     // Version Negotiation
     if (!quiche.versionIsSupported(header.version)) {
@@ -448,6 +446,9 @@ class QUICServer {
         versionDatagram,
       );
       try {
+        this.logger.warn(
+          `sent version packet ${versionDatagramLength}->${remoteInfo.port}:${remoteInfo.host}`,
+        );
         await this.socket.send_(
           versionDatagram,
           0,
@@ -456,6 +457,7 @@ class QUICServer {
           remoteInfo.host,
         );
       } catch (e) {
+        console.error(e);
         // This is a caller error
         // Not a domain error for QUICServer
         throw new errors.ErrorQUICServerNewConnection(
@@ -463,6 +465,7 @@ class QUICServer {
           { cause: e },
         );
       }
+      this.logger.error('end b');
       return;
     }
     // At this point we are processing an `Initial` packet.
@@ -473,7 +476,6 @@ class QUICServer {
     if (token.byteLength === 0) {
       const token = await this.mintToken(dcid, remoteInfo.host);
       const retryDatagram = Buffer.allocUnsafe(quiche.MAX_DATAGRAM_SIZE);
-      console.log(header.scid, header.dcid);
       const retryDatagramLength = quiche.retry(
         header.scid, // Client initial packet source ID
         header.dcid, // Client initial packet destination ID
@@ -483,6 +485,9 @@ class QUICServer {
         retryDatagram,
       );
       try {
+        this.logger.warn(
+          `sent retry packet ${retryDatagramLength}->${remoteInfo.port}:${remoteInfo.host}`,
+        );
         await this.socket.send_(
           retryDatagram,
           0,
@@ -496,6 +501,7 @@ class QUICServer {
           { cause: e },
         );
       }
+      this.logger.error('end c');
       return;
     }
     // At this point in time, the packet's DCID is the originally-derived DCID.
@@ -506,6 +512,7 @@ class QUICServer {
     );
     if (dcidOriginal == null) {
       // Failed validation due to missing DCID
+      this.logger.error('end d');
       return;
     }
     // Check that the newly-derived DCID (passed in as the SCID) is the same
@@ -513,10 +520,11 @@ class QUICServer {
     // This ensures that the derivation process hasn't changed.
     if (scid.byteLength !== header.dcid.byteLength) {
       // Failed validation due to mismatched length
+      this.logger.error('end e');
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
-    const newScid = Buffer.from(header.dcid).toString('hex');
+    const newScid = new QUICConnectionId(header.dcid);
     // Construct a QUIC connection that isn't yet started
     const connection = QUICConnection.connectionAccept({
       scid: newScid,
@@ -529,10 +537,12 @@ class QUICServer {
     });
     // This unstarted connection is set to the connection map which allows
     // concurrent received packets to trigger the `recv` and `send` pair.
-    this.socket.connectionMap.set(connection.connectionId, connection);
+    this.socket.connectionMap.set(connection.connectionId_, connection);
     connection.recv(data, remoteInfo);
     this.connection$.next(connection);
     connection.send$.subscribe(this.socket.socketSend$);
+    this.socket.socketSend$.next(connection.connectionId_);
+    this.logger.error('end f');
     return connection;
   }
 

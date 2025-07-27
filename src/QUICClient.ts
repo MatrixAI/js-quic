@@ -228,8 +228,8 @@ class QUICClient {
     // the client, because the client bridges the push flow from the connection
     // to the socket.
     connection.send$.subscribe(socket.socketSend$);
-    socket.connectionMap.set(connection.connectionId, connection);
-    socket.socketSend$.next(connection.connectionId);
+    socket.connectionMap.set(connection.connectionId_, connection);
+    socket.socketSend$.next(connection.connectionId_);
     // Set up intermediate abort signal
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -422,6 +422,7 @@ class QUICClient {
         address != null ? ` to ${address}` : ''
       }`,
     );
+    console.log('asd');
     await this.closedP;
     this.removeEventListener(
       events.EventQUICClientError.name,
@@ -439,6 +440,7 @@ class QUICClient {
     );
     // Connection listeners do not need to be removed
     // Because it is handled by `this.handleEventQUICConnectionStopped`.
+    console.log('asd');
     this.logger.info(
       `Destroyed ${this.constructor.name}${
         address != null ? ` to ${address}` : ''
