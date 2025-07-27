@@ -534,6 +534,7 @@ class QUICServer {
       sourcePort: this.socket.port,
       host: remoteInfo.host,
       port: remoteInfo.port,
+      logger: this.logger.getChild('connection'),
     });
     // This unstarted connection is set to the connection map which allows
     // concurrent received packets to trigger the `recv` and `send` pair.

@@ -7,6 +7,8 @@ import type {
   ConnectionId,
   ConnectionIdString,
 } from './types.js';
+import type * as nativeTypes from './native/types.js';
+import type Logger from '@matrixai/logger';
 import { Subject } from 'rxjs';
 import { ConnectionType } from './types.js';
 import { quiche } from './native/index.js';
@@ -26,6 +28,7 @@ class QUICConnection {
     sourcePort,
     host,
     port,
+    logger,
   }: {
     serverName?: string;
     config: QUICConfig;
@@ -34,6 +37,7 @@ class QUICConnection {
     sourcePort: Port;
     host: Host;
     port: Port;
+    logger: Logger;
   }): QUICConnection {
     // Doing checks.
     if (
@@ -76,6 +80,7 @@ class QUICConnection {
       sourcePort,
       host,
       port,
+      logger,
     );
     return quicConnection;
   }
@@ -88,6 +93,7 @@ class QUICConnection {
     sourcePort,
     host,
     port,
+    logger,
   }: {
     serverName?: string;
     config: QUICConfig;
@@ -97,6 +103,7 @@ class QUICConnection {
     sourcePort: Port;
     host: Host;
     port: Port;
+    logger: Logger;
   }) {
     // Doing checks.
     if (
@@ -134,6 +141,7 @@ class QUICConnection {
       sourcePort,
       host,
       port,
+      logger,
     );
     return quicConnection;
   }
@@ -165,6 +173,7 @@ class QUICConnection {
     public readonly sourcePort: Port,
     public readonly host: Host,
     public readonly port: Port,
+    protected logger: Logger,
   ) {
     if (config.cert != null) {
       const certPEMs = utils.collectPEMs(this.config.cert);
@@ -174,6 +183,34 @@ class QUICConnection {
       const caPEMs = utils.collectPEMs(this.config.ca);
       this.caDERs = caPEMs.map(utils.pemToDER);
     }
+
+    this.timeout$.subscribe(() => this.logger.warn(`TIMEOUT!`));
+    this.isEstablished$.subscribe((v) =>
+      this.logger.warn(`CHANGED isEstablished$ ${v}`),
+    );
+    this.isResumed$.subscribe((v) =>
+      this.logger.warn(`CHANGED isResumed$ ${v}`),
+    );
+    this.isInEarlyData$.subscribe((v) =>
+      this.logger.warn(`CHANGED isInEarlyData$ ${v}`),
+    );
+    this.isReadable$.subscribe((v) =>
+      this.logger.warn(`CHANGED isReadable$ ${v}`),
+    );
+    this.draining$.subscribe((v) =>
+      this.logger.warn(`CHANGED isDraining$ true`),
+    );
+    this.closed$.subscribe((v) => this.logger.warn(`CHANGED isClosed$ true`));
+    this.isTimedOut$.subscribe((v) =>
+      this.logger.warn(`CHANGED isTimedOut$ ${v}`),
+    );
+    this.peerError$.subscribe((v) =>
+      this.logger.warn(`CHANGED peerError$ ${v}`),
+    );
+    this.localError$.subscribe((v) =>
+      this.logger.warn(`CHANGED localError$ ${v}`),
+    );
+    this.peerCertChain$.subscribe((v) => this.logger.warn(`GOT peerCertChain`));
   }
 
   public get connectionId_(): QUICConnectionId {
@@ -242,11 +279,11 @@ class QUICConnection {
         return;
       }
     } finally {
-      // This.checkState();
+      this.checkState();
     }
 
     // TODO: check and dispatch state changes;
-    this.send$.next(this.connectionId_);
+    this.tiggerSend();
   }
 
   /**
@@ -254,6 +291,10 @@ class QUICConnection {
    */
   // TODO: define simple send
   public send() {
+    if (this.connection.isDraining()) {
+      this.logger.warn('skipping due to draining state');
+      return;
+    }
     const sendBuffer = Buffer.allocUnsafe(this.config.maxSendUdpPayloadSize);
     try {
       const result = this.connection.send(sendBuffer);
@@ -269,40 +310,167 @@ class QUICConnection {
       console.error('connection error', e);
       throw e;
     } finally {
-      // This.checkState();
+      this.checkState();
     }
+  }
+
+  protected tiggerSend() {
+    if (this.connection.isDraining()) return;
+    this.send$.next(this.connectionId_);
   }
 
   // TODO: define simple state checks
   protected checkState(): void {
-    console.log('peerStreamsLeftBidi', this.connection.peerStreamsLeftBidi());
-    console.log('peerStreamsLeftUni', this.connection.peerStreamsLeftUni());
-    console.log(
-      'maxSendUdpPayloadSize',
-      this.connection.maxSendUdpPayloadSize(),
-    );
-    console.log('timeout', this.connection.timeout());
-    console.log('activeSourceCids', this.connection.activeSourceCids());
-    console.log('maxActiveSourceCids', this.connection.maxActiveSourceCids());
-    console.log('sourceCidsLeft', this.connection.sourceCidsLeft());
-    console.log('retiredScidNext', this.connection.retiredScidNext());
-    console.log('availableDcids', this.connection.availableDcids());
-    console.log('traceId', this.connection.traceId());
-    console.log('applicationProto', this.connection.applicationProto());
-    console.log('serverName', this.connection.serverName());
-    console.log('session', this.connection.session());
-    console.log('sourceId', this.connection.sourceId());
-    console.log('destinationId', this.connection.destinationId());
-    console.log('isEstablished', this.connection.isEstablished());
-    console.log('isResumed', this.connection.isResumed());
-    console.log('isInEarlyData', this.connection.isInEarlyData());
-    console.log('isReadable', this.connection.isReadable());
-    console.log('isDraining', this.connection.isDraining());
-    console.log('isClosed', this.connection.isClosed());
-    console.log('isTimedOut', this.connection.isTimedOut());
-    console.log('peerError', this.connection.peerError());
-    console.log('localError', this.connection.localError());
-    console.log('stats', this.connection.stats());
+    this.checkTimeout();
+    // This.logger.warn(`activeSourceCids: ${this.connection.activeSourceCids()}`);
+    // this.logger.warn(`maxActiveSourceCids: ${this.connection.maxActiveSourceCids()}`);
+    // this.logger.warn(`sourceCidsLeft: ${this.connection.sourceCidsLeft()}`);
+    // this.logger.warn(`retiredScidNext: ${this.connection.retiredScidNext()}`);
+    // this.logger.warn(`availableDcids: ${this.connection.availableDcids()}`);
+    // this.logger.warn(`traceId: ${this.connection.traceId()}`);
+    // this.logger.warn(`applicationProto: ${this.connection.applicationProto()}`);
+    // this.logger.warn(`serverName: ${this.connection.serverName()}`);
+    // this.logger.warn(`session: ${this.connection.session()}`);
+    // this.logger.warn(`sourceId: ${this.connection.sourceId()}`);
+    // this.logger.warn(`destinationId: ${this.connection.destinationId()}`);
+    // this.logger.warn(`stats: ${this.connection.stats()}`);
+    this.isEstablished;
+    this.isResumed;
+    this.isInEarlyData;
+    this.isReadable;
+    this.isDraining;
+    this.isClosed;
+    this.isTimedOut;
+    this.peerError;
+    this.localError;
+    this.peerCertChain;
+  }
+
+  protected timeoutTimer: NodeJS.Timeout | undefined;
+  protected timeout$: Subject<void> = new Subject();
+  protected handleTimeout = () => {
+    this.connection.onTimeout();
+    this.timeout$.next();
+    this.checkState();
+    this.tiggerSend();
+    this.checkTimeout();
+  };
+  protected checkTimeout() {
+    const timeoutDelay = this.connection.timeout();
+    clearTimeout(this.timeoutTimer);
+    delete this.timeoutTimer;
+    if (timeoutDelay == null) return;
+    this.timeoutTimer = setTimeout(this.handleTimeout, timeoutDelay + 1);
+  }
+
+  protected isEstablished_ = false;
+  public readonly isEstablished$: Subject<boolean> = new Subject();
+  public get isEstablished() {
+    const value = this.connection.isEstablished();
+    const updated = value !== this.isEstablished_;
+    this.isEstablished_ = value;
+    if (updated) this.isEstablished$.next(value);
+    return value;
+  }
+
+  protected isResumed_ = false;
+  public readonly isResumed$: Subject<boolean> = new Subject();
+  public get isResumed() {
+    const value = this.connection.isResumed();
+    const updated = value !== this.isResumed_;
+    this.isResumed_ = value;
+    if (updated) this.isResumed$.next(value);
+    return value;
+  }
+
+  protected isInEarlyData_ = false;
+  public readonly isInEarlyData$: Subject<boolean> = new Subject();
+  public get isInEarlyData() {
+    const value = this.connection.isInEarlyData();
+    const updated = value !== this.isInEarlyData_;
+    this.isInEarlyData_ = value;
+    if (updated) this.isInEarlyData$.next(value);
+    return value;
+  }
+
+  protected isReadable_ = false;
+  public readonly isReadable$: Subject<boolean> = new Subject();
+  public get isReadable() {
+    const value = this.connection.isReadable();
+    const updated = value !== this.isReadable_;
+    this.isReadable_ = value;
+    if (updated) this.isReadable$.next(value);
+    return value;
+  }
+
+  protected isDraining_ = false;
+  public readonly draining$: Subject<void> = new Subject();
+  public get isDraining() {
+    const value = this.connection.isDraining();
+    const updated = value !== this.isDraining_;
+    this.isDraining_ = value;
+    if (updated) this.draining$.next();
+    return value;
+  }
+
+  protected isClosed_ = false;
+  public readonly closed$: Subject<void> = new Subject();
+  public get isClosed() {
+    const value = this.connection.isClosed();
+    const updated = value !== this.isClosed_;
+    this.isClosed_ = value;
+    if (updated) this.closed$.next();
+    return value;
+  }
+
+  protected isTimedOut_ = false;
+  public readonly isTimedOut$: Subject<boolean> = new Subject();
+  public get isTimedOut() {
+    const value = this.connection.isTimedOut();
+    const updated = value !== this.isTimedOut_;
+    this.isTimedOut_ = value;
+    if (updated) this.isTimedOut$.next(value);
+    return value;
+  }
+
+  protected peerError_: nativeTypes.ConnectionError | undefined = undefined;
+  public readonly peerError$: Subject<nativeTypes.ConnectionError> =
+    new Subject();
+  public get peerError() {
+    const value = this.connection.peerError();
+    if (this.peerError_ != null && value != null) {
+      this.peerError_ = value;
+      this.peerError$.next(value);
+    }
+    return value;
+  }
+
+  protected localError_: nativeTypes.ConnectionError | undefined = undefined;
+  public readonly localError$: Subject<nativeTypes.ConnectionError> =
+    new Subject();
+  public get localError() {
+    const value = this.connection.localError();
+    if (this.localError_ != null && value != null) {
+      this.localError_ = value;
+      this.localError$.next(value);
+    }
+    return value;
+  }
+
+  protected peerCertChain_: Array<string> | undefined = undefined;
+  public readonly peerCertChain$: Subject<Array<string>> = new Subject();
+  public get peerCertChain() {
+    const value = this.connection.peerCertChain();
+    if (this.peerCertChain_ == null && value != null) {
+      this.peerCertChain_ = value.map((v) => Buffer.from(v).toString('utf-8'));
+      this.peerCertChain$.next(this.peerCertChain_);
+    }
+    return this.peerCertChain_;
+  }
+
+  public kill() {
+    this.connection.close(true, 42, Buffer.from('some reason!'));
+    this.tiggerSend();
   }
 }
 

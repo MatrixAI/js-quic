@@ -195,6 +195,7 @@ class QUICClient {
         sourcePort: socket.port,
         host: host_,
         port: port_,
+        logger: logger.getChild('connection'),
       });
     } catch (e) {
       if (!isSocketShared) {
@@ -423,6 +424,15 @@ class QUICClient {
       }`,
     );
     console.log('asd');
+    // TODO: initiate stop here
+    // if (!this._closed) {
+    //   await this.connection.stop({
+    //     isApp,
+    //     errorCode,
+    //     reason,
+    //     force,
+    //   });
+    // }
     await this.closedP;
     this.removeEventListener(
       events.EventQUICClientError.name,

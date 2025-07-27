@@ -91,9 +91,11 @@ describe(QUICClient.name, () => {
       expect(conn.host).toBe('127.0.0.1');
       expect(conn.port).toBe(client.localPort);
       await sleep(2000);
-      console.log('asd');
-      await client.destroy();
-      await server.stop();
+      logger.warn('killing!');
+      client.connection.kill();
+      await sleep(2000);
+      // Await client.destroy();
+      // await server.stop();
     });
     // Test('to ipv6 server succeeds', async () => {
     //   const connectionEventProm = promise<events.EventQUICServerConnection>();
