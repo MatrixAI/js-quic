@@ -13,7 +13,7 @@ import type { Header } from './native/types.js';
 import Logger from '@matrixai/logger';
 import { AbstractEvent, EventAll } from '@matrixai/events';
 import { startStop } from '@matrixai/async-init';
-import { Subject } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
 import QUICSocket from './QUICSocket.js';
 import QUICConnection from './QUICConnection.js';
 import { ConnectionErrorCode } from './native/types.js';
@@ -363,13 +363,14 @@ class QUICServer {
       this.stopAbortController?.abort(new errors.ErrorQUICServerStopping());
     }
     this.stopAbortController = undefined;
+    const stopConnectionPs: Array<Promise<void>> = [];
     for (const connection of this.socket.connectionMap.serverConnections.values()) {
-      // TODO: clean up connections
-      console.log(
-        'existing connection not cleaned up!',
-        connection.connectionIdShared,
+      stopConnectionPs.push(
+        firstValueFrom(connection.closed$, { defaultValue: undefined }),
       );
+      connection.kill({ isApp, errorCode, reason });
     }
+    await Promise.all(stopConnectionPs);
     if (!this._closed) {
       this.dispatchEvent(new events.EventQUICServerClose());
     }
@@ -457,7 +458,6 @@ class QUICServer {
           remoteInfo.host,
         );
       } catch (e) {
-        console.error(e);
         // This is a caller error
         // Not a domain error for QUICServer
         throw new errors.ErrorQUICServerNewConnection(
@@ -539,6 +539,9 @@ class QUICServer {
     // This unstarted connection is set to the connection map which allows
     // concurrent received packets to trigger the `recv` and `send` pair.
     this.socket.connectionMap.set(connection.connectionId_, connection);
+    connection.closed$.subscribe(() => {
+      this.socket.connectionMap.delete(connection.connectionId_);
+    });
     connection.recv(data, remoteInfo);
     this.connection$.next(connection);
     connection.send$.subscribe(this.socket.socketSend$);

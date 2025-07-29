@@ -120,7 +120,6 @@ describe('native/tls/ecdsa', () => {
         0,
         quiche.MAX_CONN_ID_LEN,
       );
-      console.log(clientDcid, serverScid);
       // Stateless retry
       const token = await utils.mintToken(
         clientDcid,

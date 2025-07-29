@@ -1,5 +1,4 @@
 import type { PromiseCancellable } from '@matrixai/async-cancellable';
-import type { ContextTimed, ContextTimedInput } from '@matrixai/contexts';
 import type {
   Host,
   Port,
@@ -11,10 +10,11 @@ import type {
 } from './types.js';
 import type { Config } from './native/types.js';
 import type { ConnectionErrorCode } from './native/types.js';
+import type { Observable } from 'rxjs';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { createDestroy } from '@matrixai/async-init';
-import { decorators } from '@matrixai/contexts';
+import { firstValueFrom, merge, ReplaySubject, Subject } from 'rxjs';
 import QUICSocket from './QUICSocket.js';
 import QUICConnection from './QUICConnection.js';
 import quiche from './native/quiche.js';
@@ -46,7 +46,7 @@ class QUICClient {
    * @param opts.reasonToCode - maps stream error reasons to stream error codes
    * @param opts.codeToReason - maps stream error codes to reasons
    * @param opts.logger
-   * @param ctx
+   * @param abortObservable
    *
    * @throws {errors.ErrorQUICClientCreateTimeout} - if timed out
    * @throws {errors.ErrorQUICClientSocketNotRunning} - if shared socket is not running
@@ -70,7 +70,7 @@ class QUICClient {
       codeToReason?: StreamCodeToReason;
       logger?: Logger;
     },
-    ctx?: Partial<ContextTimedInput>,
+    abortObservable?: Observable<unknown>,
   ): PromiseCancellable<QUICClient>;
   public static createQUICClient(
     opts: {
@@ -86,13 +86,8 @@ class QUICClient {
       codeToReason?: StreamCodeToReason;
       logger?: Logger;
     },
-    ctx?: Partial<ContextTimedInput>,
+    abortObservable?: Observable<unknown>,
   ): PromiseCancellable<QUICClient>;
-  @decorators.timedCancellable(
-    true,
-    minIdleTimeout,
-    errors.ErrorQUICClientCreateTimeout,
-  )
   public static async createQUICClient(
     {
       host,
@@ -106,8 +101,6 @@ class QUICClient {
       resolveHostname = utils.resolveHostname,
       reuseAddr,
       ipv6Only,
-      reasonToCode,
-      codeToReason,
       logger = new Logger(`${this.name}`),
     }: {
       host: string;
@@ -121,12 +114,13 @@ class QUICClient {
       resolveHostname?: ResolveHostname;
       reuseAddr?: boolean;
       ipv6Only?: boolean;
-      reasonToCode?: StreamReasonToCode;
-      codeToReason?: StreamCodeToReason;
       logger?: Logger;
     },
-    @decorators.context ctx: ContextTimed,
+    abortObservable?: Observable<unknown>,
   ): Promise<QUICClient> {
+    // Setting up abort observable
+    const abort = new ReplaySubject<unknown>(1);
+    abortObservable?.subscribe(abort);
     let address = utils.buildAddress(host, port);
     logger.info(`Create ${this.name} to ${address}`);
     const quicConfig = {
@@ -185,31 +179,22 @@ class QUICClient {
       }
       throw e;
     }
-    let connection: QUICConnection;
-    try {
-      connection = QUICConnection.connectionConnect({
-        serverName: serverName ?? host,
-        scid: scid,
-        config: quicConfig,
-        sourceHost: socket.host,
-        sourcePort: socket.port,
-        host: host_,
-        port: port_,
-        logger: logger.getChild('connection'),
-      });
-    } catch (e) {
-      if (!isSocketShared) {
-        await socket.stop({ force: true });
-      }
-      throw e;
-    }
+    const connection = QUICConnection.connectionConnect({
+      serverName: serverName ?? host,
+      scid: scid,
+      config: quicConfig,
+      sourceHost: socket.host,
+      sourcePort: socket.port,
+      host: host_,
+      port: port_,
+      logger: logger.getChild('connection'),
+    });
     const client = new this({
       socket,
       connection,
       isSocketShared,
       logger,
     });
-
     socket.addEventListener(
       events.EventQUICSocketStopped.name,
       client.handleEventQUICSocketStopped,
@@ -231,6 +216,30 @@ class QUICClient {
     connection.send$.subscribe(socket.socketSend$);
     socket.connectionMap.set(connection.connectionId_, connection);
     socket.socketSend$.next(connection.connectionId_);
+
+    // Waiting for establishment or failure
+    let aborted = false;
+    abort.subscribe(() => {
+      aborted = true;
+    });
+    try {
+      await firstValueFrom(
+        merge(connection.established$, connection.closed$, abort),
+        { defaultValue: undefined },
+      );
+      if (connection.isTimedOut) throw Error('TMP IMP connection timed out');
+      if (connection.peerError !== null) throw connection.peerError;
+      if (connection.localError !== null) throw connection.localError;
+      if (aborted) throw Error('TMP IMP connection aborted');
+    } catch (e) {
+      if (!isSocketShared) {
+        await socket.stop({ force: true });
+      }
+      throw e;
+    } finally {
+      abort.complete();
+    }
+
     // Set up intermediate abort signal
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
@@ -239,13 +248,11 @@ class QUICClient {
 
   public readonly isSocketShared: boolean;
   public readonly connection: QUICConnection;
-  public readonly closedP: Promise<void>;
 
   protected logger: Logger;
   protected socket: QUICSocket;
   protected config: Config;
   protected _closed: boolean = false;
-  protected resolveClosedP: () => void;
 
   /**
    * Handles `EventQUICClientError`.
@@ -317,7 +324,6 @@ class QUICClient {
       }
     }
     this._closed = true;
-    this.resolveClosedP();
     if (
       !this[createDestroy.destroyed] &&
       this[createDestroy.status] !== 'destroying'
@@ -357,9 +363,6 @@ class QUICClient {
     this.socket = socket;
     this.isSocketShared = isSocketShared;
     this.connection = connection;
-    const { p: closedP, resolveP: resolveClosedP } = utils.promise();
-    this.closedP = closedP;
-    this.resolveClosedP = resolveClosedP;
   }
 
   @createDestroy.ready(new errors.ErrorQUICClientDestroyed())
@@ -423,17 +426,18 @@ class QUICClient {
         address != null ? ` to ${address}` : ''
       }`,
     );
-    console.log('asd');
-    // TODO: initiate stop here
-    // if (!this._closed) {
-    //   await this.connection.stop({
-    //     isApp,
-    //     errorCode,
-    //     reason,
-    //     force,
-    //   });
-    // }
-    await this.closedP;
+    const connectionClosedP = firstValueFrom(this.connection.closed$, {
+      defaultValue: undefined,
+    });
+    if (!this._closed) {
+      console.log('killing')
+      this.connection.kill({
+        isApp,
+        errorCode,
+        reason,
+      });
+    }
+    await connectionClosedP;
     this.removeEventListener(
       events.EventQUICClientError.name,
       this.handleEventQUICClientError,
@@ -450,7 +454,6 @@ class QUICClient {
     );
     // Connection listeners do not need to be removed
     // Because it is handled by `this.handleEventQUICConnectionStopped`.
-    console.log('asd');
     this.logger.info(
       `Destroyed ${this.constructor.name}${
         address != null ? ` to ${address}` : ''

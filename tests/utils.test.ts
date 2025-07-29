@@ -1,5 +1,6 @@
 import type { Host } from '#types.js';
-import { map, Observable, Subject } from 'rxjs';
+import { merge, ReplaySubject, Subject } from 'rxjs';
+import { sleep } from './utils.js';
 import * as utils from '#utils.js';
 
 describe('utils', () => {
@@ -111,12 +112,17 @@ describe('utils', () => {
 });
 
 test('asd', async () => {
-  const asd = new Subject();
-  asd.subscribe(
-    (v) => console.log('asd', v),
-    (e) => console.error(e),
-    () => console.log('complete'),
-  );
-  asd.error(new Error('asd'));
+  const asd = new Subject<void>();
+  asd.subscribe({
+    next: () => console.log('nexted'),
+    error: (e) => console.error(e),
+    complete: () => console.log('completed'),
+  });
+
+  // Asd.error(new Error('some error'));
   asd.complete();
+  asd.complete();
+  asd.next();
+  asd.error(new Error('some error'));
+  await sleep(2000);
 });

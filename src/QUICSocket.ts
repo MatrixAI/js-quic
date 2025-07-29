@@ -4,6 +4,7 @@ import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
 import type { Observable } from 'rxjs';
 import dgram from 'dgram';
+import { merge } from 'rxjs';
 import Logger from '@matrixai/logger';
 import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
@@ -62,6 +63,7 @@ class QUICSocket {
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
+  protected sendQueueProcess: Promise<void>;
 
   public socketClose$: Subject<void>;
   public socketError$: Subject<Error>;
@@ -174,7 +176,7 @@ class QUICSocket {
     reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
-    void this.processSendQueue();
+    this.sendQueueProcess = this.processSendQueue();
     // Since we have a one-to-many relationship with clients and connections,
     // we want to up the warning limit on the EventTarget
     utils.setMaxListeners(this[eventsUtils._eventTarget]);
@@ -326,7 +328,7 @@ class QUICSocket {
         this.logger.warn(
           `recv ${connection.connectionIdShared}@${remoteInfo_.host}:${remoteInfo_.port}->${data.byteLength}`,
         );
-        await connection.recv(data, remoteInfo_);
+        connection.recv(data, remoteInfo_);
       } else {
         // If the server is not registered, we cannot attempt to create a new
         // connection for this packet.
@@ -423,7 +425,8 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-
+    this.processSendQueueAbort$.next(true);
+    await this.sendQueueProcess;
     this.setupObservables();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
@@ -536,7 +539,9 @@ class QUICSocket {
     port: number,
     address: string,
   ): Promise<number>;
-  @startStop.ready(new errors.ErrorQUICSocketNotRunning())
+  @startStop.ready(new errors.ErrorQUICSocketNotRunning(), undefined, [
+    'stopping',
+  ])
   public async send_(...params: Array<any>): Promise<number> {
     return this.socketSend(...params);
   }
@@ -553,19 +558,22 @@ class QUICSocket {
   // Logic for handling send queue
   protected connectionSendReadySet: Set<string> = new Set();
   protected connectionSendReadyQueue: Array<QUICConnectionId> = [];
-
+  protected processSendQueueAbort$: Subject<boolean> = new Subject();
   public async processSendQueue(): Promise<void> {
-    this.socketSend$.subscribe((v) =>
-      this.logger.warn(`socket send with ${v.toString()}`),
-    );
-    this.socketSendReady$.subscribe({
-      next: () => this.logger.warn(`socket send ready`),
-      complete: () => this.logger.warn(`socket send Ready complete`),
-    });
+    // this.socketSend$.subscribe((v) =>
+    //   this.logger.warn(`socket send with ${v.toString()}`),
+    // );
+    // this.socketSendReady$.subscribe({
+    //   next: () => this.logger.warn(`socket send ready`),
+    //   complete: () => this.logger.warn(`socket send Ready complete`),
+    // });
     while (true) {
-      const result = await firstValueFrom(this.socketSendReady$, {
-        defaultValue: true,
-      });
+      const result = await firstValueFrom(
+        merge(this.socketSendReady$, this.processSendQueueAbort$),
+        {
+          defaultValue: true,
+        },
+      );
       if (result === true) break;
       this.logger.warn(
         `processing ran with queue size ${this.connectionSendReadyQueue.length}`,

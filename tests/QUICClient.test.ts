@@ -4,7 +4,7 @@ import type { KeyTypes, TLSConfigs } from './utils.js';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { test, fc } from '@fast-check/jest';
 import { running } from '@matrixai/async-init';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subject, timer } from 'rxjs';
 import * as testsUtils from './utils.js';
 import { generateTLSConfig, sleep } from './utils.js';
 import QUICSocket from '#QUICSocket.js';
@@ -35,7 +35,7 @@ describe(QUICClient.name, () => {
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
 
-  const types: Array<KeyTypes> = ['RSA', 'ECDSA', 'Ed25519'];
+  const types: Array<KeyTypes> = ['RSA',/* 'ECDSA', 'Ed25519'*/];
   // Const types: Array<KeyTypes> = ['RSA'];
   const defaultType = types[0];
 
@@ -65,7 +65,7 @@ describe(QUICClient.name, () => {
         },
       });
       socketCleanMethods.extractSocket(server);
-      const connectionProm = firstValueFrom(server.connection$, {
+      const connectionP = firstValueFrom(server.connection$, {
         defaultValue: undefined,
       });
       await server.start({
@@ -84,341 +84,367 @@ describe(QUICClient.name, () => {
         },
       });
       socketCleanMethods.extractSocket(client);
-      const conn = await connectionProm;
-      if (conn == null) fail('connection not found');
-      expect(conn.sourceHost).toBe('127.0.0.1');
-      expect(conn.sourcePort).toBe(server.port);
-      expect(conn.host).toBe('127.0.0.1');
-      expect(conn.port).toBe(client.localPort);
+      const connection = await connectionP;
+      if (connection == null) fail('connection not found');
+      expect(connection.sourceHost).toBe('127.0.0.1');
+      expect(connection.sourcePort).toBe(server.port);
+      expect(connection.host).toBe('127.0.0.1');
+      expect(connection.port).toBe(client.localPort);
       await sleep(2000);
+      await firstValueFrom(connection.established$);
+      await firstValueFrom(client.connection.established$);
       logger.warn('killing!');
-      client.connection.kill();
-      await sleep(2000);
-      // Await client.destroy();
-      // await server.stop();
+      await client.destroy();
+      await server.stop();
     });
-    // Test('to ipv6 server succeeds', async () => {
-    //   const connectionEventProm = promise<events.EventQUICServerConnection>();
-    //   const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
-    //   const server = new QUICServer({
-    //     crypto: {
-    //       key,
-    //       ops: serverCryptoOps,
-    //     },
-    //     logger: logger.getChild(QUICServer.name),
-    //     config: {
-    //       key: tlsConfigServer.leafKeyPairPEM.privateKey,
-    //       cert: tlsConfigServer.leafCertPEM,
-    //       verifyPeer: false,
-    //     },
-    //   });
-    //   socketCleanMethods.extractSocket(server);
-    //   server.addEventListener(
-    //     events.EventQUICServerConnection.name,
-    //     (e: events.EventQUICServerConnection) =>
-    //       connectionEventProm.resolveP(e),
-    //   );
-    //   await server.start({
-    //     host: '::1',
-    //   });
-    //   const client = await QUICClient.createQUICClient({
-    //     host: '::1',
-    //     port: server.port,
-    //     localHost: '::',
-    //     crypto: {
-    //       ops: clientCryptoOps,
-    //     },
-    //     logger: logger.getChild(QUICClient.name),
-    //     config: {
-    //       verifyPeer: false,
-    //     },
-    //   });
-    //   socketCleanMethods.extractSocket(client);
-    //   const conn = (await connectionEventProm.p).detail;
-    //   expect(conn.localHost).toBe('::1');
-    //   expect(conn.localPort).toBe(server.port);
-    //   expect(conn.remoteHost).toBe('::1');
-    //   expect(conn.remotePort).toBe(client.localPort);
-    //   await client.destroy();
-    //   await server.stop();
-    // });
-    // test('to dual stack server succeeds', async () => {
-    //   const connectionEventProm = promise<events.EventQUICServerConnection>();
-    //   const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
-    //   const server = new QUICServer({
-    //     crypto: {
-    //       key,
-    //       ops: serverCryptoOps,
-    //     },
-    //     logger: logger.getChild(QUICServer.name),
-    //     config: {
-    //       key: tlsConfigServer.leafKeyPairPEM.privateKey,
-    //       cert: tlsConfigServer.leafCertPEM,
-    //       verifyPeer: false,
-    //     },
-    //   });
-    //   socketCleanMethods.extractSocket(server);
-    //   server.addEventListener(
-    //     events.EventQUICServerConnection.name,
-    //     (e: events.EventQUICServerConnection) =>
-    //       connectionEventProm.resolveP(e),
-    //   );
-    //   await server.start({
-    //     host: '::',
-    //   });
-    //   const client = await QUICClient.createQUICClient({
-    //     host: '::', // Will resolve to ::1
-    //     port: server.port,
-    //     localHost: '::',
-    //     crypto: {
-    //       ops: clientCryptoOps,
-    //     },
-    //     logger: logger.getChild(QUICClient.name),
-    //     config: {
-    //       verifyPeer: false,
-    //     },
-    //   });
-    //   socketCleanMethods.extractSocket(client);
-    //   const conn = (await connectionEventProm.p).detail;
-    //   expect(conn.localHost).toBe('::');
-    //   expect(conn.localPort).toBe(server.port);
-    //   expect(conn.remoteHost).toBe('::1');
-    //   expect(conn.remotePort).toBe(client.localPort);
-    //   await client.destroy();
-    //   await server.stop();
-    // });
+    test('to ipv6 server succeeds', async () => {
+      const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
+      const server = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          key: tlsConfigServer.leafKeyPairPEM.privateKey,
+          cert: tlsConfigServer.leafCertPEM,
+          verifyPeer: false,
+        },
+      });
+      socketCleanMethods.extractSocket(server);
+      const connectionP = firstValueFrom(server.connection$, {
+        defaultValue: undefined,
+      });
+
+      await server.start({
+        host: '::1',
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::1',
+        port: server.port,
+        localHost: '::',
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+        },
+      });
+      socketCleanMethods.extractSocket(client);
+      const connection = await connectionP;
+      if (connection == null) fail('connection not found');
+      expect(connection.sourceHost).toBe('::1');
+      expect(connection.sourcePort).toBe(server.port);
+      expect(connection.host).toBe('::1');
+      expect(connection.port).toBe(client.localPort);
+      console.log('ending')
+      await client.destroy();
+      await server.stop();
+    });
+    test('to dual stack server succeeds', async () => {
+      const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
+      const server = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          key: tlsConfigServer.leafKeyPairPEM.privateKey,
+          cert: tlsConfigServer.leafCertPEM,
+          verifyPeer: false,
+        },
+      });
+      socketCleanMethods.extractSocket(server);
+      const connectionP = firstValueFrom(server.connection$, {
+        defaultValue: undefined,
+      });
+      await server.start({
+        host: '::',
+      });
+      const client = await QUICClient.createQUICClient({
+        host: '::', // Will resolve to ::1
+        port: server.port,
+        localHost: '::',
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: false,
+        },
+      });
+      socketCleanMethods.extractSocket(client);
+      const connection = await connectionP;
+      if (connection == null) fail('connection not found');
+      expect(connection.sourceHost).toBe('::');
+      expect(connection.sourcePort).toBe(server.port);
+      expect(connection.host).toBe('::1');
+      expect(connection.port).toBe(client.localPort);
+      await client.destroy();
+      await server.stop();
+    });
   });
-  // Describe('hard connection failures', () => {
-  //   test('times out with maxIdleTimeout when there is no server', async () => {
-  //     // QUICClient repeatedly dials until the connection timeout
-  //     await expect(
-  //       QUICClient.createQUICClient({
-  //         host: localhost,
-  //         port: noTargetPort,
-  //         localHost: localhost,
-  //         crypto: {
-  //           ops: clientCryptoOps,
-  //         },
-  //         logger: logger.getChild(QUICClient.name),
-  //         config: {
-  //           maxIdleTimeout: 200,
-  //           verifyPeer: false,
-  //         },
-  //       }),
-  //     ).rejects.toThrow(errors.ErrorQUICConnectionIdleTimeout);
-  //   });
-  //   test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
-  //     // Larger keepAliveIntervalTime throws
-  //     await expect(
-  //       QUICClient.createQUICClient({
-  //         host: localhost,
-  //         port: noTargetPort,
-  //         localHost: localhost,
-  //         crypto: {
-  //           ops: clientCryptoOps,
-  //         },
-  //         logger: logger.getChild(QUICClient.name),
-  //         config: {
-  //           maxIdleTimeout: 200,
-  //           keepAliveIntervalTime: 1000,
-  //           verifyPeer: false,
-  //         },
-  //       }),
-  //     ).rejects.toThrow(errors.ErrorQUICConnectionConfigInvalid);
-  //     // Smaller keepAliveIntervalTime doesn't cause a problem
-  //     await expect(
-  //       QUICClient.createQUICClient({
-  //         host: localhost,
-  //         port: noTargetPort,
-  //         localHost: localhost,
-  //         crypto: {
-  //           ops: clientCryptoOps,
-  //         },
-  //         logger: logger.getChild(QUICClient.name),
-  //         config: {
-  //           maxIdleTimeout: 200,
-  //           keepAliveIntervalTime: 100,
-  //           verifyPeer: false,
-  //         },
-  //       }),
-  //     ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
-  //     // Not setting an interval doesn't cause a problem either
-  //     await expect(
-  //       QUICClient.createQUICClient({
-  //         host: localhost,
-  //         port: noTargetPort,
-  //         localHost: localhost,
-  //         crypto: {
-  //           ops: clientCryptoOps,
-  //         },
-  //         logger: logger.getChild(QUICClient.name),
-  //         config: {
-  //           maxIdleTimeout: 200,
-  //           verifyPeer: false,
-  //         },
-  //       }),
-  //     ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
-  //   });
-  //   test('client times out with ctx timer while starting', async () => {
-  //     // QUICClient repeatedly dials until the connection timeout
-  //     await expect(
-  //       QUICClient.createQUICClient(
-  //         {
-  //           host: localhost,
-  //           port: noTargetPort,
-  //           localHost: localhost,
-  //           crypto: {
-  //             ops: clientCryptoOps,
-  //           },
-  //           logger: logger.getChild(QUICClient.name),
-  //           config: {
-  //             // Prevent `maxIdleTimeout` timeout
-  //             maxIdleTimeout: 100000,
-  //             verifyPeer: false,
-  //           },
-  //         },
-  //         { timer: 100 },
-  //       ),
-  //     ).rejects.toThrow(errors.ErrorQUICClientCreateTimeout);
-  //   });
-  //   test('client times out with ctx signal while starting', async () => {
-  //     // QUICClient repeatedly dials until the connection timeout
-  //     const abortController = new AbortController();
-  //     const clientProm = QUICClient.createQUICClient(
-  //       {
-  //         host: localhost,
-  //         port: noTargetPort,
-  //         localHost: localhost,
-  //         crypto: {
-  //           ops: clientCryptoOps,
-  //         },
-  //         logger: logger.getChild(QUICClient.name),
-  //         config: {
-  //           // Prevent `maxIdleTimeout` timeout
-  //           maxIdleTimeout: 100000,
-  //           verifyPeer: false,
-  //         },
-  //       },
-  //       { signal: abortController.signal },
-  //     );
-  //     await sleep(100);
-  //     abortController.abort(Error('abort error'));
-  //     await expect(clientProm).rejects.toThrow(Error('abort error'));
-  //   });
-  // });
-  // describe.each(types)('TLS rotation with %s', (type) => {
-  //   test('existing connections config is unchanged and still function', async () => {
-  //     const tlsConfig1 = await testsUtils.generateTLSConfig(type);
-  //     const tlsConfig2 = await testsUtils.generateTLSConfig(type);
-  //     const server = new QUICServer({
-  //       crypto: {
-  //         key,
-  //         ops: serverCryptoOps,
-  //       },
-  //       logger: logger.getChild(QUICServer.name),
-  //       config: {
-  //         key: tlsConfig1.leafKeyPairPEM.privateKey,
-  //         cert: tlsConfig1.leafCertPEM,
-  //       },
-  //     });
-  //     socketCleanMethods.extractSocket(server);
-  //     await server.start({
-  //       host: localhost,
-  //     });
-  //     const client1 = await QUICClient.createQUICClient({
-  //       host: localhost,
-  //       port: server.port,
-  //       localHost: localhost,
-  //       crypto: {
-  //         ops: clientCryptoOps,
-  //       },
-  //       logger: logger.getChild(QUICClient.name),
-  //       config: {
-  //         verifyPeer: true,
-  //         verifyCallback: async () => {
-  //           return undefined;
-  //         },
-  //       },
-  //     });
-  //     socketCleanMethods.extractSocket(client1);
-  //     const peerCertChainInitial = client1.connection.conn.peerCertChain();
-  //     server.updateConfig({
-  //       key: tlsConfig2.leafKeyPairPEM.privateKey,
-  //       cert: tlsConfig2.leafCertPEM,
-  //     });
-  //     // The existing connection's certs should be unchanged
-  //     const peerCertChainNew = client1.connection.conn.peerCertChain();
-  //     expect(peerCertChainNew![0].toString()).toStrictEqual(
-  //       peerCertChainInitial![0].toString(),
-  //     );
-  //     await client1.destroy();
-  //     await server.stop();
-  //   });
-  //   test('new connections use new config', async () => {
-  //     const tlsConfig1 = await testsUtils.generateTLSConfig(type);
-  //     const tlsConfig2 = await testsUtils.generateTLSConfig(type);
-  //     const server = new QUICServer({
-  //       crypto: {
-  //         key,
-  //         ops: serverCryptoOps,
-  //       },
-  //       logger: logger.getChild(QUICServer.name),
-  //       config: {
-  //         key: tlsConfig1.leafKeyPairPEM.privateKey,
-  //         cert: tlsConfig1.leafCertPEM,
-  //       },
-  //     });
-  //     socketCleanMethods.extractSocket(server);
-  //     await server.start({
-  //       host: localhost,
-  //     });
-  //     const client1 = await QUICClient.createQUICClient({
-  //       host: localhost,
-  //       port: server.port,
-  //       localHost: localhost,
-  //       crypto: {
-  //         ops: clientCryptoOps,
-  //       },
-  //       logger: logger.getChild(QUICClient.name),
-  //       config: {
-  //         verifyPeer: true,
-  //         verifyCallback: async () => {
-  //           return undefined;
-  //         },
-  //       },
-  //     });
-  //     socketCleanMethods.extractSocket(client1);
-  //     const peerCertChainInitial = client1.connection.conn.peerCertChain();
-  //     server.updateConfig({
-  //       key: tlsConfig2.leafKeyPairPEM.privateKey,
-  //       cert: tlsConfig2.leafCertPEM,
-  //     });
-  //     // Starting a new connection has a different peerCertChain
-  //     const client2 = await QUICClient.createQUICClient({
-  //       host: localhost,
-  //       port: server.port,
-  //       localHost: localhost,
-  //       crypto: {
-  //         ops: clientCryptoOps,
-  //       },
-  //       logger: logger.getChild(QUICClient.name),
-  //       config: {
-  //         verifyPeer: true,
-  //         verifyCallback: async () => {
-  //           return undefined;
-  //         },
-  //       },
-  //     });
-  //     socketCleanMethods.extractSocket(client2);
-  //     const peerCertChainNew = client2.connection.conn.peerCertChain();
-  //     expect(peerCertChainNew![0].toString()).not.toStrictEqual(
-  //       peerCertChainInitial![0].toString(),
-  //     );
-  //     await client1.destroy();
-  //     await client2.destroy();
-  //     await server.stop();
-  //   });
-  // });
+  describe('hard connection failures', () => {
+    test('times out with maxIdleTimeout when there is no server', async () => {
+      // QUICClient repeatedly dials until the connection timeout
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: noTargetPort,
+          localHost: localhost,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.toThrow('connection timed out');
+    });
+    test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
+      // Larger keepAliveIntervalTime throws
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: noTargetPort,
+          localHost: localhost,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            keepAliveIntervalTime: 1000,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.toThrow(errors.ErrorQUICConnectionConfigInvalid);
+      // Smaller keepAliveIntervalTime doesn't cause a problem
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: noTargetPort,
+          localHost: localhost,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            keepAliveIntervalTime: 100,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
+      // Not setting an interval doesn't cause a problem either
+      await expect(
+        QUICClient.createQUICClient({
+          host: localhost,
+          port: noTargetPort,
+          localHost: localhost,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            maxIdleTimeout: 200,
+            verifyPeer: false,
+          },
+        }),
+      ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
+    });
+    test('client times out with ctx timer while starting', async () => {
+      // QUICClient repeatedly dials until the connection timeout
+      await expect(
+        QUICClient.createQUICClient(
+          {
+            host: localhost,
+            port: noTargetPort,
+            localHost: localhost,
+            crypto: {
+              ops: clientCryptoOps,
+            },
+            logger: logger.getChild(QUICClient.name),
+            config: {
+              // Prevent `maxIdleTimeout` timeout
+              maxIdleTimeout: 100000,
+              verifyPeer: false,
+            },
+          },
+          timer(100),
+        ),
+      ).rejects.toThrow('TMP IMP connection aborted');
+    });
+    // Test('client times out with abort error while starting', async () => {
+    //   // QUICClient repeatedly dials until the connection timeout
+    //   const abort = new Subject<void>();
+    //   const clientProm = QUICClient.createQUICClient(
+    //     {
+    //       host: localhost,
+    //       port: noTargetPort,
+    //       localHost: localhost,
+    //       crypto: {
+    //         ops: clientCryptoOps,
+    //       },
+    //       logger: logger.getChild(QUICClient.name),
+    //       config: {
+    //         // Prevent `maxIdleTimeout` timeout
+    //         maxIdleTimeout: 100000,
+    //         verifyPeer: false,
+    //       },
+    //     },
+    //     abort,
+    //   );
+    //   await sleep(100);
+    //   abort.error(Error('abort error'));
+    //   await expect(clientProm).rejects.toThrow('abort error');
+    // });
+    test('client times out with abort while starting', async () => {
+      // QUICClient repeatedly dials until the connection timeout
+      const abort = new Subject<void>();
+      const clientProm = QUICClient.createQUICClient(
+        {
+          host: localhost,
+          port: noTargetPort,
+          localHost: localhost,
+          crypto: {
+            ops: clientCryptoOps,
+          },
+          logger: logger.getChild(QUICClient.name),
+          config: {
+            // Prevent `maxIdleTimeout` timeout
+            maxIdleTimeout: 100000,
+            verifyPeer: false,
+          },
+        },
+        abort,
+      );
+      await sleep(100);
+      abort.next();
+      await expect(clientProm).rejects.toThrow('TMP IMP connection aborted');
+    });
+  });
+
+  describe.each(types)('TLS rotation with %s', (type) => {
+    test('existing connections config is unchanged and still function', async () => {
+      const tlsConfig1 = await testsUtils.generateTLSConfig(type);
+      const tlsConfig2 = await testsUtils.generateTLSConfig(type);
+      const server = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          key: tlsConfig1.leafKeyPairPEM.privateKey,
+          cert: tlsConfig1.leafCertPEM,
+        },
+      });
+      socketCleanMethods.extractSocket(server);
+      await server.start({
+        host: localhost,
+      });
+      const client1 = await QUICClient.createQUICClient({
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: true,
+          verifyCallback: async () => {
+            return undefined;
+          },
+        },
+      });
+      socketCleanMethods.extractSocket(client1);
+      const peerCertChainInitial = client1.connection.peerCertChain;
+      server.updateConfig({
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
+      });
+      // The existing connection's certs should be unchanged
+      const peerCertChainNew = client1.connection.peerCertChain;
+      console.log(peerCertChainNew);
+      expect(peerCertChainNew![0].toString()).toStrictEqual(
+        peerCertChainInitial![0].toString(),
+      );
+      console.log('cleaning up');
+      await client1.destroy();
+      await server.stop();
+    });
+    test.skip('new connections use new config', async () => {
+      const tlsConfig1 = await testsUtils.generateTLSConfig(type);
+      const tlsConfig2 = await testsUtils.generateTLSConfig(type);
+      const server = new QUICServer({
+        crypto: {
+          key,
+          ops: serverCryptoOps,
+        },
+        logger: logger.getChild(QUICServer.name),
+        config: {
+          key: tlsConfig1.leafKeyPairPEM.privateKey,
+          cert: tlsConfig1.leafCertPEM,
+        },
+      });
+      socketCleanMethods.extractSocket(server);
+      await server.start({
+        host: localhost,
+      });
+      const client1 = await QUICClient.createQUICClient({
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: true,
+          verifyCallback: async () => {
+            return undefined;
+          },
+        },
+      });
+      socketCleanMethods.extractSocket(client1);
+      const peerCertChainInitial = client1.connection.connection.peerCertChain;
+      server.updateConfig({
+        key: tlsConfig2.leafKeyPairPEM.privateKey,
+        cert: tlsConfig2.leafCertPEM,
+      });
+      // Starting a new connection has a different peerCertChain
+      const client2 = await QUICClient.createQUICClient({
+        host: localhost,
+        port: server.port,
+        localHost: localhost,
+        crypto: {
+          ops: clientCryptoOps,
+        },
+        logger: logger.getChild(QUICClient.name),
+        config: {
+          verifyPeer: true,
+          verifyCallback: async () => {
+            return undefined;
+          },
+        },
+      });
+      socketCleanMethods.extractSocket(client2);
+      const peerCertChainNew = client2.connection.connection.peerCertChain;
+      expect(peerCertChainNew![0].toString()).not.toStrictEqual(
+        peerCertChainInitial![0].toString(),
+      );
+      await client1.destroy();
+      await client2.destroy();
+      await server.stop();
+    });
+  });
+
   // describe.each(types)('graceful tls handshake with %s certs', (type) => {
   //   test('server verification succeeds', async () => {
   //     const tlsConfigs = await testsUtils.generateTLSConfig(type);
@@ -673,6 +699,7 @@ describe(QUICClient.name, () => {
   //     await server.stop();
   //   });
   // });
+
   // describe('handles random packets', () => {
   //   test.prop(
   //     [
@@ -1116,6 +1143,7 @@ describe(QUICClient.name, () => {
   //     await socket.stop();
   //   });
   // });
+
   // describe('keepalive', () => {
   //   let tlsConfig: TLSConfigs;
   //   beforeEach(async () => {
@@ -1445,6 +1473,7 @@ describe(QUICClient.name, () => {
   //     );
   //   });
   // });
+
   // describe.each(types)('custom TLS verification with %s', (type) => {
   //   test('server succeeds custom verification', async () => {
   //     const tlsConfigs = await generateTLSConfig(type);
@@ -1665,6 +1694,7 @@ describe(QUICClient.name, () => {
   //     await server.stop();
   //   });
   // });
+
   // test('connections are established and secured quickly', async () => {
   //   const tlsConfigServer = await testsUtils.generateTLSConfig(defaultType);
   //

@@ -4,12 +4,11 @@ import type {
   Port,
   QUICConfig,
   RemoteInfo,
-  ConnectionId,
   ConnectionIdString,
 } from './types.js';
 import type * as nativeTypes from './native/types.js';
 import type Logger from '@matrixai/logger';
-import { Subject } from 'rxjs';
+import { ReplaySubject, Subject } from 'rxjs';
 import { ConnectionType } from './types.js';
 import { quiche } from './native/index.js';
 import { buildQuicheConfig } from './config.js';
@@ -134,7 +133,7 @@ class QUICConnection {
       connection!.setKeylog(config.logKeys);
     }
     const quicConnection = new this(
-      ConnectionType.CLIENT,
+      ConnectionType.SERVER,
       connection,
       config,
       sourceHost,
@@ -185,7 +184,7 @@ class QUICConnection {
     }
 
     this.timeout$.subscribe(() => this.logger.warn(`TIMEOUT!`));
-    this.isEstablished$.subscribe((v) =>
+    this.established$.subscribe((v) =>
       this.logger.warn(`CHANGED isEstablished$ ${v}`),
     );
     this.isResumed$.subscribe((v) =>
@@ -197,11 +196,11 @@ class QUICConnection {
     this.isReadable$.subscribe((v) =>
       this.logger.warn(`CHANGED isReadable$ ${v}`),
     );
-    this.draining$.subscribe((v) =>
+    this.draining$.subscribe(() =>
       this.logger.warn(`CHANGED isDraining$ true`),
     );
-    this.closed$.subscribe((v) => this.logger.warn(`CHANGED isClosed$ true`));
-    this.isTimedOut$.subscribe((v) =>
+    this.closed$.subscribe(() => this.logger.warn(`CHANGED isClosed$ true`));
+    this.timedOut$.subscribe((v) =>
       this.logger.warn(`CHANGED isTimedOut$ ${v}`),
     );
     this.peerError$.subscribe((v) =>
@@ -210,7 +209,7 @@ class QUICConnection {
     this.localError$.subscribe((v) =>
       this.logger.warn(`CHANGED localError$ ${v}`),
     );
-    this.peerCertChain$.subscribe((v) => this.logger.warn(`GOT peerCertChain`));
+    this.peerCertChain$.subscribe(() => this.logger.warn(`GOT peerCertChain`));
   }
 
   public get connectionId_(): QUICConnectionId {
@@ -334,16 +333,16 @@ class QUICConnection {
     // this.logger.warn(`sourceId: ${this.connection.sourceId()}`);
     // this.logger.warn(`destinationId: ${this.connection.destinationId()}`);
     // this.logger.warn(`stats: ${this.connection.stats()}`);
-    this.isEstablished;
-    this.isResumed;
-    this.isInEarlyData;
-    this.isReadable;
-    this.isDraining;
-    this.isClosed;
-    this.isTimedOut;
-    this.peerError;
-    this.localError;
-    this.peerCertChain;
+    void this.isEstablished;
+    void this.isResumed;
+    void this.isInEarlyData;
+    void this.isReadable;
+    void this.isDraining;
+    void this.isClosed;
+    void this.isTimedOut;
+    void this.peerError;
+    void this.localError;
+    void this.peerCertChain;
   }
 
   protected timeoutTimer: NodeJS.Timeout | undefined;
@@ -364,12 +363,12 @@ class QUICConnection {
   }
 
   protected isEstablished_ = false;
-  public readonly isEstablished$: Subject<boolean> = new Subject();
+  public readonly established$: ReplaySubject<void> = new ReplaySubject(1);
   public get isEstablished() {
     const value = this.connection.isEstablished();
     const updated = value !== this.isEstablished_;
     this.isEstablished_ = value;
-    if (updated) this.isEstablished$.next(value);
+    if (updated) this.established$.next();
     return value;
   }
 
@@ -404,9 +403,10 @@ class QUICConnection {
   }
 
   protected isDraining_ = false;
-  public readonly draining$: Subject<void> = new Subject();
+  public readonly draining$: ReplaySubject<void> = new ReplaySubject(1);
   public get isDraining() {
     const value = this.connection.isDraining();
+    this.logger.warn(`draining: ${value}`)
     const updated = value !== this.isDraining_;
     this.isDraining_ = value;
     if (updated) this.draining$.next();
@@ -414,9 +414,10 @@ class QUICConnection {
   }
 
   protected isClosed_ = false;
-  public readonly closed$: Subject<void> = new Subject();
+  public readonly closed$: ReplaySubject<void> = new ReplaySubject(1);
   public get isClosed() {
     const value = this.connection.isClosed();
+    this.logger.warn(`closed: ${value}`)
     const updated = value !== this.isClosed_;
     this.isClosed_ = value;
     if (updated) this.closed$.next();
@@ -424,18 +425,18 @@ class QUICConnection {
   }
 
   protected isTimedOut_ = false;
-  public readonly isTimedOut$: Subject<boolean> = new Subject();
+  public readonly timedOut$: ReplaySubject<void> = new ReplaySubject(1);
   public get isTimedOut() {
     const value = this.connection.isTimedOut();
     const updated = value !== this.isTimedOut_;
     this.isTimedOut_ = value;
-    if (updated) this.isTimedOut$.next(value);
+    if (updated) this.timedOut$.next();
     return value;
   }
 
   protected peerError_: nativeTypes.ConnectionError | undefined = undefined;
-  public readonly peerError$: Subject<nativeTypes.ConnectionError> =
-    new Subject();
+  public readonly peerError$: ReplaySubject<nativeTypes.ConnectionError> =
+    new ReplaySubject(1);
   public get peerError() {
     const value = this.connection.peerError();
     if (this.peerError_ != null && value != null) {
@@ -446,8 +447,8 @@ class QUICConnection {
   }
 
   protected localError_: nativeTypes.ConnectionError | undefined = undefined;
-  public readonly localError$: Subject<nativeTypes.ConnectionError> =
-    new Subject();
+  public readonly localError$: ReplaySubject<nativeTypes.ConnectionError> =
+    new ReplaySubject(1);
   public get localError() {
     const value = this.connection.localError();
     if (this.localError_ != null && value != null) {
@@ -458,7 +459,8 @@ class QUICConnection {
   }
 
   protected peerCertChain_: Array<string> | undefined = undefined;
-  public readonly peerCertChain$: Subject<Array<string>> = new Subject();
+  public readonly peerCertChain$: ReplaySubject<Array<string>> =
+    new ReplaySubject(1);
   public get peerCertChain() {
     const value = this.connection.peerCertChain();
     if (this.peerCertChain_ == null && value != null) {
@@ -468,8 +470,16 @@ class QUICConnection {
     return this.peerCertChain_;
   }
 
-  public kill() {
-    this.connection.close(true, 42, Buffer.from('some reason!'));
+  public kill({
+    isApp,
+    errorCode,
+    reason,
+  }: {
+    isApp: boolean;
+    errorCode: number;
+    reason: Uint8Array;
+  }) {
+    this.connection.close(isApp, errorCode, reason);
     this.tiggerSend();
   }
 }

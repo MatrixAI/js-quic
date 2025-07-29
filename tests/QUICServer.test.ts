@@ -360,14 +360,11 @@ describe(QUICServer.name, () => {
     // @ts-ignore: protected property
     await server.socket.stop({ force: true });
     // Results in an error event on the server
-    console.log('a');
     await expect(quicServerErrorP).rejects.toThrowError(
       errors.ErrorQUICServerSocketNotRunning,
     );
-    console.log('a');
     await expect(quicClientErrorP).rejects.toThrowError(
       errors.ErrorQUICConnectionIdleTimeout,
     );
-    console.log('a');
   });
 });
