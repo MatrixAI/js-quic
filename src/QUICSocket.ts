@@ -448,7 +448,7 @@ class QUICSocket {
     this.socketListening$ = new Subject();
     this.socketMessage$ = new Subject();
     this.socketSend$ = new Subject();
-    this.socketSend$.subscribe(({ data, host, port, at }) => {
+    this.socketSend$.subscribe(({ data, host, port }) => {
       this.logger.warn(
         `socketSend$ sent ${data.byteLength} bytes to ${host}:${port}`,
       );

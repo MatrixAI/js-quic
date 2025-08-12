@@ -228,8 +228,16 @@ class QUICClient {
         { defaultValue: undefined },
       );
       if (connection.isTimedOut) throw Error('TMP IMP connection timed out');
-      if (connection.peerError !== null) throw connection.peerError;
-      if (connection.localError !== null) throw connection.localError;
+      if (connection.peerError !== null) {
+        throw Error(
+          `TMP IMP peer errored with code ${connection.peerError.errorCode}`,
+        );
+      }
+      if (connection.localError !== null) {
+        throw Error(
+          `TMP IMP local errored with code ${connection.localError.errorCode}`,
+        );
+      }
       if (aborted) throw Error('TMP IMP connection aborted');
     } catch (e) {
       if (!isSocketShared) {

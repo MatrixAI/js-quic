@@ -10,6 +10,7 @@ import type {
 import type * as nativeTypes from './native/types.js';
 import type Logger from '@matrixai/logger';
 import { ReplaySubject, Subject } from 'rxjs';
+import { CryptoError } from './native/index.js';
 import { ConnectionType } from './types.js';
 import { quiche } from './native/index.js';
 import { buildQuicheConfig } from './config.js';
@@ -147,7 +148,7 @@ class QUICConnection {
   }
 
   // TODO: define observables here
-  public readonly error$: Subject<void> = new Subject();
+  public readonly error$: Subject<Error> = new Subject();
   // A send event must be emmitted after the following
   //  - when a recv is processed
   //  - After a timeout event when `onTimeout()` is called
@@ -263,26 +264,21 @@ class QUICConnection {
     try {
       this.connection.recv(data, recvInfo);
     } catch (e) {
-      if (this.connection.localError() == null) {
-        console.log('local error?', this.connection.localError());
-        // TODO: internal connection error.
-        return;
-      }
-      // TODO: check and dispatch a peer error if there is one
+      this.logger.warn('failed here');
       if (e.message === 'TlsFail') {
         // TODO: error out TLS observable
-        console.error('tls error', e);
-        return;
+        const error = this.localError;
+        if (error == null) utils.never('local error information as missing');
+        const message = `TLS verification failed with ${
+          CryptoError[error.errorCode]
+        }(${error.errorCode})`;
+        // TODO: make a proper TLS fail error
+        this.error$.next(Error(`TMP IMP ` + message));
       } else {
-        // TODO dispatch connection error
-        console.error('connection error', e);
-        return;
+        this.error$.next(Error(`TMP IMP Errored from ${e.message}`));
       }
-    } finally {
-      this.checkState();
     }
-
-    // TODO: check and dispatch state changes;
+    this.checkState();
     this.processSend();
   }
 
@@ -437,9 +433,12 @@ class QUICConnection {
     new ReplaySubject(1);
   public get peerError() {
     const value = this.connection.peerError();
-    if (this.peerError_ != null && value != null) {
+    if (this.peerError_ == null && value != null) {
       this.peerError_ = value;
       this.peerError$.next(value);
+      this.error$.next(
+        Error(`TMP IMP failed with peerError ${value.errorCode}`),
+      );
     }
     return value;
   }
@@ -449,9 +448,12 @@ class QUICConnection {
     new ReplaySubject(1);
   public get localError() {
     const value = this.connection.localError();
-    if (this.localError_ != null && value != null) {
+    if (this.localError_ == null && value != null) {
       this.localError_ = value;
       this.localError$.next(value);
+      this.error$.next(
+        Error(`TMP IMP failed with localError ${value.errorCode}`),
+      );
     }
     return value;
   }
