@@ -1,15 +1,20 @@
 import type QUICServer from './QUICServer.js';
-import type { Host, Hostname, Port, ResolveHostname } from './types.js';
+import type {
+  Host,
+  Hostname,
+  Port,
+  ResolveHostname,
+  SendData,
+} from './types.js';
 import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
 import type { Observable } from 'rxjs';
 import dgram from 'dgram';
-import { merge } from 'rxjs';
 import Logger from '@matrixai/logger';
 import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
 import { utils as eventsUtils } from '@matrixai/events';
-import { firstValueFrom, map, sampleTime, Subject } from 'rxjs';
+import { map, sampleTime, Subject } from 'rxjs';
 import QUICConnectionMap from './QUICConnectionMap.js';
 import quiche from './native/quiche.js';
 import * as utils from './utils.js';
@@ -63,13 +68,13 @@ class QUICSocket {
   protected socketBind: (port: number, host: string) => Promise<void>;
   protected socketClose: () => Promise<void>;
   protected socketSend: (...params: Array<any>) => Promise<number>;
-  protected sendQueueProcess: Promise<void>;
+  protected sendQueue: Set<Promise<number>> = new Set();
 
   public socketClose$: Subject<void>;
   public socketError$: Subject<Error>;
   public socketListening$: Subject<void>;
   public socketMessage$: Subject<MessageData>;
-  public socketSend$: Subject<QUICConnectionId>;
+  public socketSend$: Subject<SendData>;
   public socketSendReady$: Observable<void>;
 
   // General events
@@ -176,7 +181,6 @@ class QUICSocket {
     reuseAddr?: boolean;
     ipv6Only?: boolean;
   } = {}): Promise<void> {
-    this.sendQueueProcess = this.processSendQueue();
     // Since we have a one-to-many relationship with clients and connections,
     // we want to up the warning limit on the EventTarget
     utils.setMaxListeners(this[eventsUtils._eventTarget]);
@@ -425,8 +429,9 @@ class QUICSocket {
     const { p: closedP, resolveP: resolveClosedP } = utils.promise();
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
-    this.processSendQueueAbort$.next(true);
-    await this.sendQueueProcess;
+    this.socketSend$.complete();
+    // Wait for all sends to settle
+    await Promise.all(this.sendQueue);
     this.setupObservables();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
@@ -443,8 +448,11 @@ class QUICSocket {
     this.socketListening$ = new Subject();
     this.socketMessage$ = new Subject();
     this.socketSend$ = new Subject();
-    this.socketSend$.subscribe((connectionId) => {
-      this.queueSend(connectionId);
+    this.socketSend$.subscribe(({ data, host, port, at }) => {
+      this.logger.warn(
+        `socketSend$ sent ${data.byteLength} bytes to ${host}:${port}`,
+      );
+      void this.send_(data, port, host);
     });
     this.socketSendReady$ = this.socketSend$
       .pipe(map(() => undefined))
@@ -543,7 +551,11 @@ class QUICSocket {
     'stopping',
   ])
   public async send_(...params: Array<any>): Promise<number> {
-    return this.socketSend(...params);
+    const sendP = this.socketSend(...params).finally(() => {
+      this.sendQueue.delete(sendP);
+    });
+    this.sendQueue.add(sendP);
+    return sendP;
   }
 
   public setServer(server: QUICServer) {
@@ -552,62 +564,6 @@ class QUICSocket {
 
   public unsetServer() {
     delete this.server;
-  }
-
-  // FIXME: getting ahead of myself here. Skip for now.
-  // Logic for handling send queue
-  protected connectionSendReadySet: Set<string> = new Set();
-  protected connectionSendReadyQueue: Array<QUICConnectionId> = [];
-  protected processSendQueueAbort$: Subject<boolean> = new Subject();
-  public async processSendQueue(): Promise<void> {
-    // this.socketSend$.subscribe((v) =>
-    //   this.logger.warn(`socket send with ${v.toString()}`),
-    // );
-    // this.socketSendReady$.subscribe({
-    //   next: () => this.logger.warn(`socket send ready`),
-    //   complete: () => this.logger.warn(`socket send Ready complete`),
-    // });
-    while (true) {
-      const result = await firstValueFrom(
-        merge(this.socketSendReady$, this.processSendQueueAbort$),
-        {
-          defaultValue: true,
-        },
-      );
-      if (result === true) break;
-      this.logger.warn(
-        `processing ran with queue size ${this.connectionSendReadyQueue.length}`,
-      );
-      let connectionId = this.connectionSendReadyQueue.pop();
-      while (connectionId != null) {
-        this.connectionSendReadySet.delete(connectionId.toString());
-        const connection = this.connectionMap.get(connectionId);
-        if (connection == null) {
-          this.logger.warn(
-            `connection ${connectionId} is missing, skipping...`,
-          );
-          continue;
-        }
-        let data = connection.send();
-        while (data != null) {
-          this.logger.warn(
-            `sent ${data.data.byteLength}->${connectionId}@${data.host}:${data.port}`,
-          );
-          await this.send_(data.data, data.port, data.host);
-          data = connection.send();
-        }
-        connectionId = this.connectionSendReadyQueue.pop();
-      }
-      this.logger.warn('done processing loop');
-      // Sending messages
-    }
-    this.logger.warn('process loop complete');
-  }
-
-  protected queueSend(connectionId: QUICConnectionId): void {
-    if (this.connectionSendReadySet.has(connectionId.toString())) return;
-    this.connectionSendReadyQueue.push(connectionId);
-    this.connectionSendReadySet.add(connectionId.toString());
   }
 }
 

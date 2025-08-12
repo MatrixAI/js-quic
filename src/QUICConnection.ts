@@ -5,6 +5,7 @@ import type {
   QUICConfig,
   RemoteInfo,
   ConnectionIdString,
+  SendData,
 } from './types.js';
 import type * as nativeTypes from './native/types.js';
 import type Logger from '@matrixai/logger';
@@ -151,7 +152,7 @@ class QUICConnection {
   //  - when a recv is processed
   //  - After a timeout event when `onTimeout()` is called
   //  - When the application interacts with the streams
-  public readonly send$: Subject<QUICConnectionId> = new Subject();
+  public readonly send$: Subject<SendData> = new Subject();
 
   /**
    * Chain of local certificates from leaf to root in DER format.
@@ -282,28 +283,30 @@ class QUICConnection {
     }
 
     // TODO: check and dispatch state changes;
-    this.tiggerSend();
+    this.processSend();
   }
 
-  /**
-   * This just retrieves data from the underlying connection object
-   */
-  // TODO: define simple send
-  public send() {
+  // This will extract send data from connection and emit it on the `sendData$` subject
+  public processSend(): void {
     if (this.connection.isDraining()) {
       this.logger.warn('skipping due to draining state');
       return;
     }
-    const sendBuffer = Buffer.allocUnsafe(this.config.maxSendUdpPayloadSize);
     try {
-      const result = this.connection.send(sendBuffer);
-      if (result == null) return;
-      const [sendLength, sendInfo] = result;
-      return {
-        data: sendBuffer.subarray(0, sendLength),
-        host: sendInfo.to.host,
-        port: sendInfo.to.port,
-      };
+      while (true) {
+        const sendBuffer = Buffer.allocUnsafe(
+          this.config.maxSendUdpPayloadSize,
+        );
+        const result = this.connection.send(sendBuffer);
+        if (result == null) break;
+        const [sendLength, sendInfo] = result;
+        this.send$.next({
+          data: sendBuffer.subarray(0, sendLength),
+          host: sendInfo.to.host,
+          port: sendInfo.to.port,
+          at: sendInfo.at,
+        });
+      }
     } catch (e) {
       // TODO: dispatch connection error
       console.error('connection error', e);
@@ -311,11 +314,6 @@ class QUICConnection {
     } finally {
       this.checkState();
     }
-  }
-
-  protected tiggerSend() {
-    if (this.connection.isDraining()) return;
-    this.send$.next(this.connectionId_);
   }
 
   // TODO: define simple state checks
@@ -351,7 +349,7 @@ class QUICConnection {
     this.connection.onTimeout();
     this.timeout$.next();
     this.checkState();
-    this.tiggerSend();
+    this.processSend();
     this.checkTimeout();
   };
   protected checkTimeout() {
@@ -406,7 +404,7 @@ class QUICConnection {
   public readonly draining$: ReplaySubject<void> = new ReplaySubject(1);
   public get isDraining() {
     const value = this.connection.isDraining();
-    this.logger.warn(`draining: ${value}`)
+    this.logger.warn(`draining: ${value}`);
     const updated = value !== this.isDraining_;
     this.isDraining_ = value;
     if (updated) this.draining$.next();
@@ -417,7 +415,7 @@ class QUICConnection {
   public readonly closed$: ReplaySubject<void> = new ReplaySubject(1);
   public get isClosed() {
     const value = this.connection.isClosed();
-    this.logger.warn(`closed: ${value}`)
+    this.logger.warn(`closed: ${value}`);
     const updated = value !== this.isClosed_;
     this.isClosed_ = value;
     if (updated) this.closed$.next();
@@ -480,7 +478,7 @@ class QUICConnection {
     reason: Uint8Array;
   }) {
     this.connection.close(isApp, errorCode, reason);
-    this.tiggerSend();
+    this.processSend();
   }
 }
 

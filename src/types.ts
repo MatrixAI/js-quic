@@ -1,4 +1,4 @@
-import type { CryptoError } from './native/types.js';
+import type { CryptoError, QuicheTimeInstant } from './native/types.js';
 
 type POJO = { [key: string]: any };
 
@@ -353,6 +353,13 @@ type StreamReasonToCode = (type: 'read' | 'write', reason?: any) => number;
  */
 type StreamCodeToReason = (type: 'read' | 'write', code: number) => any;
 
+type SendData = {
+  data: Buffer;
+  host: string;
+  port: number;
+  at: QuicheTimeInstant;
+};
+
 export type {
   POJO,
   Opaque,
@@ -379,6 +386,7 @@ export type {
   StreamId,
   StreamReasonToCode,
   StreamCodeToReason,
+  SendData,
 };
 
 export { ConnectionType };

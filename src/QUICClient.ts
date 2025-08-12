@@ -14,11 +14,11 @@ import type { Observable } from 'rxjs';
 import Logger from '@matrixai/logger';
 import { running } from '@matrixai/async-init';
 import { createDestroy } from '@matrixai/async-init';
-import { firstValueFrom, merge, ReplaySubject, Subject } from 'rxjs';
+import { firstValueFrom, merge, ReplaySubject } from 'rxjs';
 import QUICSocket from './QUICSocket.js';
 import QUICConnection from './QUICConnection.js';
 import quiche from './native/quiche.js';
-import { clientDefault, minIdleTimeout } from './config.js';
+import { clientDefault } from './config.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
@@ -215,7 +215,7 @@ class QUICClient {
     // to the socket.
     connection.send$.subscribe(socket.socketSend$);
     socket.connectionMap.set(connection.connectionId_, connection);
-    socket.socketSend$.next(connection.connectionId_);
+    connection.processSend();
 
     // Waiting for establishment or failure
     let aborted = false;
@@ -430,7 +430,7 @@ class QUICClient {
       defaultValue: undefined,
     });
     if (!this._closed) {
-      console.log('killing')
+      this.logger.warn('killing!');
       this.connection.kill({
         isApp,
         errorCode,

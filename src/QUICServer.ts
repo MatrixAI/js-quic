@@ -542,10 +542,9 @@ class QUICServer {
     connection.closed$.subscribe(() => {
       this.socket.connectionMap.delete(connection.connectionId_);
     });
-    connection.recv(data, remoteInfo);
     this.connection$.next(connection);
     connection.send$.subscribe(this.socket.socketSend$);
-    this.socket.socketSend$.next(connection.connectionId_);
+    connection.recv(data, remoteInfo);
     this.logger.error('end f');
     return connection;
   }

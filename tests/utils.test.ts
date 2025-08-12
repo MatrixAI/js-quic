@@ -1,5 +1,5 @@
 import type { Host } from '#types.js';
-import { merge, ReplaySubject, Subject } from 'rxjs';
+import { map, merge, mergeMap, of, ReplaySubject, Subject } from 'rxjs';
 import { sleep } from './utils.js';
 import * as utils from '#utils.js';
 
@@ -113,16 +113,21 @@ describe('utils', () => {
 
 test('asd', async () => {
   const asd = new Subject<void>();
-  asd.subscribe({
-    next: () => console.log('nexted'),
+
+  const bsd = asd.pipe(
+    mergeMap((v) => {
+      console.log('v', v);
+      return of(1, 2);
+    }),
+  );
+  bsd.subscribe({
+    next: (v) => console.log('nexted', v),
     error: (e) => console.error(e),
     complete: () => console.log('completed'),
   });
 
   // Asd.error(new Error('some error'));
-  asd.complete();
-  asd.complete();
   asd.next();
-  asd.error(new Error('some error'));
+  asd.next();
   await sleep(2000);
 });

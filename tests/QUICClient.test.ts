@@ -35,7 +35,7 @@ describe(QUICClient.name, () => {
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
 
-  const types: Array<KeyTypes> = ['RSA',/* 'ECDSA', 'Ed25519'*/];
+  const types: Array<KeyTypes> = ['RSA' /* 'ECDSA', 'Ed25519'*/];
   // Const types: Array<KeyTypes> = ['RSA'];
   const defaultType = types[0];
 
@@ -138,7 +138,7 @@ describe(QUICClient.name, () => {
       expect(connection.sourcePort).toBe(server.port);
       expect(connection.host).toBe('::1');
       expect(connection.port).toBe(client.localPort);
-      console.log('ending')
+      console.log('ending');
       await client.destroy();
       await server.stop();
     });
@@ -445,7 +445,7 @@ describe(QUICClient.name, () => {
     });
   });
 
-  // describe.each(types)('graceful tls handshake with %s certs', (type) => {
+  // Describe.each(types)('graceful tls handshake with %s certs', (type) => {
   //   test('server verification succeeds', async () => {
   //     const tlsConfigs = await testsUtils.generateTLSConfig(type);
   //     const server = new QUICServer({
