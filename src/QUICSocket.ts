@@ -10,6 +10,7 @@ import type { Header } from './native/types.js';
 import type { RemoteInfo } from 'dgram';
 import type { Observable } from 'rxjs';
 import dgram from 'dgram';
+import { firstValueFrom } from 'rxjs';
 import Logger from '@matrixai/logger';
 import { startStop } from '@matrixai/async-init';
 import { utils as errorsUtils } from '@matrixai/errors';
@@ -235,18 +236,16 @@ class QUICSocket {
     this.socketBind = utils.promisify(this.socket.bind).bind(this.socket);
     this.socketClose = utils.promisify(this.socket.close).bind(this.socket);
     this.socketSend = utils.promisify(this.socket.send).bind(this.socket);
-    const { p: socketErrorP, cleanUp } = utils.observableToPromise(
-      this.socketError$,
-    );
+    // FIXME: needs a cleanup abort
+    const socketErrorP = firstValueFrom(this.socketError$, {
+      defaultValue: undefined,
+    });
     // This resolves DNS via `getaddrinfo` under the hood.
     // It which respects the hosts file.
     // This makes it equivalent to `dns.lookup`.
     const socketBindP = this.socketBind(port_, host_);
-    const raceResult = await Promise.race([socketBindP, socketErrorP]).finally(
-      async () => {
-        await cleanUp();
-      },
-    );
+    const raceResult = await Promise.race([socketBindP, socketErrorP]);
+    // FIXME: clean up the socket error prom
     // Possible binding failure due to EINVAL or ENOTFOUND.
     // EINVAL due to using IPv4 address where udp6 is specified.
     // ENOTFOUND when the hostname doesn't resolve, or doesn't resolve to IPv6 if udp6 is specified
@@ -391,6 +390,7 @@ class QUICSocket {
       }
     });
     this.quicSocketClose$.subscribe(async () => {
+      // FIXME: feels odd to socketClose() here
       await this.socketClose();
       this._closed = true;
       this.resolveClosedP();
@@ -421,6 +421,11 @@ class QUICSocket {
         `Cannot stop QUICSocket with ${this.connectionMap.size} active connection(s)`,
       );
     }
+    // Disable further sends
+    this.socketSend$.complete();
+    // Wait for all sends to settle
+    await Promise.all(this.sendQueue);
+    // FIXME: very weird
     if (!this._closed) {
       this.quicSocketClose$.next();
     }
@@ -430,8 +435,6 @@ class QUICSocket {
     this._closedP = closedP;
     this.resolveClosedP = resolveClosedP;
     this.socketSend$.complete();
-    // Wait for all sends to settle
-    await Promise.all(this.sendQueue);
     this.setupObservables();
     this.logger.info(`Stopped ${this.constructor.name} on ${address}`);
   }
@@ -554,6 +557,7 @@ class QUICSocket {
     const sendP = this.socketSend(...params).finally(() => {
       this.sendQueue.delete(sendP);
     });
+    sendP.catch(() => {});
     this.sendQueue.add(sendP);
     return sendP;
   }

@@ -206,10 +206,10 @@ class QUICConnection {
       this.logger.warn(`CHANGED isTimedOut$ ${v}`),
     );
     this.peerError$.subscribe((v) =>
-      this.logger.warn(`CHANGED peerError$ ${v}`),
+      this.logger.warn(`CHANGED peerError$ ${JSON.stringify(v)}`),
     );
     this.localError$.subscribe((v) =>
-      this.logger.warn(`CHANGED localError$ ${v}`),
+      this.logger.warn(`CHANGED localError$ ${JSON.stringify(v)}`),
     );
     this.peerCertChain$.subscribe(() => this.logger.warn(`GOT peerCertChain`));
   }
@@ -296,6 +296,7 @@ class QUICConnection {
         const result = this.connection.send(sendBuffer);
         if (result == null) break;
         const [sendLength, sendInfo] = result;
+        this.logger.warn(`send$ nexting with ${sendLength} bytes`);
         this.send$.next({
           data: sendBuffer.subarray(0, sendLength),
           host: sendInfo.to.host,
@@ -305,7 +306,6 @@ class QUICConnection {
       }
     } catch (e) {
       // TODO: dispatch connection error
-      console.error('connection error', e);
       throw e;
     } finally {
       this.checkState();

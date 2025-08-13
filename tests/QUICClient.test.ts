@@ -4,19 +4,19 @@ import type { KeyTypes, TLSConfigs } from './utils.js';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
 import { test, fc } from '@fast-check/jest';
 import { running } from '@matrixai/async-init';
-import { firstValueFrom, Subject, timer } from 'rxjs';
+import { firstValueFrom, ReplaySubject, Subject, timer } from 'rxjs';
+import { reportUnhandledError } from 'rxjs/internal/util/reportUnhandledError';
 import * as testsUtils from './utils.js';
 import { generateTLSConfig, sleep } from './utils.js';
 import QUICSocket from '#QUICSocket.js';
 import QUICClient from '#QUICClient.js';
 import QUICServer from '#QUICServer.js';
 import * as errors from '#errors.js';
-import { observableToPromise, promise } from '#utils.js';
 import * as events from '#events.js';
 import { CryptoError } from '#native/types.js';
 
 describe(QUICClient.name, () => {
-  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -138,7 +138,6 @@ describe(QUICClient.name, () => {
       expect(connection.sourcePort).toBe(server.port);
       expect(connection.host).toBe('::1');
       expect(connection.port).toBe(client.localPort);
-      console.log('ending');
       await client.destroy();
       await server.stop();
     });
@@ -205,7 +204,6 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.toThrow('connection timed out');
     });
-    // FIXME: resource leak
     test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
       // Larger keepAliveIntervalTime throws
       await expect(
@@ -258,7 +256,6 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
     });
-    // FIXME: resource leak
     test('client times out with ctx timer while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       await expect(
@@ -281,7 +278,6 @@ describe(QUICClient.name, () => {
         ),
       ).rejects.toThrow('TMP IMP connection aborted');
     });
-    // FIXME: resource leak
     test('client times out with abort while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       const abort = new Subject<void>();
@@ -350,11 +346,9 @@ describe(QUICClient.name, () => {
       });
       // The existing connection's certs should be unchanged
       const peerCertChainNew = client1.connection.peerCertChain;
-      console.log(peerCertChainNew);
       expect(peerCertChainNew![0].toString()).toStrictEqual(
         peerCertChainInitial![0].toString(),
       );
-      console.log('cleaning up');
       await client1.destroy();
       await server.stop();
     });
@@ -465,7 +459,6 @@ describe(QUICClient.name, () => {
       await client.destroy();
       await server.stop();
     });
-    // FIXME: resource leak
     test('client verification succeeds', async () => {
       const tlsConfigs1 = await testsUtils.generateTLSConfig(type);
       const tlsConfigs2 = await testsUtils.generateTLSConfig(type);
@@ -586,7 +579,6 @@ describe(QUICClient.name, () => {
       ).toReject();
       await server.stop();
     });
-    // FIXME: resource leak
     test('graceful failure verifying client', async () => {
       const tlsConfigs1 = await testsUtils.generateTLSConfig(type);
       const tlsConfigs2 = await testsUtils.generateTLSConfig(type);
@@ -628,6 +620,7 @@ describe(QUICClient.name, () => {
       // Expect an error event
       await errorP;
       await server.stop();
+      await client.destroy();
     });
     test('graceful failure verifying client and server', async () => {
       const tlsConfigs1 = await testsUtils.generateTLSConfig(type);

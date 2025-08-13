@@ -22,6 +22,10 @@ import { clientDefault } from './config.js';
 import * as utils from './utils.js';
 import * as events from './events.js';
 import * as errors from './errors.js';
+
+// FIXME: fixme I need to properly clean up events
+// FIXME: I need to trigger destroy if the underlying connection ends.
+
 interface QUICClient extends createDestroy.CreateDestroy {}
 @createDestroy.CreateDestroy({
   eventDestroy: events.EventQUICClientDestroy,
@@ -179,16 +183,24 @@ class QUICClient {
       }
       throw e;
     }
-    const connection = QUICConnection.connectionConnect({
-      serverName: serverName ?? host,
-      scid: scid,
-      config: quicConfig,
-      sourceHost: socket.host,
-      sourcePort: socket.port,
-      host: host_,
-      port: port_,
-      logger: logger.getChild('connection'),
-    });
+    let connection: QUICConnection;
+    try {
+      connection = QUICConnection.connectionConnect({
+        serverName: serverName ?? host,
+        scid: scid,
+        config: quicConfig,
+        sourceHost: socket.host,
+        sourcePort: socket.port,
+        host: host_,
+        port: port_,
+        logger: logger.getChild('connection'),
+      });
+    } catch (e) {
+      if (!isSocketShared) {
+        await socket.stop({ force: true });
+      }
+      throw e;
+    }
     const client = new this({
       socket,
       connection,
@@ -238,8 +250,20 @@ class QUICClient {
           `TMP IMP local errored with code ${connection.localError.errorCode}`,
         );
       }
-      if (aborted) throw Error('TMP IMP connection aborted');
+      if (aborted) {
+        const connectionClosedP = firstValueFrom(connection.closed$, {
+          defaultValue: undefined,
+        });
+        connection.kill({
+          isApp: false,
+          errorCode: 1,
+          reason: Buffer.from('Connection aborted'),
+        });
+        await connectionClosedP;
+        throw Error('TMP IMP connection aborted');
+      }
     } catch (e) {
+      if (!connection.closed) throw Error('YO MUST BE CLOSED HERE!');
       if (!isSocketShared) {
         await socket.stop({ force: true });
       }
@@ -305,32 +329,7 @@ class QUICClient {
    * from `QUICConnection`, then the `QUICConnection` will already be closing.
    * Therefore, attempting to stop the `QUICConnection` will be idempotent.
    */
-  protected handleEventQUICClientClose = async (
-    evt: events.EventQUICClientClose,
-  ) => {
-    const error = evt.detail;
-    if (!(error instanceof errors.ErrorQUICClientSocketNotRunning)) {
-      // Only stop the socket if it was encapsulated
-      if (!this.isSocketShared) {
-        // Remove the stopped listener, as we intend to stop the socket
-        this.socket.removeEventListener(
-          events.EventQUICSocketStopped.name,
-          this.handleEventQUICSocketStopped,
-        );
-        try {
-          // Force stop of the socket even if it had a connection map
-          // This is because we will be stopping this `QUICClient` which
-          //  will stop all the relevant connections
-          await this.socket.stop({ force: true });
-        } catch (e) {
-          const e_ = new errors.ErrorQUICClientInternal(
-            'Failed to stop QUICSocket',
-            { cause: e },
-          );
-          this.dispatchEvent(new events.EventQUICClientError({ detail: e_ }));
-        }
-      }
-    }
+  protected handleEventQUICClientClose = async () => {
     this._closed = true;
     if (
       !this[createDestroy.destroyed] &&
@@ -434,10 +433,14 @@ class QUICClient {
         address != null ? ` to ${address}` : ''
       }`,
     );
-    const connectionClosedP = firstValueFrom(this.connection.closed$, {
-      defaultValue: undefined,
-    });
-    if (!this._closed) {
+    // Steps involve
+    //  1. Initiate connection close if needed
+    //  2. Wait for the connection to close
+    //  3. If shared clean up socket
+    //  4. clean up all plumbing
+
+    // Killing connection if it is not already closed or draining
+    if (!this.connection.isClosed && !this.connection.isDraining) {
       this.logger.warn('killing!');
       this.connection.kill({
         isApp,
@@ -445,7 +448,14 @@ class QUICClient {
         reason,
       });
     }
-    await connectionClosedP;
+    await firstValueFrom(this.connection.closed$, {
+      defaultValue: undefined,
+    });
+
+    if (!this.isSocketShared) {
+      await this.socket.stop({ force });
+    }
+
     this.removeEventListener(
       events.EventQUICClientError.name,
       this.handleEventQUICClientError,
