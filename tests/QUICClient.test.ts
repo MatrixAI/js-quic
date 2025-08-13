@@ -205,6 +205,7 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.toThrow('connection timed out');
     });
+    // FIXME: resource leak
     test('intervalTimeoutTime must be less than maxIdleTimeout', async () => {
       // Larger keepAliveIntervalTime throws
       await expect(
@@ -257,6 +258,7 @@ describe(QUICClient.name, () => {
         }),
       ).rejects.not.toThrow(errors.ErrorQUICConnectionConfigInvalid);
     });
+    // FIXME: resource leak
     test('client times out with ctx timer while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       await expect(
@@ -279,30 +281,7 @@ describe(QUICClient.name, () => {
         ),
       ).rejects.toThrow('TMP IMP connection aborted');
     });
-    // Test('client times out with abort error while starting', async () => {
-    //   // QUICClient repeatedly dials until the connection timeout
-    //   const abort = new Subject<void>();
-    //   const clientProm = QUICClient.createQUICClient(
-    //     {
-    //       host: localhost,
-    //       port: noTargetPort,
-    //       localHost: localhost,
-    //       crypto: {
-    //         ops: clientCryptoOps,
-    //       },
-    //       logger: logger.getChild(QUICClient.name),
-    //       config: {
-    //         // Prevent `maxIdleTimeout` timeout
-    //         maxIdleTimeout: 100000,
-    //         verifyPeer: false,
-    //       },
-    //     },
-    //     abort,
-    //   );
-    //   await sleep(100);
-    //   abort.error(Error('abort error'));
-    //   await expect(clientProm).rejects.toThrow('abort error');
-    // });
+    // FIXME: resource leak
     test('client times out with abort while starting', async () => {
       // QUICClient repeatedly dials until the connection timeout
       const abort = new Subject<void>();
@@ -486,6 +465,7 @@ describe(QUICClient.name, () => {
       await client.destroy();
       await server.stop();
     });
+    // FIXME: resource leak
     test('client verification succeeds', async () => {
       const tlsConfigs1 = await testsUtils.generateTLSConfig(type);
       const tlsConfigs2 = await testsUtils.generateTLSConfig(type);
@@ -606,6 +586,7 @@ describe(QUICClient.name, () => {
       ).toReject();
       await server.stop();
     });
+    // FIXME: resource leak
     test('graceful failure verifying client', async () => {
       const tlsConfigs1 = await testsUtils.generateTLSConfig(type);
       const tlsConfigs2 = await testsUtils.generateTLSConfig(type);
@@ -683,12 +664,12 @@ describe(QUICClient.name, () => {
             verifyPeer: true,
           },
         }),
-      ).rejects.toThrow('TMP IMP local errored with 304');
+      ).rejects.toThrow('TMP IMP local errored with code 304');
       await server.stop();
     });
   });
 
-  // describe('handles random packets', () => {
+  // Describe('handles random packets', () => {
   //   test.prop(
   //     [
   //       fc.noShrink(

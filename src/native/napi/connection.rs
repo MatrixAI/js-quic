@@ -55,25 +55,22 @@ pub struct Stats {
   pub recv: i64,
   pub sent: i64,
   pub lost: i64,
+  pub spurious_lost: i64,
   pub retrans: i64,
   pub sent_bytes: i64,
   pub recv_bytes: i64,
+  pub acked_bytes: i64,
   pub lost_bytes: i64,
   pub stream_retrans_bytes: i64,
+  pub dgram_recv: i64,
+  pub dgram_sent: i64,
   pub paths_count: i64,
-  pub peer_max_idle_timeout: i64,
-  pub peer_max_udp_payload_size: i64,
-  pub peer_initial_max_data: i64,
-  pub peer_initial_max_stream_data_bidi_local: i64,
-  pub peer_initial_max_stream_data_bidi_remote: i64,
-  pub peer_initial_max_stream_data_uni: i64,
-  pub peer_initial_max_streams_bidi: i64,
-  pub peer_initial_max_streams_uni: i64,
-  pub peer_ack_delay_exponent: i64,
-  pub peer_max_ack_delay: i64,
-  pub peer_disable_active_migration: bool,
-  pub peer_active_conn_id_limit: i64,
-  pub peer_max_datagram_frame_size: Option<i64>,
+  pub reset_stream_count_local: i64,
+  pub stopped_stream_count_local: i64,
+  pub reset_stream_count_remote: i64,
+  pub stopped_stream_count_remote: i64,
+  pub path_challenge_rx_count: i64,
+  // FIXME: missing bytes_in_flight_duration: Duration
 }
 
 impl From<quiche::Stats> for Stats {
@@ -82,25 +79,22 @@ impl From<quiche::Stats> for Stats {
       recv: stats.recv as i64,
       sent: stats.sent as i64,
       lost: stats.lost as i64,
+      spurious_lost: stats.spurious_lost as i64,
       retrans: stats.retrans as i64,
       sent_bytes: stats.sent_bytes as i64,
       recv_bytes: stats.recv_bytes as i64,
+      acked_bytes: stats.acked_bytes as i64,
       lost_bytes: stats.lost_bytes as i64,
       stream_retrans_bytes: stats.stream_retrans_bytes as i64,
+      dgram_recv: stats.dgram_recv as i64,
+      dgram_sent: stats.dgram_sent as i64,
       paths_count: stats.paths_count as i64,
-      peer_max_idle_timeout: stats.peer_max_idle_timeout as i64,
-      peer_max_udp_payload_size: stats.peer_max_udp_payload_size as i64,
-      peer_initial_max_data: stats.peer_initial_max_data as i64,
-      peer_initial_max_stream_data_bidi_local: stats.peer_initial_max_stream_data_bidi_local as i64,
-      peer_initial_max_stream_data_bidi_remote: stats.peer_initial_max_stream_data_bidi_remote as i64,
-      peer_initial_max_stream_data_uni: stats.peer_initial_max_stream_data_uni as i64,
-      peer_initial_max_streams_bidi: stats.peer_initial_max_streams_bidi as i64,
-      peer_initial_max_streams_uni: stats.peer_initial_max_streams_uni as i64,
-      peer_ack_delay_exponent: stats.peer_ack_delay_exponent as i64,
-      peer_max_ack_delay: stats.peer_max_ack_delay as i64,
-      peer_disable_active_migration: stats.peer_disable_active_migration,
-      peer_active_conn_id_limit: stats.peer_active_conn_id_limit as i64,
-      peer_max_datagram_frame_size: stats.peer_max_datagram_frame_size.map(|v| v as i64),
+      reset_stream_count_local: stats.reset_stream_count_local as i64,
+      stopped_stream_count_local: stats.stopped_stream_count_local as i64,
+      reset_stream_count_remote: stats.reset_stream_count_remote as i64,
+      stopped_stream_count_remote: stats.stopped_stream_count_remote as i64,
+      path_challenge_rx_count: stats.path_challenge_rx_count as i64,
+      // FIXME: missing bytes_in_flight_duration: Duration
     };
   }
 }
@@ -715,13 +709,13 @@ impl Connection {
   }
 
   #[napi]
-  pub fn new_source_cid(
+  pub fn new_scid(
     &mut self,
     scid: Uint8Array,
     reset_token: BigInt,
     retire_if_needed: bool
   ) -> napi::Result<i64> {
-    return self.0.new_source_cid(
+    return self.0.new_scid(
       &quiche::ConnectionId::from_ref(&scid),
       reset_token.get_u128().1,
       retire_if_needed
@@ -731,18 +725,18 @@ impl Connection {
   }
 
   #[napi]
-  pub fn active_source_cids(&self) -> i64 {
-    return self.0.active_source_cids() as i64;
+  pub fn active_scids(&self) -> i64 {
+    return self.0.active_scids() as i64;
   }
 
   #[napi]
-  pub fn source_cids_left(&self) -> i64 {
-    return self.0.source_cids_left() as i64;
+  pub fn scids_left(&self) -> i64 {
+    return self.0.scids_left() as i64;
   }
 
   #[napi]
-  pub fn retire_destination_cid(&mut self, dcid_seq: i64) -> napi::Result<()> {
-    return self.0.retire_destination_cid(dcid_seq as u64).or_else(
+  pub fn retire_dcid(&mut self, dcid_seq: i64) -> napi::Result<()> {
+    return self.0.retire_dcid(dcid_seq as u64).or_else(
       |e| Err(napi::Error::from_reason(e.to_string()))
     );
   }

@@ -482,6 +482,11 @@ class QUICConnection {
     this.connection.close(isApp, errorCode, reason);
     this.processSend();
   }
+
+  // Stream related methods
+  // TODO: we need a stream map for tracking existing streams
+  // TODO: we need a stream ID tracker for avoiding used streamIds, assuming this is actually a problem
+  // TODO: time to update quiche
 }
 
 export default QUICConnection;

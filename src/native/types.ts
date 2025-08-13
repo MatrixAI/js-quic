@@ -102,15 +102,15 @@ interface Connection {
   probePath(localHost: HostPort, peerHost: HostPort): number;
   migrateSource(localHost: HostPort): number;
   migrate(localHost: HostPort, peerHost: HostPort): number;
-  newSourceCid(
+  newScid(
     scid: Uint8Array,
     resetToken: bigint,
     retireIfNeeded: boolean,
   ): number;
-  activeSourceCids(): number;
+  activeScids(): number;
   maxActiveSourceCids(): number;
-  sourceCidsLeft(): number;
-  retireDestinationCid(dcidSeq: number): void;
+  ScidsLeft(): number;
+  retireDcid(dcidSeq: number): void;
   pathEventNext(): PathEvent;
   retiredScidNext(): Uint8Array | null;
   availableDcids(): number;
@@ -172,6 +172,8 @@ enum CongestionControlAlgorithm {
   Reno = 0,
   CUBIC = 1,
   BBR = 2,
+  BBR2 = 3,
+  Bbr2Gcongestion = 4,
 }
 
 enum Shutdown {
@@ -262,25 +264,21 @@ type Stats = {
   recv: number;
   sent: number;
   lost: number;
+  spuriousLost: number;
   retrans: number;
   sentBytes: number;
   recvBytes: number;
+  ackedBytes: number;
   lostBytes: number;
   streamRetransBytes: number;
+  dgramRecv: number;
+  dgramSent: number;
   pathsCount: number;
-  peerMaxIdleTimeout: number;
-  peerMaxUdpPayloadSize: number;
-  peerInitialMaxData: number;
-  peerInitialMaxStreamDataBidiLocal: number;
-  peerInitialMaxStreamDataBidiRemote: number;
-  peerInitialMaxStreamDataUni: number;
-  peerInitialMaxStreamsBidi: number;
-  peerInitialMaxStreamsUni: number;
-  peerAckDelayExponent: number;
-  peerMaxAckDelay: number;
-  peerDisableActiveMigration: boolean;
-  peerActiveConnIdLimit: number;
-  peerMaxDatagramFrameSize?: number;
+  resetStreamCountLocal: number;
+  stoppedStreamCountLocal: number;
+  resetStreamCountRemote: number;
+  stoppedStreamCountRemote: number;
+  pathChallengeRxCount: number;
 };
 
 type HostPort = {
