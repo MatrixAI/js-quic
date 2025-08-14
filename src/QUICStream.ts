@@ -6,6 +6,7 @@ import * as utils from './utils.js';
 import { Shutdown } from './native/index.js';
 
 const CHECK_STATES = true;
+const LOG_COMPLETE_EVENTS = true;
 const CHUNK_SIZE = 1024;
 
 class QUICStream {
@@ -65,7 +66,6 @@ class QUICStream {
         this.logger.warn(
           `full send of ${sentBytes} bytes from stream ${this.id}`,
         );
-        console.log('id', this.id);
         this.connection.processSend();
         // Fully sent so break out and wait for more data
         break;
@@ -79,6 +79,7 @@ class QUICStream {
     this.logger.warn(`close stream ${this.id}`);
     this.connection.connection.streamSend(this.id, Buffer.alloc(0), true);
     this.connection.processSend();
+    this.updateWritableComplete();
   };
   protected writableAbort: UnderlyingSinkAbortCallback = (reason) => {
     this.logger.warn(`abort stream ${this.id} with reason ${reason}`);
@@ -86,6 +87,7 @@ class QUICStream {
     this.writableAborted = true;
     this.writeReady$.next();
     this.connection.processSend();
+    this.updateWritableComplete();
   };
   protected readableStart: UnderlyingSourceStartCallback<Buffer> = () => {
     this.logger.warn(`start ReadableStream ${this.id}`);
@@ -118,6 +120,7 @@ class QUICStream {
       if (finished) {
         controller.close();
         this.logger.warn(`WE'RE DONE, GO HOME`);
+        this.updateReadableComplete();
         break;
       }
     }
@@ -127,6 +130,7 @@ class QUICStream {
     this.connection.connection.streamShutdown(this.id, Shutdown.Read, 42);
     this.writableAborted = true;
     this.connection.processSend();
+    this.updateReadableComplete();
   };
 
   constructor(
@@ -152,15 +156,36 @@ class QUICStream {
       this.logger.warn(`write ready ${this.id}`);
     });
 
-    this.readable$.subscribe(() =>
-      this.logger.warn(`CHANGED readable$ ${this.id}`),
-    );
-    this.writable$.subscribe(() =>
-      this.logger.warn(`CHANGED writable$ ${this.id}`),
-    );
-    this.finished$.subscribe(() =>
-      this.logger.warn(`CHANGED finished$ ${this.id}`),
-    );
+    if (CHECK_STATES) {
+      this.readable$.subscribe(() =>
+        this.logger.warn(`CHANGED readable$ ${this.id}`),
+      );
+    }
+    if (CHECK_STATES) {
+      this.writable$.subscribe(() =>
+        this.logger.warn(`CHANGED writable$ ${this.id}`),
+      );
+    }
+    if (CHECK_STATES) {
+      this.finished$.subscribe(() =>
+        this.logger.warn(`CHANGED finished$ ${this.id}`),
+      );
+    }
+    if (LOG_COMPLETE_EVENTS) {
+      this.readableComplete$.subscribe(() =>
+        this.logger.warn(`CHANGED readableComplete$ ${this.id}`),
+      );
+    }
+    if (LOG_COMPLETE_EVENTS) {
+      this.writableComplete$.subscribe(() =>
+        this.logger.warn(`CHANGED writableComplete$ ${this.id}`),
+      );
+    }
+    if (LOG_COMPLETE_EVENTS) {
+      this.complete$.subscribe(() =>
+        this.logger.warn(`CHANGED complete$ ${this.id}`),
+      );
+    }
   }
 
   protected checkState() {
@@ -205,6 +230,48 @@ class QUICStream {
     }
     this.isWritable_ = value;
     return value;
+  }
+
+  // Logic for stream completion
+  protected _readableComplete: boolean = false;
+  public readonly readableComplete$: ReplaySubject<void> = new ReplaySubject();
+  protected _writableComplete: boolean = false;
+  public readonly writableComplete$: ReplaySubject<void> = new ReplaySubject();
+  protected _complete: boolean = false;
+  public readonly complete$: ReplaySubject<void> = new ReplaySubject();
+
+  get readableComplete() {
+    return this._readableComplete;
+  }
+  get writableComplete() {
+    return this._writableComplete;
+  }
+  get complete() {
+    return this._complete;
+  }
+
+  protected updateReadableComplete() {
+    if (this._readableComplete) return;
+    this._readableComplete = true;
+    this.readableComplete$.next();
+    this.readableComplete$.complete();
+    if (this._writableComplete) {
+      this._complete = true;
+      this.complete$.next();
+      this.complete$.complete();
+    }
+  }
+
+  protected updateWritableComplete() {
+    if (this._writableComplete) return;
+    this._writableComplete = true;
+    this.writableComplete$.next();
+    this.writableComplete$.complete();
+    if (this._readableComplete) {
+      this._complete = true;
+      this.complete$.next();
+      this.complete$.complete();
+    }
   }
 }
 

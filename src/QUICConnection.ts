@@ -613,10 +613,6 @@ class QUICConnection {
       streamId = this.streamIdServerUni;
       this.streamIdServerUni += this.streamIdStep;
     }
-    // TODO: sanity check this.
-    // if (this.isStreamUsed(streamId!)) {
-    //   utils.never('We should never repeat streamIds when creating streams');
-    // }
     const quicStream = new QUICStream(
       streamId!,
       this,
@@ -637,7 +633,12 @@ class QUICConnection {
 
   protected setupQuicStream(quicStream: QUICStream): void {
     this.streamMap.set(quicStream.id, quicStream);
-    // TODO: remove stream from map when completed event
+    quicStream.complete$.subscribe(() => {
+      this.streamMap.delete(quicStream.id);
+      this.logger.warn(
+        `streamMap delete ${quicStream.id} with ${this.streamMap.size} streams remaining`,
+      );
+    });
   }
 }
 

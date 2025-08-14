@@ -100,14 +100,14 @@ describe(QUICStream.name, () => {
     // Let's make new streams.
     const message = Buffer.from('Hello!');
     const stream = client.connection.newStream();
-    const stream2 = client.connection.newStream();
+    // Const stream2 = client.connection.newStream();
     logger.warn(`stream ${stream.id} created on client`);
     const writeP = (async () => {
       const writer = stream.writable.getWriter();
       await writer.write(message);
       await writer.close();
-      const stream2Writer = stream2.writable.getWriter();
-      await stream2Writer.write(Buffer.from('bye!'));
+      // Const stream2Writer = stream2.writable.getWriter();
+      // await stream2Writer.write(Buffer.from('bye!'));
       logger.warn(`CLOSE`);
       for await (const chunk of stream.readable) {
         logger.error(`READ ${chunk.byteLength} bytes on client`);
@@ -117,7 +117,7 @@ describe(QUICStream.name, () => {
     const serverStream = await serverStreamP;
     const serverWriter = serverStream.writable.getWriter();
     await serverWriter.write(Buffer.from('adasdasdasdasd!'));
-    // Await serverWriter.close();
+    await serverWriter.close();
     for await (const chunk of serverStream.readable) {
       logger.error(`READ ${chunk.byteLength} bytes on server`);
     }

@@ -112,22 +112,16 @@ describe('utils', () => {
 });
 
 test('asd', async () => {
-  const asd = new Subject<void>();
+  const asd = new ReplaySubject<void>(1);
 
-  const bsd = asd.pipe(
-    mergeMap((v) => {
-      console.log('v', v);
-      return of(1, 2);
-    }),
-  );
-  bsd.subscribe({
+  // Asd.error(new Error('some error'));
+  asd.next();
+  asd.complete();
+
+  asd.subscribe({
     next: (v) => console.log('nexted', v),
     error: (e) => console.error(e),
     complete: () => console.log('completed'),
   });
-
-  // Asd.error(new Error('some error'));
-  asd.next();
-  asd.next();
   await sleep(2000);
 });
