@@ -279,7 +279,7 @@ class QUICSocket {
     }
     this.socketMessage$.subscribe(async ({ data, remoteInfo }) => {
       this.logger.warn(
-        `Received ${data.byteLength} bytes from ${remoteInfo.address}:${remoteInfo.port}`,
+        `!>>>>> Received ${data.byteLength} bytes from ${remoteInfo.address}:${remoteInfo.port}`,
       );
       /**
        * Handles UDP socket message.
@@ -328,9 +328,10 @@ class QUICSocket {
         // state is optional. We can respond with `STATELESS_RESET`
         // but it's not necessary, and ignoring is simpler
         // https://www.rfc-editor.org/rfc/rfc9000.html#stateless-reset
-        this.logger.warn(
-          `recv ${connection.connectionIdShared}@${remoteInfo_.host}:${remoteInfo_.port}->${data.byteLength}`,
-        );
+        // FIXME remove
+        // this.logger.warn(
+        //   `recv ${connection.connectionIdShared}@${remoteInfo_.host}:${remoteInfo_.port}->${data.byteLength}`,
+        // );
         connection.recv(data, remoteInfo_);
       } else {
         // If the server is not registered, we cannot attempt to create a new
@@ -453,7 +454,7 @@ class QUICSocket {
     this.socketSend$ = new Subject();
     this.socketSend$.subscribe(({ data, host, port }) => {
       this.logger.warn(
-        `socketSend$ sent ${data.byteLength} bytes to ${host}:${port}`,
+        `!<<<<< socketSend$ sent ${data.byteLength} bytes to ${host}:${port}`,
       );
       void this.send_(data, port, host);
     });

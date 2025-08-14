@@ -1,22 +1,26 @@
 import type { Connection, RecvInfo } from './native/index.js';
 import type {
+  ConnectionIdString,
   Host,
   Port,
   QUICConfig,
   RemoteInfo,
-  ConnectionIdString,
   SendData,
+  StreamId,
 } from './types.js';
 import type * as nativeTypes from './native/types.js';
 import type Logger from '@matrixai/logger';
 import { ReplaySubject, Subject } from 'rxjs';
-import { CryptoError } from './native/index.js';
 import { ConnectionType } from './types.js';
-import { quiche } from './native/index.js';
+import { CryptoError, quiche } from './native/index.js';
 import { buildQuicheConfig } from './config.js';
 import * as errors from './errors.js';
 import * as utils from './utils.js';
 import QUICConnectionId from './QUICConnectionId.js';
+import QUICStream from './QUICStream.js';
+
+const LOG_STAGES = true;
+const LOG_STATE_CHAGES = true;
 
 class QUICConnection {
   // TODO: define static constructors here;
@@ -185,33 +189,61 @@ class QUICConnection {
       this.caDERs = caPEMs.map(utils.pemToDER);
     }
 
-    this.timeout$.subscribe(() => this.logger.warn(`TIMEOUT!`));
-    this.established$.subscribe((v) =>
-      this.logger.warn(`CHANGED isEstablished$ ${v}`),
-    );
-    this.isResumed$.subscribe((v) =>
-      this.logger.warn(`CHANGED isResumed$ ${v}`),
-    );
-    this.isInEarlyData$.subscribe((v) =>
-      this.logger.warn(`CHANGED isInEarlyData$ ${v}`),
-    );
-    this.isReadable$.subscribe((v) =>
-      this.logger.warn(`CHANGED isReadable$ ${v}`),
-    );
-    this.draining$.subscribe(() =>
-      this.logger.warn(`CHANGED isDraining$ true`),
-    );
-    this.closed$.subscribe(() => this.logger.warn(`CHANGED isClosed$ true`));
-    this.timedOut$.subscribe((v) =>
-      this.logger.warn(`CHANGED isTimedOut$ ${v}`),
-    );
-    this.peerError$.subscribe((v) =>
-      this.logger.warn(`CHANGED peerError$ ${JSON.stringify(v)}`),
-    );
-    this.localError$.subscribe((v) =>
-      this.logger.warn(`CHANGED localError$ ${JSON.stringify(v)}`),
-    );
-    this.peerCertChain$.subscribe(() => this.logger.warn(`GOT peerCertChain`));
+    if (LOG_STATE_CHAGES) {
+      this.timeout$.subscribe(() => this.logger.warn(`TIMEOUT!`));
+    }
+    if (LOG_STATE_CHAGES) {
+      this.established$.subscribe((v) =>
+        this.logger.warn(`CHANGED established$`),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.isResumed$.subscribe((v) =>
+        this.logger.warn(`CHANGED isResumed$ ${v}`),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.isInEarlyData$.subscribe((v) =>
+        this.logger.warn(`CHANGED isInEarlyData$ ${v}`),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.isReadable$.subscribe((v) =>
+        this.logger.warn(`CHANGED isReadable$ ${v}`),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.draining$.subscribe(() => this.logger.warn(`CHANGED draining$`));
+    }
+    if (LOG_STATE_CHAGES) {
+      this.closed$.subscribe(() => this.logger.warn(`CHANGED closed$`));
+    }
+    if (LOG_STATE_CHAGES) {
+      this.timedOut$.subscribe((v) => this.logger.warn(`CHANGED timedOut$`));
+    }
+    if (LOG_STATE_CHAGES) {
+      this.peerError$.subscribe((v) =>
+        this.logger.warn(
+          `CHANGED peerError$  app:${v.isApp} code:${
+            v.errorCode
+          } Reason:${Buffer.from(v.reason).toString()}`,
+        ),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.localError$.subscribe((v) =>
+        this.logger.warn(
+          `CHANGED localError$ app:${v.isApp} code:${
+            v.errorCode
+          } Reason:${Buffer.from(v.reason).toString()}`,
+        ),
+      );
+    }
+    if (LOG_STATE_CHAGES) {
+      this.peerCertChain$.subscribe(() =>
+        this.logger.warn(`CHANGED peerCertChain$`),
+      );
+    }
   }
 
   public get connectionId_(): QUICConnectionId {
@@ -251,6 +283,7 @@ class QUICConnection {
    */
   // TODO: define simple recv
   public recv(data: Uint8Array, remoteInfo: RemoteInfo) {
+    if (LOG_STAGES) this.logger.warn(`!----- Processing recv -----!`);
     const recvInfo: RecvInfo = {
       to: {
         host: this.sourceHost,
@@ -278,12 +311,14 @@ class QUICConnection {
         this.error$.next(Error(`TMP IMP Errored from ${e.message}`));
       }
     }
-    this.checkState();
+    this.processStreams();
     this.processSend();
+    if (LOG_STAGES) this.logger.warn(`!----- Processing recv done -----!`);
   }
 
-  // This will extract send data from connection and emit it on the `sendData$` subject
+  // This will extract send data from the connection and emit it on the `sendData$` subject
   public processSend(): void {
+    if (LOG_STAGES) this.logger.warn(`!----- processSend -----!`);
     if (this.connection.isDraining()) {
       this.logger.warn('skipping due to draining state');
       return;
@@ -296,7 +331,6 @@ class QUICConnection {
         const result = this.connection.send(sendBuffer);
         if (result == null) break;
         const [sendLength, sendInfo] = result;
-        this.logger.warn(`send$ nexting with ${sendLength} bytes`);
         this.send$.next({
           data: sendBuffer.subarray(0, sendLength),
           host: sendInfo.to.host,
@@ -310,10 +344,12 @@ class QUICConnection {
     } finally {
       this.checkState();
     }
+    if (LOG_STAGES) this.logger.warn(`!----- ProcessSend done -----!`);
   }
 
   // TODO: define simple state checks
   protected checkState(): void {
+    if (LOG_STAGES) this.logger.warn(`!----- checkState -----!`);
     this.checkTimeout();
     // This.logger.warn(`activeSourceCids: ${this.connection.activeSourceCids()}`);
     // this.logger.warn(`maxActiveSourceCids: ${this.connection.maxActiveSourceCids()}`);
@@ -337,6 +373,7 @@ class QUICConnection {
     void this.peerError;
     void this.localError;
     void this.peerCertChain;
+    if (LOG_STAGES) this.logger.warn(`!----- checkState Done -----!`);
   }
 
   protected timeoutTimer: NodeJS.Timeout | undefined;
@@ -400,7 +437,6 @@ class QUICConnection {
   public readonly draining$: ReplaySubject<void> = new ReplaySubject(1);
   public get isDraining() {
     const value = this.connection.isDraining();
-    this.logger.warn(`draining: ${value}`);
     const updated = value !== this.isDraining_;
     this.isDraining_ = value;
     if (updated) this.draining$.next();
@@ -411,7 +447,6 @@ class QUICConnection {
   public readonly closed$: ReplaySubject<void> = new ReplaySubject(1);
   public get isClosed() {
     const value = this.connection.isClosed();
-    this.logger.warn(`closed: ${value}`);
     const updated = value !== this.isClosed_;
     this.isClosed_ = value;
     if (updated) this.closed$.next();
@@ -487,6 +522,123 @@ class QUICConnection {
   // TODO: we need a stream map for tracking existing streams
   // TODO: we need a stream ID tracker for avoiding used streamIds, assuming this is actually a problem
   // TODO: time to update quiche
+
+  /**
+   * Client initiated bidirectional stream starts at 0.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdClientBidi: StreamId = 0b00;
+
+  /**
+   * Server initiated bidirectional stream starts at 1.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdServerBidi: StreamId = 0b10;
+
+  /**
+   * Client initiated unidirectional stream starts at 2.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdClientUni: StreamId = 0b01;
+
+  /**
+   * Server initiated unidirectional stream starts at 3.
+   * Increment by 4 to get the next ID.
+   */
+  protected streamIdServerUni: StreamId = 0b11;
+
+  /**
+   * The step each new stream ID is incremented
+   */
+  protected streamIdStep: StreamId = 4;
+
+  protected streamMap: Map<StreamId, QUICStream> = new Map();
+
+  public stream$: Subject<QUICStream> = new Subject();
+
+  // Process streams by iterating over the readable and writable iterators
+  // and letting the streams know there is data.
+  public processStreams(): void {
+    if (LOG_STAGES) this.logger.warn(`!----- processStreams -----!`);
+    // Checking readable
+    if (LOG_STAGES) this.logger.warn(`!----- processStreams readables -----!`);
+    for (const streamId of this.connection.readable()) {
+      this.logger.warn(`stream readable ${streamId}`);
+      let quicStream = this.streamMap.get(streamId);
+      if (quicStream == null) {
+        this.logger.warn(`creating new stream for ${streamId} on readable`);
+        quicStream = new QUICStream(
+          streamId,
+          this,
+          this.logger.getChild(`QuicStream_${streamId}`),
+        );
+        this.setupQuicStream(quicStream);
+        this.stream$.next(quicStream);
+      }
+      quicStream.readReady$.next();
+    }
+    if (LOG_STAGES) this.logger.warn(`!----- processStreams writables -----!`);
+    for (const streamId of this.connection.writable()) {
+      let quicStream = this.streamMap.get(streamId);
+      if (quicStream == null) {
+        this.logger.warn(`creating new stream for ${streamId} on writable`);
+        quicStream = new QUICStream(
+          streamId,
+          this,
+          this.logger.getChild(`QuicStream_${streamId}`),
+        );
+        this.setupQuicStream(quicStream);
+        this.stream$.next(quicStream);
+      }
+      quicStream.writeReady$.next();
+    }
+    if (LOG_STAGES) this.logger.warn(`!----- processStreams done -----!`);
+  }
+
+  /**
+   * Creates a new QUIC stream on the connection.
+   */
+  public newStream(type: 'bidi' | 'uni' = 'bidi'): QUICStream {
+    let streamId: StreamId;
+    if (this.type === ConnectionType.CLIENT && type === 'bidi') {
+      streamId = this.streamIdClientBidi;
+      this.streamIdClientBidi += this.streamIdStep;
+    } else if (this.type === ConnectionType.SERVER && type === 'bidi') {
+      streamId = this.streamIdServerBidi;
+      this.streamIdServerBidi += this.streamIdStep;
+    } else if (this.type === ConnectionType.CLIENT && type === 'uni') {
+      streamId = this.streamIdClientUni;
+      this.streamIdClientUni += this.streamIdStep;
+    } else if (this.type === ConnectionType.SERVER && type === 'uni') {
+      streamId = this.streamIdServerUni;
+      this.streamIdServerUni += this.streamIdStep;
+    }
+    // TODO: sanity check this.
+    // if (this.isStreamUsed(streamId!)) {
+    //   utils.never('We should never repeat streamIds when creating streams');
+    // }
+    const quicStream = new QUICStream(
+      streamId!,
+      this,
+      this.logger.getChild(`QuicStream_${streamId!}`),
+    );
+    this.setupQuicStream(quicStream);
+    const result = this.connection.streamSend(
+      quicStream.id,
+      Buffer.alloc(0),
+      false,
+    );
+    this.logger.warn(
+      `Stream ${streamId!} initiated with zero length message ${result}`,
+    );
+    this.processSend();
+    return quicStream;
+  }
+
+  protected setupQuicStream(quicStream: QUICStream): void {
+    this.streamMap.set(quicStream.id, quicStream);
+    // TODO: remove stream from map when completed event
+  }
 }
 
 export default QUICConnection;

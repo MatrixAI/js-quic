@@ -340,7 +340,7 @@ type ConnectionMetadata = {
   remoteCertsChain: Array<Uint8Array>;
 };
 
-type StreamId = Opaque<'StreamId', number>;
+type StreamId = number;
 
 /**
  * Maps reason (most likely an exception) to a stream code.
