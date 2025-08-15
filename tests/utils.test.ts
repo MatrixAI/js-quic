@@ -1,6 +1,4 @@
 import type { Host } from '#types.js';
-import { map, merge, mergeMap, of, ReplaySubject, Subject } from 'rxjs';
-import { sleep } from './utils.js';
 import * as utils from '#utils.js';
 
 describe('utils', () => {
@@ -109,19 +107,4 @@ describe('utils', () => {
     expect(utils.resolvesZeroIP('::2' as Host)).toBe('::2');
     expect(utils.resolvesZeroIP('::ffff:7f00:1' as Host)).toBe('::ffff:7f00:1');
   });
-});
-
-test('asd', async () => {
-  const asd = new ReplaySubject<void>(1);
-
-  // Asd.error(new Error('some error'));
-  asd.next();
-  asd.complete();
-
-  asd.subscribe({
-    next: (v) => console.log('nexted', v),
-    error: (e) => console.error(e),
-    complete: () => console.log('completed'),
-  });
-  await sleep(2000);
 });

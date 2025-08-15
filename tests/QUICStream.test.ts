@@ -1,15 +1,9 @@
-import type { ClientCryptoOps, ServerCryptoOps, StreamId } from '#types.js';
-import type QUICConnection from '#QUICConnection.js';
+import type { ClientCryptoOps, ServerCryptoOps } from '#types.js';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
-import { destroyed } from '@matrixai/async-init';
-import { test, fc } from '@fast-check/jest';
-import { jest } from '@jest/globals';
+import { test } from '@fast-check/jest';
 import { firstValueFrom } from 'rxjs';
 import * as testsUtils from './utils.js';
 import { generateTLSConfig, sleep } from './utils.js';
-import * as events from '#events.js';
-import * as errors from '#errors.js';
-import * as utils from '#utils.js';
 import QUICServer from '#QUICServer.js';
 import QUICClient from '#QUICClient.js';
 import QUICStream from '#QUICStream.js';
@@ -27,7 +21,7 @@ describe(QUICStream.name, () => {
   ]);
   const defaultType = 'RSA';
   const localhost = '127.0.0.1';
-  // This has to be setup asynchronously due to key generation
+  // This has to be set up asynchronously due to key generation
   const serverCrypto: ServerCryptoOps = {
     sign: testsUtils.signHMAC,
     verify: testsUtils.verifyHMAC,
@@ -37,30 +31,13 @@ describe(QUICStream.name, () => {
     randomBytes: testsUtils.randomBytes,
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
-  // Let createQUICStreamMock: jest.SpiedFunction<any>;
 
-  const testReason = Symbol('TestReason');
-  const testCodeToReason = (type, code) => {
-    switch (code) {
-      case 2:
-        return testReason;
-      default:
-        return new Error(`${type.toString()} ${code.toString()}`);
-    }
-  };
-  const testReasonToCode = (type, reason) => {
-    if (reason === testReason) return 2;
-    return 1;
-  };
-
-  // We need to test the stream making
+  // We need to test the stream-making
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
     socketCleanMethods = testsUtils.socketCleanupFactory();
-    // CreateQUICStreamMock = jest.spyOn(QUICStream, 'createQUICStream');
   });
   afterEach(async () => {
-    // CreateQUICStreamMock.mockRestore();
     await socketCleanMethods.stopSockets();
   });
 
@@ -132,7 +109,7 @@ describe(QUICStream.name, () => {
     logger.warn('DONE SLEEPING, shutting down');
     await client.destroy({ force: true });
     await server.stop({ force: true });
-  }, 50000);
+  });
 
   // Test('destroying stream should clean up on both ends while streams are used', async () => {
   //   const message = Buffer.from('Message!');

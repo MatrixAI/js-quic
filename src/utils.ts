@@ -9,11 +9,9 @@ import type {
   ConnectionIdString,
   StreamId,
 } from './types.js';
-import type { Observable } from 'rxjs';
 import dns from 'dns';
 import events from 'node:events';
 import { IPv4, IPv6, Validator } from 'ip-num';
-import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import QUICConnectionId from './QUICConnectionId.js';
 import * as errors from './errors.js';
 

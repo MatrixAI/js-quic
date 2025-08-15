@@ -193,7 +193,7 @@ class QUICConnection {
       this.timeout$.subscribe(() => this.logger.warn(`TIMEOUT!`));
     }
     if (LOG_STATE_CHAGES) {
-      this.established$.subscribe((v) =>
+      this.established$.subscribe(() =>
         this.logger.warn(`CHANGED established$`),
       );
     }
@@ -219,7 +219,7 @@ class QUICConnection {
       this.closed$.subscribe(() => this.logger.warn(`CHANGED closed$`));
     }
     if (LOG_STATE_CHAGES) {
-      this.timedOut$.subscribe((v) => this.logger.warn(`CHANGED timedOut$`));
+      this.timedOut$.subscribe(() => this.logger.warn(`CHANGED timedOut$`));
     }
     if (LOG_STATE_CHAGES) {
       this.peerError$.subscribe((v) =>
@@ -340,6 +340,7 @@ class QUICConnection {
       }
     } catch (e) {
       // TODO: dispatch connection error
+      this.logger.warn(`failed to process send with ${e.message}`);
       throw e;
     } finally {
       this.checkState();

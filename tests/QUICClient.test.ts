@@ -1,19 +1,13 @@
 import type { ClientCryptoOps, ServerCryptoOps } from '#types.js';
-import type QUICConnection from '#QUICConnection.js';
-import type { KeyTypes, TLSConfigs } from './utils.js';
+import type { KeyTypes } from './utils.js';
 import Logger, { LogLevel, StreamHandler, formatting } from '@matrixai/logger';
-import { test, fc } from '@fast-check/jest';
-import { running } from '@matrixai/async-init';
-import { firstValueFrom, ReplaySubject, Subject, timer } from 'rxjs';
-import { reportUnhandledError } from 'rxjs/internal/util/reportUnhandledError';
+import { test } from '@fast-check/jest';
+import { firstValueFrom, Subject, timer } from 'rxjs';
 import * as testsUtils from './utils.js';
-import { generateTLSConfig, sleep } from './utils.js';
-import QUICSocket from '#QUICSocket.js';
+import { sleep } from './utils.js';
 import QUICClient from '#QUICClient.js';
 import QUICServer from '#QUICServer.js';
 import * as errors from '#errors.js';
-import * as events from '#events.js';
-import { CryptoError } from '#native/types.js';
 
 describe(QUICClient.name, () => {
   const logger = new Logger(`${QUICClient.name} Test`, LogLevel.INFO, [

@@ -38,7 +38,6 @@ class QUICStream {
           false,
         );
       } catch (e) {
-        console.error('send failed with', e);
         controller.error(e);
         return;
       }

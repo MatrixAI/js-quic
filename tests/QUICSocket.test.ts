@@ -12,6 +12,7 @@ import * as utils from '#utils.js';
 import * as errors from '#errors.js';
 import * as events from '#events.js';
 import { ConnectionType } from '#types.js';
+import QUICConnectionId from '#QUICConnectionId.js';
 
 describe(QUICSocket.name, () => {
   const logger = new Logger(`${QUICSocket.name} Test`, LogLevel.WARN, [
@@ -122,7 +123,9 @@ describe(QUICSocket.name, () => {
     await socket.start({
       host: '127.0.0.1',
     });
-    const connectionId = Buffer.from('SomeRandomId').toString('hex');
+    const connectionId = QUICConnectionId.fromBuffer(
+      Buffer.from('SomeRandomId'),
+    );
     // Mock connection, we only need the `type` property
     const connection = { type: ConnectionType.CLIENT } as QUICConnection;
     socket.connectionMap.set(connectionId, connection);
@@ -140,7 +143,9 @@ describe(QUICSocket.name, () => {
     await socket.start({
       host: '127.0.0.1',
     });
-    const connectionId = Buffer.from('SomeRandomId').toString('hex');
+    const connectionId = QUICConnectionId.fromBuffer(
+      Buffer.from('SomeRandomId'),
+    );
     // Mock connection, we only need the `type` property
     const connection = { type: ConnectionType.CLIENT } as QUICConnection;
     socket.connectionMap.set(connectionId, connection);
@@ -283,10 +288,8 @@ describe(QUICSocket.name, () => {
     });
     test('error and close event lifecycle', async () => {
       // We expect error logs
-      const socketLogger = logger.getChild('abc');
-      socketLogger.setLevel(LogLevel.WARN);
       const socket = new QUICSocket({
-        logger: socketLogger,
+        logger: logger.getChild('QUICSocket'),
       });
       socketCleanMethods.sockets.add(socket);
       const handleEventQUICSocketStop = jest.fn();

@@ -667,7 +667,7 @@ function socketCleanupFactory() {
   };
 }
 
-type Messages = Array<Uint8Array>;
+type Messages = Array<Buffer>;
 
 type StreamData = {
   messages: Messages;
