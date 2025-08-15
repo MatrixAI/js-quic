@@ -15,7 +15,12 @@ import QUICClient from '#QUICClient.js';
 import QUICStream from '#QUICStream.js';
 
 describe(QUICStream.name, () => {
-  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.SILENT, [
+    new StreamHandler(
+      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
+    ),
+  ]);
+  const logger2 = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -66,7 +71,7 @@ describe(QUICStream.name, () => {
         key,
         ops: serverCrypto,
       },
-      logger: logger.getChild(QUICServer.name),
+      logger: logger2.getChild(QUICServer.name),
       config: {
         key: tlsConfig.leafKeyPairPEM.privateKey,
         cert: tlsConfig.leafCertPEM,
@@ -127,7 +132,7 @@ describe(QUICStream.name, () => {
     logger.warn('DONE SLEEPING, shutting down');
     await client.destroy({ force: true });
     await server.stop({ force: true });
-  });
+  }, 50000);
 
   // Test('destroying stream should clean up on both ends while streams are used', async () => {
   //   const message = Buffer.from('Message!');

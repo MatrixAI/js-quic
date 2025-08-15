@@ -319,11 +319,11 @@ class QUICConnection {
   // This will extract send data from the connection and emit it on the `sendData$` subject
   public processSend(): void {
     if (LOG_STAGES) this.logger.warn(`!----- processSend -----!`);
-    if (this.connection.isDraining()) {
-      this.logger.warn('skipping due to draining state');
-      return;
-    }
     try {
+      if (this.connection.isDraining()) {
+        this.logger.warn('skipping due to draining state');
+        return;
+      }
       while (true) {
         const sendBuffer = Buffer.allocUnsafe(
           this.config.maxSendUdpPayloadSize,
@@ -379,17 +379,22 @@ class QUICConnection {
   protected timeoutTimer: NodeJS.Timeout | undefined;
   protected timeout$: Subject<void> = new Subject();
   protected handleTimeout = () => {
+    this.logger.warn('HANDLIGN TIMEOUT');
     this.connection.onTimeout();
     this.timeout$.next();
-    this.checkState();
     this.processSend();
+    this.checkState();
     this.checkTimeout();
   };
   protected checkTimeout() {
     const timeoutDelay = this.connection.timeout();
     clearTimeout(this.timeoutTimer);
     delete this.timeoutTimer;
-    if (timeoutDelay == null) return;
+    if (timeoutDelay == null) {
+      this.logger.warn('DISARMED TIMEOUT');
+      return;
+    }
+    this.logger.warn(`TIMEOUT in ${timeoutDelay}ms`);
     this.timeoutTimer = setTimeout(this.handleTimeout, timeoutDelay + 1);
   }
 
