@@ -428,7 +428,6 @@ class QUICServer {
       header.ty !== quiche.Type.Initial &&
       header.ty !== quiche.Type.ZeroRTT
     ) {
-      this.logger.error('end a');
       return;
     }
     // Derive the new connection's SCID from the client generated DCID
@@ -465,7 +464,6 @@ class QUICServer {
           { cause: e },
         );
       }
-      this.logger.error('end b');
       return;
     }
     // At this point we are processing an `Initial` packet.
@@ -501,7 +499,6 @@ class QUICServer {
           { cause: e },
         );
       }
-      this.logger.error('end c');
       return;
     }
     // At this point in time, the packet's DCID is the originally-derived DCID.
@@ -512,7 +509,6 @@ class QUICServer {
     );
     if (dcidOriginal == null) {
       // Failed validation due to missing DCID
-      this.logger.error('end d');
       return;
     }
     // Check that the newly-derived DCID (passed in as the SCID) is the same
@@ -520,7 +516,6 @@ class QUICServer {
     // This ensures that the derivation process hasn't changed.
     if (scid.byteLength !== header.dcid.byteLength) {
       // Failed validation due to mismatched length
-      this.logger.error('end e');
       return;
     }
     // Here we shall re-use the originally-derived DCID as the SCID
@@ -545,7 +540,6 @@ class QUICServer {
     this.connection$.next(connection);
     connection.send$.subscribe(this.socket.socketSend$);
     connection.recv(data, remoteInfo);
-    this.logger.error('end f');
     return connection;
   }
 

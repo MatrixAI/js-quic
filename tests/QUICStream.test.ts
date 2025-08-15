@@ -1,20 +1,28 @@
 import type { ClientCryptoOps, ServerCryptoOps } from '#types.js';
+import type { TLSConfigs } from './utils.js';
+import type QUICConnection from '#QUICConnection.js';
 import Logger, { formatting, LogLevel, StreamHandler } from '@matrixai/logger';
 import { test } from '@fast-check/jest';
 import { firstValueFrom } from 'rxjs';
 import * as testsUtils from './utils.js';
-import { generateTLSConfig, sleep } from './utils.js';
+import { generateTLSConfig } from './utils.js';
 import QUICServer from '#QUICServer.js';
 import QUICClient from '#QUICClient.js';
 import QUICStream from '#QUICStream.js';
+import * as utils from '#utils.js';
 
-describe(QUICStream.name, () => {
-  const logger = new Logger(`${QUICStream.name} Test`, LogLevel.SILENT, [
+describe('QUICStream', () => {
+  const _logger = new Logger(`QUICStream Test`, LogLevel.SILENT, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
   ]);
-  const logger2 = new Logger(`${QUICStream.name} Test`, LogLevel.WARN, [
+  const loggerClient = new Logger(`QUICClient`, LogLevel.WARN, [
+    new StreamHandler(
+      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
+    ),
+  ]);
+  const loggerServer = new Logger(`QUICServer`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -32,23 +40,24 @@ describe(QUICStream.name, () => {
   };
   let socketCleanMethods: ReturnType<typeof testsUtils.socketCleanupFactory>;
 
+  let tlsConfig: TLSConfigs;
+  let server: QUICServer;
+  let serverConnection: QUICConnection;
+  let client: QUICClient;
+  let clientConnection: QUICConnection;
+
   // We need to test the stream-making
   beforeEach(async () => {
     key = await testsUtils.generateKeyHMAC();
     socketCleanMethods = testsUtils.socketCleanupFactory();
-  });
-  afterEach(async () => {
-    await socketCleanMethods.stopSockets();
-  });
 
-  test('should create streams', async () => {
-    const tlsConfig = await generateTLSConfig(defaultType);
-    const server = new QUICServer({
+    tlsConfig = await generateTLSConfig(defaultType);
+    server = new QUICServer({
       crypto: {
         key,
         ops: serverCrypto,
       },
-      logger: logger2.getChild(QUICServer.name),
+      logger: loggerServer.getChild(QUICServer.name),
       config: {
         key: tlsConfig.leafKeyPairPEM.privateKey,
         cert: tlsConfig.leafCertPEM,
@@ -62,14 +71,14 @@ describe(QUICStream.name, () => {
     await server.start({
       host: localhost,
     });
-    const client = await QUICClient.createQUICClient({
+    client = await QUICClient.createQUICClient({
       host: localhost,
       port: server.port,
       localHost: localhost,
       crypto: {
         ops: clientCrypto,
       },
-      logger: logger.getChild(QUICClient.name),
+      logger: loggerClient.getChild(QUICClient.name),
       config: {
         verifyPeer: false,
       },
@@ -77,39 +86,273 @@ describe(QUICStream.name, () => {
     socketCleanMethods.extractSocket(client);
     const connection = await connectionP;
     if (connection == null) throw Error('Connection is missing');
-    // Do the test
-    const serverStreamP = firstValueFrom(connection.stream$);
-    // Let's make new streams.
-    const message = Buffer.from('Hello!');
-    const stream = client.connection.newStream();
-    // Const stream2 = client.connection.newStream();
-    logger.warn(`stream ${stream.id} created on client`);
-    const writeP = (async () => {
-      const writer = stream.writable.getWriter();
-      await writer.write(message);
-      await writer.close();
-      // Const stream2Writer = stream2.writable.getWriter();
-      // await stream2Writer.write(Buffer.from('bye!'));
-      logger.warn(`CLOSE`);
-      for await (const chunk of stream.readable) {
-        logger.error(`READ ${chunk.byteLength} bytes on client`);
-      }
-      logger.error(`DONE READING on client`);
-    })();
-    const serverStream = await serverStreamP;
-    const serverWriter = serverStream.writable.getWriter();
-    await serverWriter.write(Buffer.from('adasdasdasdasd!'));
-    await serverWriter.close();
-    for await (const chunk of serverStream.readable) {
-      logger.error(`READ ${chunk.byteLength} bytes on server`);
-    }
-    logger.error(`DONE READING on server`);
-    await writeP;
-    await sleep(10000);
-    logger.warn('DONE SLEEPING, shutting down');
-    await client.destroy({ force: true });
-    await server.stop({ force: true });
+    serverConnection = connection;
+    clientConnection = client.connection;
   });
+  afterEach(async () => {
+    await server.stop({ force: true });
+    await client.destroy({ force: true });
+    await socketCleanMethods.stopSockets();
+  });
+
+  // Easy paths
+  test('should create a stream on client', async () => {
+    // Note that no stream is created on the server side unless a message is sent.
+    // Can create a stream
+    const clientStream = clientConnection.newStream();
+    expect(clientStream).toBeInstanceOf(QUICStream);
+    // StreamId should be the initial client initiated bidi
+    expect(clientStream.id).toBe(0b00);
+  });
+  test('should create a stream on server', async () => {
+    // Note that no stream is created on the server side unless a message is sent.
+    // Can create a stream
+    const serverStream = serverConnection.newStream();
+    expect(serverStream).toBeInstanceOf(QUICStream);
+    // StreamId should be the initial server initiated bidi
+    expect(serverStream.id).toBe(0b01);
+  });
+  test('should trigger complement stream on first message sent on client', async () => {
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the server side.
+    await clientWriter.write(Buffer.from('message'));
+    const serverStream = await serverStreamP;
+    expect(serverStream).toBeInstanceOf(QUICStream);
+    expect(serverStream.id).toBe(0b00);
+  });
+  test('should trigger complement stream on first message sent on server', async () => {
+    const clientStreamP = firstValueFrom(clientConnection.stream$);
+    const serverStream = serverConnection.newStream();
+    const serverWriter = serverStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the client side.
+    await serverWriter.write(Buffer.from('message'));
+    const clientStream = await clientStreamP;
+    expect(clientStream).toBeInstanceOf(QUICStream);
+    expect(clientStream.id).toBe(0b01);
+  });
+  test('should send data over stream', async () => {
+    const messages = [
+      'The ',
+      'Quick ',
+      'Brown ',
+      'Fox ',
+      'Jumped ',
+      'Over ',
+      'The ',
+      'Lazy ',
+      'Dog.',
+    ];
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    for (const message of messages) {
+      await clientWriter.write(Buffer.from(message));
+    }
+    await clientWriter.close();
+    const serverStream = await serverStreamP;
+    let receivedData = '';
+    for await (const chunk of serverStream.readable) {
+      receivedData += chunk.toString();
+    }
+    expect(receivedData).toBe(messages.join(''));
+  });
+  test('should send large amount of data over stream', async () => {
+    // Large amounts of data will block the writes until the buffers are drained.
+    // So we need a non-blocking way of sending and receiving the data at the same time.
+    // Default stream capacity is 13,500 bytes.
+    const message = Buffer.alloc(
+      20000,
+      'The Quick Brown Fox Jumped Over The Lazy Dog.',
+    );
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const handleServerStreamP = (async () => {
+      const serverStream = await serverStreamP;
+      let receivedData = '';
+      for await (const chunk of serverStream.readable) {
+        receivedData += chunk.toString();
+      }
+      return receivedData;
+    })();
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    await clientWriter.write(message);
+    await clientWriter.close();
+    const receivedData = await handleServerStreamP;
+    expect(receivedData).toBe(message.toString());
+  });
+  test('should handle multiple streams on client', async () => {
+    const message = Buffer.alloc(
+      20000,
+      'The Quick Brown Fox Jumped Over The Lazy Dog.',
+    );
+    const streamsNum = 10;
+    const serverStreamPromises: Array<Promise<string>> = [];
+    const serverStreamsCreatedProm = utils.promise<void>();
+    let serverStreamCount = 0;
+    serverConnection.stream$.subscribe((stream) => {
+      serverStreamPromises.push(
+        (async () => {
+          let receivedData = '';
+          for await (const chunk of stream.readable) {
+            receivedData += chunk.toString();
+          }
+          return receivedData;
+        })(),
+      );
+      serverStreamCount++;
+      if (serverStreamCount >= streamsNum) serverStreamsCreatedProm.resolveP();
+    });
+    // Start creating streams concurrently
+    const waitProm = utils.promise();
+    const clientStreamPromises: Array<Promise<void>> = [];
+    for (let i = 0; i < streamsNum; i++) {
+      clientStreamPromises.push(
+        (async () => {
+          await waitProm.p;
+          const stream = clientConnection.newStream();
+          const writer = stream.writable.getWriter();
+          await writer.write(message);
+          await writer.close();
+        })(),
+      );
+    }
+
+    // Now we let everything run concurrently
+    waitProm.resolveP();
+    await Promise.all(clientStreamPromises);
+    await serverStreamsCreatedProm.p;
+    const results = await Promise.all(serverStreamPromises);
+    for (const result of results) {
+      expect(result).toBe(message.toString());
+    }
+  });
+  test('should handle multiple streams on server', async () => {
+    const message = Buffer.alloc(
+      20000,
+      'The Quick Brown Fox Jumped Over The Lazy Dog.',
+    );
+    const streamsNum = 10;
+    const clientStreamPromises: Array<Promise<string>> = [];
+    const clientStreamsCreatedProm = utils.promise<void>();
+    let clientStreamCount = 0;
+    clientConnection.stream$.subscribe((stream) => {
+      clientStreamPromises.push(
+        (async () => {
+          let receivedData = '';
+          for await (const chunk of stream.readable) {
+            receivedData += chunk.toString();
+          }
+          return receivedData;
+        })(),
+      );
+      clientStreamCount++;
+      if (clientStreamCount >= streamsNum) clientStreamsCreatedProm.resolveP();
+    });
+    // Start creating streams concurrently
+    const waitProm = utils.promise();
+    const serverStreamPromises: Array<Promise<void>> = [];
+    for (let i = 0; i < streamsNum; i++) {
+      serverStreamPromises.push(
+        (async () => {
+          await waitProm.p;
+          const stream = serverConnection.newStream();
+          const writer = stream.writable.getWriter();
+          await writer.write(message);
+          await writer.close();
+        })(),
+      );
+    }
+
+    // Now we let everything run concurrently
+    waitProm.resolveP();
+    await Promise.all(serverStreamPromises);
+    await clientStreamsCreatedProm.p;
+    const results = await Promise.all(clientStreamPromises);
+    for (const result of results) {
+      expect(result).toBe(message.toString());
+    }
+  });
+
+  // Problem paths
+  test('should handle writeable stream abort with data sent', async () => {
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the server side.
+    await clientWriter.write(Buffer.from('message'));
+    await clientWriter.abort(new Error('some error'));
+    const serverStream = await serverStreamP;
+    const readP = (async () => {
+      for await (const _chunk of serverStream.readable) {
+        // Consume stream data
+      }
+    })();
+    await expect(readP).rejects.toThrow();
+  });
+  test('should handle writeable stream abort with no data sent', async () => {
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the server side.
+    await clientWriter.abort(new Error('some error'));
+    const serverStream = await serverStreamP;
+    const readP = (async () => {
+      for await (const _chunk of serverStream.readable) {
+        // Consume data
+      }
+    })();
+    await firstValueFrom(serverStream.readableComplete$);
+    // FIXME: check actual error
+    await expect(readP).rejects.toThrow();
+  });
+  test('should handle writeable stream abort while data blocked', async () => {
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the server side.
+    await clientWriter.write(Buffer.alloc(20000, 'message'));
+    await clientWriter.abort(new Error('some error'));
+
+    const waitProm = utils.promise();
+    const serverStream = await serverStreamP;
+    const readP = (async () => {
+      for await (const _chunk of serverStream.readable) {
+        await waitProm.p;
+      }
+    })();
+    // Waiting for the readable stream to end despite not being consumed
+    await firstValueFrom(serverStream.readableComplete$);
+    waitProm.resolveP();
+    // FIXME: check actual error
+    await expect(readP).rejects.toThrow();
+  });
+  test('should handle readable stream cancel with data sent', async () => {
+    const message = Buffer.from('message');
+    const serverStreamP = firstValueFrom(serverConnection.stream$);
+    const clientStream = clientConnection.newStream();
+    const clientWriter = clientStream.writable.getWriter();
+    // Writing a message should trigger the stream creation on the server side.
+    await clientWriter.write(message);
+    const serverStream = await serverStreamP;
+    const serverReader = serverStream.readable.getReader();
+    await serverReader.read();
+    await serverReader.cancel(new Error('some error'));
+    await firstValueFrom(clientStream.writableComplete$);
+    // TODO: use actual error
+    await expect(clientWriter.write(message)).rejects.toThrow();
+  });
+  // It's not possible to cancel the readable stream before data is sent
+  //  because we need data to be sent to create the stream in the first place.
+  test.todo(
+    'should handle readable stream cancel while data blocked',
+    async () => {},
+  );
+  // TODO: add obervables for data being block or waiting;
+
+  test.todo('shutting down client should clean up streams');
+  test.todo('shutting down server should clean up streams');
 
   // Test('destroying stream should clean up on both ends while streams are used', async () => {
   //   const message = Buffer.from('Message!');

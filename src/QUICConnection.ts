@@ -19,7 +19,7 @@ import * as utils from './utils.js';
 import QUICConnectionId from './QUICConnectionId.js';
 import QUICStream from './QUICStream.js';
 
-const LOG_STAGES = true;
+const LOG_STAGES = false;
 const LOG_STATE_CHAGES = true;
 
 class QUICConnection {
@@ -380,7 +380,6 @@ class QUICConnection {
   protected timeoutTimer: NodeJS.Timeout | undefined;
   protected timeout$: Subject<void> = new Subject();
   protected handleTimeout = () => {
-    this.logger.warn('HANDLIGN TIMEOUT');
     this.connection.onTimeout();
     this.timeout$.next();
     this.processSend();
@@ -392,10 +391,8 @@ class QUICConnection {
     clearTimeout(this.timeoutTimer);
     delete this.timeoutTimer;
     if (timeoutDelay == null) {
-      this.logger.warn('DISARMED TIMEOUT');
       return;
     }
-    this.logger.warn(`TIMEOUT in ${timeoutDelay}ms`);
     this.timeoutTimer = setTimeout(this.handleTimeout, timeoutDelay + 1);
   }
 
@@ -539,13 +536,13 @@ class QUICConnection {
    * Server initiated bidirectional stream starts at 1.
    * Increment by 4 to get the next ID.
    */
-  protected streamIdServerBidi: StreamId = 0b10;
+  protected streamIdServerBidi: StreamId = 0b01;
 
   /**
    * Client initiated unidirectional stream starts at 2.
    * Increment by 4 to get the next ID.
    */
-  protected streamIdClientUni: StreamId = 0b01;
+  protected streamIdClientUni: StreamId = 0b10;
 
   /**
    * Server initiated unidirectional stream starts at 3.
@@ -569,7 +566,6 @@ class QUICConnection {
     // Checking readable
     if (LOG_STAGES) this.logger.warn(`!----- processStreams readables -----!`);
     for (const streamId of this.connection.readable()) {
-      this.logger.warn(`stream readable ${streamId}`);
       let quicStream = this.streamMap.get(streamId);
       if (quicStream == null) {
         this.logger.warn(`creating new stream for ${streamId} on readable`);
