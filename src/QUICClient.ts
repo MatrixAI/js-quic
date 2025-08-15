@@ -272,7 +272,16 @@ class QUICClient {
       abort.complete();
     }
 
-    // Set up intermediate abort signal
+    connection.closed$.subscribe(() => {
+      // If we timed out, then dispatch a timeout error event
+      if (connection.isTimedOut) {
+        const error = new errors.ErrorQUICConnectionIdleTimeout();
+        client.dispatchEvent(
+          new events.EventQUICClientError({ detail: error }),
+        );
+      }
+    });
+
     address = utils.buildAddress(host_, port);
     logger.info(`Created ${this.name} to ${address}`);
     return client;

@@ -9,7 +9,12 @@ import * as events from '#events.js';
 import * as errors from '#errors.js';
 
 describe(QUICServer.name, () => {
-  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
+  const logger = new Logger(`${QUICServer.name} Test`, LogLevel.SILENT, [
+    new StreamHandler(
+      formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
+    ),
+  ]);
+  const logger2 = new Logger(`${QUICServer.name} Test`, LogLevel.WARN, [
     new StreamHandler(
       formatting.format`${formatting.level}:${formatting.keys}:${formatting.msg}`,
     ),
@@ -345,7 +350,7 @@ describe(QUICServer.name, () => {
         verifyPeer: false,
         maxIdleTimeout: 200,
       },
-      logger: logger.getChild(QUICClient.name),
+      logger: logger2.getChild(QUICClient.name),
     });
     const { p: quicClientErrorP, rejectP: rejectQuicClientErrorP } =
       utils.promise<Error>();
